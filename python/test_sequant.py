@@ -33,8 +33,8 @@ class TestSequant(unittest.TestCase):
     from _sequant.mbpt import A,H,T,t,VacuumAverage,EVOptions
     opts = EVOptions()
     opts.connect = [("h", "t"), ("f", "t"), ("g", "t")]
-    ccd = VacuumAverage( A(-2) * H() * t(2) * t(2), opts );
-    ccsd = VacuumAverage( A(-2) * H() * T(2) * T(2), opts );
+    ccd = VacuumAverage( A(-2) * H() * t(2) * t(2), opts, deduce=True );
+    ccsd = VacuumAverage( A(-2) * H() * T(2) * T(2), opts, deduce=True );
     print (ccsd.latex)
 
     class String:
@@ -60,6 +60,24 @@ class TestSequant(unittest.TestCase):
     self.addCleanup(set_normalization_convention, NormalizationConvention.Default)
     set_normalization_convention(NormalizationConvention.Symmetric)
     self.assertEqual(normalization_convention(), NormalizationConvention.Symmetric)
+
+  def test_prettify(self):
+    labels = lambda e: [f.label for f in e.factors]
+    expr = Tensor("Z", ["i_1"], ["a_1"], []) * Tensor("Y", ["a_1"], ["i_1"], [])
+    # library order, and a copy: the input is not modified
+    pretty = sq.prettify(expr, deduce=True)
+    self.assertEqual(labels(pretty), ["Y", "Z"])
+    self.assertEqual(labels(expr), ["Z", "Y"])
+    # explicit cardinal labels, with or without recanonicalization
+    self.assertEqual(labels(sq.prettify(expr, deduce=True,
+                                        cardinal_tensor_labels=["Z"])),
+                     ["Z", "Y"])
+    self.assertEqual(labels(sq.prettify(expr, deduce=True,
+                                        recanonicalize=False)),
+                     ["Y", "Z"])
+    self.assertTrue(sq.mbpt.cardinal_tensor_labels())
+    with self.assertRaises(Exception):
+      sq.prettify(expr, deduce=False)
 
 
 if __name__ == '__main__':

@@ -327,16 +327,30 @@ class CC {
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
   /// @param[in] expr input expression
+  /// @param[in] external_indices the external indices of the tensor form of
+  /// @p expr , see op::ref_av()
   /// @param[in] connect list of operator label pairs to connect; must be empty
   /// when the reference differs from the Wick vacuum and the vacuum is not
   /// MultiProduct
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
-  auto ref_av(const ExprPtr& expr,
-              const OpConnections<std::wstring>& connect) const {
+  /// @param[in] expr input expression and the result it computes, whose
+  /// indices are the external indices
+  /// @param[in] connect see ref_av(const ExprPtr&, const NamedIndexSpec&,
+  /// const OpConnections<std::wstring>&)
+  ResultExpr ref_av(const ResultExpr& expr,
+                    const OpConnections<std::wstring>& connect) const {
     return op::ref_av(expr, {.connect = connect,
                              .screen = this->screen(),
                              .use_topology = this->use_topology()});
+  }
+
+  auto ref_av(const ExprPtr& expr, const NamedIndexSpec& external_indices,
+              const OpConnections<std::wstring>& connect) const {
+    return op::ref_av(expr, external_indices,
+                      {.connect = connect,
+                       .screen = this->screen(),
+                       .use_topology = this->use_topology()});
   }
 };  // class CC
 

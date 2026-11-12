@@ -139,23 +139,6 @@ constexpr std::string type_name_of() {
     return detail::compiler_type_name<T>();
 }
 
-/// State shared by a (recursive) lexicographic comparison of expressions
-/// @sa Expr::lexicographic_compare
-struct LexicographicCompareOptions {
-  /// tensor labels that precede all others, in this order
-  /// @sa Context::cardinal_tensor_labels
-  container::vector<std::wstring> cardinal_tensor_labels;
-
-  /// @return the options that use the cardinal tensor labels of the default
-  /// context
-  static LexicographicCompareOptions from_default_context();
-
-  /// @return position of (the non-adjoint form of) @p label among
-  /// cardinal_tensor_labels, or `cardinal_tensor_labels.size()` if it is not a
-  /// cardinal label
-  std::size_t cardinal_position(std::wstring_view label) const;
-};
-
 /// @brief Base expression class
 
 /// Expr represents the interface needed to form expression trees. Classes that
@@ -245,48 +228,61 @@ class Expr : public std::enable_shared_from_this<Expr> {
 
   /// Canonicalizes @c this and returns the byproduct of canonicalization (e.g.
   /// phase)
+  /// @param named_indices the indices whose labels are meaningful, i.e. that
+  /// canonicalization must not rename (ordinarily the external indices)
+  /// @param opts the canonicalization options
   /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
   virtual ExprPtr canonicalize(
-      CanonicalizeOptions = CanonicalizeOptions::default_options()) {
+      const NamedIndexSpec &named_indices,
+      CanonicalizeOptions opts = CanonicalizeOptions{}) {
+    (void)named_indices;
+    (void)opts;
     return {};  // by default do nothing and return nullptr
   }
 
   /// Performs approximate, but fast, canonicalization of @c this and returns
   /// the byproduct of canonicalization (e.g. phase) The default is to use
   /// canonicalize(), unless overridden in the derived class.
+  /// @param named_indices the indices that canonicalization must not rename
+  /// @param opts the canonicalization options; the method is Rapid regardless
   /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
   virtual ExprPtr rapid_canonicalize(
+      const NamedIndexSpec &named_indices,
       CanonicalizeOptions opts =
-          CanonicalizeOptions::default_options().copy_and_set(
-              CanonicalizationMethod::Rapid)) {
-    return this->canonicalize(opts.copy_and_set(CanonicalizationMethod::Rapid));
+          CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Rapid)) {
+    return this->canonicalize(named_indices,
+                              opts.copy_and_set(CanonicalizationMethod::Rapid));
   }
 
+  /// @param named_indices the named indices of the canonicalization
   /// @param opts the canonicalization options
   /// @return true if this is the full canonical form that canonicalization
-  /// with @p opts produced, and since then neither this nor any of its
-  /// subexpressions has been mutated or replaced, nor have the contexts in
-  /// effect changed (see current_contexts_version())
+  /// with @p named_indices and @p opts produced, and since then neither this
+  /// nor any of its subexpressions has been mutated or replaced, nor have the
+  /// contexts in effect changed (see current_contexts_version())
   /// @note always false if @p opts does not request Complete canonicalization,
   /// the only method whose result is the same for every spelling of an
-  /// expression
-  bool is_canonical(const CanonicalizeOptions &opts =
-                        CanonicalizeOptions::default_options()) const;
+  /// expression, or has presentation settings
+  bool is_canonical(
+      const NamedIndexSpec &named_indices,
+      const CanonicalizeOptions &opts = CanonicalizeOptions{}) const;
 
   /// records that this, with its subexpressions as they are now, is the full
-  /// canonical form for @p opts, so that is_canonical(opts) holds until this
-  /// or any of its subexpressions is mutated or replaced, or the contexts in
-  /// effect change
+  /// canonical form for @p named_indices and @p opts, so that
+  /// is_canonical(named_indices, opts) holds until this or any of its
+  /// subexpressions is mutated or replaced, or the contexts in effect change
+  /// @param named_indices the named indices of the canonicalization
   /// @param opts the canonicalization options
   /// @param contexts_version the value of current_contexts_version() when the
   /// canonicalization started; if it has changed since, the mark is not valid
-  /// @note no-op if @p opts does not request Complete canonicalization
+  /// @note no-op if is_canonical() could not hold for @p opts
   /// @warning only to be called with the result of canonicalization with
-  /// @p opts: canonicalization leaves an expression marked as canonical alone
+  /// @p named_indices and @p opts: canonicalization leaves an expression
+  /// marked as canonical alone
   void mark_canonical(
-      const CanonicalizeOptions &opts,
+      const NamedIndexSpec &named_indices, const CanonicalizeOptions &opts,
       std::uint64_t contexts_version = current_contexts_version()) const;
 
   // clang-format off
@@ -450,7 +446,8 @@ class Expr : public std::enable_shared_from_this<Expr> {
       const Expr &that, const LexicographicCompareOptions &opts) const;
 
   /// Same as lexicographic_compare(that, opts) with
-  /// `opts = LexicographicCompareOptions::from_default_context()`
+  /// the default `opts` (the cardinal tensor labels of the library's canonical
+  /// form)
   /// @note prefer the overload taking options (or LexicographicExprCompare)
   /// when performing many comparisons to avoid repeatedly querying the context
   std::weak_ordering lexicographic_compare(const Expr &that) const;

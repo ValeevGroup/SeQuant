@@ -411,7 +411,7 @@ class rand_tensor_yield {
 
   /// A tensor leaf by itself: laid out per its own canonical node.
   sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
-    sequant::EvalExprTA const canon{tnsr};
+    sequant::EvalExprTA const canon{tnsr, sequant::tests::open_indices(tnsr)};
     return (*this)(canon.as_tensor(), canon.canon_indices(), canon.annot());
   }
 

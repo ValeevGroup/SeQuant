@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <utility>
 
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 
 TEST_CASE("op", "[elements]") {
@@ -708,6 +709,31 @@ TEST_CASE("op", "[elements]") {
               L"\\tilde{a}}{*^{i_1}_{a_1^{{i_1}{i_2}}}*^{i_2}_{a_2^{{i_1}{i_2}}"
               L"}}}}");
     }
+  }
+
+  SECTION("canonicalization") {
+    // a NormalOperator on its own is canonicalized like a Tensor: the
+    // (anti)symmetric creator and annihilator slots are sorted and the sign
+    // of the permutation is returned as the byproduct
+    const auto a = ex<FNOperator>(cre({L"i_2", L"a_1"}), ann({L"i_1", L"a_2"}),
+                                  Vacuum::SingleProduct);
+    const auto b = ex<FNOperator>(cre({L"a_1", L"i_2"}), ann({L"i_1", L"a_2"}),
+                                  Vacuum::SingleProduct);
+    {
+      auto ca = a->clone();
+      auto cb = b->clone();
+      canonicalize(ca, deduce_named_indices);
+      canonicalize(cb, deduce_named_indices);
+      REQUIRE(simplify(ca + cb, deduce_named_indices) == ex<Constant>(0));
+      // the canonical forms differ only by the sign
+      REQUIRE(simplify(ca * ex<Constant>(-1) - cb, deduce_named_indices) ==
+              ex<Constant>(0));
+    }
+    // lone summands, as Wick outputs them, cancel
+    REQUIRE(simplify(a->clone() + b->clone(), deduce_named_indices) ==
+            ex<Constant>(0));
+    REQUIRE(simplify(a->clone() - b->clone() - ex<Constant>(2) * a->clone(),
+                     deduce_named_indices) == ex<Constant>(0));
   }
 
   SECTION("commutativity") {

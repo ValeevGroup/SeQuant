@@ -13,6 +13,8 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <dtl/dtl.hpp>
@@ -159,12 +161,26 @@ std::size_t count_product_canonicalizations(
   }
   return count;
 }
-/// @return a guard that scopes, for every Statistics, a copy of the default
-/// context in effect for it whose canonicalization options are @p opts
-[[nodiscard]] inline auto scoped_canonicalize_options(
-    CanonicalizeOptions opts) {
-  return set_scoped_modified_default_context(
-      [&opts](Context &ctx) { ctx.set(opts); });
+/// @return the open indices of the lone tensor @p t , i.e. those that occur
+/// once in it (as EvalExpr(Tensor, IndexSet) expects)
+inline IndexSet open_indices(const Tensor &t) {
+  return TensorNetwork(ExprPtrList{t.clone()}).ext_indices();
+}
+
+/// @return @p expr as the expression of an unnamed result without symmetry
+/// whose indices are the indices of @p expr that occur once, i.e. with the
+/// deduced external indices of @p expr
+inline ResultExpr deduced_result(const ExprPtr &expr) {
+  const auto groups = get_unique_indices(expr);
+  return ResultExpr(bra(groups.bra), ket(groups.ket), aux(groups.aux),
+                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                    ColumnSymmetry::Nonsymm, std::nullopt, expr);
+}
+
+/// @return the explicit named indices @p indices (as the library derives them
+/// internally)
+inline NamedIndexSpec explicit_named(container::set<Index> indices) {
+  return detail::explicit_named_indices(std::move(indices));
 }
 
 }  // namespace sequant::tests
@@ -188,8 +204,8 @@ struct StringMaker<sequant::Expr> {
 
     if (include_canonical) {
       sequant::ExprPtr clone = expr.clone();
-      canonicalize(clone);
-      simplify(clone);
+      canonicalize(clone, sequant::deduce_named_indices);
+      simplify(clone, sequant::deduce_named_indices);
       std::string canon_str =
           StringMaker<sequant::Expr>::convert(*clone, false);
 
@@ -371,14 +387,22 @@ ExprVar to_expression(T &&expression) {
 template <typename Subclass>
 class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
  public:
+  /// @param expression the expected expression
+  /// @param named_indices the named indices of the comparison; if not given,
+  /// those of a ResultExpr are its result indices, else they are deduced
   template <typename T>
-  ExpressionMatcher(T &&expression)
-      : m_expr(to_expression(std::forward<T>(expression))) {
+  ExpressionMatcher(T &&expression,
+                    std::optional<sequant::NamedIndexSpec> named_indices = {})
+      : m_expr(to_expression(std::forward<T>(expression))),
+        m_named(
+            named_indices ? std::move(*named_indices)
+            : std::holds_alternative<sequant::ResultExpr>(m_expr)
+                ? sequant::named_indices(std::get<sequant::ResultExpr>(m_expr))
+                : sequant::NamedIndexSpec(sequant::deduce_named_indices)) {
     if (std::holds_alternative<sequant::ResultExpr>(m_expr)) {
-      Subclass::pre_comparison(
-          std::get<sequant::ResultExpr>(m_expr).expression());
+      Subclass::pre_comparison(std::get<sequant::ResultExpr>(m_expr));
     } else {
-      Subclass::pre_comparison(std::get<sequant::ExprPtr>(m_expr));
+      Subclass::pre_comparison(std::get<sequant::ExprPtr>(m_expr), m_named);
     }
   }
 
@@ -389,11 +413,16 @@ class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
 
     const sequant::ResultExpr &self = std::get<sequant::ResultExpr>(m_expr);
 
-    return self.has_label() == res.has_label() && self.label() == res.label() &&
-           self.symmetry() == res.symmetry() &&
-           self.braket_symmetry() == res.braket_symmetry() &&
-           self.column_symmetry() == res.column_symmetry() &&
-           do_match(*res.expression());
+    if (!(self.has_label() == res.has_label() &&
+          (!self.has_label() || self.label() == res.label()) &&
+          self.symmetry() == res.symmetry() &&
+          self.braket_symmetry() == res.braket_symmetry() &&
+          self.column_symmetry() == res.column_symmetry()))
+      return false;
+    // compare as results, i.e. within the symmetry group of the result
+    sequant::ResultExpr clone = res.clone();
+    Subclass::pre_comparison(clone);
+    return *clone.expression() == *self.expression();
   }
 
   bool match(const sequant::ExprPtr &expr) const {
@@ -410,13 +439,14 @@ class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
 
  protected:
   ExprVar m_expr;
+  sequant::NamedIndexSpec m_named;
 
   bool do_match(const sequant::Expr &expr) const {
     // Never modify the expression that we are trying to check in order to avoid
     // side-effects
     sequant::ExprPtr clone = expr.clone();
 
-    Subclass::pre_comparison(clone);
+    Subclass::pre_comparison(clone, m_named);
 
     if (std::holds_alternative<sequant::ResultExpr>(m_expr)) {
       return *clone == *std::get<sequant::ResultExpr>(m_expr).expression();
@@ -440,11 +470,18 @@ class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
 struct EquivalentToMatcher : ExpressionMatcher<EquivalentToMatcher> {
   using ExpressionMatcher::ExpressionMatcher;
 
-  static void pre_comparison(sequant::ExprPtr &expr) {
-    auto scope = sequant::tests::scoped_canonicalize_options(
-        sequant::CanonicalizeOptions::default_options().copy_and_set(
+  static void pre_comparison(sequant::ExprPtr &expr,
+                             const sequant::NamedIndexSpec &named_indices) {
+    sequant::simplify(
+        expr, named_indices,
+        sequant::CanonicalizeOptions{}.copy_and_set(
             sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
-    sequant::simplify(expr);
+  }
+
+  static void pre_comparison(sequant::ResultExpr &expr) {
+    sequant::simplify(
+        expr, sequant::CanonicalizeOptions{}.copy_and_set(
+                  sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
   }
 
   static std::string comparison_requirement() { return "Equivalent to"; }
@@ -455,8 +492,13 @@ struct EquivalentToMatcher : ExpressionMatcher<EquivalentToMatcher> {
 struct SimplifiesToMatcher : ExpressionMatcher<SimplifiesToMatcher> {
   using ExpressionMatcher::ExpressionMatcher;
 
-  static void pre_comparison(sequant::ExprPtr &expr) {
+  static void pre_comparison(sequant::ExprPtr &expr,
+                             const sequant::NamedIndexSpec &) {
     sequant::rapid_simplify(expr);
+  }
+
+  static void pre_comparison(sequant::ResultExpr &expr) {
+    sequant::rapid_simplify(expr.expression());
   }
 
   static std::string comparison_requirement() { return "Simplifies to"; }
@@ -467,6 +509,14 @@ struct SimplifiesToMatcher : ExpressionMatcher<SimplifiesToMatcher> {
 template <typename T>
 EquivalentToMatcher EquivalentTo(T &&expression) {
   return EquivalentToMatcher(std::forward<T>(expression));
+}
+
+/// like EquivalentTo(T&&), with the given named indices
+template <typename T>
+EquivalentToMatcher EquivalentTo(T &&expression,
+                                 sequant::NamedIndexSpec named_indices) {
+  return EquivalentToMatcher(std::forward<T>(expression),
+                             std::move(named_indices));
 }
 
 template <typename T>

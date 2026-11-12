@@ -107,7 +107,11 @@ class EvalExpr {
   ///
   /// \brief Construct an EvalExpr object from a tensor.
   ///
-  explicit EvalExpr(Tensor const& tnsr);
+  /// \param named_indices the open indices of \p tnsr , i.e. those that
+  ///        are not summed over within it; only consulted if an index occurs
+  ///        in \p tnsr more than once (a tensor-of-tensors leaf)
+  ///
+  EvalExpr(Tensor const& tnsr, IndexSet const& named_indices);
 
   ///
   /// \brief Construct an EvalExpr object from a Constant.

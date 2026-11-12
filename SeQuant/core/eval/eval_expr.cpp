@@ -131,7 +131,7 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
 
-EvalExpr::EvalExpr(Tensor const& tnsr)
+EvalExpr::EvalExpr(Tensor const& tnsr, IndexSet const& named_indices)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
@@ -139,8 +139,8 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
-    auto md = tn.canonicalize_slots(
-        get_default_context_snapshot().cardinal_tensor_labels());
+    auto md =
+        tn.canonicalize_slots(default_cardinal_tensor_labels(), named_indices);
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
     canon_indices_ = md.get_indices<index_vector>();
@@ -447,7 +447,18 @@ EvalExprNode make_unary_node(EvalOp op, EvalExprNode operand,
 
 }  // namespace
 
-EvalExprNode binarize(Tensor const& t) {
+/// \return the open indices of the leaf \p t of an evaluation tree: an index
+///         that occurs once in it, or one of \p uncontract , which is not
+///         summed over even if it occurs more than once
+static IndexSet leaf_open_indices(Tensor const& t, IndexSet const& uncontract) {
+  if (!is_tot(t)) return {};  // only a tensor-of-tensors leaf consults them
+  auto result = TensorNetwork(ExprPtrList{t.clone()}).ext_indices();
+  for (auto&& ix : t.indices())
+    if (uncontract.contains(ix)) result.emplace(ix);
+  return result;
+}
+
+EvalExprNode binarize(Tensor const& t, IndexSet const& uncontract) {
   // Detect adjoint-marked tensor leaves (label ending in U+207A '⁺'). These
   // arise when the user wrote an adjoint of a BraKetSymmetry::Nonsymm tensor,
   // see Tensor::adjoint() in expressions/tensor.cpp. We surface the adjoint
@@ -470,11 +481,13 @@ EvalExprNode binarize(Tensor const& t) {
 
     // Sentinel right child is Constant(1); the hash differs from the bare
     // leaf's so cache lookups don't collide.
-    return make_unary_node(EvalOp::Adjoint, EvalExprNode{EvalExpr{bare}},
-                           Constant{1}, t.clone(),
-                           t.indices() | ranges::to<EvalExpr::index_vector>, 1);
+    return make_unary_node(
+        EvalOp::Adjoint,
+        EvalExprNode{EvalExpr{bare, leaf_open_indices(bare, uncontract)}},
+        Constant{1}, t.clone(),
+        t.indices() | ranges::to<EvalExpr::index_vector>, 1);
   }
-  return EvalExprNode{EvalExpr{t}};
+  return EvalExprNode{EvalExpr{t, leaf_open_indices(t, uncontract)}};
 }
 
 EvalExprNode binarize(TensorPower const& power, IndexSet const& uncontract,
@@ -659,9 +672,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       auto named_indices = tn.ext_indices();
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
 
-      auto canon = tn.canonicalize_slots(
-          get_default_context_snapshot().cardinal_tensor_labels(),
-          &named_indices);
+      auto canon = tn.canonicalize_slots(default_cardinal_tensor_labels(),
+                                         named_indices);
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       EvalExpr result =
@@ -1053,7 +1065,7 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     if (inline_ctx)
       if (auto const m = inline_ctx->match(t))
         return inline_ctx->inline_definition(m->k, &t, opts, m->swapped);
-    return binarize(t);
+    return binarize(t, uncontract);
   }
 
   if (expr->is<Sum>())  //
@@ -1122,8 +1134,9 @@ EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
     // In order for that to work, we need a dedicated result node in the first
     // place. Hence, we adapt the represented expression for terminals to be
     // that terminal multiplied by 1.
-    EvalExpr result = is_scalar ? *sequant::binarize(res.result_as_variable())
-                                : *sequant::binarize(res.result_as_tensor());
+    EvalExpr result =
+        is_scalar ? *sequant::binarize(res.result_as_variable())
+                  : *sequant::binarize(res.result_as_tensor(), uncontract);
     EvalOpSetter{}.set(result, EvalOp::Product);
 
     tree = EvalExprNode(std::move(result), std::move(tree),

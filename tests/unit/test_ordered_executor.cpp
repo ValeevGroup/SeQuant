@@ -2728,8 +2728,8 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     if (!term) continue;
     sequant::opt::schedule::RecordedRoot recorded;
     try {
-      recorded = sequant::opt::schedule::record_root("R" + std::to_string(s),
-                                                     term, opts);
+      recorded = sequant::opt::schedule::record_root(
+          "R" + std::to_string(s), sequant::tests::deduced_result(term), opts);
     } catch (std::exception const&) {
       continue;
     }

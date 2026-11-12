@@ -845,9 +845,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   }
 
   std::wstring to_latex() const override {
-    auto &ctx = get_default_context();
-    const auto bkt = ctx.braket_typesetting();
-    const auto bkst = ctx.braket_slot_typesetting();
+    const auto &print_opts = io::latex::detail::active_print_options();
+    const auto bkt = print_opts.braket_typesetting;
+    const auto bkst = print_opts.braket_slot_typesetting;
 
     // either rank > 1 or sum of bra and ket ranks > 1
     // and label is not antisymmetrizer label, since it is already implied
@@ -912,8 +912,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// included, is a tensor network and is canonicalized as one, with the
   /// given options; any other is canonicalized by the default tensor
   /// canonicalizer
-  ExprPtr canonicalize(CanonicalizeOptions opts =
-                           CanonicalizeOptions::default_options()) override;
+  ExprPtr canonicalize(
+      const NamedIndexSpec &named_indices,
+      CanonicalizeOptions opts = CanonicalizeOptions{}) override;
 
   /// @brief adjoint of a Tensor swaps its bra and ket
   virtual void adjoint() override;
@@ -1250,22 +1251,6 @@ static_assert(is_tensor<Tensor>,
               "Tensor interface");
 
 using TensorPtr = std::shared_ptr<Tensor>;
-
-/// @brief canonicalizes an Expr that is a tensor leaf, as Tensor::canonicalize
-/// does
-///
-/// A leaf in which an index occurs more than once, protoindices included, is a
-/// tensor network and is canonicalized as one, with @p opts; any other is
-/// canonicalized in place by the default tensor canonicalizer, through the
-/// AbstractTensor interface of @p leaf .
-/// @param[in,out] leaf an Expr that is an AbstractTensor
-/// @param[in] opts the canonicalization options
-/// @param[in] assign assigns the canonical form computed as a tensor network,
-///            an object of the same type as @p leaf , to @p leaf
-/// @return the byproduct of canonicalization (e.g. a phase), or nullptr
-ExprPtr canonicalize_tensor_leaf(
-    Expr &leaf, CanonicalizeOptions opts,
-    const std::function<void(const AbstractTensor &)> &assign);
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
   // an overlap is Hermitian and particle (column) symmetric by definition;

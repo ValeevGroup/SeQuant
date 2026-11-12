@@ -50,7 +50,21 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
 
       ExprPtr actual = mbpt::biorthogonal_transform(input_expr, externals);
 
-      REQUIRE_THAT(actual, EquivalentTo(expected));
+      // the result is particle-symmetric: compare as such, i.e. up to
+      // permutations of its particles
+      auto as_result = [&externals](ExprPtr expr) {
+        container::svector<Index> b, k;
+        for (const auto& group : externals) {
+          b.push_back(get_ket_idx(group));
+          k.push_back(get_bra_idx(group));
+        }
+        return ResultExpr(bra(std::move(b)), ket(std::move(k)),
+                          aux(IndexList{}), Symmetry::Nonsymm,
+                          BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm, {},
+                          std::move(expr));
+      };
+      REQUIRE_THAT(as_result(actual),
+                   EquivalentTo(as_result(deserialize(expected))));
     }
   }
 

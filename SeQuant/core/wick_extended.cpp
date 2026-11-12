@@ -466,8 +466,10 @@ bool satisfies_connectivity(const Product &term, const OpProvenance &prov,
 }
 
 /// @return @p expr with every δ over an index summed within its term applied
+/// @param external_indices the external indices of @p expr
 template <Statistics S>
-ExprPtr apply_dummy_deltas(const ExprPtr &expr) {
+ExprPtr apply_dummy_deltas(const ExprPtr &expr,
+                           const NamedIndexSpec &external_indices) {
   auto result = std::make_shared<Sum>();
   const auto terms = expr->is<Sum>() ? expr : ex<Sum>(ExprPtrList{expr});
   for (const auto &term : *terms) {
@@ -475,16 +477,15 @@ ExprPtr apply_dummy_deltas(const ExprPtr &expr) {
       result->append(term);
       continue;
     }
-    // the term's own index counts tell its dummies from its externals
     ExprPtr reduced = term->clone();
-    WickTheorem<S> reducer{reduced};
+    WickTheorem<S> reducer{reduced, external_indices};
     reducer.reduce(reduced);
     if (!reduced->is<Product>()) continue;  // vanished
     // an applied δ is left as a factor of 1; append() folds it into the scalar
     const auto &product = reduced->as<Product>();
     ExprPtr folded = std::make_shared<Product>(product.scalar(), ExprPtrList{});
     for (const auto &f : product) folded->as<Product>().append(1, f);
-    result->append(canonicalize(folded));
+    result->append(canonicalize(folded, external_indices));
   }
   return result;
 }
@@ -512,7 +513,8 @@ void rewrite_eta(ExprPtr &expr) {
 template <Statistics S>
 ExprPtr cumulant_expand(const ExprPtr &wick_output,
                         const OpProvenance &provenance,
-                        const ExtendedWickOptions &opts) {
+                        const ExtendedWickOptions &opts,
+                        const NamedIndexSpec &external_indices) {
   if (!wick_output || wick_output->is<Constant>())
     return wick_output ? wick_output : ex<Constant>(0);
 
@@ -562,18 +564,23 @@ ExprPtr cumulant_expand(const ExprPtr &wick_output,
     expand_term(wick_output);
   }
   ExprPtr out = result;
-  simplify(out);
+  simplify(out, external_indices);
   if (out->is<Sum>() && out->as<Sum>().empty()) return ex<Constant>(0);
   return out;
 }
 
 template ExprPtr cumulant_expand<Statistics::FermiDirac>(
-    const ExprPtr &, const OpProvenance &, const ExtendedWickOptions &);
+    const ExprPtr &, const OpProvenance &, const ExtendedWickOptions &,
+    const NamedIndexSpec &);
 
 template <Statistics S>
 ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                       WickTheorem<S> &stats_sink) {
-  const auto &ctx = get_default_context(S);
+  // the external indices of the input, as given to the theorem
+  const NamedIndexSpec &external_indices = stats_sink.external_indices_spec_;
+  // a snapshot, which (with its registry) stays valid for the whole
+  // computation, even if the default context is replaced meanwhile
+  const auto ctx = get_default_context_snapshot(S);
   SEQUANT_ASSERT(ctx.vacuum() == Vacuum::MultiProduct);
   const auto &ibr = *ctx.index_basis_registry();
 
@@ -591,7 +598,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                      (f->as<Tensor>().label() == reserved::kronecker_label() ||
                       f->as<Tensor>().label() == reserved::overlap_label());
             })) {
-      const ExprPtr resolved = apply_dummy_deltas<S>(term);
+      const ExprPtr resolved = apply_dummy_deltas<S>(term, external_indices);
       if (resolved->as<Sum>().empty()) return ex<Constant>(0);
       SEQUANT_ASSERT(resolved->as<Sum>().size() == 1);
       term = resolved->as<Sum>().summand(0);
@@ -599,7 +606,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
     if (term->is<NormalOperator<S>>()) term = ex<Product>(ExprPtrList{term});
     // canonicalize first, so that the provenance sees the final indices
     if (term->is<Product>()) {
-      [[maybe_unused]] auto bp = term->rapid_canonicalize();
+      [[maybe_unused]] auto bp = term->rapid_canonicalize(external_indices);
       SEQUANT_ASSERT(bp == nullptr);
     }
     // the operators' equivalences are those of the term itself, in which an
@@ -607,11 +614,9 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
     // every op at its ordinal
     std::optional<typename WickTheorem<S>::TopologicalPartitions> partitions;
     if (opts.use_topology && term->is<Product>()) {
-      // the context's named indices are external even if they appear twice
-      const auto &copts = ctx.canonicalization_options();
-      partitions = WickTheorem<S>::analyze_topology(
-          term->as<Product>(),
-          copts && copts->named_indices ? &*copts->named_indices : nullptr);
+      // the declared external indices are external even if they appear twice
+      partitions = WickTheorem<S>::analyze_topology(term->as<Product>(),
+                                                    external_indices);
       // pruning by its topology would not preserve that the term is zero by
       // symmetry
       if (partitions->zero) return ex<Constant>(0);
@@ -654,7 +659,12 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                           std::to_string(nopseq->size()) +
                           " input operators of a term");
 
-    WickTheorem<S> wick{nopseq};
+    // every index of an operator is external to the theorem applied to the
+    // operators alone
+    container::set<Index> op_indices;
+    for (const auto &nop : *nopseq)
+      for (const auto &op : nop) op_indices.insert(op.index());
+    WickTheorem<S> wick{nopseq, explicit_named_indices(std::move(op_indices))};
     wick.full_contractions(false).use_topology(opts.use_topology);
     // the engine rejects a pair contraction between an avoided pair as soon
     // as it is attempted; cumulant_expand still filters the rest (a cumulant
@@ -669,27 +679,23 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
         /*count_only=*/false, /*skip_input_canonicalization=*/false);
     stats_sink.stats() += wick.stats();
 
+    const auto fixed_named_indices = explicit_named_indices(fixed_indices);
     auto result = std::make_shared<Sum>();
     auto process = [&](const ExprPtr &t) {
       // the operator and coefficient indices are external to the reductions
       // below and to the simplification inside cumulant_expand; only the
       // final apply_dummy_deltas and simplify merge the dummies
-      const auto scope =
-          set_scoped_modified_default_context([&fixed_indices](Context &ctx) {
-            ctx.set(ctx.canonicalization_options()
-                        .value_or(CanonicalizeOptions{})
-                        .copy_and_set(fixed_indices));
-          });
       for (const auto &p :
            split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), ibr,
                                  opts.full_contractions)) {
         ExprPtr reduced = p;
-        WickTheorem<S> reducer{reduced};
+        WickTheorem<S> reducer{reduced, fixed_named_indices};
         reducer.reduce(reduced);
         if (!reduced->is<Product>()) continue;  // vanished
         OpProvenance prov = provenance;
         extend_provenance(reduced->as<Product>(), prov);
-        ExprPtr expanded = cumulant_expand<S>(reduced, prov, opts);
+        ExprPtr expanded =
+            cumulant_expand<S>(reduced, prov, opts, fixed_named_indices);
         for (const auto &d : shared_deltas) expanded = expanded * d;
         expand(expanded);
         result->append(expanded);
@@ -717,8 +723,8 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
   }
   ExprPtr out = result;
   if (opts.eta_as_delta_minus_gamma) rewrite_eta(out);
-  out = apply_dummy_deltas<S>(out);
-  simplify(out);
+  out = apply_dummy_deltas<S>(out, external_indices);
+  simplify(out, external_indices);
   if (out->is<Sum>() && out->as<Sum>().empty()) return ex<Constant>(0);
   return out;
 }

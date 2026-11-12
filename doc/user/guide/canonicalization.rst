@@ -28,15 +28,12 @@ How it works, briefly
 ------------------------
 
 Canonicalizing a single :class:`sequant::Tensor` — putting its own bra/ket indices in a fixed order consistent with its declared
-permutational symmetry — is handled by a :class:`sequant::TensorCanonicalizer`, looked up by the tensor's label in the current
-:class:`sequant::Context` (see :ref:`context-canonicalizer-configuration`). Canonicalizing a whole product of tensors (or of
+permutational symmetry — is handled by a :class:`sequant::TensorCanonicalizer`. Canonicalizing a whole product of tensors (or of
 normal-ordered operators) additionally requires choosing a consistent relabeling of the *dummy* indices shared between factors; SeQuant
 does this by building a colored graph representation of the product (a *tensor network*) and computing its canonical form using the
 bundled `bliss <https://users.aalto.fi/~tjunttil/bliss/>`_ `graph-automorphism <https://en.wikipedia.org/wiki/Graph_automorphism>`_ library. This machinery is what
 ``Expr::canonicalize()`` invokes internally, and what :func:`sequant::simplify` combines with cheap algebraic clean-up (flattening,
-dropping zeros, ...) to fully reduce an expression. The method it uses and the indices it treats as named (external) are the
-:class:`sequant::CanonicalizeOptions` of the current ``Context``; :func:`sequant::canonicalize` and :func:`sequant::simplify` take no
-options of their own, so to canonicalize under other options scope a context that carries them (see :doc:`context`):
+dropping zeros, ...) to fully reduce an expression:
 
 .. literalinclude:: /examples/user/canonicalization.cpp
    :language: cpp
@@ -46,6 +43,76 @@ options of their own, so to canonicalize under other options scope a context tha
 
 A fully canonicalized expression remembers that it is in canonical form, so canonicalizing or simplifying it again before it is
 modified does no work.
+
+.. _canonicalization-internal-form:
+
+One canonical form
+--------------------
+
+The library canonicalizes to one fixed form: the ``Complete`` method (:class:`sequant::CanonicalizationMethod`), with the library's
+default tensor canonicalizers, index comparers and cardinal tensor labels (:func:`sequant::default_cardinal_tensor_labels`). No global
+setting changes it; it depends on the :class:`sequant::Context` only through the index basis registry (the order of the index spaces)
+and the single-particle basis (the symmetry of normal operators), see :doc:`context`. Code throughout the library relies on this
+form, so it is the same whoever calls it and whatever else is configured.
+
+Named indices
+----------------
+
+Canonicalization renames dummy indices, but must never rename the *named* (external) indices, whose labels carry meaning. Which
+indices are named is therefore always specified explicitly; there is no default:
+
+- a :class:`sequant::ResultExpr` carries them as the indices of its result, and ``canonicalize(ResultExpr&)`` /
+  ``simplify(ResultExpr&)`` use them. These overloads also merge terms that an explicit (anti)symmetrizer of the result
+  (``Ŝ``/``Â``) multiplies and that differ only by a permutation of its indices that it absorbs (for ``Â`` permutations of
+  its bra and of its ket indices, with their parities as phase; for ``Ŝ`` permutations of its columns). The declared symmetry
+  of the result is not used for this: that the result has a symmetry does not make its terms have it (e.g.
+  :math:`R = X + P(X)` is symmetric, :math:`2X` is not);
+- for a plain ``ExprPtr`` the caller passes :data:`sequant::deduce_named_indices`, opting in to deducing the named indices as
+  the indices that occur once in each product. This is wrong for theories in which an external index can occur several times
+  (e.g. tensor hypercontraction), which is why it is never done implicitly. The library itself never deduces named indices.
+
+The same holds for :class:`sequant::WickTheorem` and ``vac_av``/``ref_av``, and for the Python bindings
+(``simplify(expr, deduce=True)``):
+
+.. literalinclude:: /examples/user/canonicalization.cpp
+   :language: cpp
+   :start-after: start-snippet-3
+   :end-before: end-snippet-3
+   :dedent: 2
+
+Nested products
+-----------------
+
+A product whose factors are tensors and (recursively) products of tensors, such as a product parenthesized for evaluation by
+``optimize()``, is canonicalized as one tensor network of all its tensors: the dummy indices are named consistently across the
+nested products, and the parenthesization is preserved; only the factors at each level are reordered.
+
+.. _canonicalization-presentation:
+
+Presentation
+--------------
+
+The canonical form is meant to identify equivalent expressions, not to be read. Other forms are requested explicitly:
+
+- :func:`sequant::prettify` returns a copy of an expression in a form meant for reading: optionally canonicalized with the given
+  presentation settings (:class:`sequant::CanonicalizationPresentation`: tensor canonicalizers per label, index comparers and
+  cardinal tensor labels), then sorted lexicographically, which, unlike canonicalization, does not depend on the hashing algorithm.
+  Named indices are never renamed, and the structure of the expression is preserved: products keep their parenthesization
+  (e.g. the order of evaluation chosen by ``optimize()``), and sums are neither flattened nor are their summands combined.
+  For a :class:`sequant::ResultExpr`, the terms of a sum that a symmetrizer of the result multiplies are presented alike if
+  they are related by a permutation that the symmetrizer absorbs.
+  :func:`sequant::mbpt::prettify_options` is a preset that presents mbpt expressions in their conventional order (the cardinal
+  tensor labels of mbpt); ``prettify`` itself is part of the core library;
+- the same presentation settings can be passed to ``canonicalize()`` and the ``Expr::canonicalize()`` members
+  (``CanonicalizeOptions::presentation``). The result is not marked as canonical, and ``simplify()``, whose result must be the
+  canonical form, rejects them;
+- the LaTeX printers can print summands and factors in a lexicographic order (:class:`sequant::PrintOptions`, see :doc:`context`).
+
+.. literalinclude:: /examples/user/canonicalization.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
+   :dedent: 2
 
 None of this needs to be invoked explicitly in typical use: the :doc:`mbpt operator machinery <operator>` and
 :doc:`CC equation generator <cc>` call ``simplify()``/canonicalization as needed while building up equations. Knowing that it happens —

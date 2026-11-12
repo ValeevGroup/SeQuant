@@ -6,6 +6,7 @@
 #include <SeQuant/core/space.hpp>
 
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -58,8 +59,23 @@ py::object factors(ExprPtr &expr) {
   return py::none();
 }
 
-// disambiguates sequant::simplify
-ExprPtr &simplify(ExprPtr &expr) { return sequant::simplify(expr); }
+ExprPtr &simplify(ExprPtr &expr, bool deduce) {
+  return sequant::simplify(expr, named_index_spec(deduce));
+}
+
+ExprPtr &canonicalize(ExprPtr &expr, bool deduce) {
+  return sequant::canonicalize(expr, named_index_spec(deduce));
+}
+
+ExprPtr prettify(
+    const ExprPtr &expr, bool deduce, bool recanonicalize,
+    std::optional<std::vector<std::wstring>> cardinal_tensor_labels) {
+  PrettifyOptions opts{.recanonicalize = recanonicalize};
+  if (cardinal_tensor_labels)
+    opts.presentation.cardinal_tensor_labels = container::vector<std::wstring>(
+        cardinal_tensor_labels->begin(), cardinal_tensor_labels->end());
+  return sequant::prettify(expr, named_index_spec(deduce), opts);
+}
 
 py::object rational_to_fraction(const rational &r) {
   py::object Fraction = py::module::import("fractions").attr("Fraction");
@@ -172,7 +188,21 @@ PYBIND11_MODULE(_sequant, m) {
 
   py::class_<Sum, std::shared_ptr<Sum>, Expr>(m, "Sum");
 
-  m.def("simplify", &sequant::python::simplify);
+  m.def("simplify", &sequant::python::simplify,
+        "simplifies expr; deduce=True (required) deduces its external indices "
+        "as the indices that occur once in each product",
+        py::arg("expr"), py::kw_only(), py::arg("deduce"));
+  m.def("canonicalize", &sequant::python::canonicalize,
+        "canonicalizes expr; see simplify for deduce", py::arg("expr"),
+        py::kw_only(), py::arg("deduce"));
+  m.def("prettify", &sequant::python::prettify,
+        "returns a copy of expr in a form meant for reading: canonicalized "
+        "(unless recanonicalize=False) and sorted lexicographically, with the "
+        "tensors with the given cardinal_tensor_labels first (default: those "
+        "of the library's canonical form); see simplify for deduce",
+        py::arg("expr"), py::kw_only(), py::arg("deduce"),
+        py::arg("recanonicalize") = true,
+        py::arg("cardinal_tensor_labels") = py::none());
 
   python::mbpt::__init__(m.def_submodule("mbpt"));
 }

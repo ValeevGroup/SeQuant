@@ -297,21 +297,32 @@ struct ClosedShellCCSpintraceOptions {
 /// performed numerically.
 /// @warning the antisymmetrizer is assumed to be at the front of each tensor
 /// network, hence must use "complete" canonicalization to produce the input expression.
-/// @param expr input expression
+/// @param expr input expression; its result indices are the external indices
 /// @param options optional parameter controlling the algorithm selection and
 ///                other traits; the default is to use
 ///                the V2 method
 // clang-format on
+ResultExpr closed_shell_CC_spintrace(
+    const ResultExpr& expr, ClosedShellCCSpintraceOptions options = {});
+
+/// @brief like closed_shell_CC_spintrace(const ResultExpr&, ...), with the
+/// external indices given by the projector (antisymmetrizer or symmetrizer)
+/// of @p expr , or none if it has no projector
+/// @throw Exception if @p expr has no projector but has external indices
+/// @note the projector does not determine the external indices of every
+/// expression (e.g. of some multireference ones), prefer the ResultExpr
+/// overload
+/// @todo deprecate once the CC drivers produce ResultExpr objects
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
                                   ClosedShellCCSpintraceOptions options = {});
 
-/// @sa closed_shell_CC_spintrace
+/// @sa closed_shell_CC_spintrace(ExprPtr const&, ...)
 ExprPtr closed_shell_CC_spintrace_v1(
     ExprPtr const& expr,
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V1, .naive_spintrace = false});
 
-/// @sa closed_shell_CC_spintrace
+/// @sa closed_shell_CC_spintrace(ExprPtr const&, ...)
 ExprPtr closed_shell_CC_spintrace_v2(
     ExprPtr const& expr,
     ClosedShellCCSpintraceOptions options = {
@@ -388,6 +399,21 @@ std::vector<ExprPtr> open_shell_spintrace(
 /// the input expression.
 // clang-format on
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
+
+/// @brief like open_shell_CC_spintrace(const ExprPtr&), with the external
+/// indices given by the result of @p expr
+/// @details A result with indices must have the leading antisymmetrizer of its
+/// expression carry exactly its indices; a scalar result (e.g. a CC energy)
+/// must have none.
+/// @param expr the input result
+/// @return the result of each spin case, ordered as by
+/// open_shell_CC_spintrace(const ExprPtr&): spin case `s` labels the result
+/// indices of the last `s` columns of the antisymmetrizer spin-down and the
+/// others spin-up. The results have no permutational symmetry, since the
+/// antisymmetrizer is removed from their expressions.
+/// @throw Exception if @p expr has aux indices, or if its antisymmetrizer
+/// does not match its indices
+std::vector<ResultExpr> open_shell_CC_spintrace(const ResultExpr& expr);
 
 /// @brief Transforms an expression from spin orbital to spin-free (spatial)
 /// orbital form

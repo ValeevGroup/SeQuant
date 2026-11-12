@@ -805,11 +805,11 @@ ExprPtr result_symmetrization(
       sym_ket.push_back(externals.ket[(i + j) % externals.ket.size()]);
     }
 
-    symmetrization +=
-        rational(1, externals.bra.size()) *
-        ex<Tensor>(precursor_name, bra(std::move(sym_bra)),
-                   ket(std::move(sym_ket)), aux(externals.aux), ref.symmetry(),
-                   ref.braket_symmetry(), ref.column_symmetry());
+    symmetrization += rational(1, externals.bra.size()) *
+                      ex<Tensor>(precursor_name, bra(std::move(sym_bra)),
+                                 ket(std::move(sym_ket)), aux(externals.aux),
+                                 Symmetry::Nonsymm, ref.braket_symmetry(),
+                                 ColumnSymmetry::Nonsymm);
   }
 
   return symmetrization;

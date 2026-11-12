@@ -69,9 +69,9 @@ inline Hermiticity default_hermiticity(OpClass cls) {
 /// A registry that keeps track of MBPT operators by their labels and
 /// properties.
 ///
-/// Copy semantics is shallow (operator map shared via `std::shared_ptr`),
-/// allowing multiple mbpt::Context objects to share operator definitions.
-/// Use OpRegistry::clone() for deep copies.
+/// Copies are deep, i.e. a copy and its source can be modified independently;
+/// mbpt::Context objects share one (immutable) registry via
+/// `std::shared_ptr<const OpRegistry>`.
 class OpRegistry {
  public:
   /// default constructor, creates an empty registry
@@ -89,11 +89,14 @@ class OpRegistry {
             std::make_shared<container::map<std::wstring, Hermiticity>>()),
         basis_grants_(std::make_shared<BasisGrants>()) {}
 
-  /// copy constructor
+  /// copy constructor, makes a deep copy
   OpRegistry(const OpRegistry& other)
-      : ops_(other.ops_),
-        herm_overrides_(other.herm_overrides_),
-        basis_grants_(other.basis_grants_) {}
+      : ops_(std::make_shared<container::map<std::wstring, OpClass>>(
+            *other.ops_)),
+        herm_overrides_(
+            std::make_shared<container::map<std::wstring, Hermiticity>>(
+                *other.herm_overrides_)),
+        basis_grants_(std::make_shared<BasisGrants>(*other.basis_grants_)) {}
 
   /// move constructor
   OpRegistry(OpRegistry&& other) noexcept
@@ -101,7 +104,7 @@ class OpRegistry {
         herm_overrides_(std::move(other.herm_overrides_)),
         basis_grants_(std::move(other.basis_grants_)) {}
 
-  /// copy assignment operator
+  /// copy assignment operator, makes a deep copy
   OpRegistry& operator=(const OpRegistry& other);
 
   /// move assignment operator
@@ -113,7 +116,8 @@ class OpRegistry {
   /// @brief const iterator to end of registry
   [[nodiscard]] decltype(auto) end() const { return ops_->cend(); }
 
-  /// @brief clones this OpRegistry, creates a copy of ops_
+  /// @brief clones this OpRegistry
+  /// @return a (deep) copy of this
   OpRegistry clone() const;
 
   /// @brief Adds a new operator to the registry

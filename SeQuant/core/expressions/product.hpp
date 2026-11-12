@@ -339,13 +339,13 @@ class Product : public Expr {
   ConstExprIterator end_subexpr() const override;
 
   virtual ExprPtr canonicalize(
-      CanonicalizeOptions opt =
-          CanonicalizeOptions::default_options()) override;
+      const NamedIndexSpec &named_indices,
+      CanonicalizeOptions opt = CanonicalizeOptions{}) override;
 
   virtual ExprPtr rapid_canonicalize(
-      CanonicalizeOptions opts =
-          CanonicalizeOptions::default_options().copy_and_set(
-              CanonicalizationMethod::Rapid)) override;
+      const NamedIndexSpec &named_indices,
+      CanonicalizeOptions opts = CanonicalizeOptions{}.copy_and_set(
+          CanonicalizationMethod::Rapid)) override;
 
  private:
   scalar_type scalar_ = {1, 0};
@@ -362,7 +362,38 @@ class Product : public Expr {
   /// identical to the hash of the factor itself.
   hash_type memoizing_hash() const override;
 
-  ExprPtr canonicalize_impl(CanonicalizeOptions);
+  ExprPtr canonicalize_impl(const NamedIndexSpec &named_indices,
+                            CanonicalizeOptions opts);
+
+  /// collects the tensor factors of this and of its nested products
+  /// (recursively), in order
+  /// @param[out] leaves the tensor factors
+  /// @return true if this is a tree of products of tensors and scalars,
+  /// with at least one nested product
+  bool collect_nested_tensor_leaves(container::svector<ExprPtr *> &leaves);
+
+  /// canonicalizes a tree of products of tensors (see
+  /// collect_nested_tensor_leaves()) as a single tensor network of its tensor
+  /// factors @p leaves ; the parenthesization is preserved
+  void canonicalize_nested(const container::svector<ExprPtr *> &leaves,
+                           const NamedIndexSpec &named_indices,
+                           const CanonicalizeOptions &opts);
+
+  /// moves the scalar factors to the front and sorts the other factors,
+  /// respecting their commutativity
+  /// @param cardinal_tensor_labels the labels of the tensors that go first,
+  /// in this order
+  /// @param recursive whether to sort the factors of the nested products, too
+  void sort_factors(
+      const container::vector<std::wstring> &cardinal_tensor_labels,
+      bool recursive);
+
+  /// sorts the factors, which are not scalars, respecting their
+  /// commutativity
+  /// @param cardinal_tensor_labels the labels of the tensors that go first,
+  /// in this order
+  void sort_nonscalar_factors(
+      const container::vector<std::wstring> &cardinal_tensor_labels);
 
   bool static_equal(const Expr &that) const override;
 

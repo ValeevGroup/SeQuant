@@ -16,6 +16,7 @@
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/expressions/lexicographic_order.hpp>
 #include <SeQuant/core/expressions/power.hpp>
+#include <SeQuant/core/expressions/prettify.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>

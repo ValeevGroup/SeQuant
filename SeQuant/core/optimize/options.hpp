@@ -368,11 +368,16 @@ struct OptimizeOptions {
   ///          says so. Use a fresh PinSession per run, and reset this pointer
   ///          (and \ref recording) to null when the same OptimizeOptions
   ///          object is reused for another call.
+  ///
+  /// \note requires the ResultExpr overloads of optimize() and
+  /// optimize_result(): the terms are canonicalized with the external indices
+  /// of the result
   opt::schedule::PinSession* pinned = nullptr;
 
   /// Optional schedule recording (see opt/schedule_pin.hpp). When non-null,
   /// each summand is optimized on its canonicalized clone and its record is
   /// added to the session, keyed by the optimized summand's pointer. Not owned.
+  /// \note requires the ResultExpr overloads, see \ref pinned
   opt::schedule::RecordSession* recording = nullptr;
 };
 

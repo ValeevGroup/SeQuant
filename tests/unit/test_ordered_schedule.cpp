@@ -35,7 +35,9 @@
 #include "csv_size_fixtures.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include "catch2_sequant.hpp"
 
 #include <algorithm>
 #include <array>
@@ -384,7 +386,9 @@ namespace {
 sequant::EvalExpr orderedsched_eval_tensor(std::string_view tensor) {
   auto expr = sequant::deserialize<sequant::ExprPtr>(std::string(tensor));
   REQUIRE(static_cast<bool>(expr));
-  return sequant::EvalExpr{expr->as<sequant::Tensor>()};
+  return sequant::EvalExpr(
+      expr->as<sequant::Tensor>(),
+      sequant::tests::open_indices(expr->as<sequant::Tensor>()));
 }
 
 sequant::EvalNode<sequant::EvalExpr> orderedsched_leaf(

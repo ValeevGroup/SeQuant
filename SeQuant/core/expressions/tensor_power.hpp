@@ -65,8 +65,9 @@ class TensorPower : public Expr, public AbstractTensor {
 
   /// canonicalizes the slots like Tensor::canonicalize; the byproduct, the
   /// phase of the base raised to the exponent, follows from _symmetry()
-  ExprPtr canonicalize(CanonicalizeOptions opts =
-                           CanonicalizeOptions::default_options()) override;
+  ExprPtr canonicalize(
+      const NamedIndexSpec& named_indices,
+      CanonicalizeOptions opts = CanonicalizeOptions{}) override;
 
   std::wstring to_latex() const override;
 

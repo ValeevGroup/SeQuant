@@ -286,7 +286,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
       };
       auto vac_av = [](ExprPtr const& p) {
         Index::reset_tmp_index();
-        return t::vac_av(p);
+        return t::vac_av(p, deduce_named_indices);
       };
       for (int k : products) {
         INFO("K" << k);
@@ -773,7 +773,8 @@ TEST_CASE("basis-grants-linear-response", "[mbpt][csv][valgrind_skip]") {
         lst(op::Hʼ(1), op::T(2), 2, {.use_connected_form = true});
     const OpConnections<std::wstring> connect = {{L"h¹", L"t"}};
     const auto pseudo = closed_shell_CC_spintrace_v2(
-        op::vac_av(adjoint(op::Tʼ(2)) * h1_bar, {.connect = connect}));
+        op::vac_av(adjoint(op::Tʼ(2)) * h1_bar, deduce_named_indices,
+                   {.connect = connect}));
     std::size_t n = 0;
     auto const& ibr = get_default_context().index_basis_registry();
     for (auto const* tn :

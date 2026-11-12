@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/hugenholtz.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -829,9 +830,9 @@ class NormalOperator : public Operator<S>,
   }
 
   std::wstring to_latex() const override {
-    const auto &ctx = get_default_context();
-    const auto bkt = ctx.braket_typesetting();
-    const auto bkst = ctx.braket_slot_typesetting();
+    const auto &print_opts = io::latex::detail::active_print_options();
+    const auto bkt = print_opts.braket_typesetting;
+    const auto bkst = print_opts.braket_slot_typesetting;
 
     std::wstring core_label;
     if (vacuum() == Vacuum::Physical) {
@@ -926,6 +927,17 @@ class NormalOperator : public Operator<S>,
 
   ExprPtr clone() const override {
     return std::make_shared<NormalOperator>(*this);
+  }
+
+  /// canonicalizes this as a tensor leaf, i.e. like a Tensor
+  /// @sa canonicalize_tensor_leaf
+  ExprPtr canonicalize(
+      const NamedIndexSpec &named_indices,
+      CanonicalizeOptions opts = CanonicalizeOptions{}) override {
+    return canonicalize_tensor_leaf(
+        *this, named_indices, opts, [this](const AbstractTensor &canonical) {
+          *this = static_cast<const NormalOperator &>(canonical);
+        });
   }
 
   virtual void adjoint() override {
@@ -1036,7 +1048,7 @@ class NormalOperator : public Operator<S>,
   template <Statistics>
   friend class Operator;
   bool commutes_with_atom(const Expr &that) const override {
-    const auto &ibr = get_default_context(S).index_basis_registry();
+    const auto ibr = get_default_index_basis_registry(S);
 
     bool result = true;
     /// does not commute with Operator<S>

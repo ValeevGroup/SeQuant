@@ -16,6 +16,9 @@
 
 #include <vector>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 namespace sequant {
 namespace mbpt {
 inline namespace op {
@@ -53,12 +56,15 @@ std::vector<std::pair<int, int>> lower_label_pairs(
 
 // fwd declare the tensor level impl function
 namespace tensor {
-ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               const NamedIndexSpec& external_indices,
+                               OpConnections<int> connect,
                                OpConnections<int> avoid, bool use_top,
                                bool full_contractions);
 }  // namespace tensor
 
 ExprPtr expectation_value_impl(ExprPtr expr,
+                               const NamedIndexSpec& external_indices,
                                const OpConnections<std::wstring>& connect,
                                const OpConnections<std::wstring>& avoid,
                                bool use_topology, bool screen, bool skip_clone,
@@ -66,8 +72,8 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
 
-  auto vac_av_product = [&connect, &avoid, use_topology, screen,
-                         full_contractions](ExprPtr expr) {
+  auto vac_av_product = [&external_indices, &connect, &avoid, use_topology,
+                         screen, full_contractions](ExprPtr expr) {
     SEQUANT_ASSERT(expr.is<Product>());
     // Note: Non-tensor factors are filtered out at the tensor level (see
     // tensor::expectation_value_impl) before reaching WickTheorem
@@ -115,13 +121,14 @@ ExprPtr expectation_value_impl(ExprPtr expr,
 
     // lower to tensor form
     lower_to_tensor_form(expr);
-    simplify(expr);
+    simplify(expr, external_indices);
 
     // compute expectation value
     // call the tensor-level impl function directly
-    auto vev = tensor::expectation_value_impl(expr, t_connect, t_avoid,
-                                              use_topology, full_contractions);
-    return simplify(vev);
+    auto vev = tensor::expectation_value_impl(expr, external_indices, t_connect,
+                                              t_avoid, use_topology,
+                                              full_contractions);
+    return simplify(vev, external_indices);
   };
 
   ExprPtr result;
@@ -131,20 +138,25 @@ ExprPtr expectation_value_impl(ExprPtr expr,
           return factor.template is<Sum>();
         })) {
       expr = expand(expr);
-      simplify(expr);  // condense equivalent terms after expansion
-      return expectation_value_impl(expr, connect, avoid, use_topology, screen,
+      simplify(expr, external_indices);  // condense equivalent terms
+      return expectation_value_impl(expr, external_indices, connect, avoid,
+                                    use_topology, screen,
                                     /* skip_clone = */ true, full_contractions);
     } else
       return vac_av_product(expr);
   } else if (expr.is<Sum>()) {
     result = sequant::transform_sum_expr(
-        *expr, [&connect, &avoid, use_topology, screen,
-                full_contractions](const auto& op_product) {
-          return expectation_value_impl(
-              op_product, connect, avoid, use_topology, screen,
-              /* skip_clone = */ true, full_contractions);
-        });
-    simplify(result);  // combine possible equivalent summands
+        *expr,
+        [&external_indices, &connect, &avoid, use_topology, screen,
+         full_contractions](const auto& op_product) {
+          return expectation_value_impl(op_product, external_indices, connect,
+                                        avoid, use_topology, screen,
+                                        /* skip_clone = */ true,
+                                        full_contractions);
+        },
+        {.canonicalize = external_indices});
+    // combine possible equivalent summands
+    simplify(result, external_indices);
     return result;
   } else if (expr.is<op_t>()) {
     if (full_contractions) return ex<Constant>(0);
@@ -157,18 +169,37 @@ ExprPtr expectation_value_impl(ExprPtr expr,
       "type");
 }
 
-ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts) {
+ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<std::wstring> opts) {
   const bool full_contractions = detail::ref_av_full_contractions();
   detail::validate_ref_av_connections(opts, full_contractions);
-  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
-                                opts.use_topology, opts.screen, opts.skip_clone,
-                                full_contractions);
+  return expectation_value_impl(
+      expr, external_indices, opts.connect, opts.do_not_connect,
+      opts.use_topology, opts.screen, opts.skip_clone, full_contractions);
 }
 
-ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts) {
-  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
-                                opts.use_topology, opts.screen, opts.skip_clone,
+ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<std::wstring> opts) {
+  return expectation_value_impl(expr, external_indices, opts.connect,
+                                opts.do_not_connect, opts.use_topology,
+                                opts.screen, opts.skip_clone,
                                 /* full_contractions */ true);
+}
+
+ResultExpr ref_av(const ResultExpr& expr, EVOptions<std::wstring> opts) {
+  ResultExpr result = expr.clone();
+  result.expression() =
+      ref_av(expr.expression(), named_indices(expr), std::move(opts));
+  simplify(result);
+  return result;
+}
+
+ResultExpr vac_av(const ResultExpr& expr, EVOptions<std::wstring> opts) {
+  ResultExpr result = expr.clone();
+  result.expression() =
+      vac_av(expr.expression(), named_indices(expr), std::move(opts));
+  simplify(result);
+  return result;
 }
 
 }  // namespace op

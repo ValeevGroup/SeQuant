@@ -274,20 +274,53 @@ class TensorNetworkV3 {
 
   const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
 
+  /// a group of tensors, e.g. the tensors of a nested product
+  struct TensorGroup {
+    /// groups with different keys are told apart; groups with equal keys
+    /// (and equal contents) are interchangeable
+    std::size_t key;
+    /// the enclosing group, if any, as an index into the groups
+    std::optional<std::size_t> parent;
+  };
+
+  /// sets the groups of the tensors, which canonicalization keeps together:
+  /// only relabelings that map each group onto a group of the same key are
+  /// considered, e.g. those that respect the parenthesization of a nested
+  /// product (each group is a vertex of the graph, connected to the tensors
+  /// in it and to its enclosing group)
+  /// @param groups the groups; a parent precedes its children
+  /// @param tensor_groups the innermost group of each tensor, in input
+  /// order; nullopt for a tensor in no group
+  /// @pre `tensor_groups.size() == tensors().size()` , and canonicalize() has
+  /// not been called yet
+  void set_tensor_groups(
+      container::svector<TensorGroup> groups,
+      container::svector<std::optional<std::size_t>> tensor_groups) {
+    SEQUANT_ASSERT(tensor_groups.size() == tensors_.size());
+    tensor_groups_ = std::move(groups);
+    tensor_group_of_ = std::move(tensor_groups);
+  }
+
   using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
+  /// @param named_indices the indices that cannot be renamed, i.e. whose labels
+  /// are meaningful; deduction selects the external indices (ext_indices())
   /// @param options see CanonicalizeOptions for the meaning of this
-  /// parameter; the default is given by CanonicalizeOptions::default_options()
+  /// parameter; the default is given by CanonicalizeOptions{}
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr; Constant 0 if topological canonicalization finds the network
   /// to be zero by symmetry (see Graph::automorphism_phase()), in which case
   /// the tensors are left as they were
   ExprPtr canonicalize(
-      const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      const CanonicalizeOptions &options =
-          CanonicalizeOptions::default_options());
+      const container::vector<std::wstring> &cardinal_tensor_labels,
+      const NamedIndexSpec &named_indices,
+      const CanonicalizeOptions &options = CanonicalizeOptions{});
+
+  /// @return the named indices that @p spec specifies for this network:
+  /// ext_indices() if they are to be deduced
+  NamedIndexSet named_indices(const NamedIndexSpec &spec) const;
 
   /// metadata produced by canonicalize_slots()
   struct SlotCanonicalizationMetadata {
@@ -338,8 +371,7 @@ class TensorNetworkV3 {
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
-  /// their labels are meaningful; default is nullptr, which results in external
-  /// indices treated as named indices
+  /// their labels are meaningful
   /// @param named_index_compare less-than comparison function for
   /// named indices, used for coarse-grained sorting of named indices,
   /// before sorting to canonical order; the default is to sort
@@ -351,8 +383,17 @@ class TensorNetworkV3 {
   /// leaves the canonicalization at the space-only named coloring.
   /// @return the computed canonicalization metadata
   SlotCanonicalizationMetadata canonicalize_slots(
-      const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      const NamedIndexSet *named_indices = nullptr,
+      const container::vector<std::wstring> &cardinal_tensor_labels,
+      const NamedIndexSet &named_indices,
+      SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+          default_idxptr_slottype_lesscompare{},
+      const tensor_network::NamedIndexColorMap *named_index_colors = nullptr);
+
+  /// like the other overload, with the named indices that @p named_indices
+  /// specifies (deduction selects ext_indices())
+  SlotCanonicalizationMetadata canonicalize_slots(
+      const container::vector<std::wstring> &cardinal_tensor_labels,
+      const NamedIndexSpec &named_indices,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
           default_idxptr_slottype_lesscompare{},
       const tensor_network::NamedIndexColorMap *named_index_colors = nullptr);
@@ -389,12 +430,6 @@ class TensorNetworkV3 {
   /// options for generating Graph from an object of this type
   struct CreateGraphOptions {
     SEQUANT_DESIGNATED_INIT_ONLY;
-    /// pointer to the set of named indices (ordinarily,
-    /// this includes all external indices);
-    /// default is nullptr, which means use all external indices for
-    /// named indices
-    const NamedIndexSet *named_indices = nullptr;
-
     /// optional per-named-index loop-color map: when non-null, a named index
     /// found here has its DAG-scope loop-color folded into its vertex color so
     /// that same-space named indices bound to different loops become
@@ -477,7 +512,16 @@ class TensorNetworkV3 {
   ///     - for tensors with bra<->ket symmetry matching bra and ket slot
   ///     vertices have identical colors.
   // clang-format on
+  /// @param[in] named_indices the named indices (ordinarily, the external
+  /// indices)
   Graph create_graph(
+      const NamedIndexSet &named_indices,
+      const CreateGraphOptions &options = make_default_graph_options()) const;
+
+  /// like the other overload, with the named indices that @p named_indices
+  /// specifies (deduction selects ext_indices())
+  Graph create_graph(
+      const NamedIndexSpec &named_indices,
       const CreateGraphOptions &options = make_default_graph_options()) const;
   /// @param graph a graph produced by create_graph()
   /// @param aut_hook if nonempty, called with each automorphism generator of
@@ -495,6 +539,10 @@ class TensorNetworkV3 {
   container::svector<AbstractTensorPtr> tensors_;
   /// input ordinals of tensors in tensors_
   container::svector<std::size_t> tensor_input_ordinals_;
+  /// see set_tensor_groups()
+  container::svector<TensorGroup> tensor_groups_;
+  /// see set_tensor_groups(); indexed by input ordinal, empty if no groups
+  container::svector<std::optional<std::size_t>> tensor_group_of_;
 
   container::vector<Edge> edges_;
   bool have_edges_ = false;
@@ -522,23 +570,31 @@ class TensorNetworkV3 {
   /// @note with @p ignore_named_index_labels the structure of the result does
   /// not depend on the labels of the named indices, but their placement does:
   /// named indices that an automorphism of the network can exchange are placed
-  /// in the order of the context's index comparer
+  /// in the order of @p label_less
+  /// @param label_less the order of index labels; null selects the default
   [[nodiscard]] ExprPtr canonicalize_graph(
-      const NamedIndexSet &named_indices,
-      bool ignore_named_index_labels = true);
+      const NamedIndexSet &named_indices, bool ignore_named_index_labels = true,
+      std::shared_ptr<const tensor_index_comparer_t> label_less = nullptr);
 
   /// Canonicalizes every individual tensor for itself, taking into account only
   /// tensor blocks
+  /// @param options supply the canonicalizers for particular tensor labels
   /// @returns The byproduct of the canonicalizations
   ExprPtr canonicalize_individual_tensor_blocks(
-      const NamedIndexSet &named_indices);
+      const NamedIndexSet &named_indices, const CanonicalizeOptions &options);
 
   /// Canonicalizes every individual tensor for itself
+  /// @param options supply the comparers and the canonicalizers for particular
+  /// tensor labels
   /// @returns The byproduct of the canonicalizations
-  ExprPtr canonicalize_individual_tensors(const NamedIndexSet &named_indices);
+  ExprPtr canonicalize_individual_tensors(const NamedIndexSet &named_indices,
+                                          const CanonicalizeOptions &options);
 
+  /// canonicalizes every tensor with the canonicalizer that @p options give
+  /// for its label, else with @p canonicalizer
   ExprPtr do_individual_canonicalization(
-      const TensorCanonicalizer &canonicalizer);
+      const TensorCanonicalizer &canonicalizer,
+      const CanonicalizeOptions &options);
 
   void add_expr(const Expr &expr) {
     ExprPtr clone = expr.clone();

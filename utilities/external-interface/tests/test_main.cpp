@@ -30,8 +30,7 @@ int main(int argc, char* argv[]) {
        .vacuum = Vacuum::SingleProduct,
        .spbasis = SPBasis::Spinor,
        .first_dummy_index_ordinal = 100,
-       .deserialization_column_symmetry = ColumnSymmetry::Symm,
-       .cardinal_tensor_labels = sequant::mbpt::cardinal_tensor_labels()});
+       .deserialization_column_symmetry = ColumnSymmetry::Symm});
 
   auto mbpt_ctx = mbpt::Context(
       {.csv = mbpt::CSV::No, .op_registry_ptr = mbpt::make_legacy_registry()});

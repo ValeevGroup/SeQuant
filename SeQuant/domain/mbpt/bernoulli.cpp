@@ -24,6 +24,9 @@
 #include <string_view>
 #include <utility>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 // Bernoulli expansion of the unitary-CC similarity-transformed Hamiltonian
 // H̄ = e^{−σ} H e^{σ}, σ = T − T† (anti-Hermitian). For UCC the plain BCH
 // series does not terminate, because σ mixes excitation and de-excitation.
@@ -116,6 +119,18 @@ namespace sequant::mbpt::bernoulli {
 
 namespace {
 
+/// the external indices of the tensor-level operator expressions of this
+/// file: none, since every index pairs a coefficient tensor with a normal
+/// operator
+const NamedIndexSpec& no_external_indices() {
+  static const NamedIndexSpec result = explicit_named_indices({});
+  return result;
+}
+
+}  // namespace
+
+namespace {
+
 /// Returns @f$b_0,\ldots,b_{\mathrm{max\_order}}@f$ in
 /// @f$x/(\exp(x)-1)=\sum_n b_n x^n@f$.
 ///
@@ -201,14 +216,14 @@ container::svector<PartitionPathCoefficients> nested_commutator_coefficients(
 
 ExprPtr wick_reduce(const ExprPtr& expr_in) {
   auto expr = expr_in->clone();
-  simplify(expr);
-  FWickTheorem wick{expr};
+  simplify(expr, no_external_indices());
+  FWickTheorem wick{expr, no_external_indices()};
   // use_topology (on by default) is exact for partial contractions too: it only
   // permutes ops whose stand-alone swap is a symmetry of the input
   wick.full_contractions(false);
   auto result = wick.compute(/*count_only=*/false,
                              /*skip_input_canonicalization=*/true);
-  simplify(result);
+  simplify(result, no_external_indices());
   return result;
 }
 
@@ -294,11 +309,12 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
 
   ExprPtr out;
   if (expr.is<Sum>()) {
-    out = transform_sum_expr(expr.as<Sum>().summands(), expand_term);
+    out = transform_sum_expr(expr.as<Sum>().summands(), expand_term,
+                             {.canonicalize = no_external_indices()});
   } else {
     out = expand_term(expr);
   }
-  simplify(out);
+  simplify(out, no_external_indices());
   return out;
 }
 
@@ -310,7 +326,8 @@ ExprPtr keep_N_terms(const ExprPtr& bx, std::size_t cutoff,
     auto out = std::make_shared<Sum>();
     for (const auto& t : bx.as<Sum>())
       if (is_N_term(t, cutoff, min_rank)) out->append(t);
-    return out->empty() ? ex<Constant>(0) : simplify(ExprPtr{out});
+    return out->empty() ? ex<Constant>(0)
+                        : simplify(ExprPtr{out}, no_external_indices());
   }
   return is_N_term(bx, cutoff, min_rank) ? bx : ex<Constant>(0);
 }
@@ -324,7 +341,8 @@ ExprPtr N_part_reduced(const ExprPtr& reduced, std::size_t cutoff,
 /// R_part for input already in wick_reduce'd form.
 ExprPtr R_part_reduced(const ExprPtr& reduced, std::size_t cutoff,
                        std::size_t min_rank) {
-  return simplify(reduced - N_part_reduced(reduced, cutoff, min_rank));
+  return simplify(reduced - N_part_reduced(reduced, cutoff, min_rank),
+                  no_external_indices());
 }
 
 }  // namespace
@@ -360,7 +378,7 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   const auto F = op::tensor::F();
   const auto V = op::tensor::h(2);
   const auto T = op::tensor::T(N, skip1);
-  const auto sigma = simplify(T - adjoint(T));
+  const auto sigma = simplify(T - adjoint(T), no_external_indices());
 
   // Applies one partition tag; 'A' is no filter. `reduced` skips the
   // wick_reduce inside N_part/R_part, which commutator output has had already.
@@ -414,7 +432,7 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
     }
   };
 
-  add(1, simplify(F + V));  // H̄⁰ = F + V   [Eq. (46)]
+  add(1, simplify(F + V, no_external_indices()));  // H̄⁰ = F + V   [Eq. (46)]
   if (rank >= 1) {
     // Eq. (44) generates the V commutators; the F commutator occurs only in
     // H̄¹. Generate paths before Wick expansion so exact zero coefficients and
@@ -426,7 +444,7 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
         add(coefficient, nest(path));
   }
   auto result = acc.make_expr();
-  return simplify(result);
+  return simplify(result, no_external_indices());
 }
 
 }  // namespace sequant::mbpt::bernoulli

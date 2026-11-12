@@ -138,8 +138,13 @@ struct OpParams {
 };
 
 /// @return the tensor labels in the cardinal order, starting with the
-/// reserved labels that Context uses by default
+/// reserved labels that lead the library's canonical form (see
+/// default_cardinal_tensor_labels())
 std::vector<std::wstring> cardinal_tensor_labels();
+
+/// @return the options of prettify() that present mbpt expressions in the
+/// conventional order of their tensors (see cardinal_tensor_labels())
+PrettifyOptions prettify_options();
 
 //////////////////////////////
 
@@ -564,19 +569,43 @@ struct EVOptions {
 namespace tensor {
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
+/// @param external_indices the external indices of @p expr (e.g. those of its
+///        projector), which survive the expectation value; see NamedIndexSpec
 /// @param opts defines the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
 /// @pre When the reference differs from the Wick vacuum and the vacuum is not
 ///      MultiProduct, opts.connect and opts.do_not_connect must both be empty.
-ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
+ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<int> opts = {});
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
+/// @param external_indices the external indices of @p expr ; see
+///        NamedIndexSpec
 /// @param opts defines the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
-ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
+ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<int> opts = {});
+
+/// @brief computes the reference expectation value of the tensor-level
+/// expression of @p expr , whose result indices are the external indices
+/// @return @p expr with its expression replaced by the expectation value
+ResultExpr ref_av(const ResultExpr& expr, EVOptions<int> opts = {});
+
+/// @brief computes the vacuum expectation value of the tensor-level expression
+/// of @p expr , whose result indices are the external indices
+/// @return @p expr with its expression replaced by the expectation value
+ResultExpr vac_av(const ResultExpr& expr, EVOptions<int> opts = {});
 }  // namespace tensor
+
+/// @param base the comparer to defer to; null selects the default one
+/// @return an Index comparer that moves the active indices (those of the
+/// intersection of the particle and hole spaces of the registry of the
+/// default context) to the front and otherwise defers to @p base ; for use as
+/// the index comparer of a CanonicalizationPresentation
+std::shared_ptr<const tensor_index_comparer_t> active_first_index_comparer(
+    std::shared_ptr<const tensor_index_comparer_t> base = nullptr);
 }  // namespace op
 
 }  // namespace mbpt

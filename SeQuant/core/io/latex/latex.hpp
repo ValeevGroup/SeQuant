@@ -22,12 +22,30 @@ class ExprPtr;
 class Power;
 class TensorPower;
 class ResultExpr;
+struct PrintOptions;
 }  // namespace sequant
 
 namespace sequant::io::latex {
 
+namespace detail {
+
+/// @return the PrintOptions in effect on the calling thread: those given to
+/// the to_string() call that is printing on this thread, else those of the
+/// default context
+/// @note the to_latex() members read the typesetting from here, so that
+/// printing with explicit PrintOptions never modifies the (process-wide)
+/// default context
+const PrintOptions& active_print_options();
+
+}  // namespace detail
+
+/// prints @p expr with the PrintOptions of the default context
 /// @returns an empty string if @p expr is null.
 std::wstring to_string(const ExprPtr& expr);
+
+/// prints @p expr with the given PrintOptions
+/// @returns an empty string if @p expr is null.
+std::wstring to_string(const ExprPtr& expr, const PrintOptions& opts);
 
 template <typename T>
 concept has_to_latex_member = requires(const T& t) { t.to_latex(); };
@@ -113,7 +131,11 @@ std::wstring to_string(const Power& power);
 
 std::wstring to_string(const TensorPower& power);
 
+/// prints @p expr with the PrintOptions of the default context
 std::wstring to_string(const ResultExpr& expr);
+
+/// prints @p expr with the given PrintOptions
+std::wstring to_string(const ResultExpr& expr, const PrintOptions& opts);
 
 namespace detail {
 

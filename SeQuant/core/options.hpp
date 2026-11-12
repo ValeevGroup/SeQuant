@@ -5,11 +5,15 @@
 #ifndef SEQUANT_CORE_OPTIONS_HPP
 #define SEQUANT_CORE_OPTIONS_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
+#include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sequant {
@@ -44,6 +48,119 @@ CanonicalizationMethod operator|(CanonicalizationMethod m1,
                                  CanonicalizationMethod m2);
 std::wstring to_wstring(CanonicalizationMethod m);
 
+/// tag that requests the named indices of an expression to be deduced as the
+/// indices that occur once in each of its products
+/// @warning deduction is a heuristic that fails for expressions in which an
+/// external index occurs more than once (e.g. in tensor hypercontraction or
+/// with quasi-diagonal tensors); the library itself never deduces
+struct DeduceNamedIndices {
+  explicit constexpr DeduceNamedIndices() = default;
+  friend constexpr bool operator==(DeduceNamedIndices,
+                                   DeduceNamedIndices) = default;
+};
+
+/// requests the deduction of named indices, see DeduceNamedIndices
+inline constexpr DeduceNamedIndices deduce_named_indices{};
+
+class NamedIndexSpec;
+
+namespace detail {
+/// @return the specification of the explicit named indices @p named_indices
+/// @note for the library's own use: public functions take the named indices
+/// as the indices of a ResultExpr, which also gives their symmetries
+NamedIndexSpec explicit_named_indices(container::set<Index> named_indices);
+}  // namespace detail
+
+/// @brief specifies the named indices of a canonicalization, i.e. the indices
+/// whose labels are meaningful and must not change (ordinarily the external
+/// indices of an expression)
+///
+/// Either a request to deduce them (see DeduceNamedIndices), the only form a
+/// user constructs, or an explicit set of indices, which the library derives
+/// from a ResultExpr or from what it knows about an expression it builds
+/// (see detail::explicit_named_indices()). There is deliberately no default:
+/// every caller of a canonicalization states which indices are named.
+class NamedIndexSpec {
+ public:
+  /// requests deduction
+  NamedIndexSpec(DeduceNamedIndices) {}
+
+  /// @return true if the named indices are to be deduced
+  bool deduce() const { return !named_indices_.has_value(); }
+  /// @return the named indices
+  /// @pre `!deduce()`
+  const container::set<Index>& indices() const;
+  /// @return pointer to the named indices, or null if they are to be deduced
+  const container::set<Index>* indices_ptr() const {
+    return named_indices_ ? &*named_indices_ : nullptr;
+  }
+
+  friend bool operator==(const NamedIndexSpec&,
+                         const NamedIndexSpec&) = default;
+
+ private:
+  explicit NamedIndexSpec(container::set<Index> named_indices)
+      : named_indices_(std::move(named_indices)) {}
+  friend NamedIndexSpec detail::explicit_named_indices(
+      container::set<Index> named_indices);
+
+  std::optional<container::set<Index>> named_indices_;
+};
+
+/// @brief settings of a canonicalization that only affect how its result
+/// looks, i.e. which of the equivalent forms it picks; a member that is not
+/// set takes the library default
+struct CanonicalizationPresentation {
+  SEQUANT_DESIGNATED_INIT_ONLY;
+
+  /// the labels of the tensors to place first, in this order
+  std::optional<container::vector<std::wstring>> cardinal_tensor_labels =
+      std::nullopt;
+  /// orders the indices of a tensor
+  std::shared_ptr<const tensor_index_comparer_t> index_comparer = nullptr;
+  /// orders the index pairs of a tensor
+  std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer =
+      nullptr;
+  /// canonicalizers for the tensors with the given labels; the one for the
+  /// empty label, if any, replaces the default canonicalizer of the tensors
+  /// with any other label
+  container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+      tensor_canonicalizers = {};
+
+  /// @return true if @p a and @p b agree in every member; comparers and
+  /// canonicalizers are compared by identity
+  friend bool operator==(const CanonicalizationPresentation& a,
+                         const CanonicalizationPresentation& b);
+};
+
+/// @return the cardinal tensor labels of the library's canonical form: the
+/// reserved labels of the antisymmetrizer, symmetrizer and transposition
+/// operators
+const container::vector<std::wstring>& default_cardinal_tensor_labels();
+
+/// State shared by a (recursive) lexicographic comparison of expressions
+/// @sa Expr::lexicographic_compare
+struct LexicographicCompareOptions {
+  /// tensor labels that precede all others, in this order; the default is
+  /// that of the library's canonical form
+  /// @sa default_cardinal_tensor_labels()
+  container::vector<std::wstring> cardinal_tensor_labels =
+      default_cardinal_tensor_labels();
+
+  /// @return position of (the non-adjoint form of) @p label among
+  /// cardinal_tensor_labels, or `cardinal_tensor_labels.size()` if it is not a
+  /// cardinal label
+  std::size_t cardinal_position(std::wstring_view label) const;
+
+  bool operator==(const LexicographicCompareOptions&) const = default;
+};
+
+/// version of the canonical form that canonicalize() produces with the
+/// default (internal-form) options; it is increased whenever that form
+/// changes, so that records keyed by canonical forms (e.g. schedule documents,
+/// see eval::schedule::ContextRecord) can detect that they are stale
+inline constexpr int canonical_form_version = 1;
+
 /// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
@@ -59,10 +176,6 @@ struct CanonicalizeOptions {
   /// is fixed
   /// @endinternal
   CanonicalizationMethod method = CanonicalizationMethod::Complete;
-  /// specifies named indices; by default all indices that appear only once are
-  /// deduced to be named, but this may be misleading if e.g. single
-  /// summed-over dummy index appears in an expression
-  std::optional<container::set<Index>> named_indices = std::nullopt;
   /// whether the graph-based canonicalization ignores the labels of named
   /// indices, so that the structure of the result does not depend on them;
   /// named indices that an automorphism of the network can exchange are then
@@ -71,26 +184,60 @@ struct CanonicalizeOptions {
   /// two named indices of the network. A Sum canonicalizes its summands with
   /// labels distinguished regardless.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
+  /// presentation settings; null selects the library's canonical form, which
+  /// is the only one recorded by the canonical mark of an Expr
+  std::shared_ptr<const CanonicalizationPresentation> presentation = nullptr;
 
-  static CanonicalizeOptions default_options();
+  /// @return true if these options produce the library's canonical form, i.e.
+  /// have no presentation settings
+  bool is_internal_form() const { return presentation == nullptr; }
+
   CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
-  CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
+  CanonicalizeOptions copy_and_set(
+      std::shared_ptr<const CanonicalizationPresentation>) const;
 
-  /// @return true if @p a and @p b agree in every member
+  /// @return true if @p a and @p b agree in every member; presentations are
+  /// compared by value
   friend bool operator==(const CanonicalizeOptions& a,
                          const CanonicalizeOptions& b) {
     // the bindings name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY
     // tag), so that a member added to CanonicalizeOptions fails to compile here
     // until it is compared
-    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a] = a;
-    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b] = b;
+    const auto& [guard_a, method_a, ignore_labels_a, presentation_a] = a;
+    const auto& [guard_b, method_b, ignore_labels_b, presentation_b] = b;
     (void)guard_a;
     (void)guard_b;
-    return method_a == method_b && named_indices_a == named_indices_b &&
-           ignore_labels_a == ignore_labels_b;
+    const bool same_presentation = presentation_a == presentation_b ||
+                                   (presentation_a && presentation_b &&
+                                    *presentation_a == *presentation_b);
+    return method_a == method_b && ignore_labels_a == ignore_labels_b &&
+           same_presentation;
   }
 };
+
+namespace detail {
+
+/// the presentation settings that a canonicalization with given options uses;
+/// each resolves a setting that @c opts.presentation does not set to the
+/// library default
+/// @{
+const container::vector<std::wstring>& cardinal_tensor_labels(
+    const CanonicalizeOptions& opts);
+std::shared_ptr<const tensor_index_comparer_t> index_comparer(
+    const CanonicalizeOptions& opts);
+std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer(
+    const CanonicalizeOptions& opts);
+/// @return the canonicalizer for exactly @p label , or null
+std::shared_ptr<TensorCanonicalizer> nondefault_tensor_canonicalizer(
+    const CanonicalizeOptions& opts, std::wstring_view label);
+/// @return the canonicalizer for @p label , else the one for the empty label,
+/// or null if neither is set
+std::shared_ptr<TensorCanonicalizer> tensor_canonicalizer(
+    const CanonicalizeOptions& opts, std::wstring_view label);
+/// @}
+
+}  // namespace detail
 
 }  // namespace sequant
 

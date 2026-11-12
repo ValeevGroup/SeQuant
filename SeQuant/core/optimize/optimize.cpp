@@ -172,8 +172,24 @@ void store_term_axes(OptimizeOptions const& opts, Expr const* optimized,
 /// and is reported by PinSession::finish. Otherwise the DP runs on the
 /// canonical term, so the recorded labels are the output's labels. Recording
 /// adds record_term of the result.
-ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
-  auto canon = opt::schedule::canonical_term(term);
+/// \return the external indices with which a pinned or recorded term is
+///         canonicalized
+/// \throw Exception if \p external is null, i.e. the expression is not a
+///        ResultExpr
+NamedIndexSpec const& schedule_external_indices(
+    NamedIndexSpec const* external) {
+  if (!external)
+    throw Exception(
+        "optimize: schedule pinning and recording canonicalize the terms with "
+        "the external indices of the result, which requires the ResultExpr "
+        "overload");
+  return *external;
+}
+
+ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts,
+                           NamedIndexSpec const* external) {
+  auto canon =
+      opt::schedule::canonical_term(term, schedule_external_indices(external));
   auto key = opt::schedule::term_key(canon);
   bool pure = opt::is_tensor_factor(*canon) || canon->is<Constant>();
   if (canon->is<Product>()) {
@@ -219,9 +235,10 @@ ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
 
 /// Optimize a Product that contains only tensor (opt::is_tensor_factor) and
 /// scalar factors.
-ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
+ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts,
+                         NamedIndexSpec const* external) {
   if (opts.pinned || opts.recording)
-    return opt_scheduled_term(ex<Product>(prod), opts);
+    return opt_scheduled_term(ex<Product>(prod), opts, external);
   // Filled by either batched objective when term_batch_axes is set; every
   // other objective leaves it empty, so the term_batch_axes insertion below is
   // then a no-op-shaped empty-vector entry (harmless: the binarizer only
@@ -245,13 +262,14 @@ inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 /// non-scalar factors by substituting placeholder tensors with target indices,
 /// optimizing the resulting tensor-only product, then swapping the originals
 /// back in.
-ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
+ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts,
+                          NamedIndexSpec const* external) {
   // a pin cannot rebuild a mixed product; a recording lists it as not
   // pinnable and optimizes it as usual, with the placeholder product below
   // kept out of the record (it is not a term of the root)
   if (opts.pinned)
-    throw_not_pinnable(opt::schedule::term_key(
-        opt::schedule::canonical_term(ex<Product>(prod))));
+    throw_not_pinnable(opt::schedule::term_key(opt::schedule::canonical_term(
+        ex<Product>(prod), schedule_external_indices(external))));
   OptimizeOptions inner = opts;
   inner.recording = nullptr;
   container::svector<ExprPtr> non_tensors(prod.size());
@@ -272,7 +290,8 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   }
 
   auto result = opt_pure_product(
-      Product{prod.scalar(), new_factors, Product::Flatten::No}, inner);
+      Product{prod.scalar(), new_factors, Product::Flatten::No}, inner,
+      external);
 
   auto replacer = [&non_tensors](ExprPtr& out) {
     if (!out->is<Tensor>()) return;
@@ -295,9 +314,10 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
 
   result->visit(replacer, /* atoms_only = */ true);
   if (opts.recording)
-    opts.recording->add(result.get(),
-                        opt::schedule::record_unpinnable_term(
-                            opt::schedule::canonical_term(ex<Product>(prod))));
+    opts.recording->add(
+        result.get(),
+        opt::schedule::record_unpinnable_term(opt::schedule::canonical_term(
+            ex<Product>(prod), schedule_external_indices(external))));
   return result;
 }
 
@@ -345,18 +365,20 @@ void relocate_records(
 /// outermost Sum's summands are processed in parallel; nested recursive
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
 ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
-                      bool reorder, bool parallel_outer) {
+                      bool reorder, bool parallel_outer,
+                      NamedIndexSpec const* external) {
   bool const scheduled = opts.pinned || opts.recording;
   // under pinning or recording, a lone Tensor or Constant is a term too
   if (scheduled && !expr->is<Product>() && !expr->is<Sum>())
-    return opt_scheduled_term(expr, opts);
+    return opt_scheduled_term(expr, opts, external);
 
   if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
     bool pure = ranges::all_of(prod, [](auto&& x) {
       return opt::is_tensor_factor(*x) || x->is_scalar();
     });
-    return pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
+    return pure ? opt_pure_product(prod, opts, external)
+                : opt_mixed_product(prod, opts, external);
   }
 
   if (expr->is<Sum>()) {
@@ -372,7 +394,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     auto do_term = [&](std::size_t i) {
       new_smands[i] = optimize_impl(in_sum.summand(i), opts,
                                     /*reorder=*/false,
-                                    /*parallel_outer=*/false);
+                                    /*parallel_outer=*/false, external);
     };
 
     // Thread-safety of the parallel branch rests on two invariants; do NOT
@@ -480,19 +502,29 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
 ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
   if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
   return optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
-                       /*parallel_outer=*/true);
+                       /*parallel_outer=*/true, /*external=*/nullptr);
 }
 
 OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
   if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
   OptimizeResult res;
   res.expr = optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
-                           /*parallel_outer=*/true);
+                           /*parallel_outer=*/true, /*external=*/nullptr);
+  return res;
+}
+
+OptimizeResult optimize_result(ResultExpr const& expr, OptimizeOptions opts) {
+  if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
+  const auto external = named_indices(expr);
+  OptimizeResult res;
+  res.expr = optimize_impl(expr.expression(), opts,
+                           opts.reorder == ReorderSum::Reorder,
+                           /*parallel_outer=*/true, &external);
   return res;
 }
 
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {
-  expr.expression() = optimize(expr.expression(), std::move(opts));
+  expr.expression() = optimize_result(expr, std::move(opts)).expr;
   return expr;
 }
 

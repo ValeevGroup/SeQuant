@@ -555,13 +555,13 @@ TEST_CASE("expr", "[elements]") {
 
       // simplify folds a foldable Power-in-Product into the Product scalar
       auto pwf = ex<Power>(2, 2) * ex<Variable>(L"x");
-      simplify(pwf);
+      simplify(pwf, deduce_named_indices);
       REQUIRE(pwf->is<Product>());
       REQUIRE(pwf->as<Product>().scalar() == 4);
 
       // non-foldable Power stays as a factor; scalar is 1
       auto pwnf = ex<Power>(2, rational{1, 2}) * ex<Variable>(L"x");
-      simplify(pwnf);
+      simplify(pwnf, deduce_named_indices);
       REQUIRE(pwnf->is<Product>());
       REQUIRE(pwnf->as<Product>().scalar() == 1);
     }
@@ -580,7 +580,7 @@ TEST_CASE("expr", "[elements]") {
 
       // same base: exponents add, b^(1/2) b^(1/2) = b
       auto same = ex<Power>(half, half) * vx * ex<Power>(half, half);
-      simplify(same);
+      simplify(same, deduce_named_indices);
       REQUIRE(same->is<Product>());
       REQUIRE(same->as<Product>().scalar() == half);
       REQUIRE(factors(same).size() == 1);
@@ -588,7 +588,7 @@ TEST_CASE("expr", "[elements]") {
       // same exponent: bases multiply, (1/2)^(1/2) (1/8)^(1/2) = 1/4
       auto perfect =
           ex<Power>(half, half) * ex<Power>(rational{1, 8}, half) * vx;
-      simplify(perfect);
+      simplify(perfect, deduce_named_indices);
       REQUIRE(perfect->is<Product>());
       REQUIRE(perfect->as<Product>().scalar() == rational{1, 4});
       REQUIRE(factors(perfect).size() == 1);
@@ -596,7 +596,7 @@ TEST_CASE("expr", "[elements]") {
       // ... and the irrational part stays: (1/2)^(1/2) (1/6)^(1/2) =
       // (1/6) 3^(1/2)
       auto fused = ex<Power>(half, half) * ex<Power>(rational{1, 6}, half) * vx;
-      simplify(fused);
+      simplify(fused, deduce_named_indices);
       REQUIRE(fused->is<Product>());
       REQUIRE(fused->as<Product>().scalar() == rational{1, 6});
       REQUIRE(factors(fused).size() == 2);
@@ -605,13 +605,13 @@ TEST_CASE("expr", "[elements]") {
       // more than two Powers fuse into one
       auto three = ex<Power>(half, half) * ex<Power>(half, half) * vx *
                    ex<Power>(2, half) * ex<Power>(2, half);
-      simplify(three);
+      simplify(three, deduce_named_indices);
       REQUIRE(*three == *vx);
 
       // different bases and exponents fuse into one root:
       // 2^(1/2) 3^(1/3) = 72^(1/6)
       auto roots = ex<Power>(2, half) * ex<Power>(3, third) * vx;
-      simplify(roots);
+      simplify(roots, deduce_named_indices);
       REQUIRE(roots->is<Product>());
       REQUIRE(roots->as<Product>().scalar() == 1);
       REQUIRE(factors(roots).size() == 2);
@@ -622,15 +622,15 @@ TEST_CASE("expr", "[elements]") {
           ex<Power>(2, half) * ex<Power>(3, third) * ex<Power>(2, third) * vx;
       auto order2 =
           ex<Power>(3, third) * ex<Power>(2, third) * ex<Power>(2, half) * vx;
-      simplify(order1);
-      simplify(order2);
+      simplify(order1, deduce_named_indices);
+      simplify(order2, deduce_named_indices);
       REQUIRE(*order1 == *order2);
       REQUIRE(has_factor(order1, Power(288, rational{1, 6})));
 
       // the rational part of a lone Power goes into the scalar:
       // 2^(3/2) = 2 2^(1/2)
       auto lone = ex<Power>(2, rational{3, 2}) * vx;
-      simplify(lone);
+      simplify(lone, deduce_named_indices);
       REQUIRE(lone->as<Product>().scalar() == 2);
       REQUIRE(has_factor(lone, Power(2, half)));
       // ... including the part hidden in the radicand, 48^(1/2) = 4 3^(1/2),
@@ -638,20 +638,20 @@ TEST_CASE("expr", "[elements]") {
       // this form
       auto root48 = ex<Power>(48, half) * vx;
       auto scaled = ex<Constant>(4) * ex<Power>(3, half) * vx;
-      simplify(root48);
-      simplify(scaled);
+      simplify(root48, deduce_named_indices);
+      simplify(scaled, deduce_named_indices);
       REQUIRE(*root48 == *scaled);
       REQUIRE(root48->as<Product>().scalar() == 4);
       REQUIRE(has_factor(root48, Power(3, half)));
       // ... and the part in a denominator: (1/2)^(1/2) = (1/2) 2^(1/2)
       auto inverse = ex<Power>(half, half) * vx;
-      simplify(inverse);
+      simplify(inverse, deduce_named_indices);
       REQUIRE(inverse->as<Product>().scalar() == half);
       REQUIRE(has_factor(inverse, Power(2, half)));
       // a complex scalar is left alone as well
       auto complex_scalar =
           ex<Constant>(Constant::scalar_type{4, 4}) * ex<Power>(3, half) * vx;
-      simplify(complex_scalar);
+      simplify(complex_scalar, deduce_named_indices);
       REQUIRE(complex_scalar->as<Product>().scalar() ==
               Constant::scalar_type{4, 4});
       REQUIRE(has_factor(complex_scalar, Power(3, half)));
@@ -660,7 +660,7 @@ TEST_CASE("expr", "[elements]") {
       // 3^(1/2) x + 2 3^(1/2) x = 3 3^(1/2) x
       auto sum =
           ex<Power>(3, half) * vx + ex<Constant>(2) * ex<Power>(3, half) * vx;
-      simplify(sum);
+      simplify(sum, deduce_named_indices);
       REQUIRE(sum->is<Product>());
       REQUIRE(sum->as<Product>().scalar() == 3);
       REQUIRE(has_factor(sum, Power(3, half)));
@@ -668,7 +668,7 @@ TEST_CASE("expr", "[elements]") {
       // x
       auto sum2 =
           ex<Constant>(2) * ex<Power>(2, half) * vx + ex<Power>(8, half) * vx;
-      simplify(sum2);
+      simplify(sum2, deduce_named_indices);
       REQUIRE(sum2->is<Product>());
       REQUIRE(sum2->as<Product>().scalar() == 4);
       REQUIRE(has_factor(sum2, Power(2, half)));
@@ -679,7 +679,7 @@ TEST_CASE("expr", "[elements]") {
                       ex<Power>(third, half) * vx +
                   ex<Constant>(rational{1, 4}) * ex<Power>(half, half) *
                       ex<Power>(third, half) * vx;
-      simplify(sum3);
+      simplify(sum3, deduce_named_indices);
       REQUIRE(sum3->is<Product>());
       REQUIRE(sum3->as<Product>().scalar() == rational{1, 8});
       REQUIRE(has_factor(sum3, Power(6, half)));
@@ -690,14 +690,14 @@ TEST_CASE("expr", "[elements]") {
       const rational pq = rational{1000003} * rational{1000033};
       auto large = ex<Power>(pq, rational{2, 3}) * ex<Power>(1000003, third) *
                    ex<Power>(1000033, third) * vx;
-      simplify(large);
+      simplify(large, deduce_named_indices);
       REQUIRE(large->as<Product>().scalar() == pq);
       REQUIRE(factors(large).size() == 1);
       // a power of a prime beyond trial division is still taken out of the
       // radicand: (p^2 3)^(1/2) = p 3^(1/2)
       auto large_square =
           ex<Power>(rational{1000003} * rational{1000003} * 3, half) * vx;
-      simplify(large_square);
+      simplify(large_square, deduce_named_indices);
       REQUIRE(large_square->as<Product>().scalar() == 1000003);
       REQUIRE(has_factor(large_square, Power(3, half)));
 
@@ -705,25 +705,25 @@ TEST_CASE("expr", "[elements]") {
       // left alone
       auto huge = ex<Power>(2, rational{1, 65537}) *
                   ex<Power>(3, rational{1, 65539}) * vx;
-      simplify(huge);
+      simplify(huge, deduce_named_indices);
       REQUIRE(factors(huge).size() == 3);
 
       // negative exponents: (1/2)^(-1/2) (1/8)^(-1/2) = 4
       auto negexp =
           ex<Power>(half, -half) * ex<Power>(rational{1, 8}, -half) * vx;
-      simplify(negexp);
+      simplify(negexp, deduce_named_indices);
       REQUIRE(negexp->as<Product>().scalar() == 4);
       REQUIRE(factors(negexp).size() == 1);
 
       // negative bases do not fuse
       auto negative = ex<Power>(-2, half) * ex<Power>(-3, half) * vx;
-      simplify(negative);
+      simplify(negative, deduce_named_indices);
       REQUIRE(negative->is<Product>());
       REQUIRE(factors(negative).size() == 3);
 
       // Variable-based Powers are left alone
       auto var = ex<Power>(vx, half) * ex<Power>(2, half) * ex<Power>(2, half);
-      simplify(var);
+      simplify(var, deduce_named_indices);
       REQUIRE(var->is<Product>());
       REQUIRE(var->as<Product>().scalar() == 2);
       REQUIRE(factors(var).size() == 1);
@@ -734,12 +734,12 @@ TEST_CASE("expr", "[elements]") {
       auto conj_a = ex<Power>(half, half);
       conj_a->adjoint();
       auto conj = conj_a->clone() * conj_a->clone() * vx;
-      simplify(conj);
+      simplify(conj, deduce_named_indices);
       REQUIRE(conj->is<Product>());
       REQUIRE(conj->as<Product>().scalar() == half);
       REQUIRE(factors(conj).size() == 1);
       auto mixed = ex<Power>(half, half) * conj_a->clone() * vx;
-      simplify(mixed);
+      simplify(mixed, deduce_named_indices);
       REQUIRE(mixed->as<Product>().scalar() == half);
       REQUIRE(factors(mixed).size() == 1);
 
@@ -750,7 +750,7 @@ TEST_CASE("expr", "[elements]") {
                                   ex<Product>(ExprPtrList{ex<Power>(2, half)})},
                       Product::Flatten::No);
       REQUIRE(factors(nested).size() == 3);
-      simplify(nested);
+      simplify(nested, deduce_named_indices);
       REQUIRE(nested->is<Product>());
       REQUIRE(nested->as<Product>().scalar() == 2);
       REQUIRE(factors(nested).size() == 1);
@@ -759,16 +759,16 @@ TEST_CASE("expr", "[elements]") {
       // 2^(3/2) becomes 2 2^(1/2) and merges with it in a Sum, and 2^(1/2)
       // is left alone
       auto lone_cube = ex<Power>(8, third);
-      simplify(lone_cube);
+      simplify(lone_cube, deduce_named_indices);
       REQUIRE(lone_cube == ex<Constant>(2));
       auto lone_sum = ex<Power>(2, rational{3, 2}) +
                       ex<Constant>(2) * ex<Power>(2, half) + ex<Power>(8, half);
-      simplify(lone_sum);
+      simplify(lone_sum, deduce_named_indices);
       REQUIRE(lone_sum->is<Product>());
       REQUIRE(lone_sum->as<Product>().scalar() == 6);
       REQUIRE(has_factor(lone_sum, Power(2, half)));
       auto lone_root = ex<Power>(2, half);
-      simplify(lone_root);
+      simplify(lone_root, deduce_named_indices);
       REQUIRE(*lone_root == Power(2, half));
     }
 
@@ -786,26 +786,26 @@ TEST_CASE("expr", "[elements]") {
 
       // x x = x^2
       auto square = vx * vy * vx;
-      simplify(square);
+      simplify(square, deduce_named_indices);
       REQUIRE(factors(square).size() == 2);
       REQUIRE(has_factor(square, Power(vx, 2)));
       REQUIRE(has_factor(square, *vy));
 
       // x x^(1/2) = x^(3/2)
       auto mixed = vx * ex<Power>(vx, half) * vy;
-      simplify(mixed);
+      simplify(mixed, deduce_named_indices);
       REQUIRE(factors(mixed).size() == 2);
       REQUIRE(has_factor(mixed, Power(vx, rational{3, 2})));
 
       // x^(1/2) x^(1/2) = x
       auto roots = ex<Power>(vx, half) * ex<Power>(vx, half) * vy;
-      simplify(roots);
+      simplify(roots, deduce_named_indices);
       REQUIRE(factors(roots).size() == 2);
       REQUIRE(has_factor(roots, *vx));
 
       // x^2 x^(-2) = 1
       auto cancel = ex<Power>(vx, 2) * ex<Power>(vx, -2) * vy;
-      simplify(cancel);
+      simplify(cancel, deduce_named_indices);
       REQUIRE(*cancel == *vy);
 
       // distinct labels are left alone, in their order (canonicalize, not
@@ -819,18 +819,18 @@ TEST_CASE("expr", "[elements]") {
       auto cx = vx->clone();
       cx->adjoint();
       auto norm = vx * cx;
-      simplify(norm);
+      simplify(norm, deduce_named_indices);
       REQUIRE(factors(norm).size() == 2);
 
       // (x*)^1 is x*
       auto first_power = ex<Power>(cx, 1) * vy;
-      simplify(first_power);
+      simplify(first_power, deduce_named_indices);
       REQUIRE(factors(first_power).size() == 2);
       REQUIRE(has_factor(first_power, *cx));
 
       // so numerically equal terms merge in a Sum: x x y + x^2 y = 2 x^2 y
       auto sum = vx * vx * vy + ex<Power>(vx, 2) * vy;
-      simplify(sum);
+      simplify(sum, deduce_named_indices);
       REQUIRE(sum->is<Product>());
       REQUIRE(sum->as<Product>().scalar() == 2);
       REQUIRE(has_factor(sum, Power(vx, 2)));
@@ -840,23 +840,23 @@ TEST_CASE("expr", "[elements]") {
       auto pconj = ex<Power>(vx, half);
       pconj->adjoint();
       auto conj = ex<Power>(cx, half) * pconj * vy;
-      simplify(conj);
+      simplify(conj, deduce_named_indices);
       REQUIRE(factors(conj).size() == 2);
       REQUIRE(has_factor(conj, *cx));
 
       // the conjugation ends up on the Variable whatever the exponent:
       // (x*)^2 is left alone, (x^2)* becomes (x*)^2, and the two merge
       auto base_conj = ex<Power>(cx, 2) * vy;
-      simplify(base_conj);
+      simplify(base_conj, deduce_named_indices);
       REQUIRE(factors(base_conj).size() == 2);
       REQUIRE(has_factor(base_conj, Power(cx, 2)));
       auto power_conj = ex<Power>(vx, 2);
       power_conj->adjoint();
       auto moved = power_conj->clone() * vy;
-      simplify(moved);
+      simplify(moved, deduce_named_indices);
       REQUIRE(*moved == *base_conj);
       auto merged = ex<Power>(cx, 2) * vy + power_conj * vy;
-      simplify(merged);
+      simplify(merged, deduce_named_indices);
       REQUIRE(merged->is<Product>());
       REQUIRE(merged->as<Product>().scalar() == 2);
       REQUIRE(has_factor(merged, Power(cx, 2)));
@@ -864,12 +864,12 @@ TEST_CASE("expr", "[elements]") {
       // a lone Power gets the same treatment, so it merges with its Product
       // form in a Sum: (x^2)* + (x*)^2 = 2 (x*)^2, x^1 + x = 2 x
       auto lone_conj = power_conj->clone() + ex<Power>(cx, 2);
-      simplify(lone_conj);
+      simplify(lone_conj, deduce_named_indices);
       REQUIRE(lone_conj->is<Product>());
       REQUIRE(lone_conj->as<Product>().scalar() == 2);
       REQUIRE(has_factor(lone_conj, Power(cx, 2)));
       auto lone_first = ex<Power>(vx, 1) + vx;
-      simplify(lone_first);
+      simplify(lone_first, deduce_named_indices);
       REQUIRE(lone_first->is<Product>());
       REQUIRE(lone_first->as<Product>().scalar() == 2);
       REQUIRE(has_factor(lone_first, *vx));
@@ -1029,11 +1029,12 @@ TEST_CASE("expr", "[elements]") {
     {  // Product::deep_copy keeps the canonical mark
       ExprPtr e = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
                   ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
-      const auto opts = CanonicalizeOptions::default_options().copy_and_set(
-          CanonicalizationMethod::Complete);
-      e->mark_canonical(opts);
-      REQUIRE(e->is_canonical(opts));
-      REQUIRE(e->as<Product>().deep_copy().is_canonical(opts));
+      const auto opts =
+          CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Complete);
+      e->mark_canonical(deduce_named_indices, opts);
+      REQUIRE(e->is_canonical(deduce_named_indices, opts));
+      REQUIRE(e->as<Product>().deep_copy().is_canonical(deduce_named_indices,
+                                                        opts));
     }
   }  // SECTION("clone")
 
@@ -1168,7 +1169,7 @@ TEST_CASE("expr", "[elements]") {
           expr = ex<Constant>(2 * expr->as<Constant>().value());
         }
       });
-      CHECK_NOTHROW(simplify(x));
+      CHECK_NOTHROW(simplify(x, deduce_named_indices));
       CHECK(x->is<Constant>());
       CHECK(x->as<Constant>().value() == 84);
     }
@@ -1610,32 +1611,32 @@ TEST_CASE("expr", "[elements]") {
         ex1 = ex<Constant>(1);
 
         ExprPtr res = ex1 + 1;
-        simplify(res);
+        simplify(res, deduce_named_indices);
         REQUIRE(res == ex<Constant>(2));
 
         res = 1 + ex1;
-        simplify(res);
+        simplify(res, deduce_named_indices);
         REQUIRE(res == ex<Constant>(2));
 
         res = ex1 - 1;
-        simplify(res);
+        simplify(res, deduce_named_indices);
         REQUIRE(res == ex<Constant>(0));
 
         res = 1 - ex1;
-        simplify(res);
+        simplify(res, deduce_named_indices);
         REQUIRE(res == ex<Constant>(0));
 
         res = ex1 * 5.0;
-        simplify(res);
+        simplify(res, deduce_named_indices);
         REQUIRE(res == ex<Constant>(5));
 
         res = 5.0 * ex1;
-        simplify(res);
+        simplify(res, deduce_named_indices);
         REQUIRE(res == ex<Constant>(5));
 
         // This will be rewritten as (1/5.0) * ex1
         res = ex1 / 5.0;
-        simplify(res);
+        simplify(res, deduce_named_indices);
         REQUIRE(res == ex<Constant>(rational(1, 5)));
       }
 
@@ -1644,20 +1645,21 @@ TEST_CASE("expr", "[elements]") {
         auto Two = ex<Constant>(2);
 
         ExprPtr res1 = One + L"x";
-        simplify(res1);
+        simplify(res1, deduce_named_indices);
         REQUIRE_THAT(res1, EquivalentTo(One + ex<Variable>(L"x")));
-        REQUIRE_THAT(simplify(L"x" + One), EquivalentTo(res1));
+        REQUIRE_THAT(simplify(L"x" + One, deduce_named_indices),
+                     EquivalentTo(res1));
 
         ExprPtr res2 = res1 - "x";
-        simplify(res2);
+        simplify(res2, deduce_named_indices);
         REQUIRE(res2 == One);
 
         ExprPtr res3 = L"x" - One;
-        simplify(res3);
+        simplify(res3, deduce_named_indices);
         REQUIRE_THAT(res3, EquivalentTo(ex<Variable>(L"x") - One));
 
         ExprPtr res4 = Two * "y";
-        simplify(res4);
+        simplify(res4, deduce_named_indices);
         REQUIRE_THAT(res4, EquivalentTo(Two * ex<Variable>("y")));
         REQUIRE_THAT("y" * Two, EquivalentTo(res4));
       }
@@ -1666,7 +1668,7 @@ TEST_CASE("expr", "[elements]") {
         ex1 = ex<Constant>(5);
 
         ExprPtr res = ex1 / Constant(3);
-        simplify(res);
+        simplify(res, deduce_named_indices);
 
         REQUIRE(res == ex<Constant>(rational(5, 3)));
       }
@@ -2162,8 +2164,8 @@ TEST_CASE("expr_type_id", "[elements]") {
 TEST_CASE("canonical_mark", "[elements]") {
   using namespace sequant;
 
-  const auto opts = CanonicalizeOptions::default_options().copy_and_set(
-      CanonicalizationMethod::Complete);
+  const auto opts =
+      CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Complete);
   const auto rapid_opts = opts.copy_and_set(CanonicalizationMethod::Rapid);
 
   auto make_product = [] {
@@ -2177,55 +2179,57 @@ TEST_CASE("canonical_mark", "[elements]") {
   };
 
   SECTION("unmarked by default") {
-    REQUIRE(!make_product()->is_canonical(opts));
-    REQUIRE(!make_sum()->is_canonical(opts));
+    REQUIRE(!make_product()->is_canonical(deduce_named_indices, opts));
+    REQUIRE(!make_sum()->is_canonical(deduce_named_indices, opts));
   }
 
   SECTION("marking") {
     auto e = make_sum();
-    e->mark_canonical(opts);
-    REQUIRE(e->is_canonical(opts));
+    e->mark_canonical(deduce_named_indices, opts);
+    REQUIRE(e->is_canonical(deduce_named_indices, opts));
     // the mark is only valid for the options it was recorded under ...
     REQUIRE(!e->is_canonical(
+        deduce_named_indices,
         opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No)));
-    REQUIRE(!e->is_canonical(
-        opts.copy_and_set(container::set<Index>{Index{L"i_1"}})));
+    // ... and the named indices it was recorded with
+    REQUIRE(!e->is_canonical(sequant::tests::explicit_named({Index{L"i_1"}}),
+                             opts));
     // ... and never for rapid canonicalization
-    REQUIRE(!e->is_canonical(rapid_opts));
+    REQUIRE(!e->is_canonical(deduce_named_indices, rapid_opts));
     // only full canonicalization marks
     auto r = make_sum();
-    r->mark_canonical(rapid_opts);
-    REQUIRE(!r->is_canonical(rapid_opts));
-    REQUIRE(!r->is_canonical(opts));
+    r->mark_canonical(deduce_named_indices, rapid_opts);
+    REQUIRE(!r->is_canonical(deduce_named_indices, rapid_opts));
+    REQUIRE(!r->is_canonical(deduce_named_indices, opts));
     // the subexpressions are not marked
-    REQUIRE(!(*e)[0]->is_canonical(opts));
+    REQUIRE(!(*e)[0]->is_canonical(deduce_named_indices, opts));
   }
 
   SECTION("changing the contexts in effect invalidates") {
     auto e = make_sum();
-    e->mark_canonical(opts);
-    REQUIRE(e->is_canonical(opts));
+    e->mark_canonical(deduce_named_indices, opts);
+    REQUIRE(e->is_canonical(deduce_named_indices, opts));
     {
       // a copy given its own registry, which is a configuration of its own
       auto changed = get_default_context();
       changed.set(IndexBasisRegistry(*changed.index_basis_registry()));
       auto resetter = set_scoped_default_context(changed);
-      REQUIRE(!e->is_canonical(opts));
+      REQUIRE(!e->is_canonical(deduce_named_indices, opts));
     }
     // ... for as long as they are in effect
-    REQUIRE(e->is_canonical(opts));
+    REQUIRE(e->is_canonical(deduce_named_indices, opts));
   }
 
   SECTION("mutations of Product invalidate") {
     auto check = [&](auto &&mutate) {
       auto e = make_product();
-      e->mark_canonical(opts);
-      REQUIRE(e->is_canonical(opts));
+      e->mark_canonical(deduce_named_indices, opts);
+      REQUIRE(e->is_canonical(deduce_named_indices, opts));
       // memoize the hashes, which in-place mutation of a subexpression leaves
       // stale in its ancestors
       e->hash_value();
       mutate(e);
-      return e->is_canonical(opts);
+      return e->is_canonical(deduce_named_indices, opts);
     };
     CHECK(!check([](ExprPtr &e) {
       e->as<Product>().append(1, ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
@@ -2264,29 +2268,29 @@ TEST_CASE("canonical_mark", "[elements]") {
   SECTION("mutations of operators invalidate") {
     auto e = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
              ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
-    e->mark_canonical(opts);
-    REQUIRE(e->is_canonical(opts));
+    e->mark_canonical(deduce_named_indices, opts);
+    REQUIRE(e->is_canonical(deduce_named_indices, opts));
     e->as<Product>().factor(1)->as<FNOperator>()[0] = fcre(L"a_7");
-    REQUIRE(!e->is_canonical(opts));
+    REQUIRE(!e->is_canonical(deduce_named_indices, opts));
 
     auto s = ex<FNOperatorSeq>(FNOperator(cre({L"a_1"}), ann({L"i_1"})),
                                FNOperator(cre({L"a_2"}), ann({L"i_2"})));
-    s->mark_canonical(opts);
-    REQUIRE(s->is_canonical(opts));
+    s->mark_canonical(deduce_named_indices, opts);
+    REQUIRE(s->is_canonical(deduce_named_indices, opts));
     s->as<FNOperatorSeq>()[1] = FNOperator(cre({L"a_3"}), ann({L"i_3"}));
-    REQUIRE(!s->is_canonical(opts));
+    REQUIRE(!s->is_canonical(deduce_named_indices, opts));
   }
 
   SECTION("mutations of Sum invalidate") {
     auto check = [&](auto &&mutate) {
       auto e = make_sum();
-      e->mark_canonical(opts);
-      REQUIRE(e->is_canonical(opts));
+      e->mark_canonical(deduce_named_indices, opts);
+      REQUIRE(e->is_canonical(deduce_named_indices, opts));
       // memoize the hashes, which in-place mutation of a subexpression leaves
       // stale in its ancestors
       e->hash_value();
       mutate(e);
-      return e->is_canonical(opts);
+      return e->is_canonical(deduce_named_indices, opts);
     };
     CHECK(!check([](ExprPtr &e) {
       e->as<Sum>().append(ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
@@ -2312,29 +2316,29 @@ TEST_CASE("canonical_mark", "[elements]") {
 
   SECTION("clone keeps the mark") {
     for (auto e : {make_product(), make_sum()}) {
-      e->mark_canonical(opts);
+      e->mark_canonical(deduce_named_indices, opts);
       auto c = e->clone();
-      REQUIRE(c->is_canonical(opts));
+      REQUIRE(c->is_canonical(deduce_named_indices, opts));
       // mutating the clone does not affect the original, or vice versa
       c->adjoint();
-      REQUIRE(!c->is_canonical(opts));
-      REQUIRE(e->is_canonical(opts));
+      REQUIRE(!c->is_canonical(deduce_named_indices, opts));
+      REQUIRE(e->is_canonical(deduce_named_indices, opts));
       auto c2 = e->clone();
       e->adjoint();
-      REQUIRE(c2->is_canonical(opts));
+      REQUIRE(c2->is_canonical(deduce_named_indices, opts));
     }
     auto t = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_1"});
-    t->mark_canonical(opts);
-    REQUIRE(t->clone()->is_canonical(opts));
+    t->mark_canonical(deduce_named_indices, opts);
+    REQUIRE(t->clone()->is_canonical(deduce_named_indices, opts));
     auto c = ex<Constant>(2);
-    c->mark_canonical(opts);
-    REQUIRE(c->clone()->is_canonical(opts));
+    c->mark_canonical(deduce_named_indices, opts);
+    REQUIRE(c->clone()->is_canonical(deduce_named_indices, opts));
   }
 
   SECTION("moving out invalidates the source") {
     auto e = make_product();
-    e->mark_canonical(opts);
+    e->mark_canonical(deduce_named_indices, opts);
     Product moved(std::move(e->as<Product>()));
-    REQUIRE(!e->is_canonical(opts));
+    REQUIRE(!e->is_canonical(deduce_named_indices, opts));
   }
 }

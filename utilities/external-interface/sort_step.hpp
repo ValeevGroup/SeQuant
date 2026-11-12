@@ -14,6 +14,9 @@
 
 namespace sequant::util::extint {
 
+/// sorts the expressions lexicographically
+/// @deprecated use the prettify step (PrettifyStep), which also brings the
+/// expressions into a readable form
 class SortStep : public OneByOneProcessingStep<ExpressionData, true,
                                                InputAccess::WorkingCopy> {
  public:

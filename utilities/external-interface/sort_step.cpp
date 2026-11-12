@@ -4,9 +4,11 @@
 
 #include <SeQuant/core/expr.hpp>
 
+#include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
 #include <iterator>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,6 +30,12 @@ void SortStep::set_options(const nlohmann::json &) {
 std::size_t SortStep::process(std::string_view id_prefix, std::size_t id_start,
                               ExecutionContext &ctx,
                               WorkingCopy<ExpressionData> &input) {
+  static std::once_flag deprecation_warning;
+  std::call_once(deprecation_warning, [this]() {
+    spdlog::warn("The '{}' step is deprecated; use the 'prettify' step instead",
+                 kind());
+  });
+
   const LexicographicExprCompare cmp;
 
   for (ResultExpr &expr : input.data.expressions) {

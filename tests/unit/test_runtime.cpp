@@ -12,7 +12,6 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/scope.hpp>
@@ -108,164 +107,6 @@ TEST_CASE("context", "[runtime]") {
     }
     // leaving scope resets the context back
     CHECK(get_default_context() == initial_ctx);
-  }
-
-  SECTION("tensor canonicalizers") {
-    const Context ctx(
-        {.index_basis_registry_shared_ptr = mbpt::make_sr_spaces()});
-    const auto null_canon = std::make_shared<NullTensorCanonicalizer>();
-
-    SECTION("defaults") {
-      REQUIRE(ctx.tensor_canonicalizer_ptr(L""));
-      CHECK(std::dynamic_pointer_cast<DefaultTensorCanonicalizer>(
-          ctx.tensor_canonicalizer_ptr(L"")));
-      CHECK(ctx.tensor_canonicalizer_ptr(L"anything") ==
-            ctx.tensor_canonicalizer_ptr(L""));
-      CHECK(&ctx.tensor_canonicalizer(L"anything") ==
-            ctx.tensor_canonicalizer_ptr(L"").get());
-      CHECK(ctx.nondefault_tensor_canonicalizer_ptr(L"anything") == nullptr);
-      CHECK(ctx.cardinal_tensor_labels() ==
-            container::vector<std::wstring>{reserved::antisymm_label(),
-                                            reserved::symm_label(),
-                                            reserved::transposition_label()});
-      {
-        const Index i1(L"i_1"), i2(L"i_2"), a1(L"a_1");
-        const auto& cmp = ctx.index_comparer();
-        REQUIRE(cmp);
-        CHECK(cmp(i1, i2));
-        CHECK(!cmp(i2, i1));
-        CHECK(!cmp(i1, i1));
-        CHECK(cmp(i1, a1) == (i1.space() < a1.space()));
-        const auto& paircmp = ctx.index_pair_comparer();
-        REQUIRE(paircmp);
-        CHECK(paircmp({i1, a1}, {i2, a1}));
-        CHECK(!paircmp({i2, a1}, {i1, a1}));
-      }
-    }
-
-    SECTION("equal-defaults") {
-      const Context ctx2({.index_basis_registry = *ctx.index_basis_registry()});
-      CHECK(ctx == ctx2);
-    }
-
-    SECTION("setters-copy-only") {
-      auto ctx_q = ctx;
-      CHECK(ctx_q == ctx);
-      ctx_q.set_tensor_canonicalizer(L"Q", null_canon);
-      CHECK(ctx_q.nondefault_tensor_canonicalizer_ptr(L"Q") == null_canon);
-      CHECK(ctx_q.tensor_canonicalizer_ptr(L"Q") == null_canon);
-      CHECK(ctx_q.tensor_canonicalizer_ptr(L"R") ==
-            ctx.tensor_canonicalizer_ptr(L""));
-      CHECK(ctx.nondefault_tensor_canonicalizer_ptr(L"Q") == nullptr);
-      CHECK(ctx_q != ctx);
-      ctx_q.unset_tensor_canonicalizer(L"Q");
-      CHECK(ctx_q.nondefault_tensor_canonicalizer_ptr(L"Q") == nullptr);
-      CHECK(ctx_q == ctx);
-    }
-
-    SECTION("no-canonicalizer") {
-      auto ctx_none = ctx;
-      ctx_none.unset_tensor_canonicalizer(L"");
-      CHECK(ctx_none.tensor_canonicalizer_ptr(L"anything") == nullptr);
-      CHECK_THROWS_AS(ctx_none.tensor_canonicalizer(L"anything"), Exception);
-      CHECK(ctx_none != ctx);
-    }
-
-    SECTION("comparer-identity") {
-      auto ctx_cmp = ctx;
-      ctx_cmp.set_index_comparer(TensorCanonicalizer::index_comparer_t(
-          [](const Index& a, const Index& b) { return a < b; }));
-      CHECK(ctx_cmp != ctx);
-      const auto ctx_cmp_copy = ctx_cmp;
-      CHECK(ctx_cmp_copy == ctx_cmp);
-      CHECK(ctx_cmp.index_comparer()(Index(L"i_1"), Index(L"i_2")));
-      auto ctx_paircmp = ctx;
-      ctx_paircmp.set_index_pair_comparer(
-          TensorCanonicalizer::index_pair_comparer_t(
-              [](const TensorCanonicalizer::index_pair_t& a,
-                 const TensorCanonicalizer::index_pair_t b) {
-                return a.first < b.first;
-              }));
-      CHECK(ctx_paircmp != ctx);
-    }
-
-    SECTION("cardinal-labels") {
-      auto ctx_card = ctx;
-      ctx_card.set_cardinal_tensor_labels({L"X", L"Y"});
-      CHECK(ctx_card.cardinal_tensor_labels() ==
-            container::vector<std::wstring>{L"X", L"Y"});
-      CHECK(ctx_card != ctx);
-      ctx_card.set_cardinal_tensor_labels(ctx.cardinal_tensor_labels());
-      CHECK(ctx_card == ctx);
-    }
-
-    SECTION("copy-only") {
-      {
-        auto source = ctx;
-        const auto moved_to = std::move(source);
-        CHECK(source == moved_to);
-        CHECK(source.index_comparer());
-        CHECK(source.tensor_canonicalizer_ptr(L""));
-      }
-    }
-
-    SECTION("reinstalled-comparer") {
-      auto ctx_same_cmp = ctx;
-      ctx_same_cmp.set_index_comparer(ctx.index_comparer_ptr())
-          .set_index_pair_comparer(ctx.index_pair_comparer_ptr());
-      CHECK(ctx_same_cmp == ctx);
-      CHECK(ctx_same_cmp.version() == ctx.version());
-      CHECK(Context(ctx).set_index_comparer(ctx.index_comparer()) != ctx);
-    }
-
-    SECTION("chaining") {
-      auto ctx_chain = ctx;
-      CHECK(&ctx_chain.set_tensor_canonicalizer(L"Q", null_canon)
-                 .unset_tensor_canonicalizer(L"Q")
-                 .set_cardinal_tensor_labels(ctx.cardinal_tensor_labels())
-                 .set_index_comparer(ctx.index_comparer())
-                 .set_index_pair_comparer(ctx.index_pair_comparer()) ==
-            &ctx_chain);
-    }
-
-    SECTION("named-parameters") {
-      const auto custom_cmp = TensorCanonicalizer::index_comparer_t(
-          [](const Index& a, const Index& b) { return a < b; });
-      const Context ctx_opts(
-          {.index_basis_registry = *ctx.index_basis_registry(),
-           .tensor_canonicalizers =
-               container::map<std::wstring,
-                              std::shared_ptr<TensorCanonicalizer>>{
-                   {L"Q", null_canon}},
-           .index_comparer = custom_cmp,
-           .cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
-      CHECK(ctx_opts.tensor_canonicalizer_ptr(L"Q") == null_canon);
-      // the empty label maps to the default canonicalizer unless given
-      CHECK(ctx_opts.tensor_canonicalizer_ptr(L"R") ==
-            Context{}.tensor_canonicalizer_ptr(L""));
-      CHECK(Context({.tensor_canonicalizers =
-                         container::map<std::wstring,
-                                        std::shared_ptr<TensorCanonicalizer>>{
-                             {L"", null_canon}}})
-                .tensor_canonicalizer_ptr(L"R") == null_canon);
-      CHECK(ctx_opts.cardinal_tensor_labels() ==
-            container::vector<std::wstring>{L"Z"});
-      CHECK(ctx_opts.index_comparer());
-      CHECK(ctx_opts.index_comparer()(Index(L"i_1"), Index(L"i_2")));
-      CHECK(ctx_opts.index_pair_comparer());
-      CHECK(ctx_opts != ctx);
-    }
-
-    SECTION("null-rejected") {
-      CHECK_THROWS_AS(
-          Context({.tensor_canonicalizers =
-                       container::map<std::wstring,
-                                      std::shared_ptr<TensorCanonicalizer>>{
-                           {L"Q", nullptr}}}),
-          Exception);
-      CHECK_THROWS_AS(Context{}.set_tensor_canonicalizer(L"Q", nullptr),
-                      Exception);
-    }
   }
 
   SECTION("deprecated index space registry spellings forward") {
@@ -365,7 +206,8 @@ TEST_CASE("context", "[runtime]") {
     Context ctx;
     const auto v0 = ctx.version();
     CHECK(v0 != 0);
-    // the version identifies the canonicalization configuration
+    // the version identifies the configuration canonicalization depends on:
+    // the index basis registry and the single-particle basis
     CHECK(Context{}.version() == v0);
     CHECK(Context({.vacuum = Vacuum::SingleProduct}).version() == v0);
 
@@ -401,17 +243,6 @@ TEST_CASE("context", "[runtime]") {
     CHECK(Context{} == Context{});
     CHECK(Context{} != with_registry);
 
-    // the canonicalization options are compared in full, named indices
-    // included, as the version does
-    {
-      Context plain(with_registry);
-      plain.set(CanonicalizeOptions::default_options());
-      Context named(with_registry);
-      named.set(CanonicalizeOptions::default_options().copy_and_set(
-          std::optional<container::set<Index>>{container::set<Index>{}}));
-      CHECK(named != plain);
-      CHECK(named.version() != plain.version());
-    }
     // the version of a configuration whose objects are gone is not reused,
     // even if a new object takes the address of a dead one: the registries
     // are constructed in one buffer, so the second has the address of the
@@ -438,7 +269,8 @@ TEST_CASE("context", "[runtime]") {
       CHECK(reborn.version() != dead_version);
     }
 
-    // the canonicalization settings change the version, the others do not
+    // the registry and the single-particle basis change the version, the
+    // other settings do not
     auto changes = [&ctx](auto&& set) {
       const auto before = ctx.version();
       set(ctx);
@@ -449,6 +281,9 @@ TEST_CASE("context", "[runtime]") {
     CHECK(!changes([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
     CHECK(!changes([](Context& c) { c.set(BraKetTypesetting::KetSub); }));
     CHECK(!changes([](Context& c) { c.set(BraKetSlotTypesetting::Naive); }));
+    CHECK(!changes([](Context& c) {
+      c.set(PrintOptions{.ordering = LexicographicCompareOptions{}});
+    }));
     CHECK(!changes([](Context& c) { c.set(Symmetry::Symm); }));
     CHECK(!changes([](Context& c) { c.set(Hermiticity::Hermitian); }));
     CHECK(!changes([](Context& c) { c.set(ColumnSymmetry::Symm); }));
@@ -456,22 +291,10 @@ TEST_CASE("context", "[runtime]") {
     CHECK(changes([](Context& c) { c.set(IndexBasisRegistry{}); }));
     CHECK(changes(
         [](Context& c) { c.set(std::make_shared<IndexBasisRegistry>()); }));
-    CHECK(changes([](Context& c) { c.set(CanonicalizeOptions{}); }));
-    CHECK(changes([](Context& c) {
-      c.set(CanonicalizeOptions::default_options().copy_and_set(
-          CanonicalizeOptions::IgnoreNamedIndexLabel::No));
-    }));
-    CHECK(changes([](Context& c) {
-      c.set(c.canonicalization_options()->copy_and_set(
-          std::optional<container::set<Index>>{container::set<Index>{}}));
-    }));
     {
       const auto before = ctx.version();
-      CHECK(changes([](Context& c) {
-        c.set_tensor_canonicalizer(L"Q",
-                                   std::make_shared<NullTensorCanonicalizer>());
-      }));
-      CHECK(changes([](Context& c) { c.unset_tensor_canonicalizer(L"Q"); }));
+      CHECK(changes([](Context& c) { c.set(SPBasis::Spinor); }));
+      CHECK(changes([](Context& c) { c.set(SPBasis::Spinfree); }));
       // undoing a change restores the version
       CHECK(ctx.version() == before);
     }
@@ -479,28 +302,14 @@ TEST_CASE("context", "[runtime]") {
     // of a chain of setters get none: versions are assigned in increasing
     // order, and the intermediate one, read after the final one, is newer
     {
-      const auto s = std::make_shared<NullTensorCanonicalizer>();
-      const auto t = std::make_shared<NullTensorCanonicalizer>();
+      const auto registry = std::make_shared<IndexBasisRegistry>();
       Context chained(ctx);
-      chained.set_tensor_canonicalizer(L"S", s).set_tensor_canonicalizer(L"T",
-                                                                         t);
+      chained.set(registry).set(SPBasis::Spinor);
       const auto final_version = chained.version();
       Context intermediate(ctx);
-      intermediate.set_tensor_canonicalizer(L"S", s);
+      intermediate.set(registry);
       CHECK(intermediate.version() > final_version);
     }
-    CHECK(changes([](Context& c) {
-      c.set_index_comparer(TensorCanonicalizer::default_index_comparer());
-    }));
-    CHECK(changes([](Context& c) {
-      c.set_index_pair_comparer(
-          TensorCanonicalizer::default_index_pair_comparer());
-    }));
-    CHECK(!changes(
-        [](Context& c) { c.set_index_comparer(c.index_comparer_ptr()); }));
-    CHECK(changes([](Context& c) {
-      c.set_cardinal_tensor_labels(container::vector<std::wstring>{L"Z"});
-    }));
 
     // the copy was not affected
     CHECK(copy.version() == v0);
@@ -511,37 +320,34 @@ TEST_CASE("context", "[runtime]") {
     auto restore = sequant::detail::make_scope_exit(
         [&initial_ctx] { set_default_context(initial_ctx); });
 
-    // the process-wide context is the sole owner of its labels and comparer
-    set_default_context(
-        Context(initial_ctx)
-            .set_cardinal_tensor_labels(container::vector<std::wstring>{L"X"})
-            .set_index_comparer(TensorCanonicalizer::index_comparer_t(
-                [](const Index& i1, const Index& i2) {
-                  return i2.label() < i1.label();
-                })));
+    // the process-wide context is the sole owner of its registry
+    {
+      IndexBasisRegistry registry;
+      registry.add(L"q", 0b01);
+      set_default_context(Context(initial_ctx)
+                              .set(std::move(registry))
+                              .set_first_dummy_index_ordinal(200));
+    }
     const auto snapshot = get_default_context_snapshot();
     CHECK(snapshot == get_default_context());
     CHECK(snapshot.version() == current_context_version());
-    const auto& labels = snapshot.cardinal_tensor_labels();
-    const auto& comparer = snapshot.index_comparer();
+    const auto& registry = *snapshot.index_basis_registry();
 
     // replacing the process-wide context leaves the snapshot intact
     set_default_context(initial_ctx);
-    CHECK(labels == container::vector<std::wstring>{L"X"});
-    CHECK(comparer(Index(L"i_2"), Index(L"i_1")));
+    CHECK(registry.contains(L"q"));
+    CHECK(snapshot.first_dummy_index_ordinal() == 200);
 
     // the next snapshot sees every change of the process-wide context,
     // including one made on another thread
     std::thread([&initial_ctx] {
-      set_default_context(Context(initial_ctx)
-                              .set_cardinal_tensor_labels(
-                                  container::vector<std::wstring>{L"Y"}));
+      set_default_context(
+          Context(initial_ctx).set_first_dummy_index_ordinal(300));
     }).join();
-    CHECK(get_default_context_snapshot().cardinal_tensor_labels() ==
-          container::vector<std::wstring>{L"Y"});
+    CHECK(get_default_context_snapshot().first_dummy_index_ordinal() == 300);
     std::thread([] { reset_default_context(); }).join();
-    CHECK(get_default_context_snapshot().cardinal_tensor_labels() ==
-          Context{}.cardinal_tensor_labels());
+    CHECK(get_default_context_snapshot().first_dummy_index_ordinal() ==
+          Context{}.first_dummy_index_ordinal());
     set_default_context(initial_ctx);
 
     // on a thread with a scoped context, a copy of that context
@@ -553,15 +359,14 @@ TEST_CASE("context", "[runtime]") {
 TEST_CASE("scoped contexts", "[runtime]") {
   using namespace sequant;
 
-  auto q_canonicalizer = [] {
-    return get_default_context().nondefault_tensor_canonicalizer_ptr(L"Q");
+  // the first dummy index ordinal serves as a marker of the context in effect
+  auto marker = [] {
+    return get_default_context().first_dummy_index_ordinal();
   };
-  auto with_q_canonicalizer =
-      [](std::shared_ptr<TensorCanonicalizer> canonicalizer) {
-        return Context(get_default_context())
-            .set_tensor_canonicalizer(L"Q", std::move(canonicalizer));
-      };
-  REQUIRE(!q_canonicalizer());
+  auto with_marker = [](std::size_t m) {
+    return Context(get_default_context()).set_first_dummy_index_ordinal(m);
+  };
+  const auto initial_marker = marker();
 
   SECTION("each thread sees only its own") {
     constexpr int nthreads = 6;
@@ -569,52 +374,52 @@ TEST_CASE("scoped contexts", "[runtime]") {
     std::atomic<int> mismatches = 0;
     std::vector<std::thread> threads;
     for (int t = 0; t != nthreads; ++t) {
-      threads.emplace_back([&] {
-        const auto mine = std::make_shared<NullTensorCanonicalizer>();
+      threads.emplace_back([&, t] {
+        const std::size_t mine = initial_marker + 1 + t;
         {
-          auto scoped = set_scoped_default_context(with_q_canonicalizer(mine));
+          auto scoped = set_scoped_default_context(with_marker(mine));
           all_scoped.arrive_and_wait();
           for (int i = 0; i != 1000; ++i)
-            if (q_canonicalizer() != mine) ++mismatches;
+            if (marker() != mine) ++mismatches;
         }
-        if (q_canonicalizer()) ++mismatches;
+        if (marker() != initial_marker) ++mismatches;
       });
     }
     for (auto& thread : threads) thread.join();
     CHECK(mismatches == 0);
-    CHECK(!q_canonicalizer());
+    CHECK(marker() == initial_marker);
   }
 
   SECTION("parallel workers see the scoped context of the caller") {
-    const auto mine = std::make_shared<NullTensorCanonicalizer>();
+    const std::size_t mine = initial_marker + 1;
     std::vector<int> items(64);
     std::atomic<int> mismatches = 0;
     {
-      auto scoped = set_scoped_default_context(with_q_canonicalizer(mine));
+      auto scoped = set_scoped_default_context(with_marker(mine));
       auto scoped_mbpt = mbpt::set_scoped_default_mbpt_context(
           mbpt::Context({.csv = mbpt::CSV::Yes}));
       sequant::for_each(items, [&](int&) {
-        if (q_canonicalizer() != mine) ++mismatches;
+        if (marker() != mine) ++mismatches;
         if (mbpt::get_default_mbpt_context().csv() != mbpt::CSV::Yes)
           ++mismatches;
         // nested scopes compose
-        const auto inner = std::make_shared<NullTensorCanonicalizer>();
+        const std::size_t inner = initial_marker + 2;
         {
-          auto scoped = set_scoped_default_context(with_q_canonicalizer(inner));
-          if (q_canonicalizer() != inner) ++mismatches;
+          auto scoped = set_scoped_default_context(with_marker(inner));
+          if (marker() != inner) ++mismatches;
         }
-        if (q_canonicalizer() != mine) ++mismatches;
+        if (marker() != mine) ++mismatches;
       });
       CHECK(sequant::transform_reduce(items, 0, std::plus<int>{}, [&](int) {
-              return q_canonicalizer() == mine ? 0 : 1;
+              return marker() == mine ? 0 : 1;
             }) == 0);
-      CHECK(q_canonicalizer() == mine);
+      CHECK(marker() == mine);
     }
     CHECK(mismatches == 0);
 
     // after the scope workers see the process-wide context again
     sequant::for_each(items, [&](int&) {
-      if (q_canonicalizer()) ++mismatches;
+      if (marker() != initial_marker) ++mismatches;
     });
     CHECK(mismatches == 0);
   }
@@ -622,91 +427,91 @@ TEST_CASE("scoped contexts", "[runtime]") {
   // unlike for_each, whose execution-policy backend may run serially,
   // parallel_do always runs on num_threads() distinct threads
   SECTION("parallel_do threads see the scoped context of the caller") {
-    const auto mine = std::make_shared<NullTensorCanonicalizer>();
+    const std::size_t mine = initial_marker + 1;
     std::atomic<int> invocations = 0;
     std::atomic<int> mismatches = 0;
     std::mutex thread_ids_mtx;
     std::set<std::thread::id> thread_ids;
     {
-      auto scoped = set_scoped_default_context(with_q_canonicalizer(mine));
+      auto scoped = set_scoped_default_context(with_marker(mine));
       sequant::parallel_do([&](int) {
         ++invocations;
         {
           std::scoped_lock lock(thread_ids_mtx);
           thread_ids.insert(std::this_thread::get_id());
         }
-        if (q_canonicalizer() != mine) ++mismatches;
+        if (marker() != mine) ++mismatches;
       });
-      CHECK(q_canonicalizer() == mine);
+      CHECK(marker() == mine);
     }
     CHECK(invocations == num_threads());
     CHECK(mismatches == 0);
     if (num_threads() > 1) CHECK(thread_ids.size() > 1);
 
     sequant::parallel_do([&](int) {
-      if (q_canonicalizer()) ++mismatches;
+      if (marker() != initial_marker) ++mismatches;
     });
     CHECK(mismatches == 0);
   }
 
   SECTION("a modification applies to the context of every statistics") {
-    const auto labels = [](Statistics s) {
-      return get_default_context(s).cardinal_tensor_labels();
+    const auto vacuum = [](Statistics s) {
+      return get_default_context(s).vacuum();
     };
-    const container::vector<std::wstring> arbitrary_labels{L"A"};
-    const container::vector<std::wstring> fermi_labels{L"F"};
     auto scoped =
         set_scoped_default_context(container::map<Statistics, Context>{
             {Statistics::Arbitrary,
-             Context(get_default_context())
-                 .set_cardinal_tensor_labels(arbitrary_labels)},
+             Context(get_default_context()).set(Vacuum::SingleProduct)},
             {Statistics::FermiDirac,
-             Context(get_default_context())
-                 .set_cardinal_tensor_labels(fermi_labels)}});
-    const auto mine = std::make_shared<NullTensorCanonicalizer>();
-    auto q_canonicalizer_of = [](Statistics s) {
-      return get_default_context(s).nondefault_tensor_canonicalizer_ptr(L"Q");
+             Context(get_default_context()).set(Vacuum::Physical)}});
+    const std::size_t mine = initial_marker + 1;
+    auto marker_of = [](Statistics s) {
+      return get_default_context(s).first_dummy_index_ordinal();
     };
     {
       auto modified = set_scoped_modified_default_context(
-          [&mine](Context& ctx) { ctx.set_tensor_canonicalizer(L"Q", mine); });
-      CHECK(labels(Statistics::Arbitrary) == arbitrary_labels);
-      CHECK(labels(Statistics::FermiDirac) == fermi_labels);
-      CHECK(labels(Statistics::BoseEinstein) == arbitrary_labels);
-      CHECK(q_canonicalizer_of(Statistics::Arbitrary) == mine);
-      CHECK(q_canonicalizer_of(Statistics::FermiDirac) == mine);
+          [mine](Context& ctx) { ctx.set_first_dummy_index_ordinal(mine); });
+      CHECK(vacuum(Statistics::Arbitrary) == Vacuum::SingleProduct);
+      CHECK(vacuum(Statistics::FermiDirac) == Vacuum::Physical);
+      CHECK(vacuum(Statistics::BoseEinstein) == Vacuum::SingleProduct);
+      CHECK(marker_of(Statistics::Arbitrary) == mine);
+      CHECK(marker_of(Statistics::FermiDirac) == mine);
     }
-    CHECK(labels(Statistics::Arbitrary) == arbitrary_labels);
-    CHECK(labels(Statistics::FermiDirac) == fermi_labels);
-    CHECK(!q_canonicalizer_of(Statistics::Arbitrary));
-    CHECK(!q_canonicalizer_of(Statistics::FermiDirac));
+    CHECK(vacuum(Statistics::Arbitrary) == Vacuum::SingleProduct);
+    CHECK(vacuum(Statistics::FermiDirac) == Vacuum::Physical);
+    CHECK(marker_of(Statistics::Arbitrary) == initial_marker);
+    CHECK(marker_of(Statistics::FermiDirac) == initial_marker);
   }
 
   SECTION("mbpt::load refuses to run under a scoped context") {
     const auto process_wide_version = current_context_version();
     {
-      auto scoped = set_scoped_default_context(
-          with_q_canonicalizer(std::make_shared<NullTensorCanonicalizer>()));
+      auto scoped = set_scoped_default_context(with_marker(initial_marker + 1));
       CHECK_THROWS_AS(mbpt::load(), Exception);
     }
     CHECK(current_context_version() == process_wide_version);
-    CHECK(!q_canonicalizer());
+    CHECK(marker() == initial_marker);
   }
 
-  // e.g. the scopes of successive top-level WickTheorems, which map the
-  // normal operator labels to one shared NullTensorCanonicalizer
   SECTION("equal modifications of a context scope equal versions") {
-    const auto& shared = NullTensorCanonicalizer::instance();
-    REQUIRE(shared == NullTensorCanonicalizer::instance());
-    auto scoped_version = [](std::shared_ptr<TensorCanonicalizer> c) {
-      auto modified = set_scoped_modified_default_context(
-          [&c](Context& ctx) { ctx.set_tensor_canonicalizer(L"Q", c); });
+    const auto other_spbasis =
+        get_default_context().spbasis() == SPBasis::Spinor ? SPBasis::Spinfree
+                                                           : SPBasis::Spinor;
+    auto scoped_version = [](auto&& modify) {
+      auto modified = set_scoped_modified_default_context(modify);
       return current_context_version();
     };
-    const auto v1 = scoped_version(shared);
+    auto set_spbasis = [other_spbasis](Context& ctx) {
+      ctx.set(other_spbasis);
+    };
+    const auto v1 = scoped_version(set_spbasis);
     CHECK(v1 != current_context_version());
-    CHECK(scoped_version(shared) == v1);
-    CHECK(scoped_version(std::make_shared<NullTensorCanonicalizer>()) != v1);
+    CHECK(scoped_version(set_spbasis) == v1);
+    // a (copied) registry of its own is a configuration of its own
+    CHECK(scoped_version([other_spbasis](Context& ctx) {
+            ctx.set(other_spbasis)
+                .set(IndexBasisRegistry(*ctx.index_basis_registry()));
+          }) != v1);
   }
 
   SECTION("the current version follows the effective context") {
@@ -719,9 +524,8 @@ TEST_CASE("scoped contexts", "[runtime]") {
       CHECK(current_context_version() == other.version());
       CHECK(current_context_version() != v0);
       {
-        auto modified = set_scoped_modified_default_context([](Context& ctx) {
-          ctx.set_cardinal_tensor_labels(container::vector<std::wstring>{L"Z"});
-        });
+        auto modified = set_scoped_modified_default_context(
+            [](Context& ctx) { ctx.set(SPBasis::Spinfree); });
         CHECK(current_context_version() != other.version());
         CHECK(current_context_version() != v0);
         CHECK(current_context_version(Statistics::FermiDirac) ==
@@ -843,38 +647,6 @@ TEST_CASE("parallel exceptions", "[runtime]") {
         CHECK(rethrown_item(e.exceptions()[k].second) == static_cast<int>(k));
     }
   }
-}
-
-// the helper changes the canonicalization options of the context in effect
-// for every Statistics and nothing else, i.e. a context specific to one
-// Statistics keeps its other settings
-TEST_CASE("scoped_canonicalize_options", "[runtime]") {
-  using namespace sequant;
-  auto fermi = get_default_context(Statistics::FermiDirac);
-  fermi.set(Vacuum::Physical);
-  auto arbitrary = get_default_context();
-  arbitrary.set(Vacuum::SingleProduct);
-  auto outer = set_scoped_default_context(container::map<Statistics, Context>{
-      {Statistics::FermiDirac, fermi}, {Statistics::Arbitrary, arbitrary}});
-  const auto opts = CanonicalizeOptions::default_options().copy_and_set(
-      container::set<Index>{Index{L"i_1"}});
-  REQUIRE(
-      get_default_context(Statistics::FermiDirac).canonicalization_options() !=
-      opts);
-  {
-    auto inner = tests::scoped_canonicalize_options(opts);
-    CHECK(get_default_context(Statistics::FermiDirac).vacuum() ==
-          Vacuum::Physical);
-    CHECK(get_default_context().vacuum() == Vacuum::SingleProduct);
-    CHECK(get_default_context(Statistics::FermiDirac)
-              .canonicalization_options() == opts);
-    CHECK(get_default_context().canonicalization_options() == opts);
-  }
-  CHECK(get_default_context(Statistics::FermiDirac).vacuum() ==
-        Vacuum::Physical);
-  CHECK(
-      get_default_context(Statistics::FermiDirac).canonicalization_options() !=
-      opts);
 }
 
 // a pin scopes a copy of the contexts in effect, with their versions, that a

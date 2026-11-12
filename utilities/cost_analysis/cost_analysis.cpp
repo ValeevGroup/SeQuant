@@ -154,13 +154,10 @@ void setup_context(const Config& cfg) {
   }
 
   auto ctx = get_default_context_snapshot();
-  auto copts = CanonicalizeOptions::default_options().copy_and_set(
-      CanonicalizationMethod::Complete);
   ctx.set(Vacuum::SingleProduct)
       .set(cfg.spinor ? SPBasis::Spinor : SPBasis::Spinfree)
       .set(ibr)
-      .set(BraKetSlotTypesetting::Naive)
-      .set(copts);
+      .set(BraKetSlotTypesetting::Naive);
   set_default_context(ctx);
 }
 

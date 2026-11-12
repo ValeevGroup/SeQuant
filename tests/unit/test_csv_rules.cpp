@@ -433,7 +433,7 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
   // overlap reduction is contraction-time only, so simplify keeps them
   SECTION("simplify-keeps-overlaps") {
     ExprPtr simplified = project(deserialize(foreign), own_pair(All));
-    simplify(simplified);
+    simplify(simplified, deduce_named_indices);
     CHECK(standing_metrics(simplified) == 2);
   }
 
@@ -697,7 +697,7 @@ TEST_CASE("csv-pno-projection-lambda-canonicalizes",
         CAPTURE(toUtf8(serialize(term)));
         bra_legs += minted_bra_legs(term);
         ExprPtr canonical = term->clone();
-        REQUIRE_NOTHROW(canonicalize(canonical));
+        REQUIRE_NOTHROW(canonicalize(canonical, deduce_named_indices));
       }
       CHECK(bra_legs > 0);
     }

@@ -30,7 +30,9 @@
 #include "tensor_power_fixtures.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include "catch2_sequant.hpp"
 
 #include <algorithm>
 #include <array>
@@ -149,6 +151,39 @@ TEST_CASE("schedule document rejects bad shapes", "[schedule-document]") {
   REQUIRE_THROWS_WITH(
       from_json(mutate(d, "sequant.schedule/1", "sequant.schedule/0")),
       ContainsSubstring("format"));
+
+  // (e) the version of the canonical form is an integer
+  REQUIRE_THROWS_WITH(from_json(mutate(d, "\"canonical_form\": 0",
+                                       "\"canonical_form\": \"1\"")),
+                      ContainsSubstring("canonical_form"));
+}
+
+TEST_CASE("schedule document records the version of the canonical form",
+          "[schedule-document]") {
+  using Catch::Matchers::ContainsSubstring;
+  auto d = make_doc();
+  d.fingerprint.context.canonical_form = 7;
+  REQUIRE(from_json(to_json(d)).fingerprint.context.canonical_form == 7);
+
+  // a document written before the version was recorded reads as version 0,
+  // which the fingerprint check reports as a mismatch
+  auto old_text = to_json(d);
+  {
+    // the key is the last of its object: drop it with the preceding comma
+    auto const key = old_text.find("\"canonical_form\": 7");
+    REQUIRE(key != std::string::npos);
+    auto const comma = old_text.rfind(',', key);
+    old_text.erase(comma,
+                   key + std::string("\"canonical_form\": 7").size() - comma);
+  }
+  REQUIRE(old_text.find("canonical_form") == std::string::npos);
+  auto const old = from_json(old_text);
+  REQUIRE(old.fingerprint.context.canonical_form == 0);
+  auto live = old.fingerprint;
+  live.context.canonical_form = sequant::canonical_form_version;
+  REQUIRE_THROWS_WITH(
+      sequant::opt::schedule::check_fingerprint(old.fingerprint, live),
+      ContainsSubstring("fingerprint.context.canonical_form"));
 }
 
 TEST_CASE("schedule document reader caps the nesting depth",
@@ -545,21 +580,25 @@ TEST_CASE("term key is stable under relabeling and factor order",
   auto a = pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}");
   auto b = pin_parse(L"t{a_3,a_4;i_3,i_4} * g{i_1,i_2;a_3,a_4}");
   auto const a_text = sequant::serialize(a);
-  REQUIRE(term_key(canonical_term(a)) == term_key(canonical_term(b)));
+  REQUIRE(term_key(canonical_term(a, sequant::deduce_named_indices)) ==
+          term_key(canonical_term(b, sequant::deduce_named_indices)));
   // canonical_term works on a clone
   REQUIRE(sequant::serialize(a) == a_text);
   // different externals order
   auto c = pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_4,i_3}");
-  REQUIRE(term_key(canonical_term(a)) != term_key(canonical_term(c)));
+  REQUIRE(term_key(canonical_term(a, sequant::deduce_named_indices)) !=
+          term_key(canonical_term(c, sequant::deduce_named_indices)));
   // factors of a canonical Product in order
-  REQUIRE(canonical_factors(canonical_term(a)).size() == 2);
+  REQUIRE(canonical_factors(canonical_term(a, sequant::deduce_named_indices))
+              .size() == 2);
 }
 
 TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"),
+                     sequant::deduce_named_indices);
   auto [optimized, annotations] = pin_optimize(canon);
   REQUIRE(annotations.size() == 2);
   // the policy forces slicing somewhere: the record carries real annotations
@@ -585,8 +624,9 @@ TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
   }
 
   // a record survives re-canonicalizing a relabeled copy of the term
-  auto canon2 = canonical_term(
-      pin_parse(L"t{a_4;i_4} * g{i_1,i_2;a_3,a_4} * t{a_3;i_3}"));
+  auto canon2 =
+      canonical_term(pin_parse(L"t{a_4;i_4} * g{i_1,i_2;a_3,a_4} * t{a_3;i_3}"),
+                     sequant::deduce_named_indices);
   REQUIRE(term_key(canon2) == rec.key);
   auto pinned2 = rebuild_pinned_term(rec, canon2);
   REQUIRE(*pinned2.expr == *optimized);
@@ -615,7 +655,7 @@ sequant::ExprPtr power_root() {
 TEST_CASE("record-term-tensor-power", "[schedule-document][tensor-power]") {
   using namespace sequant::opt::schedule;
   auto _ = sequant::set_scoped_default_context(lax_braket_context());
-  auto canon = canonical_term(power_term());
+  auto canon = canonical_term(power_term(), sequant::deduce_named_indices);
   REQUIRE(canon->is<sequant::Product>());
   REQUIRE(canonical_factors(canon).size() == 3);
   auto [optimized, annotations] = pin_optimize(canon);
@@ -636,7 +676,8 @@ TEST_CASE("record-term-tensor-power", "[schedule-document][tensor-power]") {
   auto lone = canonical_term(
       sequant::pow(sequant::ex<sequant::Tensor>(L"D", sequant::bra{L"i_1"},
                                                 sequant::ket{L"a_1"}),
-                   sequant::rational{-1}));
+                   sequant::rational{-1}),
+      sequant::deduce_named_indices);
   REQUIRE(lone->is<sequant::TensorPower>());
   auto lone_rec = record_term(lone, lone, {});
   REQUIRE(lone_rec.tree.has_value());
@@ -649,7 +690,8 @@ TEST_CASE("record-term", "[schedule-document]") {
   using Catch::Matchers::ContainsSubstring;
 
   SECTION("lone tensor") {
-    auto canon = canonical_term(pin_parse(L"t{a_1;i_1}"));
+    auto canon =
+        canonical_term(pin_parse(L"t{a_1;i_1}"), sequant::deduce_named_indices);
     REQUIRE(canonical_factors(canon).size() == 1);
     auto [optimized, annotations] = pin_optimize(canon);
     auto rec = record_term(canon, optimized, annotations);
@@ -665,7 +707,8 @@ TEST_CASE("record-term", "[schedule-document]") {
 
   SECTION("scalar") {
     auto canon =
-        canonical_term(sequant::ex<sequant::Constant>(sequant::rational{1, 2}));
+        canonical_term(sequant::ex<sequant::Constant>(sequant::rational{1, 2}),
+                       sequant::deduce_named_indices);
     REQUIRE(canonical_factors(canon).empty());
     auto rec = record_term(canon, canon, {});
     REQUIRE(!rec.tree.has_value());
@@ -674,14 +717,16 @@ TEST_CASE("record-term", "[schedule-document]") {
     auto pinned = rebuild_pinned_term(rec, canon);
     REQUIRE(*pinned.expr == *canon);
     // a negative scalar round-trips too
-    auto neg = canonical_term(
-        sequant::ex<sequant::Constant>(sequant::rational{-3, 4}));
+    auto neg =
+        canonical_term(sequant::ex<sequant::Constant>(sequant::rational{-3, 4}),
+                       sequant::deduce_named_indices);
     REQUIRE(*rebuild_pinned_term(record_term(neg, neg, {}), neg).expr == *neg);
   }
 
   SECTION("identical factors and a fractional scalar") {
     auto canon = canonical_term(
-        pin_parse(L"1/2 * t{a_1;i_1} * t{a_2;i_2} * f{i_1,i_2;a_1,a_2}"));
+        pin_parse(L"1/2 * t{a_1;i_1} * t{a_2;i_2} * f{i_1,i_2;a_1,a_2}"),
+        sequant::deduce_named_indices);
     REQUIRE(canonical_factors(canon).size() == 3);
     auto [optimized, annotations] = pin_optimize(canon);
     auto rec = record_term(canon, optimized, annotations);
@@ -696,7 +741,8 @@ TEST_CASE("record-term", "[schedule-document]") {
 
   SECTION("mixed product") {
     auto canon =
-        canonical_term(pin_parse(L"t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"));
+        canonical_term(pin_parse(L"t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"),
+                       sequant::deduce_named_indices);
     REQUIRE(canon->is<sequant::Product>());
     REQUIRE_THROWS_WITH(record_term(canon, canon, {}),
                         ContainsSubstring("only tensor products"));
@@ -713,8 +759,10 @@ TEST_CASE("rebuild_pinned_term rejects foreign factors and unknown axis labels",
   using namespace sequant::opt::schedule;
   using Catch::Matchers::ContainsSubstring;
   auto canon_a =
-      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}"));
-  auto canon_b = canonical_term(pin_parse(L"f{i_1;a_1} * t{a_1;i_2}"));
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}"),
+                     sequant::deduce_named_indices);
+  auto canon_b = canonical_term(pin_parse(L"f{i_1;a_1} * t{a_1;i_2}"),
+                                sequant::deduce_named_indices);
   auto [optimized, annotations] = pin_optimize(canon_a);
   auto rec = record_term(canon_a, optimized, annotations);
   REQUIRE(rec.nodes.size() == 1);
@@ -734,7 +782,8 @@ TEST_CASE("record-term-inner-annotations", "[schedule-document]") {
   // i_2 is contracted between X and Y only: the (X Y) subtree is fully
   // contracted unless binarize is told i_2 is external; the optimizer still
   // emits one annotation per inner node
-  auto canon = canonical_term(pin_parse(L"X{;;i_2} * Y{;;i_2} * Z{a_1;i_1}"));
+  auto canon = canonical_term(pin_parse(L"X{;;i_2} * Y{;;i_2} * Z{a_1;i_1}"),
+                              sequant::deduce_named_indices);
   REQUIRE(canonical_factors(canon).size() == 3);
   auto [optimized, annotations] = pin_optimize(canon);
   REQUIRE(annotations.size() == 2);
@@ -750,8 +799,9 @@ TEST_CASE("record-term-inner-annotations", "[schedule-document]") {
 TEST_CASE("record_term accepts an empty annotation vector",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"),
+                     sequant::deduce_named_indices);
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -782,8 +832,9 @@ TEST_CASE(
   SECTION("a Variable factor") {
     auto canon =
         canonical_term(sequant::ex<sequant::Product>(sequant::ExprPtrList{
-            sequant::ex<sequant::Variable>(L"x"), pin_parse(L"f{i_1;a_1}"),
-            pin_parse(L"t{a_1;i_2}")}));
+                           sequant::ex<sequant::Variable>(L"x"),
+                           pin_parse(L"f{i_1;a_1}"), pin_parse(L"t{a_1;i_2}")}),
+                       sequant::deduce_named_indices);
     REQUIRE(canon->is<sequant::Product>());
     REQUIRE_THROWS_WITH(record_term(canon, canon, {}),
                         ContainsSubstring("only tensor products"));
@@ -794,8 +845,9 @@ TEST_CASE(
                         ContainsSubstring("only tensor products"));
   }
 
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"),
+                     sequant::deduce_named_indices);
   auto [optimized, annotations] = pin_optimize(canon);
   auto rec = record_term(canon, optimized, annotations);
   REQUIRE(rec.nodes.size() == 2);
@@ -898,12 +950,23 @@ std::vector<std::string> record_keys(RootRecord const& r) {
 
 }  // namespace
 
+TEST_CASE("recording requires a ResultExpr", "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  using Catch::Matchers::ContainsSubstring;
+  auto opts = session_opts();
+  RecordSession session("R");
+  opts.recording = &session;
+  // the terms are canonicalized with the external indices of the result
+  REQUIRE_THROWS_WITH(sequant::optimize_result(session_root(), opts),
+                      ContainsSubstring("ResultExpr overload"));
+}
+
 TEST_CASE("record_root then pin reproduces the optimized Sum and annotations",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
   auto const sum = session_root();
   auto opts = session_opts();
-  auto rr = record_root("R", sum, opts);
+  auto rr = record_root("R", sequant::tests::deduced_result(sum), opts);
   REQUIRE(rr.record.label == "R");
   REQUIRE(rr.record.terms.size() == 4);
   REQUIRE(rr.optimized->is<sequant::Sum>());
@@ -915,7 +978,8 @@ TEST_CASE("record_root then pin reproduces the optimized Sum and annotations",
   auto opts2 = opts;
   opts2.pinned = &session;
   opts2.term_batch_axes = std::make_shared<AxesMap>();
-  auto pinned = sequant::optimize_result(sum, opts2).expr;
+  auto pinned =
+      sequant::optimize_result(sequant::tests::deduced_result(sum), opts2).expr;
   REQUIRE(*pinned == *rr.optimized);  // same trees, same order, same labels
   require_same_annotations((*opts2.term_batch_axes)[pinned.get()],
                            recorded_axes);
@@ -927,7 +991,7 @@ TEST_CASE("record-root-tensor-power", "[schedule-document][tensor-power]") {
   auto _ = sequant::set_scoped_default_context(lax_braket_context());
   auto const sum = power_root();
   auto opts = session_opts();
-  auto rr = record_root("E", sum, opts);
+  auto rr = record_root("E", sequant::tests::deduced_result(sum), opts);
   REQUIRE(rr.record.terms.size() == 2);
   for (auto const& t : rr.record.terms) REQUIRE(t.pinnable);
   auto const& recorded_axes = (*opts.term_batch_axes)[rr.optimized.get()];
@@ -936,7 +1000,8 @@ TEST_CASE("record-root-tensor-power", "[schedule-document][tensor-power]") {
   auto opts2 = opts;
   opts2.pinned = &session;
   opts2.term_batch_axes = std::make_shared<AxesMap>();
-  auto pinned = sequant::optimize_result(sum, opts2).expr;
+  auto pinned =
+      sequant::optimize_result(sequant::tests::deduced_result(sum), opts2).expr;
   REQUIRE(*pinned == *rr.optimized);
   require_same_annotations((*opts2.term_batch_axes)[pinned.get()],
                            recorded_axes);
@@ -961,7 +1026,7 @@ void require_json_pin_round_trip(sequant::ExprPtr const& sum) {
     CAPTURE(static_cast<int>(objective));
     auto opts = session_opts();
     opts.objective_function = objective;
-    auto rr = record_root("R", sum, opts);
+    auto rr = record_root("R", sequant::tests::deduced_result(sum), opts);
     bool const batched =
         objective == sequant::ObjectiveFunction::DenseTimeSpaceBatched;
     bool any_nodes = false;
@@ -980,7 +1045,7 @@ void require_json_pin_round_trip(sequant::ExprPtr const& sum) {
     auto opts2 = opts;
     opts2.pinned = &session;
     opts2.term_batch_axes = std::make_shared<AxesMap>();
-    auto rr2 = record_root("R", sum, opts2);
+    auto rr2 = record_root("R", sequant::tests::deduced_result(sum), opts2);
     REQUIRE_NOTHROW(session.finish());
     REQUIRE(*rr2.optimized == *rr.optimized);
 
@@ -1007,7 +1072,8 @@ TEST_CASE("an axis with several proto indices survives JSON and pins",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
   auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1<i_1,i_2>} * t{a_1<i_1,i_2>;i_1}"));
+      pin_parse(L"g{i_1,i_2;a_1<i_1,i_2>} * t{a_1<i_1,i_2>;i_1}"),
+      sequant::deduce_named_indices);
   REQUIRE(canonical_factors(canon).size() == 2);
   auto [optimized, annotations] = pin_optimize(canon);
   // annotate the single contraction node with the PNO index
@@ -1041,7 +1107,7 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
   using Catch::Matchers::ContainsSubstring;
   auto const sum = session_root();
   auto opts = session_opts();
-  auto rr = record_root("R", sum, opts);
+  auto rr = record_root("R", sequant::tests::deduced_result(sum), opts);
   REQUIRE(rr.record.terms.size() == 4);
 
   SECTION("a missing record") {
@@ -1052,7 +1118,7 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
     auto opts2 = opts;
     opts2.pinned = &session;
     REQUIRE_THROWS_WITH(
-        sequant::optimize_result(sum, opts2),
+        sequant::optimize_result(sequant::tests::deduced_result(sum), opts2),
         ContainsSubstring("missing") && ContainsSubstring(dropped));
   }
 
@@ -1067,37 +1133,44 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
     PinSession session(rr.record);
     auto opts2 = opts;
     opts2.pinned = &session;
-    REQUIRE_THROWS_WITH(sequant::optimize_result(relabeled, opts2),
+    REQUIRE_THROWS_WITH(sequant::optimize_result(
+                            sequant::tests::deduced_result(relabeled), opts2),
                         ContainsSubstring("missing") &&
                             ContainsSubstring("no term matched") &&
                             ContainsSubstring("external indices"));
   }
 
   SECTION("an unused record") {
-    auto other = record_root(
-        "O", session_sum({L"h{i_1;a_3} * t{a_3;i_2}", L"Y{i_1;i_2}"}), opts);
+    auto other = record_root("O",
+                             sequant::tests::deduced_result(session_sum(
+                                 {L"h{i_1;a_3} * t{a_3;i_2}", L"Y{i_1;i_2}"})),
+                             opts);
     auto doc = rr.record;
     doc.terms.push_back(other.record.terms[0]);
     PinSession session(doc);
     auto opts2 = opts;
     opts2.pinned = &session;
-    REQUIRE_THROWS_WITH(sequant::optimize_result(sum, opts2),
-                        ContainsSubstring("unused") &&
-                            ContainsSubstring(other.record.terms[0].key));
+    REQUIRE_THROWS_WITH(
+        sequant::optimize_result(sequant::tests::deduced_result(sum), opts2),
+        ContainsSubstring("unused") &&
+            ContainsSubstring(other.record.terms[0].key));
   }
 
   SECTION("a duplicate term") {
     auto twice =
         session_sum({L"g{i_1;a_3} * t{a_3;i_2}", L"g{i_1;a_4} * t{a_4;i_2}"});
     REQUIRE(twice->as<sequant::Sum>().size() == 2);
-    auto once = record_root("D", session_sum({L"g{i_1;a_3} * t{a_3;i_2}"}),
+    auto once = record_root("D",
+                            sequant::tests::deduced_result(
+                                session_sum({L"g{i_1;a_3} * t{a_3;i_2}"})),
                             session_opts());
     PinSession session(once.record);
     auto opts2 = opts;
     opts2.pinned = &session;
-    REQUIRE_THROWS_WITH(sequant::optimize_result(twice, opts2),
-                        ContainsSubstring("duplicate") &&
-                            ContainsSubstring(once.record.terms[0].key));
+    REQUIRE_THROWS_WITH(
+        sequant::optimize_result(sequant::tests::deduced_result(twice), opts2),
+        ContainsSubstring("duplicate") &&
+            ContainsSubstring(once.record.terms[0].key));
   }
 
   SECTION("a mixed product") {
@@ -1107,14 +1180,17 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
     PinSession session(RootRecord{"M", {}});
     auto opts2 = opts;
     opts2.pinned = &session;
-    REQUIRE_THROWS_WITH(sequant::optimize_result(mixed, opts2),
-                        ContainsSubstring("only tensor products"));
+    REQUIRE_THROWS_WITH(
+        sequant::optimize_result(sequant::tests::deduced_result(mixed), opts2),
+        ContainsSubstring("only tensor products"));
     // a recording optimizes the mixed product as usual and lists it as not
     // pinnable (no tree, no nodes), so the root's term set stays complete
     auto opts3 = opts;
     RecordSession recording("M");
     opts3.recording = &recording;
-    auto const optimized = sequant::optimize_result(mixed, opts3).expr;
+    auto const optimized =
+        sequant::optimize_result(sequant::tests::deduced_result(mixed), opts3)
+            .expr;
     REQUIRE(optimized->is<sequant::Sum>());
     REQUIRE(optimized->as<sequant::Sum>().size() == 2);
     auto const record = recording.finish();
@@ -1136,31 +1212,35 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
     auto const loaded = from_json(to_json(doc));
     REQUIRE(compare(doc, loaded).empty());
     REQUIRE_THROWS_WITH(
-        rebuild_pinned_term(
-            *unpinnable, canonical_term(mixed->as<sequant::Sum>().summand(0))),
+        rebuild_pinned_term(*unpinnable,
+                            canonical_term(mixed->as<sequant::Sum>().summand(0),
+                                           sequant::deduce_named_indices)),
         ContainsSubstring("not pinnable"));
     PinSession session2(loaded.roots[0]);
     auto opts4 = opts;
     opts4.pinned = &session2;
-    REQUIRE_THROWS_WITH(sequant::optimize_result(mixed, opts4),
-                        ContainsSubstring("only tensor products"));
+    REQUIRE_THROWS_WITH(
+        sequant::optimize_result(sequant::tests::deduced_result(mixed), opts4),
+        ContainsSubstring("only tensor products"));
   }
 
   SECTION("several failures are listed in one exception") {
     auto doc = rr.record;
     auto const dropped = doc.terms[0].key;
     doc.terms.erase(doc.terms.begin());
-    auto other = record_root("O", session_sum({L"h{i_1;a_3} * t{a_3;i_2}"}),
+    auto other = record_root("O",
+                             sequant::tests::deduced_result(
+                                 session_sum({L"h{i_1;a_3} * t{a_3;i_2}"})),
                              session_opts());
     doc.terms.push_back(other.record.terms[0]);
     PinSession session(doc);
     auto opts2 = opts;
     opts2.pinned = &session;
-    REQUIRE_THROWS_WITH(sequant::optimize_result(sum, opts2),
-                        ContainsSubstring("missing") &&
-                            ContainsSubstring(dropped) &&
-                            ContainsSubstring("unused") &&
-                            ContainsSubstring(other.record.terms[0].key));
+    REQUIRE_THROWS_WITH(
+        sequant::optimize_result(sequant::tests::deduced_result(sum), opts2),
+        ContainsSubstring("missing") && ContainsSubstring(dropped) &&
+            ContainsSubstring("unused") &&
+            ContainsSubstring(other.record.terms[0].key));
   }
 }
 
@@ -1169,14 +1249,16 @@ TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
   using Catch::Matchers::ContainsSubstring;
   auto const sum = session_root();
   auto opts = session_opts();
-  auto rr = record_root("R", sum, opts);
+  auto rr = record_root("R", sequant::tests::deduced_result(sum), opts);
   auto const& whole = rr.optimized->as<sequant::Sum>();
 
   // the whole-Sum pin, for comparison
   PinSession whole_session(rr.record);
   auto opts_whole = opts;
   opts_whole.pinned = &whole_session;
-  auto pinned_whole = sequant::optimize_result(sum, opts_whole).expr;
+  auto pinned_whole =
+      sequant::optimize_result(sequant::tests::deduced_result(sum), opts_whole)
+          .expr;
 
   PinSession session(rr.record);
   auto opts2 = opts;
@@ -1184,16 +1266,19 @@ TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
   opts2.term_batch_axes = std::make_shared<AxesMap>();
   std::vector<sequant::ExprPtr> by_position(rr.record.terms.size());
   for (auto const& s : sum->as<sequant::Sum>().summands()) {
-    auto optimized = sequant::optimize_result(s, opts2).expr;
-    auto const pos = session.document_position(term_key(canonical_term(s)));
+    auto optimized =
+        sequant::optimize_result(sequant::tests::deduced_result(s), opts2).expr;
+    auto const pos = session.document_position(
+        term_key(canonical_term(s, sequant::deduce_named_indices)));
     REQUIRE(pos.has_value());
     REQUIRE(!by_position[*pos]);
     by_position[*pos] = optimized;
   }
   REQUIRE_NOTHROW(session.finish());
   // a finished session is single-use: a further run through it is refused
-  REQUIRE_THROWS_WITH(sequant::optimize_result(sum, opts2),
-                      ContainsSubstring("single-use"));
+  REQUIRE_THROWS_WITH(
+      sequant::optimize_result(sequant::tests::deduced_result(sum), opts2),
+      ContainsSubstring("single-use"));
   for (std::size_t k = 0; k < by_position.size(); ++k) {
     REQUIRE(*by_position[k] == *whole.summand(k));
     REQUIRE(*by_position[k] == *pinned_whole->as<sequant::Sum>().summand(k));
@@ -1204,7 +1289,9 @@ TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
   PinSession partial(rr.record);
   auto opts3 = opts;
   opts3.pinned = &partial;
-  sequant::optimize_result(sum->as<sequant::Sum>().summand(0), opts3);
+  sequant::optimize_result(
+      sequant::tests::deduced_result(sum->as<sequant::Sum>().summand(0)),
+      opts3);
   REQUIRE_THROWS_WITH(partial.finish(), ContainsSubstring("unused"));
 
   // per-summand recording: records in call order
@@ -1214,14 +1301,15 @@ TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
   // each result is dropped right away (a realistic caller): its address may be
   // reused by the next result, and no record may be lost
   for (auto const& s : sum->as<sequant::Sum>().summands())
-    sequant::optimize_result(s, opts4);
+    sequant::optimize_result(sequant::tests::deduced_result(s), opts4);
   auto per_summand = recording.finish();
   REQUIRE(per_summand.terms.size() == sum->as<sequant::Sum>().size());
   REQUIRE(per_summand.label == "R");
   REQUIRE(per_summand.terms.size() == 4);
   for (std::size_t k = 0; k < 4; ++k)
     REQUIRE(per_summand.terms[k].key ==
-            term_key(canonical_term(sum->as<sequant::Sum>().summand(k))));
+            term_key(canonical_term(sum->as<sequant::Sum>().summand(k),
+                                    sequant::deduce_named_indices)));
 }
 
 TEST_CASE("pinned order is the document order, not the clustered order",
@@ -1234,11 +1322,12 @@ TEST_CASE("pinned order is the document order, not the clustered order",
                    L"g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4} * s{i_5;i_6}",
                    L"Z{i_1,i_2,i_5;i_3,i_4,i_6}"});
   auto opts = session_opts();
-  auto rr = record_root("R", sum, opts);
+  auto rr = record_root("R", sequant::tests::deduced_result(sum), opts);
   REQUIRE(rr.record.terms.size() == 4);
   std::vector<std::string> input_keys;
   for (auto const& s : sum->as<sequant::Sum>().summands())
-    input_keys.push_back(term_key(canonical_term(s)));
+    input_keys.push_back(
+        term_key(canonical_term(s, sequant::deduce_named_indices)));
   // reorder did change the order
   REQUIRE(record_keys(rr.record) != input_keys);
 
@@ -1248,7 +1337,8 @@ TEST_CASE("pinned order is the document order, not the clustered order",
   auto opts2 = opts;
   opts2.pinned = &session;
   opts2.term_batch_axes = std::make_shared<AxesMap>();
-  auto pinned = sequant::optimize_result(sum, opts2).expr;
+  auto pinned =
+      sequant::optimize_result(sequant::tests::deduced_result(sum), opts2).expr;
   REQUIRE(pinned->is<sequant::Sum>());
   auto const& ps = pinned->as<sequant::Sum>();
   REQUIRE(ps.size() == 4);
@@ -1263,7 +1353,8 @@ TEST_CASE("pinned order is the document order, not the clustered order",
   opts3.term_batch_axes = std::make_shared<AxesMap>();
   PinSession session2(doc);
   opts3.pinned = &session2;
-  auto pinned2 = sequant::optimize_result(sum, opts3).expr;
+  auto pinned2 =
+      sequant::optimize_result(sequant::tests::deduced_result(sum), opts3).expr;
   std::vector<sequant::Expr const*> order;
   for (auto const& s : pinned2->as<sequant::Sum>().summands())
     order.push_back(s.get());
@@ -1282,7 +1373,8 @@ std::vector<sequant::eval::dryrun::EvalNodeDryRun> fingerprint_forest(
   std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
   for (auto s : {L"g{i_1,i_2;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
                  L"f{i_1;a_3} * t{a_3,a_4;i_3,i_4} * f{i_2;a_4}"}) {
-    auto canon = sequant::opt::schedule::canonical_term(pin_parse(s));
+    auto canon = sequant::opt::schedule::canonical_term(
+        pin_parse(s), sequant::deduce_named_indices);
     auto optimized = sequant::optimize(canon, opts);
     sequant::BinarizationOptions bopts;
     if (auto it = opts.term_batch_axes->find(optimized.get());
@@ -1318,7 +1410,9 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
   REQUIRE(fp.batchable.size() == 2);  // exactly the bases present
   REQUIRE(fp.context.strict_braket_symmetry ==
           sequant::get_default_context().assert_strict_braket_symmetry());
-  REQUIRE(!fp.context.canonicalization_method.empty());
+  REQUIRE(!fp.context.vacuum.empty());
+  REQUIRE(!fp.context.spbasis.empty());
+  REQUIRE(fp.context.canonical_form == sequant::canonical_form_version);
 
   auto opts2 = opts;
   opts2.idx_to_extent = [](sequant::Index const&) -> std::size_t { return 3; };
@@ -1353,7 +1447,8 @@ TEST_CASE("fingerprint-tensor-power-base",
   opts.batch_policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"D";
   };
-  auto optimized = sequant::optimize(canonical_term(power_term()), opts);
+  auto optimized = sequant::optimize(
+      canonical_term(power_term(), sequant::deduce_named_indices), opts);
   sequant::BinarizationOptions bopts;
   if (auto it = opts.term_batch_axes->find(optimized.get());
       it != opts.term_batch_axes->end())
@@ -1380,15 +1475,14 @@ TEST_CASE("check_fingerprint names every differing field",
   b.persistent_only = !a.persistent_only;
   b.mode_order = {"i"};
   b.batchable["a"] = {false, true};
-  b.context.canonicalization_method = "other";
-  b.context.ignore_named_index_labels = !a.context.ignore_named_index_labels;
-  REQUIRE_THROWS_WITH(
-      check_fingerprint(a, b),
-      ContainsSubstring("fingerprint.persistent_only") &&
-          ContainsSubstring("fingerprint.mode_order") &&
-          ContainsSubstring("fingerprint.batchable.a") &&
-          ContainsSubstring("fingerprint.context.canonicalization_method") &&
-          ContainsSubstring("fingerprint.context.ignore_named_index_labels"));
+  b.context.vacuum = "other";
+  b.context.spbasis = "other";
+  REQUIRE_THROWS_WITH(check_fingerprint(a, b),
+                      ContainsSubstring("fingerprint.persistent_only") &&
+                          ContainsSubstring("fingerprint.mode_order") &&
+                          ContainsSubstring("fingerprint.batchable.a") &&
+                          ContainsSubstring("fingerprint.context.vacuum") &&
+                          ContainsSubstring("fingerprint.context.spbasis"));
 
   // a different Context makes the live fingerprint differ
   auto ctx = sequant::get_default_context_snapshot();
@@ -1426,7 +1520,8 @@ DagFixture dag_fixture(
   opts.batch_policy = policy;
   opts.term_batch_axes = std::make_shared<AxesMap>();
   for (auto const& [label, expr] : roots) {
-    auto rr = sequant::opt::schedule::record_root(label, expr, opts);
+    auto rr = sequant::opt::schedule::record_root(
+        label, sequant::tests::deduced_result(expr), opts);
     sequant::BinarizationOptions bopts;
     if (auto it = opts.term_batch_axes->find(rr.optimized.get());
         it != opts.term_batch_axes->end())
@@ -2053,7 +2148,7 @@ TEST_CASE("write the viewer example document", "[.write-example]") {
   doc.producer_version = "example";
   doc.producer_date = "2026-10-19";
 
-  sequant::OptimizeOptions opts;  // as dag_fixture() set it up
+  sequant::OptimizeOptions opts;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = pin_extent;
   opts.batch_policy = external_occ_policy();
@@ -2209,7 +2304,8 @@ Document build_document(sequant::ExprPtr const& sum,
     session.emplace(*pinned);
     opts.pinned = &*session;
   }
-  auto rr = sequant::opt::schedule::record_root("R", sum, opts);
+  auto rr = sequant::opt::schedule::record_root(
+      "R", sequant::tests::deduced_result(sum), opts);
   if (session) session->finish();
   sequant::ExprPtr const optimized = rr.optimized;
   RootRecord const record = std::move(rr.record);

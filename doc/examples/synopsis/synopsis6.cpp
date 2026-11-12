@@ -19,7 +19,7 @@ int main() {
   auto hbar =
       H(2) + commutator(H(2), t(2)) +
       ex<Constant>(rational(1, 2)) * commutator(commutator(H(2), t(2)), t(2));
-  auto ccd_eq = op::vac_av(P(nₚ(2)) * hbar);
+  auto ccd_eq = op::vac_av(P(nₚ(2)) * hbar, deduce_named_indices);
   std::wcout << "<" << to_latex(P(nₚ(2)) * hbar) << "> = " << to_latex(ccd_eq)
              << std::endl;
 

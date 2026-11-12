@@ -32,13 +32,6 @@
 
 namespace sequant {
 
-LexicographicCompareOptions
-LexicographicCompareOptions::from_default_context() {
-  return LexicographicCompareOptions{
-      .cardinal_tensor_labels =
-          get_default_context_snapshot().cardinal_tensor_labels()};
-}
-
 std::size_t LexicographicCompareOptions::cardinal_position(
     std::wstring_view label) const {
   label = strip_adjoint_label(label);
@@ -56,8 +49,7 @@ std::weak_ordering Expr::lexicographic_compare(
 }
 
 std::weak_ordering Expr::lexicographic_compare(const Expr &that) const {
-  return lexicographic_compare(
-      that, LexicographicCompareOptions::from_default_context());
+  return lexicographic_compare(that, LexicographicCompareOptions{});
 }
 
 ExprIterator Expr::begin() { return begin_subexpr(); }
@@ -130,23 +122,27 @@ const ExprPtr &Expr::back() const { return at(size() - 1); }
 namespace {
 
 /// only the topological stage followed by the lexicographic one produces a
-/// form that is the same for every spelling of an expression
+/// form that is the same for every spelling of an expression; only the
+/// library's form is recorded, so that a form produced with presentation
+/// settings is neither marked nor taken for canonical
 bool is_full(const CanonicalizeOptions &opts) {
   return (opts.method & CanonicalizationMethod::Complete) ==
-         CanonicalizationMethod::Complete;
+             CanonicalizationMethod::Complete &&
+         opts.is_internal_form();
 }
 
 /// @return the digest of everything other than the expression itself that
 /// canonical form depends on
-std::size_t canonicalization_key(const CanonicalizeOptions &opts,
+std::size_t canonicalization_key(const NamedIndexSpec &named_indices,
+                                 const CanonicalizeOptions &opts,
                                  std::uint64_t contexts_version) {
   auto key = hash::value(contexts_version);
   hash::combine(key, static_cast<int>(opts.method));
   hash::combine(key, static_cast<bool>(opts.ignore_named_index_labels));
-  hash::combine(key, opts.named_indices.has_value());
-  if (opts.named_indices) {
-    hash::combine(key, opts.named_indices->size());
-    for (const auto &idx : *opts.named_indices) hash::combine(key, idx);
+  hash::combine(key, named_indices.deduce());
+  if (!named_indices.deduce()) {
+    hash::combine(key, named_indices.indices().size());
+    for (const auto &idx : named_indices.indices()) hash::combine(key, idx);
   }
   return key;
 }
@@ -158,24 +154,27 @@ std::uint64_t next_canonical_stamp() {
 
 }  // namespace
 
-bool Expr::is_canonical(const CanonicalizeOptions &opts) const {
+bool Expr::is_canonical(const NamedIndexSpec &named_indices,
+                        const CanonicalizeOptions &opts) const {
   if (!is_full(opts)) return false;
   const auto seal = canonical_mark_.seal.load(std::memory_order_relaxed);
   if (seal == 0) return false;
   const auto digest = canonical_subtree_digest();
   if (!digest) return false;
-  auto expected_seal = canonicalization_key(opts, current_contexts_version());
+  auto expected_seal =
+      canonicalization_key(named_indices, opts, current_contexts_version());
   hash::combine(expected_seal, *digest);
   return seal == expected_seal;
 }
 
-void Expr::mark_canonical(const CanonicalizeOptions &opts,
+void Expr::mark_canonical(const NamedIndexSpec &named_indices,
+                          const CanonicalizeOptions &opts,
                           std::uint64_t contexts_version) const {
   if (!is_full(opts)) return;
   stamp_canonical_subtree();
   const auto digest = canonical_subtree_digest();
   if (!digest) return;
-  auto seal = canonicalization_key(opts, contexts_version);
+  auto seal = canonicalization_key(named_indices, opts, contexts_version);
   hash::combine(seal, *digest);
   canonical_mark_.seal.store(seal, std::memory_order_relaxed);
 }

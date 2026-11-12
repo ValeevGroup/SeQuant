@@ -22,6 +22,8 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
+#include <SeQuant/domain/mbpt/rdm.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -35,6 +37,7 @@
 #include <type_traits>
 #include <vector>
 
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/interface.hpp>
 #include <range/v3/view/transform.hpp>
@@ -54,10 +57,6 @@ TEST_CASE("spin", "[spin]") {
   using IdxGroupList = container::svector<container::svector<Index>>;
 
   // P.S. ref outputs produced with complete canonicalization
-  auto ctx = get_default_context();
-  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-  auto _ = set_scoped_default_context(ctx);
-
   SECTION("protoindices supported") {
     auto ibr = get_default_context().index_basis_registry();
     Index i1(L"i_1");
@@ -68,12 +67,12 @@ TEST_CASE("spin", "[spin]") {
     REQUIRE_NOTHROW(spintrace(expr));
     {  // assume spin-free spaces
       auto expr_st = spintrace(expr);
-      simplify(expr_st);
+      simplify(expr_st, deduce_named_indices);
       REQUIRE_THAT(expr_st, EquivalentTo("2 t{i1;a1<i1>} F{a1<i1>;i1}"));
     }
     {  // assume spin-dependent spaces
       auto expr_st = spintrace(expr, {}, /* assume_spin_free_spaces */ false);
-      simplify(expr_st);
+      simplify(expr_st, deduce_named_indices);
       REQUIRE_THAT(expr_st, EquivalentTo("t{i↓1;a↓1<i↓1>} F{a↓1<i↓1>;i↓1} + "
                                          "t{i↑1;a↑1<i↑1>} F{a↑1<i↑1>;i↑1}"));
     }
@@ -319,7 +318,7 @@ TEST_CASE("spin", "[spin]") {
         ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}, particle_symmetric) *
         ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, particle_symmetric);
     auto result = spintrace(expr);
-    canonicalize(result);
+    canonicalize(result, deduce_named_indices);
     REQUIRE_THAT(result, EquivalentTo("2 f{i1;a1} t{a1;i1}"));
   }
 
@@ -333,7 +332,7 @@ TEST_CASE("spin", "[spin]") {
           ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, particle_symmetric) *
           ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_2"}, particle_symmetric);
       auto result = spintrace(expr);
-      canonicalize(result);
+      canonicalize(result, deduce_named_indices);
       REQUIRE_THAT(result,
                    EquivalentTo("- g{i1,i2;a1,a2} t{a1;i2} t{a2;i1} "
                                 "+ 2 g{i1,i2;a1,a2} t{a1;i1} t{a2;i2}"));
@@ -343,7 +342,7 @@ TEST_CASE("spin", "[spin]") {
   SECTION("Scaled Product with variable") {
     ExprPtr expr = deserialize(L"1/2 Var g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}");
     auto result = spintrace(expr);
-    canonicalize(result);
+    canonicalize(result, deduce_named_indices);
     REQUIRE_THAT(
         result,
         EquivalentTo(
@@ -383,7 +382,7 @@ TEST_CASE("spin", "[spin]") {
     auto result = ex<Constant>(rational{1, 2}) * spintrace(expr);
     expand(result);
     rapid_simplify(result);
-    canonicalize(result);
+    canonicalize(result, deduce_named_indices);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
     REQUIRE_THAT(result, EquivalentTo("-1/2 g{i1,i2;a1,a2} t{a1,a2;i2,i1} "
@@ -586,7 +585,7 @@ SECTION("Expand Symmetrizer") {
     auto result = S_maps(input);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 6);
-    result->canonicalize();
+    result->canonicalize(deduce_named_indices);
     rapid_simplify(result);
     REQUIRE_THAT(
         result,
@@ -742,7 +741,7 @@ SECTION("Symmetrize expression") {
         ex<Tensor>(Tensor{reserved::symm_label(), bra(std::move(kixs)),
                           ket(std::move(bixs)), particle_symmetric}) *
         input;
-    simplify(result);
+    simplify(result, deduce_named_indices);
     REQUIRE(result->is<Sum>() == false);
     REQUIRE_THAT(result,
                  EquivalentTo("4 Ŝ{i1,i2;a1,a2} g{i3,i4;a3,a4}:S "
@@ -850,6 +849,14 @@ SECTION("Swap bra kets") {
 }
 
 SECTION("Closed-shell spintrace CCD") {
+  // without a projector, the ExprPtr overloads cannot tell external indices
+  // from dummies: an expression with external indices is rejected
+  {
+    const auto residual = deserialize(L"1/2 g{i_1,i_3;a_1,a_3} t{a_3;i_3}",
+                                      {.def_perm_symm = Symmetry::Antisymm});
+    REQUIRE_THROWS_AS(closed_shell_CC_spintrace_v1(residual), Exception);
+    REQUIRE_THROWS_AS(closed_shell_CC_spintrace_v2(residual), Exception);
+  }
   // Energy expression
   {
     {  // standard = v1 , expression can be parsed directly without requiring
@@ -933,7 +940,7 @@ SECTION("Closed-shell spintrace CCSD") {
                   spintrace(input, IdxGroupList{{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
-    canonicalize(result);
+    canonicalize(result, deduce_named_indices);
     REQUIRE_THAT(result, EquivalentTo("f{a1;i1}"));
   }
 
@@ -1217,7 +1224,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}},
         true);
-    simplify(result_1);
+    simplify(result_1, deduce_named_indices);
     REQUIRE(result_1->size() == 18);  // 18 raw terms
     REQUIRE_THAT(
         result_1,
@@ -1248,9 +1255,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     auto result_2 = closed_shell_spintrace(
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
-    simplify(result_2);
+    simplify(result_2, deduce_named_indices);
     result_2 = S_maps(result_2);
-    simplify(result_2);
+    simplify(result_2, deduce_named_indices);
 
     REQUIRE(result_2->size() == 18);  // 18 raw terms
     REQUIRE_THAT(
@@ -1355,7 +1362,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result->size() == 6);
-    simplify(result);
+    simplify(result, deduce_named_indices);
     REQUIRE(result->size() == 6);
   }
 
@@ -1388,7 +1395,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result->size() == 12);
-    simplify(result);
+    simplify(result, deduce_named_indices);
     REQUIRE(result->size() == 12);
   }
 }
@@ -1504,7 +1511,7 @@ SECTION("Relation in spin P operators") {
   expand(p6_input);
   auto p6_result = expand_P_op(p6_input);
   reset_tags(p6_result);
-  simplify(p6_result);
+  simplify(p6_result, deduce_named_indices);
 
   auto A_12 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
                          ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
@@ -1515,27 +1522,27 @@ SECTION("Relation in spin P operators") {
 
   p6_result = A_12 * p6_result;
   expand(p6_result);
-  canonicalize(p6_result);
+  canonicalize(p6_result, deduce_named_indices);
   p6_result = expand_A_op(p6_result);
   reset_tags(p6_result);
-  simplify(p6_result);
+  simplify(p6_result, deduce_named_indices);
 
   auto p7_input = p_abb * input;
   expand(p7_input);
   auto p7_result = expand_P_op(p7_input);
   reset_tags(p7_result);
-  simplify(p7_result);
+  simplify(p7_result, deduce_named_indices);
 
   p7_result = A_23 * p7_result;
   expand(p7_result);
   p7_result = expand_A_op(p7_result);
   reset_tags(p7_result);
-  simplify(p7_result);
+  simplify(p7_result, deduce_named_indices);
 
   auto expanded_A = A3 * input;
   expanded_A = expand_A_op(expanded_A);
   reset_tags(expanded_A);
-  simplify(expanded_A);
+  simplify(expanded_A, deduce_named_indices);
   REQUIRE(p6_result == p7_result);
   REQUIRE(p6_result == expanded_A);
 }
@@ -1620,7 +1627,7 @@ SECTION("Open-shell spin-tracing") {
                                 particle_symmetric));
     auto f = ex<Tensor>(Tensor(L"f", bra{a1A}, ket{a2A}, particle_symmetric));
     auto ft3 = f * t3;
-    ft3->canonicalize();
+    ft3->canonicalize(deduce_named_indices);
     REQUIRE_THAT(ft3, EquivalentTo("f{a↑1;a↑2} t{a↑3,a↑2,a↓2;i↑1,i↑3,i↓2}"));
   }
 
@@ -1648,7 +1655,7 @@ SECTION("Open-shell spin-tracing") {
             input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}));
     REQUIRE(result.size() == 3);
     for (auto& r : result) {
-      simplify(r);
+      simplify(r, deduce_named_indices);
       CHECK(r->is_zero());
     }
   }
@@ -1765,7 +1772,7 @@ SECTION("Open-shell spin-tracing") {
     expand(result2);
     result2 = expand_A_op(result2);
     reset_tags(result2);
-    canonicalize(result2);
+    canonicalize(result2, deduce_named_indices);
     rapid_simplify(result2);
     REQUIRE(result2->size() == 27);
 
@@ -1775,7 +1782,7 @@ SECTION("Open-shell spin-tracing") {
     expand(result3);
     result3 = expand_A_op(result3);
     reset_tags(result3);
-    canonicalize(result3);
+    canonicalize(result3, deduce_named_indices);
     rapid_simplify(result3);
     REQUIRE(result3->size() == 27);
   }
@@ -1814,7 +1821,7 @@ SECTION("Open-shell spin-tracing") {
     expand(result_aab);
     result_aab = expand_A_op(result_aab);
     reset_tags(result_aab);
-    canonicalize(result_aab);
+    canonicalize(result_aab, deduce_named_indices);
     rapid_simplify(result_aab);
     REQUIRE(result_aab->size() == 18);
 
@@ -1869,6 +1876,69 @@ SECTION("Open-shell CC spintrace energy") {
                      L"+ 1/4 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1,a↓2;i↓1,i↓2}:A "
                      L"+ g{i↑1,i↓2;a↑1,a↓2} t{a↑1,a↓2;i↑1,i↓2}"));
   }
+}
+
+SECTION("Open-shell CC spintrace ResultExpr") {
+  // the energy: a scalar result, traced like the plain expression
+  {
+    const auto input = deserialize(
+        L"f{i_1;a_1} t{a_1;i_1} "
+        L"+ 1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+        {.def_perm_symm = Symmetry::Antisymm});
+    const auto result =
+        open_shell_CC_spintrace(ResultExpr(Variable(L"E"), input));
+    REQUIRE(result.size() == 1);
+    REQUIRE(result[0].has_label());
+    REQUIRE(result[0].label() == L"E");
+    REQUIRE(result[0].bra().empty());
+    REQUIRE(result[0].ket().empty());
+    REQUIRE_THAT(
+        result[0].expression(),
+        EquivalentTo(open_shell_CC_spintrace(input).at(0), explicit_named({})));
+  }
+
+  // a residual: the result indices are spin-cased like the columns of the
+  // antisymmetrizer
+  const auto A = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
+                            ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
+  const auto residual =
+      A * ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                     Symmetry::Antisymm) +
+      A * ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_3"}) *
+          ex<Tensor>(L"t", bra{L"a_3", L"a_2"}, ket{L"i_1", L"i_2"},
+                     Symmetry::Antisymm);
+  const Tensor R(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                 Symmetry::Antisymm);
+  const auto result = open_shell_CC_spintrace(ResultExpr(R, residual));
+  const auto reference = open_shell_CC_spintrace(residual);
+  REQUIRE(result.size() == 3);
+  REQUIRE(reference.size() == 3);
+  const std::vector<std::wstring> expected_heads = {
+      L"R{a↑1,a↑2;i↑1,i↑2}", L"R{a↑1,a↓2;i↑1,i↓2}", L"R{a↓1,a↓2;i↓1,i↓2}"};
+  for (std::size_t s = 0; s != result.size(); ++s) {
+    REQUIRE(result[s].label() == L"R");
+    REQUIRE(result[s].symmetry() == Symmetry::Nonsymm);
+    REQUIRE(result[s].column_symmetry() == ColumnSymmetry::Nonsymm);
+    const auto expected_head = deserialize(expected_heads[s]);
+    const Tensor& expected = expected_head->as<Tensor>();
+    REQUIRE(ranges::equal(result[s].bra(), expected.bra()));
+    REQUIRE(ranges::equal(result[s].ket(), expected.ket()));
+    REQUIRE(*result[s].expression() == *reference[s]);
+  }
+
+  // a scalar result must not carry an antisymmetrizer, and a result with
+  // indices must carry one with exactly its indices
+  REQUIRE_THROWS_AS(
+      open_shell_CC_spintrace(ResultExpr(Variable(L"E"), residual)), Exception);
+  REQUIRE_THROWS_AS(open_shell_CC_spintrace(ResultExpr(
+                        R, ex<Tensor>(L"g", bra{L"a_1", L"a_2"},
+                                      ket{L"i_1", L"i_2"}, Symmetry::Antisymm) *
+                               ex<Constant>(1))),
+                    Exception);
+  const Tensor R_other(L"R", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
+                       Symmetry::Antisymm);
+  REQUIRE_THROWS_AS(open_shell_CC_spintrace(ResultExpr(R_other, residual)),
+                    Exception);
 }
 
 SECTION("ResultExpr") {
@@ -2135,4 +2205,92 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
                       Catch::Matchers::ContainsSubstring("μ̃↓"));
     CHECK_THROWS_AS(spintrace(term(m1_half)), Exception);
   }
+}
+
+// the results of the library's transformations depend on the context only
+// through its formalism settings (registry, vacuum, SP basis): the printing
+// options and the deserialization defaults, which used to sit next to the
+// (now removed) canonicalization settings, do not affect them
+TEST_CASE("results independent of presentation settings", "[spin]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using IdxGroupList = container::svector<container::svector<Index>>;
+
+  auto compute = [] {
+    std::vector<ExprPtr> results;
+    // closed- and open-shell spin tracing of a projected CCSD-like term
+    const auto projected =
+        ex<Constant>(rational{1, 4}) *
+        ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                   ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+        ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                   Symmetry::Antisymm) *
+        ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                   Symmetry::Antisymm) *
+        ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_3", L"i_4"},
+                   Symmetry::Antisymm);
+    const IdxGroupList groups{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
+    results.push_back(closed_shell_spintrace(projected, groups));
+    for (auto&& r : open_shell_spintrace(projected, groups))
+      results.push_back(r);
+
+    // spin tracing and biorthogonal transformation of a result
+    const ResultExpr residual(
+        bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, aux{}, Symmetry::Antisymm,
+        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm, L"R",
+        ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"},
+                   Symmetry::Antisymm) *
+                ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                           Symmetry::Antisymm) +
+            ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_3"}) *
+                ex<Tensor>(L"t", bra{L"a_3", L"a_2"}, ket{L"i_1", L"i_2"},
+                           Symmetry::Antisymm));
+    auto traced = closed_shell_spintrace(residual);
+    biorthogonal_transform(traced);
+    for (auto&& r : traced) results.push_back(r.expression());
+
+    // densities in terms of cumulants
+    const ResultExpr density(
+        bra{L"i_1"}, ket{L"i_2"}, aux{}, Symmetry::Nonsymm,
+        BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm, L"D",
+        density::make_cumulant(bra{Index(L"i_1"), Index(L"i_3")},
+                               ket{Index(L"i_2"), Index(L"i_4")}) *
+            ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_3"}));
+    results.push_back(
+        decompositions::cumulants_to_densities(density).expression());
+    return results;
+  };
+
+  const auto reference = compute();
+  auto scoped = set_scoped_modified_default_context([](sequant::Context& ctx) {
+    ctx.set(PrintOptions{
+        .braket_typesetting = BraKetTypesetting::KetSub,
+        .braket_slot_typesetting = BraKetSlotTypesetting::TensorPackage,
+        .ordering = LexicographicCompareOptions{
+            .cardinal_tensor_labels = {L"t", L"g", L"f"}}});
+    ctx.set(Symmetry::Antisymm)
+        .set(Hermiticity::Hermitian)
+        .set(ColumnSymmetry::Nonsymm);
+  });
+  const auto changed = compute();
+  REQUIRE(changed.size() == reference.size());
+  for (std::size_t k = 0; k != reference.size(); ++k) {
+    CAPTURE(k, serialize(reference[k]), serialize(changed[k]));
+    CHECK(*changed[k] == *reference[k]);
+  }
+}
+
+TEST_CASE("closed-shell spintrace of a result", "[spin]") {
+  using namespace sequant;
+  // the spin-traced residual does not have the permutational symmetry of the
+  // spin-orbital one
+  const auto r = mbpt::CC{2}.t();
+  const ResultExpr residual(Tensor(L"R", bra{L"a_1", L"a_2"},
+                                   ket{L"i_1", L"i_2"}, Symmetry::Antisymm),
+                            r.at(2));
+  const auto traced = mbpt::closed_shell_CC_spintrace(residual);
+  CHECK(traced.symmetry() == Symmetry::Nonsymm);
+  CHECK(traced.bra() == residual.bra());
+  CHECK(traced.ket() == residual.ket());
+  CHECK(*traced.expression() == *mbpt::closed_shell_CC_spintrace(r.at(2)));
 }

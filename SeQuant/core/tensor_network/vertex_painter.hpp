@@ -31,6 +31,13 @@ struct AuxGroup {
 
   std::size_t id;
 };
+/// a group of tensors (see TensorNetworkV3::set_tensor_groups()), colored by
+/// its key
+struct TensorGroupKey {
+  explicit TensorGroupKey(std::size_t key) : key(key) {}
+
+  std::size_t key;
+};
 /// column in a group of columns produces single braket slot
 struct ColumnGroup {
   /// creates a group of particles of size @p size and symmetry @p symmetry
@@ -55,7 +62,7 @@ class VertexPainter {
   using NamedIndexColorMap = tensor_network::NamedIndexColorMap;
   using VertexData =
       std::variant<const AbstractTensor *, Index, const ProtoBundle *, BraGroup,
-                   KetGroup, AuxGroup, ColumnGroup>;
+                   KetGroup, AuxGroup, ColumnGroup, TensorGroupKey>;
   using ColorMap = container::map<Color, VertexData>;
 
   /// \param named_indices indices not in this list will use colors based on
@@ -80,6 +87,7 @@ class VertexPainter {
   Color operator()(const KetGroup &group);
   Color operator()(const AuxGroup &group);
   Color operator()(const ColumnGroup &group);
+  Color operator()(const TensorGroupKey &group);
 
   /// will apply @p shade to all subsequent colors.
   /// use this to shade colors of all tensor components by the color of its type
@@ -181,6 +189,7 @@ class VertexPainter {
   bool may_have_same_color(const VertexData &data, const KetGroup &group);
   bool may_have_same_color(const VertexData &data, const AuxGroup &group);
   bool may_have_same_color(const VertexData &data, const ColumnGroup &group);
+  bool may_have_same_color(const VertexData &data, const TensorGroupKey &group);
   bool may_have_same_color(const VertexData &data, const Index &idx);
   bool may_have_same_color(const VertexData &data, const ProtoBundle &bundle);
 };

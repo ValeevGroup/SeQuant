@@ -1,0 +1,73 @@
+#ifndef SEQUANT_EXPRESSIONS_PRETTIFY_HPP
+#define SEQUANT_EXPRESSIONS_PRETTIFY_HPP
+
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
+#include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+
+namespace sequant {
+
+/// options of prettify()
+struct PrettifyOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
+
+  /// whether to canonicalize (Complete) with the #presentation settings before
+  /// sorting; if false, the summands and the commuting factors of the
+  /// expression are only sorted
+  bool recanonicalize = true;
+  /// the presentation settings: the canonicalizers and comparers used to
+  /// recanonicalize, and the cardinal tensor labels used to recanonicalize
+  /// and to sort (unset members default to those of the library's canonical
+  /// form)
+  CanonicalizationPresentation presentation = {};
+};
+
+/// @brief Brings an expression into a form meant for reading
+///
+/// The library canonicalizes to one fixed internal form, which is meant to
+/// identify equivalent expressions, not to be read. This returns an equivalent
+/// expression in a form chosen by @p opts : (optionally) canonicalized with
+/// the presentation settings, then ordered lexicographically (see sort_expr()
+/// and LexicographicExprCompare), which, unlike canonicalization, does not
+/// depend on the hashing algorithm. The named indices are never renamed.
+///
+/// The structure of the expression is preserved: the parenthesization of
+/// products (e.g. the order of evaluation chosen by optimize()) is kept,
+/// sums are not flattened and their summands are not combined. Only the
+/// summands that are tensors or (possibly nested) products of tensors are
+/// recanonicalized, the dummy indices of a nested product being named
+/// consistently across it; the other summands (e.g. products with a sum as
+/// a factor) are only sorted.
+/// @note the result is meant for presentation only, i.e. it is not
+/// canonical in the sense of Expr::is_canonical(); pass it to
+/// canonicalize()/simplify() before relying on its form
+/// @param expr the expression to prettify; it is not modified
+/// @param named_indices the indices whose labels are meaningful (ordinarily
+/// the external indices of @p expr ); see NamedIndexSpec
+/// @param opts the options
+/// @return the prettified copy of @p expr
+[[nodiscard]] ExprPtr prettify(const ExprPtr& expr,
+                               const NamedIndexSpec& named_indices,
+                               const PrettifyOptions& opts = {});
+
+/// @brief Brings a ResultExpr into a form meant for reading, with the indices
+/// of its result as the named indices
+///
+/// If recanonicalizing, each summand of a sum that a (anti)symmetrizer of the
+/// result multiplies (S * (X_1 + X_2 + ...)), and the factor X of any other
+/// product S * X, is presented by its image, under the permutations that S
+/// absorbs (see detail::symmetrizer_group()), that comes first in the order of
+/// @p opts ; the images X and P(X) are interchangeable there, as
+/// S * X = sign(P) S * P(X). Other terms are not replaced by images.
+/// @sa prettify(const ExprPtr&, const NamedIndexSpec&, const PrettifyOptions&)
+/// @param expr the expression to prettify; it is not modified
+/// @param opts the options
+/// @return the prettified copy of @p expr
+[[nodiscard]] ResultExpr prettify(const ResultExpr& expr,
+                                  const PrettifyOptions& opts = {});
+
+}  // namespace sequant
+
+#endif  // SEQUANT_EXPRESSIONS_PRETTIFY_HPP

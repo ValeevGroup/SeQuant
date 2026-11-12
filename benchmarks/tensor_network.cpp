@@ -99,13 +99,13 @@ static void random_tensor_network(benchmark::State& state) {
     state.SkipWithMessage("Invalid");
   }
 
-  const auto& cardinal_tensor_labels =
-      get_default_context().cardinal_tensor_labels();
+  const auto& cardinal_tensor_labels = default_cardinal_tensor_labels();
   for (auto _ : state) {
     // Need to clone in order to avoid mutating original expression
     TensorNetwork tn(prod->clone()->as<Product>().factors());
 
-    ExprPtr expr = tn.canonicalize(cardinal_tensor_labels);
+    ExprPtr expr =
+        tn.canonicalize(cardinal_tensor_labels, deduce_named_indices);
 
     // Prevent the compiler from optimizing the canonicalization away
     benchmark::DoNotOptimize(expr);

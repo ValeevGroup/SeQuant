@@ -71,7 +71,7 @@ static void wick(benchmark::State &state, bool full_conractions_only,
   // Note: only what is contained in this loop will be part
   // of the benchmark timings
   for (auto _ : state) {
-    WickTheorem<stats> wick(input->clone());
+    WickTheorem<stats> wick(input->clone(), deduce_named_indices);
     wick.full_contractions(full_conractions_only);
     wick.use_topology(use_topology);
 
@@ -163,10 +163,10 @@ static void mbpt_vac_av(benchmark::State &state, bool csv) {
   for (auto _ : state) {
     ExprPtr result = [&]() {
       if (input.connections) {
-        return mbpt::tensor::vac_av(input.expr,
+        return mbpt::tensor::vac_av(input.expr, deduce_named_indices,
                                     {.connect = input.connections.value()});
       } else {
-        return mbpt::tensor::vac_av(input.expr);
+        return mbpt::tensor::vac_av(input.expr, deduce_named_indices);
       }
     }();
 

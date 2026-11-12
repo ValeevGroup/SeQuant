@@ -100,8 +100,9 @@ int main(int argc, char **argv) {
       return 3;
     }
 
-    auto graph = network->create_graph(
-        {.named_indices = use_named_indices ? nullptr : &empty_named_indices});
+    // the named indices are the external ones, if requested, else none
+    auto graph = use_named_indices ? network->create_graph(deduce_named_indices)
+                                   : network->create_graph(empty_named_indices);
 
     if (canonical) {
       const unsigned int *perm = TN::canonicalize_graph(graph);

@@ -24,29 +24,6 @@ namespace sequant {
 
 namespace {
 
-// process-wide immutable defaults, shared so that default-constructed
-// contexts compare equal
-const std::shared_ptr<TensorCanonicalizer>& default_tensor_canonicalizer() {
-  static const std::shared_ptr<TensorCanonicalizer> result =
-      std::make_shared<DefaultTensorCanonicalizer>();
-  return result;
-}
-
-const std::shared_ptr<const tensor_index_comparer_t>& default_index_comparer() {
-  static const std::shared_ptr<const tensor_index_comparer_t> result =
-      std::make_shared<const tensor_index_comparer_t>(
-          TensorCanonicalizer::default_index_comparer());
-  return result;
-}
-
-const std::shared_ptr<const tensor_index_pair_comparer_t>&
-default_index_pair_comparer() {
-  static const std::shared_ptr<const tensor_index_pair_comparer_t> result =
-      std::make_shared<const tensor_index_pair_comparer_t>(
-          TensorCanonicalizer::default_index_pair_comparer());
-  return result;
-}
-
 /// identifies a shared object while it lives; the weak reference keeps an
 /// object later allocated at the same address from matching. A null pointer
 /// denotes no object (a Context need not have a registry) and is always alive.
@@ -62,34 +39,18 @@ struct ObjectRef {
   bool operator==(const ObjectRef& other) const { return ptr == other.ptr; }
 };
 
-/// what canonicalization reads from a Context: its CanonicalizationConfig, its
-/// index basis registry and its SP basis, with the shared objects referred to
-/// weakly and compared by identity (operator==(const Context&, const Context&)
-/// compares the registries by value); mirrors Context::CanonicalizationConfig
-/// in context.hpp, so a member added there is added here
+/// what canonicalization reads from a Context: its index basis registry
+/// (compared by identity, referred to weakly; operator==(const Context&, const
+/// Context&) compares the registries by value) and its SP basis
 struct CanonicalizationKey {
   ObjectRef registry;
   /// determines the symmetry of NormalOperator
   SPBasis spbasis = Context::Defaults::spbasis;
-  container::vector<std::pair<std::wstring, ObjectRef>> canonicalizers;
-  ObjectRef index_comparer;
-  ObjectRef index_pair_comparer;
-  container::vector<std::wstring> cardinal_labels;
-  std::optional<CanonicalizeOptions> options;
 
-  bool alive() const {
-    return registry.alive() && index_comparer.alive() &&
-           index_pair_comparer.alive() &&
-           std::ranges::all_of(canonicalizers,
-                               [](const auto& c) { return c.second.alive(); });
-  }
+  bool alive() const { return registry.alive(); }
 
   bool operator==(const CanonicalizationKey& other) const {
-    return registry == other.registry && spbasis == other.spbasis &&
-           canonicalizers == other.canonicalizers &&
-           index_comparer == other.index_comparer &&
-           index_pair_comparer == other.index_pair_comparer &&
-           cardinal_labels == other.cardinal_labels && options == other.options;
+    return registry == other.registry && spbasis == other.spbasis;
   }
 };
 
@@ -132,31 +93,6 @@ std::shared_ptr<const IndexBasisRegistry> take_registry(
   return nullptr;
 }
 
-void check_tensor_canonicalizer(
-    const std::shared_ptr<TensorCanonicalizer>& canonicalizer) {
-  if (!canonicalizer)
-    throw Exception("Context: a tensor canonicalizer must not be null");
-}
-
-template <typename Comparer>
-std::shared_ptr<const Comparer> checked_comparer(
-    std::shared_ptr<const Comparer> comparer) {
-  SEQUANT_ASSERT(comparer && *comparer);
-  return comparer;
-}
-
-template <typename Comparer>
-std::shared_ptr<const Comparer> make_comparer(Comparer comparer) {
-  return checked_comparer(
-      std::make_shared<const Comparer>(std::move(comparer)));
-}
-
-void check_cardinal_tensor_labels(
-    [[maybe_unused]] const container::vector<std::wstring>& labels) {
-  SEQUANT_ASSERT(!has_duplicates(labels) &&
-                 "cardinal tensor labels must not contain duplicates");
-}
-
 }  // namespace
 
 bool default_context_manipulation_threadsafe() {
@@ -179,14 +115,12 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
              ctx2.assert_strict_braket_symmetry() &&
          ctx1.spbasis() == ctx2.spbasis() &&
          ctx1.first_dummy_index_ordinal() == ctx2.first_dummy_index_ordinal() &&
-         ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
-         ctx1.braket_slot_typesetting() == ctx2.braket_slot_typesetting() &&
+         ctx1.print_options() == ctx2.print_options() &&
          ctx1.deserialization_symmetry() == ctx2.deserialization_symmetry() &&
          ctx1.deserialization_hermiticity() ==
              ctx2.deserialization_hermiticity() &&
          ctx1.deserialization_column_symmetry() ==
              ctx2.deserialization_column_symmetry() &&
-         *ctx1.canonicalization_config_ == *ctx2.canonicalization_config_ &&
          same_registry(ctx1.index_basis_registry(),
                        ctx2.index_basis_registry());
 }
@@ -396,37 +330,11 @@ Context::Context(Options options)
       assert_strict_braket_symmetry_(options.assert_strict_braket_symmetry),
       spbasis_(options.spbasis),
       first_dummy_index_ordinal_(options.first_dummy_index_ordinal),
-      braket_typesetting_(options.braket_typesetting),
-      braket_slot_typesetting_(options.braket_slot_typesetting),
+      print_options_(std::move(options.print_options)),
       deserialization_symmetry_(options.deserialization_symmetry),
       deserialization_hermiticity_(options.deserialization_hermiticity),
       deserialization_column_symmetry_(
-          options.deserialization_column_symmetry) {
-  auto config = std::make_shared<CanonicalizationConfig>();
-  if (options.tensor_canonicalizers) {
-    for (const auto& [label, canonicalizer] : *options.tensor_canonicalizers)
-      check_tensor_canonicalizer(canonicalizer);
-    config->tensor_canonicalizers = std::move(*options.tensor_canonicalizers);
-  }
-  config->tensor_canonicalizers.try_emplace(L"",
-                                            default_tensor_canonicalizer());
-  config->index_comparer =
-      options.index_comparer ? make_comparer(std::move(*options.index_comparer))
-                             : default_index_comparer();
-  config->index_pair_comparer =
-      options.index_pair_comparer
-          ? make_comparer(std::move(*options.index_pair_comparer))
-          : default_index_pair_comparer();
-  if (options.cardinal_tensor_labels) {
-    check_cardinal_tensor_labels(*options.cardinal_tensor_labels);
-    config->cardinal_labels = std::move(*options.cardinal_tensor_labels);
-  } else
-    config->cardinal_labels = {reserved::antisymm_label(),
-                               reserved::symm_label(),
-                               reserved::transposition_label()};
-  config->options = std::move(options.canonicalization_options);
-  canonicalization_config_ = std::move(config);
-}
+          options.deserialization_column_symmetry) {}
 
 std::uint64_t Context::version() const {
   // computed on demand, so that the intermediate configurations of a chain of
@@ -434,29 +342,10 @@ std::uint64_t Context::version() const {
   // at once compute the same version, since equal configurations share one
   auto result = version_.value.load(std::memory_order_relaxed);
   if (result != 0) return result;
-  // binds every member, so that a member added to CanonicalizationConfig
-  // fails to compile here until the key accounts for it
-  const auto& [tensor_canonicalizers, index_comparer, index_pair_comparer,
-               cardinal_labels, options] = *canonicalization_config_;
   CanonicalizationKey key{.registry = ObjectRef(idx_basis_reg_),
-                          .spbasis = spbasis_,
-                          .canonicalizers = {},
-                          .index_comparer = ObjectRef(index_comparer),
-                          .index_pair_comparer = ObjectRef(index_pair_comparer),
-                          .cardinal_labels = cardinal_labels,
-                          .options = options};
-  for (const auto& [label, canonicalizer] : tensor_canonicalizers)
-    key.canonicalizers.emplace_back(label, ObjectRef(canonicalizer));
+                          .spbasis = spbasis_};
   result = canonicalization_version(std::move(key));
   version_.value.store(result, std::memory_order_relaxed);
-  return result;
-}
-
-Context::CanonicalizationConfig& Context::mutable_canonicalization_config() {
-  auto copy =
-      std::make_shared<CanonicalizationConfig>(*canonicalization_config_);
-  auto& result = *copy;
-  canonicalization_config_ = std::move(copy);
   return result;
 }
 
@@ -492,16 +381,14 @@ SPBasis Context::spbasis() const { return spbasis_; }
 std::size_t Context::first_dummy_index_ordinal() const {
   return first_dummy_index_ordinal_;
 }
-std::optional<CanonicalizeOptions> Context::canonicalization_options() const {
-  return canonicalization_config_->options;
-}
+const PrintOptions& Context::print_options() const { return print_options_; }
 
 BraKetTypesetting Context::braket_typesetting() const {
-  return braket_typesetting_;
+  return print_options_.braket_typesetting;
 }
 
 BraKetSlotTypesetting Context::braket_slot_typesetting() const {
-  return braket_slot_typesetting_;
+  return print_options_.braket_slot_typesetting;
 }
 
 Symmetry Context::deserialization_symmetry() const {
@@ -514,53 +401,6 @@ Hermiticity Context::deserialization_hermiticity() const {
 
 ColumnSymmetry Context::deserialization_column_symmetry() const {
   return deserialization_column_symmetry_;
-}
-
-std::shared_ptr<TensorCanonicalizer> Context::tensor_canonicalizer_ptr(
-    std::wstring_view label) const {
-  auto result = nondefault_tensor_canonicalizer_ptr(label);
-  if (!result) result = nondefault_tensor_canonicalizer_ptr(L"");
-  return result;
-}
-
-std::shared_ptr<TensorCanonicalizer>
-Context::nondefault_tensor_canonicalizer_ptr(std::wstring_view label) const {
-  const auto& map = canonicalization_config_->tensor_canonicalizers;
-  auto it = map.find(std::wstring{label});
-  return it != map.end() ? it->second : nullptr;
-}
-
-const TensorCanonicalizer& Context::tensor_canonicalizer(
-    std::wstring_view label) const {
-  auto ptr = tensor_canonicalizer_ptr(label);
-  if (!ptr)
-    throw Exception(
-        "Context::tensor_canonicalizer: no canonicalizer for this label nor "
-        "for the empty label");
-  // the map entry keeps *ptr alive
-  return *ptr;
-}
-
-const tensor_index_comparer_t& Context::index_comparer() const {
-  return *canonicalization_config_->index_comparer;
-}
-
-const tensor_index_pair_comparer_t& Context::index_pair_comparer() const {
-  return *canonicalization_config_->index_pair_comparer;
-}
-
-std::shared_ptr<const tensor_index_comparer_t> Context::index_comparer_ptr()
-    const {
-  return canonicalization_config_->index_comparer;
-}
-
-std::shared_ptr<const tensor_index_pair_comparer_t>
-Context::index_pair_comparer_ptr() const {
-  return canonicalization_config_->index_pair_comparer;
-}
-
-const container::vector<std::wstring>& Context::cardinal_tensor_labels() const {
-  return canonicalization_config_->cardinal_labels;
 }
 
 Context& Context::set(Vacuum vacuum) {
@@ -599,19 +439,18 @@ Context& Context::set_first_dummy_index_ordinal(
   return *this;
 }
 
-Context& Context::set(CanonicalizeOptions copt) {
-  mutable_canonicalization_config().options = copt;
-  invalidate_version();
+Context& Context::set(PrintOptions print_options) {
+  print_options_ = std::move(print_options);
   return *this;
 }
 
 Context& Context::set(BraKetTypesetting bkt) {
-  braket_typesetting_ = bkt;
+  print_options_.braket_typesetting = bkt;
   return *this;
 }
 
 Context& Context::set(BraKetSlotTypesetting bkst) {
-  braket_slot_typesetting_ = bkst;
+  print_options_.braket_slot_typesetting = bkst;
   return *this;
 }
 
@@ -627,62 +466,6 @@ Context& Context::set(Hermiticity hermiticity) {
 
 Context& Context::set(ColumnSymmetry column_symmetry) {
   deserialization_column_symmetry_ = column_symmetry;
-  return *this;
-}
-
-Context& Context::set_tensor_canonicalizer(
-    std::wstring_view label,
-    std::shared_ptr<TensorCanonicalizer> canonicalizer) {
-  check_tensor_canonicalizer(canonicalizer);
-  mutable_canonicalization_config().tensor_canonicalizers.insert_or_assign(
-      std::wstring{label}, std::move(canonicalizer));
-  invalidate_version();
-  return *this;
-}
-
-Context& Context::unset_tensor_canonicalizer(std::wstring_view label) {
-  mutable_canonicalization_config().tensor_canonicalizers.erase(
-      std::wstring{label});
-  invalidate_version();
-  return *this;
-}
-
-Context& Context::set_index_comparer(tensor_index_comparer_t comparer) {
-  mutable_canonicalization_config().index_comparer =
-      make_comparer(std::move(comparer));
-  invalidate_version();
-  return *this;
-}
-
-Context& Context::set_index_comparer(
-    std::shared_ptr<const tensor_index_comparer_t> comparer) {
-  mutable_canonicalization_config().index_comparer =
-      checked_comparer(std::move(comparer));
-  invalidate_version();
-  return *this;
-}
-
-Context& Context::set_index_pair_comparer(
-    tensor_index_pair_comparer_t comparer) {
-  mutable_canonicalization_config().index_pair_comparer =
-      make_comparer(std::move(comparer));
-  invalidate_version();
-  return *this;
-}
-
-Context& Context::set_index_pair_comparer(
-    std::shared_ptr<const tensor_index_pair_comparer_t> comparer) {
-  mutable_canonicalization_config().index_pair_comparer =
-      checked_comparer(std::move(comparer));
-  invalidate_version();
-  return *this;
-}
-
-Context& Context::set_cardinal_tensor_labels(
-    container::vector<std::wstring> labels) {
-  check_cardinal_tensor_labels(labels);
-  mutable_canonicalization_config().cardinal_labels = std::move(labels);
-  invalidate_version();
   return *this;
 }
 

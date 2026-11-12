@@ -148,8 +148,9 @@ void require_permutation(TreeShape const& tree, std::size_t n,
 
 }  // namespace
 
-ExprPtr canonical_term(ExprPtr const& term) {
-  return canonicalize(flatten(term->clone()));
+ExprPtr canonical_term(ExprPtr const& term,
+                       NamedIndexSpec const& external_indices) {
+  return canonicalize(flatten(term->clone()), external_indices);
 }
 
 std::string term_key(ExprPtr const& canonical) {
@@ -494,12 +495,12 @@ eval::schedule::RootRecord RecordSession::finish() const {
   return checked_root(label_, std::move(terms));
 }
 
-RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
+RecordedRoot record_root(std::string label, ResultExpr const& root,
                          OptimizeOptions opts) {
   RecordSession session(std::move(label));
   opts.recording = &session;
   RecordedRoot result;
-  result.optimized = optimize_result(root_sum, opts).expr;
+  result.optimized = optimize_result(root, opts).expr;
   std::vector<Expr const*> order;
   if (result.optimized->is<Sum>())
     for (auto const& s : result.optimized->as<Sum>().summands())
@@ -583,18 +584,13 @@ eval::schedule::Fingerprint make_fingerprint(
   fp.reorder = reorder_name(opts.reorder);
   fp.cse["subnet"] = opts.CSE.subnet ? "true" : "false";
   for (auto const& m : mode_order) fp.mode_order.push_back(toUtf8(m));
-  auto const& ctx = get_default_context();
+  // a snapshot, which the setting of another default context cannot change
+  // while it is read
+  auto const ctx = get_default_context_snapshot();
   fp.context.vacuum = vacuum_name(ctx.vacuum());
   fp.context.spbasis = spbasis_name(ctx.spbasis());
   fp.context.strict_braket_symmetry = ctx.assert_strict_braket_symmetry();
-  for (auto const& l : ctx.cardinal_tensor_labels())
-    fp.context.cardinal_tensor_labels.push_back(toUtf8(l));
-  auto const copts = ctx.canonicalization_options().value_or(
-      CanonicalizeOptions::default_options());
-  fp.context.canonicalization_method = toUtf8(to_wstring(copts.method));
-  fp.context.ignore_named_index_labels =
-      copts.ignore_named_index_labels ==
-      CanonicalizeOptions::IgnoreNamedIndexLabel::Yes;
+  fp.context.canonical_form = canonical_form_version;
   return fp;
 }
 
@@ -611,6 +607,7 @@ std::string join(std::vector<std::string> const& v) {
 std::string str(std::string const& s) { return s; }
 std::string str(bool b) { return b ? "true" : "false"; }
 std::string str(double d) { return std::to_string(d); }
+std::string str(int i) { return std::to_string(i); }
 std::string str(std::vector<std::string> const& v) { return join(v); }
 std::string str(std::pair<bool, bool> const& p) {
   return "(" + str(p.first) + "," + str(p.second) + ")";
@@ -671,12 +668,7 @@ void check_fingerprint(eval::schedule::Fingerprint const& loaded,
   diff(d, "context.spbasis", a.spbasis, b.spbasis);
   diff(d, "context.strict_braket_symmetry", a.strict_braket_symmetry,
        b.strict_braket_symmetry);
-  diff(d, "context.cardinal_tensor_labels", a.cardinal_tensor_labels,
-       b.cardinal_tensor_labels);
-  diff(d, "context.canonicalization_method", a.canonicalization_method,
-       b.canonicalization_method);
-  diff(d, "context.ignore_named_index_labels", a.ignore_named_index_labels,
-       b.ignore_named_index_labels);
+  diff(d, "context.canonical_form", a.canonical_form, b.canonical_form);
   if (d.empty()) return;
   std::string msg = "schedule fingerprint mismatch:";
   for (auto const& line : d) msg += "\n" + line;

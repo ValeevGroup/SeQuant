@@ -63,9 +63,11 @@
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <catch2/catch_approx.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include "catch2_sequant.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -3756,7 +3758,7 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
   REQUIRE(a1.has_proto_indices());
   REQUIRE(a2.has_proto_indices());
 
-  EvalExpr const ev{t};
+  EvalExpr const ev{t, sequant::tests::open_indices(t)};
   auto const& ci = ev.canon_indices();
 
   auto nar = [](std::wstring_view w) {

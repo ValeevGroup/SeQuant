@@ -21,8 +21,9 @@
 namespace sequant {
 
 /// @brief Base class for Tensor canonicalizers
-/// To make custom canonicalizer make a derived class and install an instance
-/// of that class in a Context (see Context::set_tensor_canonicalizer())
+/// To make a custom canonicalizer make a derived class and pass an instance of
+/// that class explicitly, via
+/// CanonicalizationPresentation::tensor_canonicalizers
 class TensorCanonicalizer {
  public:
   using index_comparer_t = tensor_index_comparer_t;
@@ -85,12 +86,29 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       this->external_indices_.emplace(idx);
     });
   }
+
+  /// @tparam IndexContainer as above
+  /// @param external_indices container of external Index objects
+  /// @param index_comparer orders the indices; null selects the default
+  /// @param index_pair_comparer orders the index pairs; null selects the
+  /// default
+  template <typename IndexContainer>
+  DefaultTensorCanonicalizer(
+      IndexContainer&& external_indices,
+      std::shared_ptr<const index_comparer_t> index_comparer,
+      std::shared_ptr<const index_pair_comparer_t> index_pair_comparer)
+      : DefaultTensorCanonicalizer(
+            std::forward<IndexContainer>(external_indices)) {
+    index_comparer_ = std::move(index_comparer);
+    index_pair_comparer_ = std::move(index_pair_comparer);
+  }
   virtual ~DefaultTensorCanonicalizer() = default;
 
   /// Canonicalizes the assignment of indices to bra and ket
   static void canonicalize_braket(AbstractTensor& t);
 
-  /// Implements TensorCanonicalizer::apply
+  /// Implements TensorCanonicalizer::apply, with the comparers given at
+  /// construction, else the default ones
   /// @note Canonicalizes @c t by sorting its bra (if @c
   /// t.symmetry()==Symmetry::Nonsymm ) or its bra and ket (if @c
   /// t.symmetry()!=Symmetry::Nonsymm ),
@@ -166,6 +184,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
 
  private:
   container::set<Index> external_indices_;
+  std::shared_ptr<const index_comparer_t> index_comparer_;
+  std::shared_ptr<const index_pair_comparer_t> index_pair_comparer_;
 
  protected:
   void tag_indices(AbstractTensor& t) const;
