@@ -7,7 +7,7 @@
 
 namespace sequant {
 
-Result::id_t Result::id_for_name(std::string_view name) noexcept {
+Result::id_t Result::id_for_name(std::string_view name) {
   static std::mutex mtx;
   static std::unordered_map<std::string, id_t> ids;
   std::scoped_lock lock(mtx);

@@ -233,7 +233,7 @@ class SEQUANT_EVAL_API Result {
   /// \return Returns true if the concrete type of the object is T.
   ///
   template <typename T>
-  [[nodiscard]] bool is() const noexcept {
+  [[nodiscard]] bool is() const {
     return this->type_id() == id_for_type<std::decay_t<T>>();
   }
 
@@ -519,12 +519,12 @@ class SEQUANT_EVAL_API Result {
   /// here (set_value()). Default no-op.
   virtual void ensure_value() const {}
 
-  [[nodiscard]] virtual id_t type_id() const noexcept = 0;
+  [[nodiscard]] virtual id_t type_id() const = 0;
 
   /// @note the id is keyed by the (mangled) name of `T`, hence agrees across
   /// shared libraries even though each caches it in its own copy of `id`
   template <typename T>
-  [[nodiscard]] static id_t id_for_type() noexcept {
+  [[nodiscard]] static id_t id_for_type() {
     static const id_t id = id_for_name(typeid(T).name());
     return id;
   }
@@ -535,7 +535,7 @@ class SEQUANT_EVAL_API Result {
 
   /// @return the id of the type with (mangled) name @p name; a new id is
   /// assigned on the first call for a given name
-  [[nodiscard]] static id_t id_for_name(std::string_view name) noexcept;
+  [[nodiscard]] static id_t id_for_name(std::string_view name);
 };
 
 ///
@@ -620,7 +620,7 @@ class ResultScalar final : public Result {
   }
 
  private:
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<ResultScalar<T>>();
   }
 
