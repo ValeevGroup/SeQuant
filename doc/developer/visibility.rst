@@ -75,6 +75,17 @@ boundaries must therefore be exported:
 ``rtti-across-libraries`` checks the ``type_info`` identity of such types by address, which detects a missing export also with
 libstdc++.
 
+Third-party headers
+-------------------
+
+Hidden visibility also applies to the code of other libraries that a SeQuant library instantiates from their headers. Libraries
+that keep process-wide state in statics of inline functions, or compare ``type_info`` objects, then get a private copy per
+SeQuant library. TiledArray/MADNESS do both (e.g. the default ``World``), so SeQuant code must include TiledArray only via
+``SeQuant/core/eval/backends/tiledarray/tiledarray.hpp``, which includes it with default visibility. On Darwin, clang's
+``-fvisibility-inlines-hidden`` takes precedence over that ``#pragma GCC visibility push(default)`` for inline member functions (e.g.
+TiledArray's default ``World`` accessor), so the library that compiles TiledArray code (``SeQuant-eval-ta``) is built without
+``VISIBILITY_INLINES_HIDDEN``, on every platform.
+
 Unit tests
 ----------
 
