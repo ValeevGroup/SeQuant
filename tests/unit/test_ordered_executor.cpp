@@ -64,6 +64,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -2842,6 +2843,12 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   opts.roofline.fast_mem_elems = 1000000.0;
   opts.term_batch_axes = axes_map;
 
+  // wall time of each stage, reported with the table below
+  auto const tick = [] { return std::chrono::steady_clock::now(); };
+  auto const secs = [](auto a, auto b) {
+    return std::chrono::duration<double>(b - a).count();
+  };
+  auto const t_plan0 = tick();
   std::vector<Node> forest;
   // one root per tree: summand s is root "R<s>" with a single term
   std::vector<sequant::eval::schedule::RootRecord> roots;
@@ -2876,6 +2883,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   auto const block_of = [](sequant::Index const&) -> std::size_t {
     return 256;
   };
+  auto const t_sched0 = tick();
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   REQUIRE(!rich.cells.empty());
   auto const vmap = sequant::eval::build_value_node_map(forest);
@@ -2960,6 +2968,8 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     ut_dump_sched_tree(*ordered_opt);
   if (char const* rd = std::getenv("SEQUANT_UT_ROLE_DIAG"))
     ut_dump_role_diag(rich, legality, rd);
+  auto const t_sched1 = tick();
+  double t_cold = 0, t_warm = 0;
 
   std::function<bool(Node const&)> const is_volatile_node =
       [p = policy.is_volatile_leaf](Node const& n) -> bool {
@@ -3131,7 +3141,9 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
       peak_total = 0;
       peak_live.clear();
     }
+    auto const t_run0 = tick();
     run(o1, doc ? &*doc->run : nullptr);  // COLD
+    t_cold = secs(t_run0, tick());
     if (doc) {
       std::ofstream out(doc_path, std::ios::binary);
       REQUIRE(out.good());
@@ -3185,7 +3197,9 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     }
 
     cache.reset();
+    auto const t_run1 = tick();
     run(o2, nullptr);  // WARM
+    t_warm = secs(t_run1, tick());
     // SEQUANT_UT_TOP_BUILDS=<N>: the N values built most often over the two
     // iterations (the recompute tally), with their labels and occurrence
     // counts -- where a fused chain's interposed loops rebuild a value.
@@ -3356,6 +3370,11 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
              << L"/" << kOccBlock << L"/" << kPaoBlock
              << (occ_contracted ? L", occ also CONTRACTED-batchable" : L"")
              << L" ===\n";
+  std::wcerr << std::defaultfloat << L"  wall time, s: per-term optimization "
+             << secs(t_plan0, t_sched0) << L", ordered schedule "
+             << secs(t_sched0, t_sched1) << L", ordered dry run cold " << t_cold
+             << L" warm " << t_warm << L"\n"
+             << std::scientific;
   pr(L"forest  iter1 (cold)", f1);
   pr(L"forest  iter2 (warm)", f2);
   if (ordered_ok) {
