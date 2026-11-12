@@ -5,6 +5,7 @@
 
 #include <sstream>
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/elementwise.hpp>
@@ -38,17 +39,13 @@ namespace detail {
 
 // Instrumentation (SEQUANT_SYNC_STATS, analysis-only): count gop.fence() calls
 // so the ordered-executor's synchronization overhead can be localized.
-inline std::atomic<std::size_t>& fence_counter() {
-  static std::atomic<std::size_t> c{0};
-  return c;
-}
+// The counters live in SeQuant-eval-ta, so that they are process-wide; the
+// totals are reported at exit if SEQUANT_SYNC_STATS is set.
+SEQUANT_EVAL_TA_INTERNAL_API std::atomic<std::size_t>& fence_counter();
 inline void note_fence() {
   fence_counter().fetch_add(1, std::memory_order_relaxed);
 }
-inline std::atomic<std::size_t>& wait_counter() {
-  static std::atomic<std::size_t> c{0};
-  return c;
-}
+SEQUANT_EVAL_TA_INTERNAL_API std::atomic<std::size_t>& wait_counter();
 inline void note_wait() {
   wait_counter().fetch_add(1, std::memory_order_relaxed);
 }
@@ -59,28 +56,11 @@ void wait_for_lazy_cleanup(Array const& arr) {
   Array::wait_for_lazy_cleanup(arr.world());
   note_wait();
 }
-inline std::atomic<std::size_t>& slice_counter() {
-  static std::atomic<std::size_t> c{0};
-  return c;
-}
+SEQUANT_EVAL_TA_INTERNAL_API std::atomic<std::size_t>& slice_counter();
 inline void note_slice() {
   slice_counter().fetch_add(1, std::memory_order_relaxed);
 }
-inline std::atomic<long long>& slice_ns() {
-  static std::atomic<long long> c{0};
-  return c;
-}
-struct FenceReporter {
-  ~FenceReporter() {
-    if (std::getenv("SEQUANT_SYNC_STATS"))
-      std::cerr << "TOTAL gop.fence() calls = " << fence_counter().load()
-                << " ; wait_for_lazy_cleanup calls = " << wait_counter().load()
-                << " ; slice_mode calls = " << slice_counter().load()
-                << " ; slice_mode total = " << (slice_ns().load() / 1e9) << " s"
-                << "\n";
-  }
-};
-inline FenceReporter fence_reporter_{};
+SEQUANT_EVAL_TA_INTERNAL_API std::atomic<long long>& slice_ns();
 
 // Wire PhaseTimer's boundary barrier to a TA world fence so per-region phase
 // timers cannot misattribute async (deferred) work across regions. Runs only
