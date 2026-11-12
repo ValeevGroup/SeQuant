@@ -1,8 +1,12 @@
 #include <SeQuant/core/utility/expr_filter.hpp>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/index.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
 #include <memory>
 #include <regex>
 #include <string_view>
@@ -51,6 +55,14 @@ bool matches_recursively(const Expr &expr, Predicate &&predicate) {
   return false;
 }
 
+/// @returns Whether @p label fully matches at least one of @p patterns
+bool label_matches_any(std::wstring_view label,
+                       const std::vector<std::wregex> &patterns) {
+  return std::ranges::any_of(patterns, [&](const std::wregex &pattern) {
+    return std::regex_match(label.begin(), label.end(), pattern);
+  });
+}
+
 }  // namespace
 
 ContainsRule::ContainsRule(ExprMatcher matcher)
@@ -70,11 +82,43 @@ bool LabelRule::matches(const Expr &expr) const {
       return false;
     }
 
-    std::wstring_view label = sub.as<Labeled>().label();
+    return label_matches_any(sub.as<Labeled>().label(), patterns_);
+  });
+}
 
-    return std::ranges::any_of(patterns_, [&](const std::wregex &pattern) {
-      return std::regex_match(label.begin(), label.end(), pattern);
+IndexSpaceCountRule::IndexSpaceCountRule(
+    std::vector<IndexSpaceCount> counts,
+    std::vector<std::wregex> label_patterns)
+    : counts_(std::move(counts)), label_patterns_(std::move(label_patterns)) {}
+
+bool IndexSpaceCountRule::matches(const Expr &expr) const {
+  return matches_recursively(expr, [&](const Expr &sub) {
+    if (!sub.is<Tensor>()) {
+      return false;
+    }
+
+    const Tensor &tensor = sub.as<Tensor>();
+
+    if (!label_patterns_.empty() &&
+        !label_matches_any(tensor.label(), label_patterns_)) {
+      return false;
+    }
+
+    return std::ranges::all_of(counts_, [&](const IndexSpaceCount &bounds) {
+      const auto count = static_cast<std::size_t>(std::ranges::count_if(
+          tensor.indices(),
+          [&](const Index &idx) { return idx.space() == bounds.space; }));
+      return bounds.min <= count && count <= bounds.max;
     });
+  });
+}
+
+IndexCountRule::IndexCountRule(std::size_t count) : count_(count) {}
+
+bool IndexCountRule::matches(const Expr &expr) const {
+  return matches_recursively(expr, [&](const Expr &sub) {
+    return sub.is<Tensor>() && static_cast<std::size_t>(std::ranges::distance(
+                                   sub.as<Tensor>().indices())) == count_;
   });
 }
 

@@ -13,9 +13,14 @@
 
 #include "test_extint.hpp"
 
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <nlohmann/json.hpp>
+
+#include <string>
+#include <string_view>
 
 using namespace sequant;
 using namespace sequant::util::extint;
@@ -146,6 +151,28 @@ TEST_CASE("substitute step", "[extint]") {
     REQUIRE(ctx.has_data("sub.0"));
   }
 
+  SECTION("block-mode substitution renames only the targeted blocks") {
+    ExecutionContext ctx;
+    seed_expr(ctx, {L"R1{a2;i2} = + f{p1;a1} T1s{a1;p1} f{i1;p2} T1s{p2;i1}"
+                    L" T1s{a2;i2}"});
+    SubstituteStep step;
+    step.set_options(
+        json{{"substitutions",
+              {{"T1s{a1;p1}", "T1{a1;p1}"}, {"T1s{p1;i1}", "T1{p1;i1}"}}},
+             {"tensor_equality_mode", "block"}});
+    REQUIRE(step.run("sub", ctx, {"in.0"}) == 1);
+    const ExpressionData &out =
+        convert_data<ExpressionData>(ctx.get_data("sub.0").front().data.get());
+    const std::wstring str =
+        io::serialization::to_string(out.expressions.front());
+    INFO(toUtf8(str));
+    REQUIRE(str.find(L"T1{a_1;p_1}") != std::wstring::npos);
+    REQUIRE(str.find(L"T1{p_2;i_1}") != std::wstring::npos);
+    REQUIRE(str.find(L"T1s{a_2;i_2}") != std::wstring::npos);
+    REQUIRE(str.find(L"T1s{a_1;p_1}") == std::wstring::npos);
+    REQUIRE(str.find(L"T1s{p_2;i_1}") == std::wstring::npos);
+  }
+
   SECTION("an input left unchanged is dropped") {
     ExecutionContext ctx;
     seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
@@ -153,6 +180,16 @@ TEST_CASE("substitute step", "[extint]") {
     step.set_options(json{{"substitutions", {{"q{a1;i1}", "X{a1;i1}"}}}});
     REQUIRE(step.run("sub", ctx, {"in.0"}) == 0);
     REQUIRE_FALSE(ctx.has_data("sub.0"));
+  }
+
+  SECTION("keep_unchanged emits unchanged inputs") {
+    ExecutionContext ctx;
+    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    SubstituteStep step;
+    step.set_options(json{{"substitutions", {{"q{a1;i1}", "X{a1;i1}"}}},
+                          {"keep_unchanged", true}});
+    REQUIRE(step.run("sub", ctx, {"in.0"}) == 1);
+    REQUIRE(ctx.has_data("sub.0"));
   }
 
   SECTION("an unchanged input is dropped even if it is not needed later") {
@@ -275,6 +312,53 @@ TEST_CASE("filter step", "[extint]") {
            {{"rules", {{{"type", "contains"}, {"label", "g"}}}}}}}}});
     // keep_empty defaults to true -> both groups are emitted
     REQUIRE(step.run("flt", ctx, {"in.0"}) == 2);
+  }
+
+  SECTION("index count rules") {
+    // f{a1;i1} has 2 indices, T2 has 4
+    auto run = [](const json &rule) {
+      ExecutionContext ctx;
+      seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+      FilterStep step;
+      step.set_options(
+          json{{"keep_empty", false},
+               {"groups", {{"g", {{"rules", json::array({rule})}}}}}});
+      return step.run("flt", ctx, {"in.0"});
+    };
+
+    REQUIRE(run({{"type", "index_count"}, {"count", 4}}) == 1);
+    REQUIRE(run({{"type", "index_count"}, {"count", 3}}) == 0);
+    REQUIRE(run({{"type", "index_count"}, {"count", 3}, {"negate", true}}) ==
+            1);
+    REQUIRE(run({{"type", "index_spaces"}, {"spaces", {{"i", 2}, {"a", 2}}}}) ==
+            1);
+    REQUIRE(run({{"type", "index_spaces"}, {"spaces", {{"i", 3}}}}) == 0);
+    // bounds and label restriction apply to a single tensor
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"min", 2}}}}}}) == 1);
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"min", 3}}}}}}) == 0);
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"max", 1}}}}},
+                 {"label", "f"}}) == 1);
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"min", 2}}}}},
+                 {"label", "f"}}) == 0);
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"min", 2}}}}},
+                 {"label", "T2"}}) == 1);
+    REQUIRE_THROWS_AS(
+        run({{"type", "index_spaces"}, {"spaces", {{"a", {{"foo", 1}}}}}}),
+        Exception);
+    REQUIRE_THROWS_AS(
+        run({{"type", "index_count"}, {"count", 2}, {"label", "f"}}),
+        Exception);
+    REQUIRE_THROWS_AS(run({{"type", "index_spaces"},
+                           {"spaces", {{"a", {{"min", 3}, {"max", 1}}}}}}),
+                      Exception);
+    REQUIRE_THROWS_AS(run({{"type", "index_count"}, {"count", -1}}), Exception);
+    REQUIRE_THROWS_AS(
+        run({{"type", "index_spaces"}, {"spaces", json::object()}}), Exception);
   }
 
   SECTION("keep_empty=false drops empty groups") {

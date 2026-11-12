@@ -33,12 +33,14 @@ class SubstituteStep : public OneByOneProcessingStep<ExpressionData, false,
                       ExecutionContext &ctx,
                       WorkingCopy<ExpressionData> &input) override;
 
-  // Inputs left unchanged by the substitutions are dropped
+  // Unless keep_unchanged is set, inputs left unchanged by the substitutions
+  // are dropped
   bool needs_original_input() const override;
 
  private:
   std::vector<std::pair<ExprPtr, ExprPtr>> substitutions_;
   TensorComparison tensor_mode_ = TensorComparison::Block;
+  bool keep_unchanged_ = false;
   std::map<std::string, std::string, std::less<>> result_labels_;
 };
 
