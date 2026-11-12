@@ -671,6 +671,12 @@ RichSchedule compute_dag_boulevard(R const& forest,
     Frame f;
     f.n = &n;
     f.pre = pre_counter++;
+    // A node produced at the root scope (EvalExpr::root_scope) is outside
+    // every loop opened above it, and so is its subtree.
+    if (!n.leaf() && n->root_scope()) {
+      ectx.clear();
+      ectx_opener.clear();
+    }
     // Children see this node's own realized loops on top of the enclosing
     // context; the node itself does not (it is recorded with `ectx`).
     f.child_ectx = ectx;
@@ -974,6 +980,10 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (!is_batched(r, m)) continue;
       (void)find(encode(i, pV));
       if (!par) continue;
+      // A value produced at the root scope is read assembled: the loop that
+      // slices it is its own, never its consumer's, so the two positions are
+      // not joined.
+      if (!r.is_leaf && (*r.node)->root_scope()) continue;
       auto const pj = std::find(par->carried.begin(), par->carried.end(), m);
       if (pj == par->carried.end()) {
         std::size_t const rn = reduction_node(par_idx, m);
@@ -1468,6 +1478,9 @@ RichSchedule compute_dag_boulevard(R const& forest,
           kb != out.loop_kind.end() && kb->second == BatchModeType::External;
       return !(a_ext && b_ext);
     };
+    container::vector<
+        std::pair<std::pair<LoopInstance, LoopInstance>, std::size_t>>
+        preferred;
     for (ValueCell const& c : out.cells)
       for (OccurrenceRec const& occ : c.occurrences) {
         // One instance per ectx entry, parallel to ectx_opener_point
@@ -1477,19 +1490,48 @@ RichSchedule compute_dag_boulevard(R const& forest,
         auto const& chain_opener = occ.ectx_opener_point;
         for (auto const& [ix, kind] : occ.opens) {
           auto const key = opened_instance(occ, ix, kind);  // checked above
-          if (!chain.empty() && chain.back() != *key &&
-              constrains(chain.back(), *key))
+          if (chain.empty() || chain.back() == *key) continue;
+          if (constrains(chain.back(), *key))
             out.loop_order.emplace(std::make_pair(chain.back(), *key),
                                    c.value_id);
+          else
+            preferred.push_back({{chain.back(), *key}, c.value_id});
         }
         for (std::size_t k = 1; k < chain.size(); ++k) {
           if (chain[k - 1] == chain[k]) continue;
           if (chain_opener[k - 1] == chain_opener[k]) continue;
-          if (!constrains(chain[k - 1], chain[k])) continue;
-          out.loop_order.emplace(std::make_pair(chain[k - 1], chain[k]),
-                                 c.value_id);
+          if (constrains(chain[k - 1], chain[k]))
+            out.loop_order.emplace(std::make_pair(chain[k - 1], chain[k]),
+                                   c.value_id);
+          else
+            preferred.push_back({{chain[k - 1], chain[k]}, c.value_id});
         }
       }
+    // Two External loops opened by different occurrences: the values between
+    // the two openers are inside the outer loop only, so the builder can home
+    // them in the nest only if it nests the loops as the DP did. Unlike the
+    // pairs above this is a preference: loops fused across trees may nest in
+    // opposite orders in two of them, and then the builder's own order (and a
+    // pass split) stands. A pair is taken unless the pairs so far already
+    // order the two loops the other way.
+    auto const reaches = [&](LoopInstance const& from, LoopInstance const& to) {
+      container::svector<LoopInstance> stack{from};
+      std::set<LoopInstance> seen;
+      while (!stack.empty()) {
+        LoopInstance const x = stack.back();
+        stack.pop_back();
+        if (!seen.insert(x).second) continue;
+        for (auto it = out.loop_order.lower_bound({x, LoopInstance{}});
+             it != out.loop_order.end() && it->first.first == x; ++it) {
+          if (it->first.second == to) return true;
+          stack.push_back(it->first.second);
+        }
+      }
+      return false;
+    };
+    for (auto const& [pair, witness] : preferred)
+      if (!reaches(pair.second, pair.first))
+        out.loop_order.emplace(pair, witness);
   }
 
   return out;

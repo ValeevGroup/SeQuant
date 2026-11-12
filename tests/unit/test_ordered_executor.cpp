@@ -897,8 +897,11 @@ namespace {
                    << (b.kind == sequant::BatchModeType::External
                            ? L"external"
                            : L"contracted")
-                   << L" builds=" << builds << L" children=" << children
-                   << L" outs=";
+                   << L" builds=" << builds << L"[";
+        for (auto const& st : b.steps)
+          if (auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value))
+            std::wcerr << bs->value_id << L" ";
+        std::wcerr << L"] children=" << children << L" outs=";
         for (auto const& [ovid, okind] : b.outputs)
           std::wcerr << ovid << L":"
                      << (okind == sequant::eval::OutputKind::AccumulateSum
@@ -2804,6 +2807,23 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
            : 100.0) *
       1e9;
 
+  // SEQUANT_UT_DRYRUN_HOLD=1: the search may hold an amplitude-independent
+  // operand outside the loop that slices its consumer; one of at least
+  // SEQUANT_UT_DRYRUN_DISK_MIN_GB (default 1) lives on disk, free to hold,
+  // with SEQUANT_UT_DRYRUN_DISK_READ / _WRITE the cost of moving one element
+  // (FLOP-equivalents, default 0).
+  if (std::getenv("SEQUANT_UT_DRYRUN_HOLD")) {
+    auto const env_d = [](char const* k, double dflt) {
+      return std::getenv(k) ? std::atof(std::getenv(k)) : dflt;
+    };
+    policy.hold.enabled = true;
+    policy.hold.slow_min_bytes =
+        env_d("SEQUANT_UT_DRYRUN_DISK_MIN_GB", 1.0) * 1e9;
+    policy.hold.slow.residency_weight = 0.0;
+    policy.hold.slow.read_cost = env_d("SEQUANT_UT_DRYRUN_DISK_READ", 0.0);
+    policy.hold.slow.write_cost = env_d("SEQUANT_UT_DRYRUN_DISK_WRITE", 0.0);
+  }
+
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -2825,7 +2845,11 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   std::vector<Node> forest;
   // one root per tree: summand s is root "R<s>" with a single term
   std::vector<sequant::eval::schedule::RootRecord> roots;
+  // SEQUANT_UT_DRYRUN_TERM=<k>: only summand k
+  char const* const only_term = std::getenv("SEQUANT_UT_DRYRUN_TERM");
   for (std::size_t s = 0; s < nterms; ++s) {
+    if (only_term && s != static_cast<std::size_t>(std::atoll(only_term)))
+      continue;
     sequant::ExprPtr const term =
         orderedexec_witness_flatten_product(summands[s]);
     if (!term) continue;
@@ -2855,6 +2879,34 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   REQUIRE(!rich.cells.empty());
   auto const vmap = sequant::eval::build_value_node_map(forest);
+  // SEQUANT_UT_NODE_ANNOT: every node of every tree with the loops it opens,
+  // whether it is produced at the root scope, and its home
+  if (std::getenv("SEQUANT_UT_NODE_ANNOT")) {
+    std::function<void(Node const&, int)> dump = [&](Node const& n, int d) {
+      std::wcerr << L"[node] " << std::wstring(2 * d, L' ')
+                 << (n.leaf() ? L"leaf " : L"I ")
+                 << sequant::toUtf16(n->label()) << L"(";
+      for (auto const& x : n->canon_indices())
+        std::wcerr << x.full_label() << L" ";
+      std::wcerr << L")";
+      if (!n.leaf()) {
+        std::wcerr << L" opens[";
+        for (auto const& [ix, k] : n->batch_loops_opened_here())
+          std::wcerr << ix.full_label()
+                     << (k == sequant::BatchModeType::External ? L":e "
+                                                               : L":c ");
+        std::wcerr << L"] home[";
+        for (auto const& ix : n->occurrence_home())
+          std::wcerr << ix.full_label() << L" ";
+        std::wcerr << L"]" << (n->root_scope() ? L" ROOT-SCOPE" : L"");
+        std::wcerr << L"\n";
+        dump(n.left(), d + 1);
+        dump(n.right(), d + 1);
+      } else
+        std::wcerr << L"\n";
+    };
+    for (auto const& t : forest) dump(t, 0);
+  }
 
   using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
   annot_t const layout{};
@@ -3048,6 +3100,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
       if (disk_min_gb) {
         r.disk.min_bytes =
             static_cast<std::size_t>(std::atof(disk_min_gb) * 1e9);
+        r.disk.record_peak_on_disk = dump_liveset;
         cache.set_disk_spill(&r.disk);
       }
       double const f0 = sink.flops.load();
@@ -3299,7 +3352,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     pr(L"ordered iter1 (cold)", o1);
     pr(L"ordered iter2 (warm)", o2);
     if (disk_min_gb) {
-      auto const prd = [](wchar_t const* tag, Row const& r) {
+      auto const prd = [&](wchar_t const* tag, Row const& r) {
         std::wcerr << L"  " << tag << L"  [disk >= "
                    << double(r.disk.min_bytes) / 1e9 << L" GB]  resident_peak="
                    << double(r.peak) / 1e9 << L" GB  disk_peak="
@@ -3308,6 +3361,18 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
                    << L" GB in " << r.disk.n_writes << L"  read<="
                    << double(r.disk.bytes_read) / 1e9 << L" GB in "
                    << r.disk.n_reads << L"\n";
+        auto on_disk = r.disk.peak_on_disk;
+        std::sort(
+            on_disk.begin(), on_disk.end(),
+            [](auto const& a, auto const& b) { return a.second > b.second; });
+        for (auto const& [h, bytes] : on_disk) {
+          std::wstring sig;
+          if (auto hc = hash_to_cell.find(h); hc != hash_to_cell.end())
+            sig = space_sig(rich.cells[hc->second].carried);
+          std::wcerr << L"    on disk at its peak: " << double(bytes) / 1e9
+                     << L" GB  h=" << (h % 100000) << L"  " << node_kind(h)
+                     << L"{" << sig << L"}\n";
+        }
       };
       prd(L"ordered iter1 (cold)", o1);
       prd(L"ordered iter2 (warm)", o2);

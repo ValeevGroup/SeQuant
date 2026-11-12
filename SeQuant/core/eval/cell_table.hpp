@@ -91,15 +91,16 @@ struct TableCell {
   ///       (\c detail::bound_instances empty), so its content is identical
   ///       across every batch and across repeated evaluations of the same
   ///       schedule and may survive a cache reset between them; And
-  ///   (b) some consumer of it holds a volatile value, or it has no consumer
-  ///       at all (a forest root -- validator rule 4 admits a zero-consumer
-  ///       cell only at the root scope).
-  /// (b) is what makes this the frontier: a cell all of whose consumers are
-  /// non-volatile is never read again, because those consumers are themselves
-  /// skipped by cache-halt on every later evaluation -- holding it across
-  /// evaluations would cost its bytes and buy nothing. See \c
-  /// detail::apply_persistence_frontier (cell_table_builder.hpp), which
-  /// decides (b) once the table's reads exist.
+  ///   (b) some consumer of it is produced again on a later evaluation, or
+  ///       it has no consumer at all (a forest root -- validator rule 4
+  ///       admits a zero-consumer cell only at the root scope).
+  /// (b) is what makes this the frontier: a cell none of whose consumers is
+  /// produced again is never read again -- holding it across evaluations
+  /// would cost its bytes and buy nothing. A consumer is produced again if
+  /// it holds a volatile value, or if it is amplitude-independent but bound
+  /// to a loop (so it cannot persist) and something produced again reads it.
+  /// See \c detail::apply_persistence_frontier (cell_table_builder.hpp),
+  /// which decides (b) once the table's reads exist.
   ///
   /// This is distinct from the forest evaluator's per-scratch "survives the
   /// reset of its home scope" flag, which tests only the innermost home loop

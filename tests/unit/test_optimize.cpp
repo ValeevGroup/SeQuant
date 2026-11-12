@@ -7,6 +7,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -2912,6 +2913,178 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   CHECK(ext_on >= 1u);
   // The point: external placement fired inside the DP and cut the peak.
   CHECK(peak_on < peak_off);
+}
+
+// HoldPolicy: an amplitude-independent intermediate that carries the mode its
+// consumer slices is, without holding, produced inside the consumer's loop
+// and so again on every evaluation. With holding the search may produce it
+// once at the root scope and let the consumer read slices of it; the node is
+// then stamped NodeBatchAnnotation::root_scope.
+TEST_CASE("the DP holds a persistent operand outside its consumer's loop",
+          "[optimize][batch][hold]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_copy = get_default_context_snapshot();
+  {
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent(L"a", 3ul);
+    ctx_copy.set(std::move(reg));
+  }
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
+  auto is_F = [](Index const& ix) { return ix.basis().base_key() == L"F"; };
+  auto batch_fn = [](Index const&) -> std::size_t { return 1; };
+  // g and h do not change between evaluations, t does; F is carried to the
+  // result, so a loop over it is an external one
+  std::vector<ExprPtr> ts;
+  for (auto s : {L"g{F1;a1}", L"h{a1;a2}", L"t{a2;a3,a4}"})
+    ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+  TensorNetwork net{ts};
+  container::svector<Index> targets;  // F1, a3, a4 occur once
+
+  struct Outcome {
+    double peak_bytes = 0, cost = 0;
+    std::size_t n_root_scope = 0, n_opens = 0;
+  };
+  auto run = [&](bool hold, double slow_min_bytes, double move_cost = 0.0) {
+    o::PeakBatchedModel model{idxsz, batch_fn, {}};
+    model.is_batchable_contracted_index = is_F;
+    model.is_batchable_external_index = is_F;
+    model.batch_spectator_indices = true;
+    model.charge_batch_recompute = true;
+    model.perf_first = true;
+    model.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+    model.volatile_weight = 20.0;
+    // below the unsliced peak: F has to be sliced
+    model.peak_threshold = 9000.0;
+    model.hold.enabled = hold;
+    model.hold.slow_min_bytes = slow_min_bytes;
+    model.hold.slow.read_cost = model.hold.slow.write_cost = move_cost;
+    auto ctx = model.build_context(net, targets);
+    auto st = o::solve_single_term(model, net, targets, ctx);
+    Outcome out;
+    auto emitted = model.reconstruct_batched_modes(ctx, st, &out.peak_bytes);
+    for (auto const& ann : emitted.second) {
+      if (ann.root_scope) ++out.n_root_scope;
+      out.n_opens += ann.opened_here.size();
+    }
+    out.cost =
+        st[(std::size_t{1} << ctx.nt) - 1][0][model.select_root(ctx, st)].flops;
+    return out;
+  };
+
+  auto const off = run(false, 0.0);
+  auto const on_slow = run(true, 0.0);  // every held value in the slow space
+  auto const on_ram =  // held values stay in memory, against the budget
+      run(true, std::numeric_limits<double>::infinity());
+  // moving an element to or from the slow space costs 10
+  auto const on_priced = run(true, 0.0, 10.0);
+
+  // not held: g*h would sit in the F loop and be produced on every
+  // evaluation, 20 * (100*3*3) + 20 * (100*3*3*3) = 72000, so h*t goes first:
+  // 20 * 3^4 + 20 * (100*3*3*3) = 55620
+  CHECK(off.n_root_scope == 0u);
+  CHECK(off.cost == Catch::Approx(55620.0));
+  // held: g*h is produced once, 100*3*3 + 20 * (100*3*3*3) = 54900
+  CHECK(on_slow.n_root_scope == 1u);
+  CHECK(on_slow.cost == Catch::Approx(54900.0));
+  CHECK(on_slow.peak_bytes <= 9000.0);
+  // held in memory the 2400 B of g*h count against the budget, on top of the
+  // result the loop scatters into: not worth it
+  CHECK(on_ram.n_root_scope == 0u);
+  CHECK(on_ram.cost == Catch::Approx(off.cost));
+  // one write and a read per evaluation of the 300 held elements cost far
+  // more than the 720 saved; what remains priced is the write of the 900
+  // elements of the result, itself assembled in the slow space on every
+  // evaluation: 55620 + 20 * 10 * 900
+  CHECK(on_priced.n_root_scope == 0u);
+  CHECK(on_priced.cost == Catch::Approx(235620.0));
+}
+
+// The held operand's stamp reaches the evaluation tree, and its home is
+// outside its consumer's loop: the schedule maker then produces it at the
+// root scope.
+TEST_CASE("a held operand is homed outside its consumer's loop",
+          "[optimize][batch][hold]") {
+  using namespace sequant;
+  auto ctx_copy = get_default_context_snapshot();
+  {
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent(L"a", 3ul);
+    ctx_copy.set(std::move(reg));
+  }
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
+  auto is_F = [](Index const& ix) { return ix.basis().base_key() == L"F"; };
+
+  // the network of the test above
+  auto expr = deserialize(L"g{F1;a1} h{a1;a2} t{a2;a3,a4}",
+                          {.def_perm_symm = Symmetry::Nonsymm});
+
+  auto tree = [&](bool hold) {
+    auto axes_map = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+      return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+    };
+    opts.batch_policy.is_batchable_external_index = is_F;
+    opts.batch_policy.batch_spectator_indices = true;
+    opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 1;
+    };
+    opts.batch_policy.peak_threshold = 9000.0;
+    opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
+      return t.label() == L"t";
+    };
+    opts.batch_policy.hold.enabled = hold;
+    opts.batch_policy.hold.slow_min_bytes = 0.0;
+    opts.volatile_weight = 20.0;
+    opts.term_batch_axes = axes_map;
+    auto optimized = optimize(expr, opts);
+    REQUIRE(optimized);
+    auto it = axes_map->find(optimized.get());
+    REQUIRE(it != axes_map->end());
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(optimized, {}, bopts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    std::vector<EvalNode<EvalExpr>> forest{node};
+    stamp_occurrence_homes(forest);
+    return forest;
+  };
+
+  // counts the nodes produced at the root scope, and those of them whose
+  // home is empty
+  auto count = [](auto const& forest) {
+    std::pair<std::size_t, std::size_t> n{0, 0};
+    forest.front().visit_internal([&](auto const& x) {
+      if (!x->root_scope()) return;
+      ++n.first;
+      if (x->occurrence_home().empty()) ++n.second;
+    });
+    return n;
+  };
+  // some node opens the loop over F either way
+  auto opens_F = [](auto const& forest) {
+    bool opens = false;
+    forest.front().visit_internal([&](auto const& x) {
+      if (!x->batch_loops_opened_here().empty()) opens = true;
+    });
+    return opens;
+  };
+
+  auto const off = tree(false);
+  CHECK(opens_F(off));
+  CHECK(count(off) == std::pair<std::size_t, std::size_t>{0, 0});
+
+  auto const on = tree(true);
+  CHECK(opens_F(on));
+  // g*h carries F, the mode its consumer's loop slices, yet its home is empty
+  CHECK(count(on) == std::pair<std::size_t, std::size_t>{1, 1});
 }
 
 // peak_threshold must GATE contracted (aux) batching under perf-first: a

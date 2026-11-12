@@ -211,6 +211,9 @@ struct CostParams {
   /// When true, only persistent (volatile-leaf-free) subnetworks are batched;
   /// threaded from BatchPolicy::persistent_only. Batched objectives only.
   bool batch_persistent_only = false;
+  /// Holding operands outside their consumer's loop, and the memory space of
+  /// the large ones; threaded from BatchPolicy::hold. Batched objectives only.
+  HoldPolicy hold = {};
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public

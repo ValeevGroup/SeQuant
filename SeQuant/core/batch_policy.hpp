@@ -23,6 +23,38 @@ class Tensor;
 ///     trees is built once per home block and reused, rather than rebuilt
 ///     per tree.
 enum class BatchScheduler { forest_descent, ordered };
+/// A place a value can live, as the batched cost model prices it. Random
+/// access memory is the reference space (weight 1, no traffic cost beyond the
+/// roofline term); a slower space such as local disk holds values at little
+/// or no cost against the peak budget but charges for moving them.
+struct MemorySpace {
+  /// What one resident element counts against \c BatchPolicy::peak_threshold
+  /// while the value is idle: 1 for memory, 0 for a space that does not use it.
+  double residency_weight = 1.0;
+  /// Cost of reading one element from the space, in the units of the
+  /// performance cost (FLOPs, or roofline FLOP-equivalents).
+  double read_cost = 0.0;
+  /// Cost of writing one element to the space, in the same units.
+  double write_cost = 0.0;
+};
+
+/// Lets the batched search hold an amplitude-independent operand outside the
+/// loop that slices its consumer: the operand is produced once, whole, at the
+/// root scope (in batches of its own if it has to be), and the consumer reads
+/// slices of it. Without this an operand that carries a mode its consumer
+/// slices is produced inside the consumer's loop, block by block, cannot
+/// persist across evaluations, and is rebuilt on every one.
+struct HoldPolicy {
+  /// Off (default): the search is exactly what it was.
+  bool enabled = false;
+  /// A value held outside its consumer's loop, or scatter-assembled at the
+  /// root scope, lives in \c slow if it is at least this large (bytes), else
+  /// in memory. Must agree with the size from which the executor keeps a
+  /// whole root-scope value on disk (\c eval::DiskSpill::min_bytes).
+  double slow_min_bytes = std::numeric_limits<double>::infinity();
+  /// The space of the large held values. Default: free to hold, free to move.
+  MemorySpace slow = {.residency_weight = 0.0};
+};
 
 /// One batchability policy shared by the single-term optimizer and the runtime
 /// batched evaluator (make_evaluator). All predicates default empty.
@@ -101,6 +133,10 @@ struct BatchPolicy {
   /// accumulator + contribution co-residency of a node that contracts a
   /// batchable index.
   double accumulation_factor = 0.0;
+
+  /// Whether, and how, the search may hold an operand outside the loop that
+  /// slices its consumer; see \ref HoldPolicy.
+  HoldPolicy hold = {};
 
   /// Selects between the two runtime execution models (\ref BatchScheduler
   /// above). Consulted by the
