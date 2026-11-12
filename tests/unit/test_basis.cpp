@@ -172,10 +172,12 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
   CHECK_FALSE(different_instances(IndexBasis{uocc, 1, L"ã"},
                                   IndexBasis{uocc, 1, L"ã"}));
   CHECK_FALSE(different_instances(IndexBasis{uocc}, IndexBasis{uocc, 1, L"ã"}));
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
   CHECK(includes(IndexBasis{uocc}, IndexBasis{uocc, 1, L"ã"}));
   CHECK(includes(IndexBasis{uocc, 1, L"ã"}, IndexBasis{uocc, 1, L"ã"}));
   CHECK_FALSE(includes(IndexBasis{uocc, 1, L"ã"}, IndexBasis{uocc, 1}));
   CHECK_FALSE(includes(IndexBasis{uocc, 1}, IndexBasis{uocc, 1, L"ã"}));
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
   // colour: sees the instance, of the index and of its proto indices, but not
   // which occupieds the proto indices are

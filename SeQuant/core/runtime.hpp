@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
@@ -31,24 +32,15 @@
 namespace sequant {
 
 namespace detail {
-inline int& nthreads_accessor() {
-  auto init_nthreads = []() {
-    const auto nthreads_cstr = std::getenv("SEQUANT_NUM_THREADS");
-    int nthreads = nthreads_cstr ? string_to<unsigned int>(nthreads_cstr)
-                                 : (std::thread::hardware_concurrency() > 0
-                                        ? std::thread::hardware_concurrency()
-                                        : 1);
-    return nthreads;
-  };
-  static int nthreads = init_nthreads();
-  return nthreads;
-}
+/// @return the process-wide number of threads (shared by all SeQuant
+/// libraries; hence defined out-of-line)
+SEQUANT_SYMB_INTERNAL_API int& nthreads_accessor();
 }  // namespace detail
 
 /// thrown by the parallel primitives (sequant::parallel_do, sequant::for_each,
 /// sequant::transform_reduce) when more than one invocation of the work
 /// function throws; a single exception is rethrown as is
-class ParallelExceptions : public Exception {
+class SEQUANT_SYMB_API ParallelExceptions : public Exception {
  public:
   /// the ordinal of a work item (the thread id for parallel_do) and the
   /// exception its invocation threw
@@ -335,7 +327,7 @@ T transform_reduce(SizedRange&& rng, T init, const BinaryReductionOp& reduce,
 #endif
 }
 
-void set_locale();
+SEQUANT_SYMB_API void set_locale();
 
 }  // namespace sequant
 

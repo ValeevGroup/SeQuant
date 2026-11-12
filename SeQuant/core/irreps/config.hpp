@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_IRREPS_CONFIG_HPP
 #define SEQUANT_CORE_IRREPS_CONFIG_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/irreps/any.hpp>
 
 #include <optional>
@@ -56,14 +57,16 @@ struct IrrepContextSpec {
 
 /// Creates an IRREP context from the given description
 /// @throws Exception if the description is invalid
-AnyIrrepContext make_irrep_context(const IrrepContextSpec &spec);
+SEQUANT_SYMB_INTERNAL_API AnyIrrepContext
+make_irrep_context(const IrrepContextSpec &spec);
 
 /// Removes the whitespace around the names in a textual IRREP specification
 /// (a name, a product "X*Y" or a relation "X*Y = Z"), such that
 /// "A * B = C" and "A*B=C" are equivalent. IRREP names must not contain
 /// whitespace themselves.
 /// @throws Exception if a name contains whitespace
-std::string normalize_irrep_spec(std::string_view spec);
+SEQUANT_SYMB_INTERNAL_API std::string normalize_irrep_spec(
+    std::string_view spec);
 
 }  // namespace sequant
 

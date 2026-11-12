@@ -6,6 +6,8 @@
 
 namespace sequant {
 
+const IndexSpace IndexSpace::null;
+
 // Note: we can't add a templated ctor for IndexSpace as that would have to be
 // defined in the header, requiring an include to index_basis_registry,
 // resulting in a circular include issue.

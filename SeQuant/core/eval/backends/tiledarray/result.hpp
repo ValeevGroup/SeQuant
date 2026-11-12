@@ -5,15 +5,14 @@
 
 #include <sstream>
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/tiledarray.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/elementwise.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
-
-#include <TiledArray/einsum/tiledarray.h>
-#include <tiledarray.h>
 
 #include <range/v3/view/iota.hpp>
 
@@ -38,17 +37,13 @@ namespace detail {
 
 // Instrumentation (SEQUANT_SYNC_STATS, analysis-only): count gop.fence() calls
 // so the ordered-executor's synchronization overhead can be localized.
-inline std::atomic<std::size_t>& fence_counter() {
-  static std::atomic<std::size_t> c{0};
-  return c;
-}
+// The counters live in SeQuant-eval-ta, so that they are process-wide; the
+// totals are reported at exit if SEQUANT_SYNC_STATS is set.
+SEQUANT_EVAL_TA_INTERNAL_API std::atomic<std::size_t>& fence_counter();
 inline void note_fence() {
   fence_counter().fetch_add(1, std::memory_order_relaxed);
 }
-inline std::atomic<std::size_t>& wait_counter() {
-  static std::atomic<std::size_t> c{0};
-  return c;
-}
+SEQUANT_EVAL_TA_INTERNAL_API std::atomic<std::size_t>& wait_counter();
 inline void note_wait() {
   wait_counter().fetch_add(1, std::memory_order_relaxed);
 }
@@ -59,28 +54,11 @@ void wait_for_lazy_cleanup(Array const& arr) {
   Array::wait_for_lazy_cleanup(arr.world());
   note_wait();
 }
-inline std::atomic<std::size_t>& slice_counter() {
-  static std::atomic<std::size_t> c{0};
-  return c;
-}
+SEQUANT_EVAL_TA_INTERNAL_API std::atomic<std::size_t>& slice_counter();
 inline void note_slice() {
   slice_counter().fetch_add(1, std::memory_order_relaxed);
 }
-inline std::atomic<long long>& slice_ns() {
-  static std::atomic<long long> c{0};
-  return c;
-}
-struct FenceReporter {
-  ~FenceReporter() {
-    if (std::getenv("SEQUANT_SYNC_STATS"))
-      std::cerr << "TOTAL gop.fence() calls = " << fence_counter().load()
-                << " ; wait_for_lazy_cleanup calls = " << wait_counter().load()
-                << " ; slice_mode calls = " << slice_counter().load()
-                << " ; slice_mode total = " << (slice_ns().load() / 1e9) << " s"
-                << "\n";
-  }
-};
-inline FenceReporter fence_reporter_{};
+SEQUANT_EVAL_TA_INTERNAL_API std::atomic<long long>& slice_ns();
 
 // Wire PhaseTimer's boundary barrier to a TA world fence so per-region phase
 // timers cannot misattribute async (deferred) work across regions. Runs only
@@ -859,8 +837,8 @@ template <typename ArrayT>
 /// to \p os .
 /// \param world the world object to use for logging
 /// \param label string to prepend to the profile
-void log_ta_tensor_host_memory_use(madness::World& world,
-                                   std::string_view label = "");
+SEQUANT_EVAL_TA_INTERNAL_API void log_ta_tensor_host_memory_use(
+    madness::World& world, std::string_view label = "");
 
 inline void log_ta_tensor_host_memory_use() {
 #if defined(SEQUANT_EVAL_TRACE)
@@ -1058,7 +1036,7 @@ class ResultTensorTA final : public Result {
   mutable ArrayT parent_;
   view_type view_;
 
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<this_type>();
   }
 
@@ -1622,7 +1600,7 @@ class ResultTensorOfTensorTA final : public Result {
   mutable ArrayT parent_;
   view_type view_;
 
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<this_type>();
   }
 
@@ -2061,14 +2039,15 @@ class ResultTensorOfTensorTA final : public Result {
 // with_expr() hands out, which costs GBs of compiler memory per class. The
 // nested results are instantiated over the arena-pinned inner tile
 // (TA::ArenaTensor), the inner tile of a CSV/PNO array.
-extern template class ResultTensorTA<
-    TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>>;
-extern template class ResultTensorTA<
+extern template class SEQUANT_EVAL_TA_TEMPLATE_DECL_API
+    ResultTensorTA<TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>>;
+extern template class SEQUANT_EVAL_TA_TEMPLATE_DECL_API ResultTensorTA<
     TA::DistArray<TA::Tensor<std::complex<double>>, TA::SparsePolicy>>;
-extern template class ResultTensorOfTensorTA<
+extern template class SEQUANT_EVAL_TA_TEMPLATE_DECL_API ResultTensorOfTensorTA<
     TA::DistArray<TA::Tensor<TA::ArenaTensor<double>>, TA::SparsePolicy>>;
-extern template class ResultTensorOfTensorTA<TA::DistArray<
-    TA::Tensor<TA::ArenaTensor<std::complex<double>>>, TA::SparsePolicy>>;
+extern template class SEQUANT_EVAL_TA_TEMPLATE_DECL_API
+    ResultTensorOfTensorTA<TA::DistArray<
+        TA::Tensor<TA::ArenaTensor<std::complex<double>>>, TA::SparsePolicy>>;
 
 /// \brief Restrict a TA::DistArray to a contiguous tile range of one mode.
 ///

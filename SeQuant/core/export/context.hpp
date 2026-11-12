@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_CONTEXT_HPP
 #define SEQUANT_CORE_EXPORT_CONTEXT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -32,9 +33,9 @@ enum class ZeroStrategy {
   AlwaysZero = ZeroOnLoad | ZeroOnCreate | ZeroOnReuse,
 };
 
-ZeroStrategy operator|(ZeroStrategy lhs, ZeroStrategy rhs);
-ZeroStrategy operator&(ZeroStrategy lhs, ZeroStrategy rhs);
-bool operator!(ZeroStrategy strategy);
+SEQUANT_EXPORT_API ZeroStrategy operator|(ZeroStrategy lhs, ZeroStrategy rhs);
+SEQUANT_EXPORT_API ZeroStrategy operator&(ZeroStrategy lhs, ZeroStrategy rhs);
+SEQUANT_EXPORT_API bool operator!(ZeroStrategy strategy);
 
 /// A combination of a Load and ZeroStrategy
 ///
@@ -45,7 +46,7 @@ bool operator!(ZeroStrategy strategy);
 /// thereby shadow a load strategy set elsewhere for the same object).
 /// @sa LoadStrategy
 /// @sa ZeroStrategy
-struct StrategyPair {
+struct SEQUANT_EXPORT_API StrategyPair {
   StrategyPair() = default;
   StrategyPair(LoadStrategy load, ZeroStrategy zero);
   StrategyPair(LoadStrategy load);
@@ -78,7 +79,7 @@ struct ExportIrrepData;
 
 /// Value-semantic, opaque holder of the IRREP-related data of an
 /// ExportContext (keeps the IRREP machinery out of this header)
-class ExportIrrepDataHolder {
+class SEQUANT_EXPORT_INTERNAL_API ExportIrrepDataHolder {
  public:
   ExportIrrepDataHolder();
   ExportIrrepDataHolder(const ExportIrrepDataHolder &other);
@@ -109,7 +110,7 @@ enum class Usage {
 /// A set of Usage scenarios for a given tensor/variable. Contrary to Usage,
 /// this can hold a combination of usage scenarios.
 /// @sa Usage
-class UsageSet {
+class SEQUANT_EXPORT_API UsageSet {
  public:
   using Value = std::underlying_type_t<Usage>;
   UsageSet() = default;
@@ -121,14 +122,14 @@ class UsageSet {
   UsageSet &operator|=(Usage usage);
   UsageSet &operator&=(Usage usage);
 
-  friend bool operator&(UsageSet set, Usage usage);
-  friend bool operator&(Usage usage, UsageSet set);
+  friend SEQUANT_EXPORT_API bool operator&(UsageSet set, Usage usage);
+  friend SEQUANT_EXPORT_API bool operator&(Usage usage, UsageSet set);
 
-  friend bool operator==(UsageSet set, Usage usage);
-  friend bool operator==(Usage usage, UsageSet set);
+  friend SEQUANT_EXPORT_API bool operator==(UsageSet set, Usage usage);
+  friend SEQUANT_EXPORT_API bool operator==(Usage usage, UsageSet set);
 
-  friend bool operator!=(UsageSet set, Usage usage);
-  friend bool operator!=(Usage usage, UsageSet set);
+  friend SEQUANT_EXPORT_API bool operator!=(UsageSet set, Usage usage);
+  friend SEQUANT_EXPORT_API bool operator!=(Usage usage, UsageSet set);
 
  private:
   Value m_val = static_cast<Value>(Usage::None);
@@ -144,7 +145,7 @@ class UsageSet {
 /// The context object has to be user-provided when initiating an export and
 /// is passed down to every single function during the export context. Hence,
 /// it acts as a communication channel down into the export process.
-class ExportContext {
+class SEQUANT_EXPORT_API ExportContext {
  public:
   using TensorStrategyMap =
       std::map<Tensor, StrategyPair, TensorBlockLessThanComparator>;

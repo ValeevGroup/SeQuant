@@ -5,6 +5,7 @@
 #ifndef SEQUANT_WICK_HPP
 #define SEQUANT_WICK_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -1867,8 +1868,10 @@ class WickTheorem {
   void reduce(ExprPtr &expr) const;
 };
 
-extern template class WickTheorem<Statistics::BoseEinstein>;
-extern template class WickTheorem<Statistics::FermiDirac>;
+extern template class SEQUANT_SYMB_TEMPLATE_DECL_API
+    WickTheorem<Statistics::BoseEinstein>;
+extern template class SEQUANT_SYMB_TEMPLATE_DECL_API
+    WickTheorem<Statistics::FermiDirac>;
 
 using BWickTheorem = WickTheorem<Statistics::BoseEinstein>;
 using FWickTheorem = WickTheorem<Statistics::FermiDirac>;

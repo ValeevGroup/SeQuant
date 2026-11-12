@@ -72,7 +72,7 @@ class Singleton {
     if (auto* result_ptr = published_instance().load(std::memory_order_acquire))
       return result_ptr;
     if constexpr (has_default_ctor<Derived>) {
-      return set_default_instance();
+      return &set_default_instance();
     } else
       return nullptr;
   }

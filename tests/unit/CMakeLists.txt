@@ -26,9 +26,12 @@ set(symb_test_sources
     "test_tensor.cpp"
     "test_tensor_network.cpp"
     "test_utilities.cpp"
+    "test_visibility.cpp"
     "test_wick.cpp"
-    "test_wick_extended.cpp"
 )
+if (NOT BUILD_SHARED_LIBS)  # tests non-exported internals (see SEQUANT_UNIT_TESTS_INTERNALS below)
+    list(APPEND symb_test_sources "test_wick_extended.cpp")
+endif()
 
 add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
 target_set_compiler_flags(unit_tests-sequant-symb-obj)
@@ -69,10 +72,12 @@ target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
 ##########################
 set(optimize_test_sources
     "test_extract_subtrees.cpp"
-    "test_fusion.cpp"
     "test_name_recycling.cpp"
     "test_optimize.cpp"
 )
+if (NOT BUILD_SHARED_LIBS)  # tests non-exported internals (see SEQUANT_UNIT_TESTS_INTERNALS below)
+    list(APPEND optimize_test_sources "test_fusion.cpp")
+endif()
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
 target_set_compiler_flags(unit_tests-sequant-optimize-obj)
 target_set_optimization_flags(unit_tests-sequant-optimize-obj)
@@ -212,9 +217,11 @@ set(eval_dryrun_test_sources
     "test_ordered_random.cpp"
     "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
-    "test_schedule_document.cpp"
     "test_slicing_signature.cpp"
 )
+if (NOT BUILD_SHARED_LIBS)  # tests non-exported internals (see SEQUANT_UNIT_TESTS_INTERNALS below)
+    list(APPEND eval_dryrun_test_sources "test_schedule_document.cpp")
+endif()
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
 target_set_compiler_flags(unit_tests-sequant-eval-dryrun-obj)
 target_set_optimization_flags(unit_tests-sequant-eval-dryrun-obj)
@@ -245,15 +252,23 @@ set_source_files_properties("test_ordered_executor.cpp" "test_ordered_schedule.c
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
-# range-v3 headers name their ::meta namespace unqualified, which is ambiguous
-# with sequant::meta once a file-scope `using namespace sequant` is in effect.
-# Under a Unity build such a directive leaks into the files concatenated after
-# it, so a range-v3 header first parsed there fails to compile. Parse them all
-# ahead of every file instead (include guards make this free after the first).
+# Settings for all unit test OBJECT libraries:
+#  - range-v3 headers name their ::meta namespace unqualified, which is ambiguous
+#    with sequant::meta once a file-scope `using namespace sequant` is in effect.
+#    Under a Unity build such a directive leaks into the files concatenated after
+#    it, so a range-v3 header first parsed there fails to compile. Parse them all
+#    ahead of every file instead (include guards make this free after the first).
+#  - SeQuant's libraries hide everything but their exported API (see SeQuant/api.hpp).
+#    Hence, tests that use internal (non-exported) out-of-line functions can only be
+#    built against static libraries; they are guarded by SEQUANT_UNIT_TESTS_INTERNALS
+#    (and tagged [internal]).
 foreach(_module IN ITEMS symb eval optimize export mbpt eval-dryrun eval-ta eval-btas eval-tapp)
     if (TARGET unit_tests-sequant-${_module}-obj)
         set_property(TARGET unit_tests-sequant-${_module}-obj PROPERTY
             UNITY_BUILD_CODE_BEFORE_INCLUDE "#include <range/v3/all.hpp>")
+        if (NOT BUILD_SHARED_LIBS)
+            target_compile_definitions(unit_tests-sequant-${_module}-obj PRIVATE SEQUANT_UNIT_TESTS_INTERNALS)
+        endif()
     endif()
 endforeach()
 

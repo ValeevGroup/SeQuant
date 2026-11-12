@@ -93,6 +93,46 @@ include(CMakePackageConfigHelpers)
 
 include(compiler)
 
+# the SeQuant libraries (modules); SeQuant/api.hpp defines export macros for each of them
+set(SEQUANT_API_MODULES symb eval optimize export core mbpt eval-ta)
+
+# Helper: sets ${_var} to the name of module ${_module} in macro names (e.g. eval-ta -> EVAL_TA)
+function(sequant_module_macro_name _var _module)
+    string(TOUPPER "${_module}" _name)
+    string(REPLACE "-" "_" _name "${_name}")
+    set(${_var} ${_name} PARENT_SCOPE)
+endfunction()
+
+# Helper: hides all symbols of SeQuant library target ${_target} by default; only declarations
+#         annotated with SEQUANT_<MODULE>_API / SEQUANT_<MODULE>_INTERNAL_API (see SeQuant/api.hpp.in)
+#         are visible. SEQUANT_BUILDING_<MODULE> is defined while compiling the library's sources.
+function(sequant_set_visibility _target _module)
+    if (NOT _module IN_LIST SEQUANT_API_MODULES)
+        message(FATAL_ERROR "sequant_set_visibility: module ${_module} is missing in SEQUANT_API_MODULES")
+    endif()
+    sequant_module_macro_name(_module_uc ${_module})
+    set_target_properties(${_target} PROPERTIES
+            CXX_VISIBILITY_PRESET hidden
+            VISIBILITY_INLINES_HIDDEN ON
+            DEFINE_SYMBOL SEQUANT_BUILDING_${_module_uc})
+    # sanitizer runtimes are not linked into shared libraries, which hence have undefined symbols
+    set(_flags "${CMAKE_CXX_FLAGS} ${CMAKE_SHARED_LINKER_FLAGS}")
+    foreach(_config IN LISTS CMAKE_BUILD_TYPE CMAKE_CONFIGURATION_TYPES)
+        string(TOUPPER "${_config}" _config_uc)
+        string(APPEND _flags " ${CMAKE_CXX_FLAGS_${_config_uc}} ${CMAKE_SHARED_LINKER_FLAGS_${_config_uc}}")
+    endforeach()
+    get_target_property(_type ${_target} TYPE)
+    if (_type STREQUAL "STATIC_LIBRARY")
+        # DEFINE_SYMBOL only applies to shared libraries
+        target_compile_definitions(${_target} PRIVATE SEQUANT_BUILDING_${_module_uc})
+    elseif (_type STREQUAL "SHARED_LIBRARY" AND NOT APPLE AND NOT WIN32
+            AND CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang)$"
+            AND NOT _flags MATCHES "-fsanitize")
+        # every symbol a SeQuant library needs must be resolved by its link interface
+        target_link_options(${_target} PRIVATE "LINKER:--no-undefined")
+    endif()
+endfunction()
+
 # Helper: creates SeQuant-${module} target, sets EXPORT_NAME, creates SeQuant::${module} alias,
 #         and applies warning flags (for non-INTERFACE targets)
 macro(sequant_add_library _module)
@@ -104,6 +144,7 @@ macro(sequant_add_library _module)
     if (NOT _type STREQUAL "INTERFACE_LIBRARY")
         target_set_compiler_flags(SeQuant-${_module})
         target_set_optimization_flags(SeQuant-${_module})
+        sequant_set_visibility(SeQuant-${_module} ${_module})
     endif()
 endmacro()
 
@@ -236,6 +277,11 @@ if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
+# with DLLs, executables (e.g. tests) only find SeQuant's DLLs if they are in the same directory
+if (PROJECT_IS_TOP_LEVEL AND WIN32 AND BUILD_SHARED_LIBS AND NOT DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+endif()
+
 # std::thread requires (on some platforms?) thread support which is not
 # provided automatically
 find_package(Threads REQUIRED)
@@ -301,7 +347,9 @@ include(FindOrFetchEigen)
 include(FindOrFetchJSON)
 
 # embedded bliss-0.73
-add_library(SeQuant-bliss
+# always static (and hidden): every SeQuant library/executable gets its own private copy;
+# bliss has no global mutable state and its RTTI is not used across libraries
+add_library(SeQuant-bliss STATIC
         SeQuant/external/bliss/defs.cc
         SeQuant/external/bliss/defs.hh
         SeQuant/external/bliss/graph.cc
@@ -320,7 +368,10 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.h
         )
 set_target_properties(SeQuant-bliss PROPERTIES EXPORT_NAME bliss)
-set_target_properties(SeQuant-bliss PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+set_target_properties(SeQuant-bliss PROPERTIES CXX_SCAN_FOR_MODULES OFF
+        POSITION_INDEPENDENT_CODE ON
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON)
 add_library(SeQuant::bliss ALIAS SeQuant-bliss)
 target_set_optimization_flags(SeQuant-bliss)
 target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
@@ -390,6 +441,7 @@ set(SeQuant_symb_src
         SeQuant/core/basis.cpp
         SeQuant/core/basis.hpp
         SeQuant/core/index_basis_registry.cpp
+        SeQuant/core/logger.cpp
         SeQuant/core/index_basis_registry.hpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
@@ -541,8 +593,10 @@ set(SeQuant_eval_src
         SeQuant/core/eval/legality.hpp
         SeQuant/core/eval/lifetime_mask.hpp
         SeQuant/core/eval/node_batch_annotation.hpp
+        SeQuant/core/eval/op_counts.cpp
         SeQuant/core/eval/op_counts.hpp
         SeQuant/core/eval/ordered_dump.hpp
+        SeQuant/core/eval/ordered_executor.cpp
         SeQuant/core/eval/ordered_executor.hpp
         SeQuant/core/eval/ordered_schedule.hpp
         SeQuant/core/eval/peak_monitor.hpp
@@ -622,6 +676,7 @@ set(SeQuant_eval_ta_src
         SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
         SeQuant/core/eval/backends/tiledarray/result.hpp
         SeQuant/core/eval/backends/tiledarray/result.cpp
+        SeQuant/core/eval/backends/tiledarray/tiledarray.hpp
         ${SeQuant_eval_ta_inst_src}
 )
 
@@ -768,7 +823,8 @@ target_compile_features(SeQuant-symb INTERFACE "cxx_std_20")
 # SeQuant-eval: backend-agnostic evaluation framework
 ##########################
 sequant_add_library(eval ${SeQuant_eval_src})
-target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb PRIVATE SeQuant-bliss)
+# bliss is public: eval_node_compare.hpp calls bliss::Graph::cmp inline
+target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb SeQuant-bliss)
 # nlohmann/json is header-only and used only in schedule_document.cpp: take its
 # include dirs without linking, so it does not leak into the exported target
 target_include_directories(SeQuant-eval SYSTEM PRIVATE
@@ -795,6 +851,7 @@ if (SEQUANT_HAS_TILEDARRAY)
     target_compile_definitions(SeQuant-eval-ta PUBLIC SEQUANT_HAS_TILEDARRAY=1)
     target_set_compiler_flags(SeQuant-eval-ta)
     target_set_optimization_flags(SeQuant-eval-ta)
+    sequant_set_visibility(SeQuant-eval-ta eval-ta)
 endif()
 
 ##########################
@@ -943,7 +1000,30 @@ configure_file(
         ${PROJECT_SOURCE_DIR}/SeQuant/version.hpp.in
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
 )
+set(SEQUANT_SHARED_LIBS ${BUILD_SHARED_LIBS})
+set(SEQUANT_API_MODULE_MACROS "")
+foreach(_module IN LISTS SEQUANT_API_MODULES)
+    sequant_module_macro_name(_m ${_module})
+    string(APPEND SEQUANT_API_MODULE_MACROS "
+#ifdef SEQUANT_BUILDING_${_m}
+#define SEQUANT_${_m}_API SEQUANT_DSO_EXPORT
+#define SEQUANT_${_m}_TEMPLATE_DECL_API SEQUANT_DSO_TEMPLATE_DECL_EXPORT
+#define SEQUANT_${_m}_TEMPLATE_DEF_API SEQUANT_DSO_TEMPLATE_DEF_EXPORT
+#else
+#define SEQUANT_${_m}_API SEQUANT_DSO_IMPORT
+#define SEQUANT_${_m}_TEMPLATE_DECL_API SEQUANT_DSO_TEMPLATE_DECL_IMPORT
+#define SEQUANT_${_m}_TEMPLATE_DEF_API
+#endif
+#define SEQUANT_${_m}_INTERNAL_API SEQUANT_${_m}_API
+")
+endforeach()
+configure_file(
+        ${PROJECT_SOURCE_DIR}/SeQuant/api.hpp.in
+        ${PROJECT_BINARY_DIR}/SeQuant/api.hpp
+        @ONLY
+)
 install(FILES ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
+        ${PROJECT_BINARY_DIR}/SeQuant/api.hpp
         DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}/SeQuant")
 
 # Create the version file

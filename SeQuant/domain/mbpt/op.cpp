@@ -594,11 +594,19 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       dep ? *dep : UseDepIdx::None, normalization, grant);
 }
 
-template class OpMaker<Statistics::FermiDirac>;
-template class OpMaker<Statistics::BoseEinstein>;
+// see SEQUANT_MBPT_TEMPLATE_{DECL,DEF}_API in SeQuant/api.hpp
+template class SEQUANT_MBPT_TEMPLATE_DEF_API OpMaker<Statistics::FermiDirac>;
+template class SEQUANT_MBPT_TEMPLATE_DEF_API OpMaker<Statistics::BoseEinstein>;
 
-template class Operator<qns_t, Statistics::FermiDirac>;
-template class Operator<qns_t, Statistics::BoseEinstein>;
+template class SEQUANT_MBPT_TEMPLATE_DEF_API
+    Operator<void, Statistics::FermiDirac>;
+template class SEQUANT_MBPT_TEMPLATE_DEF_API
+    Operator<void, Statistics::BoseEinstein>;
+
+template class SEQUANT_MBPT_TEMPLATE_DEF_API
+    Operator<qns_t, Statistics::FermiDirac>;
+template class SEQUANT_MBPT_TEMPLATE_DEF_API
+    Operator<qns_t, Statistics::BoseEinstein>;
 
 inline namespace op {
 

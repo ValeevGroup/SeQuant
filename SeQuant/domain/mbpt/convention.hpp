@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CONVENTION_HPP
 #define SEQUANT_CONVENTION_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
 #include <SeQuant/core/basis.hpp>
@@ -45,14 +46,14 @@ enum class SpinConvention {
 /// @throw Exception if the calling thread has an active scoped context (see
 /// set_scoped_default_context()), whose settings would otherwise be
 /// installed process-wide
-void load(Convention conv = Convention::Minimal,
-          SpinConvention spconv = SpinConvention::Default);
+SEQUANT_MBPT_API void load(Convention conv = Convention::Minimal,
+                           SpinConvention spconv = SpinConvention::Default);
 
 /// @brief decorate IndexSpace labels with spin
 std::wstring decorate_label(std::wstring label, bool up);
 
 /// @brief add fermionic spin spaces to registry
-void add_fermi_spin(IndexBasisRegistry& ibr);
+SEQUANT_MBPT_API void add_fermi_spin(IndexBasisRegistry& ibr);
 
 /// the basis instance add_ao_basis registers the AO bases as: above every CSV
 /// instance, below the PAO one, so an AO basis sorts after every other basis
@@ -83,8 +84,8 @@ inline constexpr IndexBasis::instance_type default_ao_basis_instance =
 /// @throw Exception if `μ` is already registered, the instance of the space
 ///        is named, or the space is not registered; the registry is then
 ///        left untouched
-void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
-                  IndexSpace::QuantumNumbers spin_any);
+SEQUANT_MBPT_API void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
+                                   IndexSpace::QuantumNumbers spin_any);
 
 /// @deprecated the VBS and ABS AO bases are the layout of the program's basis
 /// registry, which registers them itself; this registers MPQC's layout from
@@ -102,7 +103,7 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
 [[deprecated(
     "the VBS and ABS AO bases are the program's basis-registry layout; "
     "register them there, and the OBS AO basis with add_ao_basis(ibr, "
-    "spin_any)")]] void
+    "spin_any)")]] SEQUANT_MBPT_API void
 add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
              IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs = false,
              IndexBasis::instance_type instance = default_ao_basis_instance);
@@ -110,23 +111,26 @@ add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
 /// @deprecated the AO bases are named instances of the orbital spaces, see
 /// add_ao_basis(), to which this forwards; unlike the AO spaces this used to
 /// register, the bases need every space they span registered
-[[deprecated("the AO bases are named basis instances; use add_ao_basis")]] void
+[[deprecated(
+    "the AO bases are named basis instances; use "
+    "add_ao_basis")]] SEQUANT_MBPT_API void
 add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
               IndexSpace::QuantumNumbers spin_any, bool vbs = false,
               bool abs = false);
 
 /// @brief add DF spaces to registry
-void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& ibr);
+SEQUANT_MBPT_API void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& ibr);
 
 /// @brief add THC spaces to registry
-void add_thc_spaces(std::shared_ptr<IndexBasisRegistry>& ibr);
+SEQUANT_MBPT_API void add_thc_spaces(std::shared_ptr<IndexBasisRegistry>& ibr);
 
 /// @deprecated the PAO basis is a named instance of the particle space, see
 /// add_pao_basis(), to which this forwards; like it, this registers the OBS
 /// AO basis `μ` if \p ibr has none, which add_ao_spaces() cannot then
 /// register, so call that one first
 [[deprecated(
-    "the PAO basis is a named basis instance; use add_pao_basis")]] void
+    "the PAO basis is a named basis instance; use "
+    "add_pao_basis")]] SEQUANT_MBPT_API void
 add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
                IndexSpace::QuantumNumbers spin_any);
 
@@ -173,12 +177,13 @@ struct PAOBasisSpec {
 ///        add_ao_basis()), or if it is registered but is a space, follows an
 ///        entry itself or does not span the particle space; the registry is
 ///        then left untouched
-void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
-                   IndexSpace::QuantumNumbers spin_any,
-                   const PAOBasisSpec& spec = {});
+SEQUANT_MBPT_API void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
+                                    IndexSpace::QuantumNumbers spin_any,
+                                    const PAOBasisSpec& spec = {});
 
 /// @brief add batching spaces to registry
-void add_batching_spaces(std::shared_ptr<IndexBasisRegistry>& ibr);
+SEQUANT_MBPT_API void add_batching_spaces(
+    std::shared_ptr<IndexBasisRegistry>& ibr);
 
 /// @name built-in definitions of IndexSpace
 /// @{
@@ -186,41 +191,41 @@ void add_batching_spaces(std::shared_ptr<IndexBasisRegistry>& ibr);
 /// Most standard models only need 2 base spaces, occupied and unoccupied.
 /// This is minimal partitioning sufficient for computing expectation values
 /// in context of single-reference MBPT.
-std::shared_ptr<IndexBasisRegistry> make_min_sr_spaces(
+SEQUANT_MBPT_API std::shared_ptr<IndexBasisRegistry> make_min_sr_spaces(
     SpinConvention scv = SpinConvention::Default);
 
 /// Common partitioning for single reference F12 calculations.
 /// notably, this set contains an other_unoccupied space, α', commonly used to
 /// construct an approximately complete representation
-std::shared_ptr<IndexBasisRegistry> make_F12_sr_spaces(
+SEQUANT_MBPT_API std::shared_ptr<IndexBasisRegistry> make_F12_sr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// Multireference partitioning contains an active space, x, which is assumed to
 /// have partial occupancy although it is considered unoccupied with respect to
 /// a SingleProduct Vacuum. This leads to a variety of additional composite
 /// spaces with may or may not be occupied.
-std::shared_ptr<IndexBasisRegistry> make_mr_spaces(
+SEQUANT_MBPT_API std::shared_ptr<IndexBasisRegistry> make_mr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// like make_mr_spaces, but without frozen orbitals
-std::shared_ptr<IndexBasisRegistry> make_min_mr_spaces(
+SEQUANT_MBPT_API std::shared_ptr<IndexBasisRegistry> make_min_mr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// 'Standard' choice of partitioning orbitals in a single reference.
 /// Includes frozen_core, active_occupied, active_unoccupied, and
 /// inactive_unoccupied orbitals as base spaces.
-std::shared_ptr<IndexBasisRegistry> make_sr_spaces(
+SEQUANT_MBPT_API std::shared_ptr<IndexBasisRegistry> make_sr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// Legacy partitioning similar to previous versions of SeQuant which had
 /// compile time hard coded partitioning. This is useful when verifying
 /// previously obtained results which have been canonicalized in this context.
-std::shared_ptr<IndexBasisRegistry> make_legacy_spaces(
+SEQUANT_MBPT_API std::shared_ptr<IndexBasisRegistry> make_legacy_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// make fermi and bose space registries for multicomponent models
-std::pair<std::shared_ptr<IndexBasisRegistry>,
-          std::shared_ptr<IndexBasisRegistry>>
+SEQUANT_MBPT_API std::pair<std::shared_ptr<IndexBasisRegistry>,
+                           std::shared_ptr<IndexBasisRegistry>>
 make_fermi_and_bose_spaces(SpinConvention spconv = SpinConvention::Default);
 
 /// @}

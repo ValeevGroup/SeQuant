@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_RESULT_HPP
 #define SEQUANT_EVAL_RESULT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 
 #include <SeQuant/core/algorithm.hpp>
@@ -23,6 +24,8 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <typeinfo>
 #include <utility>
 
 namespace sequant {
@@ -145,13 +148,7 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
 /// so raw values look like 6073936079388559375. The mapping is process-
 /// global and monotonic so the same hash gets the same label across log
 /// lines, which makes a trace easy to follow.
-inline std::string annot_label(std::int64_t key) noexcept {
-  static container::unordered_map<std::int64_t, std::string> labels;
-  static std::size_t next_id = 0;
-  if (auto it = labels.find(key); it != labels.end()) return it->second;
-  auto name = "i" + std::to_string(next_id++);
-  return labels.emplace(key, std::move(name)).first->second;
-}
+SEQUANT_EVAL_INTERNAL_API std::string annot_label(std::int64_t key) noexcept;
 
 template <typename RngOfOrdinals>
 std::string ords_to_labels(RngOfOrdinals const& ords) {
@@ -219,7 +216,7 @@ struct Annot {
 ///        btas::Tensor, etc.) or a scalar (eg. double, std::complex
 ///        etc.).
 ///
-class Result {
+class SEQUANT_EVAL_API Result {
  public:
   using id_t = size_t;
 
@@ -236,7 +233,7 @@ class Result {
   /// \return Returns true if the concrete type of the object is T.
   ///
   template <typename T>
-  [[nodiscard]] bool is() const noexcept {
+  [[nodiscard]] bool is() const {
     return this->type_id() == id_for_type<std::decay_t<T>>();
   }
 
@@ -522,11 +519,13 @@ class Result {
   /// here (set_value()). Default no-op.
   virtual void ensure_value() const {}
 
-  [[nodiscard]] virtual id_t type_id() const noexcept = 0;
+  [[nodiscard]] virtual id_t type_id() const = 0;
 
+  /// @note the id is keyed by the (mangled) name of `T`, hence agrees across
+  /// shared libraries even though each caches it in its own copy of `id`
   template <typename T>
-  [[nodiscard]] static id_t id_for_type() noexcept {
-    static id_t id = next_id();
+  [[nodiscard]] static id_t id_for_type() {
+    static const id_t id = id_for_name(typeid(T).name());
     return id;
   }
 
@@ -534,7 +533,9 @@ class Result {
   /// mutable: a pending view fills it in from a const get<T>() (set_value())
   mutable std::any value_;
 
-  [[nodiscard]] static id_t next_id() noexcept;
+  /// @return the id of the type with (mangled) name @p name; a new id is
+  /// assigned on the first call for a given name
+  [[nodiscard]] static id_t id_for_name(std::string_view name);
 };
 
 ///
@@ -619,7 +620,7 @@ class ResultScalar final : public Result {
   }
 
  private:
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<ResultScalar<T>>();
   }
 

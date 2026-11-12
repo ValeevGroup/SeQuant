@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_STACKCHECKER_HPP
 #define SEQUANT_CORE_EXPORT_STACKCHECKER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/export/forwarding_generator.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
@@ -17,7 +18,7 @@ namespace sequant {
 /// Simulates the memory stack of a backend that only supports stack-like
 /// allocations: an object can only be released if it was the most recently
 /// allocated object that is still allocated.
-class MemoryStack {
+class SEQUANT_EXPORT_API MemoryStack {
  public:
   /// Sets the indices that distinguish otherwise equal tensors (batching)
   void set_batch_indices(std::span<const Index> indices);

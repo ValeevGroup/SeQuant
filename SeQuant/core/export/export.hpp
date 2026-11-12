@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_EXPORT_HPP
 #define SEQUANT_CORE_EXPORT_EXPORT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/export/compute_selection.hpp>
@@ -482,21 +483,23 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
 /// loaded object. This may reuse previously used/declares tensors.
 /// @param acceptable If provided, only names for which this predicate returns
 ///        true are considered. In this case, the tensor need not be loaded.
-bool rename(Tensor &tensor, PreprocessResult &result,
-            const std::function<bool(const Tensor &)> &acceptable = {});
+SEQUANT_EXPORT_INTERNAL_API bool rename(
+    Tensor &tensor, PreprocessResult &result,
+    const std::function<bool(const Tensor &)> &acceptable = {});
 /// Renames the given Variable to a name that doesn't collide with any
 /// currently loaded object. This may reuse previously used/declares
 /// variables.
 /// @param acceptable If provided, only names for which this predicate returns
 ///        true are considered. In this case, the variable need not be loaded.
-bool rename(Variable &variable, PreprocessResult &result,
-            const std::function<bool(const Variable &)> &acceptable = {});
+SEQUANT_EXPORT_INTERNAL_API bool rename(
+    Variable &variable, PreprocessResult &result,
+    const std::function<bool(const Variable &)> &acceptable = {});
 
 /// Context for IRREP propagation during export. Tensors whose IRREPs have
 /// already been computed during the export (i.e. results of previously
 /// processed trees) are resolved via the ExportContext's registry. All others
 /// are resolved via the user-provided IRREP context.
-class RegisteredIrrepContext {
+class SEQUANT_EXPORT_INTERNAL_API RegisteredIrrepContext {
  public:
   using set_type = AnyIrrepSet;
 

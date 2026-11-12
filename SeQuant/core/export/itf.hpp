@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_ITF_HPP
 #define SEQUANT_CORE_EXPORT_ITF_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
@@ -26,7 +27,7 @@
 namespace sequant {
 
 /// Context for the ItfGenerator
-class ItfContext : public ReorderingContext {
+class SEQUANT_EXPORT_API ItfContext : public ReorderingContext {
  public:
   using TagMap = container::map<IndexSpace, std::string>;
   using NameMap = container::map<IndexSpace, std::string>;

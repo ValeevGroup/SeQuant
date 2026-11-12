@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_OP_HPP
 #define SEQUANT_DOMAIN_MBPT_OP_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/domain/mbpt/fwd.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
@@ -67,7 +68,7 @@ enum class Normalization {
 /// @return the prefactor for an operator of class @p opclass under the active
 /// NormalizationConvention; projectors Â and Ŝ are not operators of any
 /// class, see the label overload
-Normalization normalization(OpClass opclass);
+SEQUANT_MBPT_INTERNAL_API Normalization normalization(OpClass opclass);
 
 /// @return the prefactor for an operator labeled @p label under the active
 /// NormalizationConvention
@@ -139,7 +140,7 @@ struct OpParams {
 
 /// @return the tensor labels in the cardinal order, starting with the
 /// reserved labels that Context uses by default
-std::vector<std::wstring> cardinal_tensor_labels();
+SEQUANT_MBPT_API std::vector<std::wstring> cardinal_tensor_labels();
 
 //////////////////////////////
 
@@ -205,6 +206,12 @@ class Operator<void, S> : public Expr, public Labeled {
   std::function<std::wstring_view()> label_generator_;
   std::function<ExprPtr()> tensor_form_generator_;
 };
+
+// exported, since the (exported) Operator<qns_t, S> derive from these
+extern template class SEQUANT_MBPT_TEMPLATE_DECL_API
+    Operator<void, Statistics::FermiDirac>;
+extern template class SEQUANT_MBPT_TEMPLATE_DECL_API
+    Operator<void, Statistics::BoseEinstein>;
 
 using FOperatorBase = FOperator<void>;
 using BOperatorBase = BOperator<void>;
@@ -471,60 +478,64 @@ using qnc_t = qns_t;
 using op_t = mbpt::Operator<qnc_t>;
 
 /// combines 2 sets of quantum numbers using Wick's theorem
-qns_t combine(qns_t, const qns_t&);
+SEQUANT_MBPT_API qns_t combine(qns_t, const qns_t&);
+
+/// @return true if @p qns describes the vacuum (no quasiparticle changes)
+template <>
+SEQUANT_MBPT_API bool is_vacuum<qns_t>(qns_t qns);
 
 /// @brief Constructs quantum numbers for an excitation operator based on the
 /// defined context
 /// @param k the rank of the operator
 /// @param SQN the spin quantum number
-qns_t excitation_type_qns(std::size_t k,
-                          IndexSpace::QuantumNumbers SQN = Spin::any);
+SEQUANT_MBPT_API qns_t
+excitation_type_qns(std::size_t k, IndexSpace::QuantumNumbers SQN = Spin::any);
 
 /// @brief Constructs quantum numbers for an excitation operator based on the
 /// defined context. Sometimes we want to guarantee that a qns has an interval
 /// from 0 to \p k regardless of base spaces
 /// @param k the rank of the operator, QN has the interval from 0 to \p k
 /// @param SQN the spin quantum number
-qns_t interval_excitation_type_qns(std::size_t k,
-                                   IndexSpace::QuantumNumbers SQN = Spin::any);
+SEQUANT_MBPT_API qns_t interval_excitation_type_qns(
+    std::size_t k, IndexSpace::QuantumNumbers SQN = Spin::any);
 
 /// @brief Constructs quantum numbers for an deexcitation operator based on the
 /// defined context
 /// @param k the rank of the operator
 /// @param SQN the spin quantum number
-qns_t deexcitation_type_qns(std::size_t k,
-                            IndexSpace::QuantumNumbers SQN = Spin::any);
+SEQUANT_MBPT_API qns_t deexcitation_type_qns(
+    std::size_t k, IndexSpace::QuantumNumbers SQN = Spin::any);
 
 /// @brief Constructs quantum numbers for an deexcitation operator based on the
 /// defined context. Sometimes we want to guarantee that a qns has an interval
 /// from 0 to \p k regardless of base spaces
 /// @param k the rank of the operator, QN has the interval from 0 to \p k
 /// @param SQN the spin quantum number
-qns_t interval_deexcitation_type_qns(
+SEQUANT_MBPT_API qns_t interval_deexcitation_type_qns(
     std::size_t k, IndexSpace::QuantumNumbers SQN = Spin::any);
 
 /// @brief Constructs quantum numbers for a general operator based on the
 /// defined context
 /// @param k the rank of the operator
-qns_t general_type_qns(std::size_t k);
+SEQUANT_MBPT_API qns_t general_type_qns(std::size_t k);
 
 /// @brief Constructs quantum numbers for a generic excitation operator
 /// @param particle_rank number of operators in the particle space
 /// @param hole_rank number operators in the hole space
 /// @param particle_space particle space within the defined context
 /// @param hole_space hole space within the defined context
-qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
-                             IndexSpace particle_space, IndexSpace hole_space,
-                             IndexSpace::QuantumNumbers SQN = Spin::any);
+SEQUANT_MBPT_API qns_t generic_excitation_qns(
+    std::size_t particle_rank, std::size_t hole_rank, IndexSpace particle_space,
+    IndexSpace hole_space, IndexSpace::QuantumNumbers SQN = Spin::any);
 
 /// @brief Constructs quantum numbers for a generic deexcitation operator
 /// @param particle_rank number of operators in the particle space
 /// @param hole_rank number operators in the hole space
 /// @param particle_space particle space within the defined context
 /// @param hole_space hole space within the defined context
-qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
-                               IndexSpace particle_space, IndexSpace hole_space,
-                               IndexSpace::QuantumNumbers SQN = Spin::any);
+SEQUANT_MBPT_API qns_t generic_deexcitation_qns(
+    std::size_t particle_rank, std::size_t hole_rank, IndexSpace particle_space,
+    IndexSpace hole_space, IndexSpace::QuantumNumbers SQN = Spin::any);
 
 inline namespace op {
 
@@ -568,14 +579,14 @@ namespace tensor {
 /// @note Connectivity constraints are empty by default.
 /// @pre When the reference differs from the Wick vacuum and the vacuum is not
 ///      MultiProduct, opts.connect and opts.do_not_connect must both be empty.
-ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
+SEQUANT_MBPT_API ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
-ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
+SEQUANT_MBPT_API ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
 }  // namespace tensor
 }  // namespace op
 
@@ -880,8 +891,10 @@ class OpMaker {
   [[nodiscard]] auto nannihilators() const { return ann_spaces_.size(); };
 };
 
-extern template class OpMaker<Statistics::FermiDirac>;
-extern template class OpMaker<Statistics::BoseEinstein>;
+extern template class SEQUANT_MBPT_TEMPLATE_DECL_API
+    OpMaker<Statistics::FermiDirac>;
+extern template class SEQUANT_MBPT_TEMPLATE_DECL_API
+    OpMaker<Statistics::BoseEinstein>;
 
 /// \tparam QuantumNumbers a sequence of quantum numbers, must be
 /// default-initializable
@@ -997,8 +1010,10 @@ class Operator : public Operator<void, S> {
 
 };  // class Operator
 
-extern template class Operator<qns_t, Statistics::FermiDirac>;
-extern template class Operator<qns_t, Statistics::BoseEinstein>;
+extern template class SEQUANT_MBPT_TEMPLATE_DECL_API
+    Operator<qns_t, Statistics::FermiDirac>;
+extern template class SEQUANT_MBPT_TEMPLATE_DECL_API
+    Operator<qns_t, Statistics::BoseEinstein>;
 
 inline namespace op {
 namespace tensor {
@@ -1011,51 +1026,52 @@ using mbpt::nₚ;
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
 /// supported
 // clang-format on
-ExprPtr h(std::size_t k);
+SEQUANT_MBPT_API ExprPtr h(std::size_t k);
 
 /// @brief Total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
-ExprPtr H(std::size_t k = 2);
+SEQUANT_MBPT_API ExprPtr H(std::size_t k = 2);
 
 /// @brief Fock operator implied one-body operator, optional explicit
 /// construction requires user to specify the IndexSpace corresponding to all
 /// orbitals which may have non-zero density.
-ExprPtr F(bool use_tensor = true,
-          const IndexSpace& reference_occupied = {L"", 0});
+SEQUANT_MBPT_API ExprPtr F(bool use_tensor = true,
+                           const IndexSpace& reference_occupied = {L"", 0});
 
 /// A general operator of rank \p K
-ExprPtr θ(std::size_t K);
+SEQUANT_MBPT_API ExprPtr θ(std::size_t K);
 
 /// Makes particle-conserving excitation operator of rank \p K based on the
 /// defined context
-ExprPtr t(std::size_t K);
+SEQUANT_MBPT_API ExprPtr t(std::size_t K);
 
 /// Makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K based on the defined context
-ExprPtr T(std::size_t K, bool skip1 = false);
+SEQUANT_MBPT_API ExprPtr T(std::size_t K, bool skip1 = false);
 
 /// Makes particle-conserving deexcitation operator of rank \p K based on the
 /// defined context
-ExprPtr λ(std::size_t K);
+SEQUANT_MBPT_API ExprPtr λ(std::size_t K);
 
 /// Makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p K based on the defined context
-ExprPtr Λ(std::size_t K, bool skip1 = false);
+SEQUANT_MBPT_API ExprPtr Λ(std::size_t K, bool skip1 = false);
 
 /// @brief Makes generic right-hand replacement operator
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr r(nann na, ncre nc,
-          const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
-          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+SEQUANT_MBPT_API ExprPtr
+r(nann na, ncre nc,
+  const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+  const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
 
 /// @brief Makes generic excitation operator
 /// @param np number of particle creators
 /// @param nh number of hole creators
-ExprPtr r(nₚ np, nₕ nh);
+SEQUANT_MBPT_API ExprPtr r(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 
 /// @brief Makes generic left-hand replacement operator
@@ -1063,15 +1079,15 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr l(
-    nann na, ncre nc,
-    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
-    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+SEQUANT_MBPT_API ExprPtr
+l(nann na, ncre nc,
+  const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+  const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
 
 /// @brief Makes generic deexcitation operator
 /// @param np number of particle annihilators
 /// @param nh number of hole annihilators
-ExprPtr l(nₚ np, nₕ nh);
+SEQUANT_MBPT_API ExprPtr l(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 
 // clang-format off
@@ -1083,7 +1099,8 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
+SEQUANT_MBPT_API ExprPtr P(nₚ np, nₕ nh,
+                           std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
@@ -1094,28 +1111,32 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 /// @param grants_of if given, the operator label whose basis grants the legs carry
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
+SEQUANT_MBPT_API ExprPtr A(nₚ np, nₕ nh,
+                           std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 /// @param grants_of if given, the operator label whose basis grants the legs
 /// carry
-ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of = {});
+SEQUANT_MBPT_API ExprPtr S(std::int64_t K,
+                           std::optional<std::wstring> grants_of = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr Hʼ(std::size_t R, const OpParams& params = {.order = 1});
+SEQUANT_MBPT_API ExprPtr Hʼ(std::size_t R,
+                            const OpParams& params = {.order = 1});
 
 /// @brief Makes perturbed particle-conserving excitation operator
 /// @param K rank of the excitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
+SEQUANT_MBPT_API ExprPtr tʼ(std::size_t K,
+                            const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators
 /// @param K rank up to which the sum is to be formed
@@ -1123,15 +1144,16 @@ ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr Tʼ(std::size_t K,
-           const OpParams& params = {.order = 1, .skip1 = false});
+SEQUANT_MBPT_API ExprPtr Tʼ(std::size_t K, const OpParams& params = {
+                                               .order = 1, .skip1 = false});
 
 /// @brief Makes perturbed particle-conserving deexcitation operator
 /// @param K rank of the deexcitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
+SEQUANT_MBPT_API ExprPtr λʼ(std::size_t K,
+                            const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators
 /// @param K rank up to which the sum is to be formed
@@ -1139,8 +1161,8 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr Λʼ(std::size_t K,
-           const OpParams& params = {.order = 1, .skip1 = false});
+SEQUANT_MBPT_API ExprPtr Λʼ(std::size_t K, const OpParams& params = {
+                                               .order = 1, .skip1 = false});
 
 }  // namespace tensor
 }  // namespace op
@@ -1151,21 +1173,21 @@ inline namespace op {
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
 /// supported
 // clang-format on
-ExprPtr h(std::size_t k);
+SEQUANT_MBPT_API ExprPtr h(std::size_t k);
 
 /// @brief Total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
 /// supported
-ExprPtr H(std::size_t k = 2);
+SEQUANT_MBPT_API ExprPtr H(std::size_t k = 2);
 
 /// @brief Fock operator implied one-body operator, optional explicit
 /// construction requires user to specify the IndexSpace corresponding to all
 /// orbitals which may have non-zero density.
-ExprPtr F(bool use_tensor = true,
-          const IndexSpace& reference_occupied = {L"", 0});
+SEQUANT_MBPT_API ExprPtr F(bool use_tensor = true,
+                           const IndexSpace& reference_occupied = {L"", 0});
 
 /// A general operator of rank \p K
-ExprPtr θ(std::size_t K);
+SEQUANT_MBPT_API ExprPtr θ(std::size_t K);
 
 /// @brief Makes a replacement operator of particle rank \p rank
 ///        \f$ \{ \tilde{a}^{p_1 \dots p_r}_{p_{r+1} \dots p_{2r}} \} \f$ over
@@ -1176,35 +1198,36 @@ ExprPtr θ(std::size_t K);
 ///       rely on them: creators use `1 ... rank`, annihilators use
 ///       `rank+1 ... 2*rank`.
 /// @param rank particle rank (>= 1)
-ExprPtr ã(std::size_t rank);
+SEQUANT_MBPT_API ExprPtr ã(std::size_t rank);
 
 /// Makes particle-conserving excitation operator of rank \p K
-ExprPtr t(std::size_t K);
+SEQUANT_MBPT_API ExprPtr t(std::size_t K);
 
 /// Makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K
-ExprPtr T(std::size_t K, bool skip1 = false);
+SEQUANT_MBPT_API ExprPtr T(std::size_t K, bool skip1 = false);
 
 /// Makes particle-conserving deexcitation operator of rank \p K
-ExprPtr λ(std::size_t K);
+SEQUANT_MBPT_API ExprPtr λ(std::size_t K);
 
 /// Makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p K
-ExprPtr Λ(std::size_t K, bool skip1 = false);
+SEQUANT_MBPT_API ExprPtr Λ(std::size_t K, bool skip1 = false);
 
 /// @brief Makes generic excitation operator
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr r(nann na, ncre nc,
-          const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
-          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+SEQUANT_MBPT_API ExprPtr
+r(nann na, ncre nc,
+  const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+  const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
 
 /// @brief Makes generic excitation operator
 /// @param np number of particle creators
 /// @param nh number of hole creators
-ExprPtr r(nₚ np, nₕ nh);
+SEQUANT_MBPT_API ExprPtr r(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 
 /// @brief Makes generic deexcitation operator
@@ -1212,15 +1235,15 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr l(
-    nann na, ncre nc,
-    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
-    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+SEQUANT_MBPT_API ExprPtr
+l(nann na, ncre nc,
+  const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+  const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
 
 /// @brief Makes generic deexcitation operator
 /// @param np number of particle annihilators
 /// @param nh number of hole annihilators
-ExprPtr l(nₚ np, nₕ nh);
+SEQUANT_MBPT_API ExprPtr l(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 
 /// @brief Makes sum of generic right-hand replacement operators up to max rank
@@ -1229,15 +1252,16 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
 /// @return `r(na,nc) + r(na-1,nc-1) + ...`
-ExprPtr R(nann na, ncre nc,
-          const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
-          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+SEQUANT_MBPT_API ExprPtr
+R(nann na, ncre nc,
+  const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+  const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
 
 /// @brief Makes sum of generic excitation operators up to max rank
 /// @param np max number of particle creators
 /// @param nh max number of hole creators
 /// @return `r(np,nh) + r(np-1,nh-1) + ...`
-ExprPtr R(nₚ np, nₕ nh);
+SEQUANT_MBPT_API ExprPtr R(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 
 /// @brief Makes sum of generic "left-hand" replacement operators up to max rank
@@ -1246,16 +1270,16 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
 /// @return `l(na,nc) + l(na-1,nc-1) + ...`
-ExprPtr L(
-    nann na, ncre nc,
-    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
-    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+SEQUANT_MBPT_API ExprPtr
+L(nann na, ncre nc,
+  const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+  const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
 
 /// @brief Makes sum of deexcitation operators up to max rank
 /// @param np max number of particle annihilators
 /// @param nh max number of hole annihilators
 /// @return `l(np,nh) + l(np-1,nh-1) + ...`
-ExprPtr L(nₚ np, nₕ nh);
+SEQUANT_MBPT_API ExprPtr L(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 
 // clang-format off
@@ -1267,7 +1291,8 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
+SEQUANT_MBPT_API ExprPtr P(nₚ np, nₕ nh,
+                           std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
@@ -1277,28 +1302,32 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 /// @param grants_of if given, the operator label whose basis grants the legs carry
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
+SEQUANT_MBPT_API ExprPtr A(nₚ np, nₕ nh,
+                           std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 /// @param grants_of if given, the operator label whose basis grants the legs
 /// carry
-ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of = {});
+SEQUANT_MBPT_API ExprPtr S(std::int64_t K,
+                           std::optional<std::wstring> grants_of = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr Hʼ(std::size_t R, const OpParams& params = {.order = 1});
+SEQUANT_MBPT_API ExprPtr Hʼ(std::size_t R,
+                            const OpParams& params = {.order = 1});
 
 /// @brief Makes perturbed particle-conserving excitation operator from OpParams
 /// @param K rank of the excitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
+SEQUANT_MBPT_API ExprPtr tʼ(std::size_t K,
+                            const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators
 /// @param K rank up to which the sum is to be formed
@@ -1306,15 +1335,16 @@ ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr Tʼ(std::size_t K,
-           const OpParams& params = {.order = 1, .skip1 = false});
+SEQUANT_MBPT_API ExprPtr Tʼ(std::size_t K, const OpParams& params = {
+                                               .order = 1, .skip1 = false});
 
 /// @brief Makes perturbed particle-conserving deexcitation operator
 /// @param K rank of the deexcitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
+SEQUANT_MBPT_API ExprPtr λʼ(std::size_t K,
+                            const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators
 /// @param K rank up to which the sum is to be formed
@@ -1322,8 +1352,8 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, IBR must contain batching space
-ExprPtr Λʼ(std::size_t K,
-           const OpParams& params = {.order = 1, .skip1 = false});
+SEQUANT_MBPT_API ExprPtr Λʼ(std::size_t K, const OpParams& params = {
+                                               .order = 1, .skip1 = false});
 
 /// @brief computes the quantum number change effected by a given Operator or
 /// Operator Product when applied to the vacuum state
@@ -1331,35 +1361,36 @@ ExprPtr Λʼ(std::size_t K,
 /// to be computed
 /// @return the quantum number change effected by \p expr
 /// @pre \p expr must be an Operator or an Operator Product
-qns_t apply_to_vac(const ExprPtr& expr);
+SEQUANT_MBPT_API qns_t apply_to_vac(const ExprPtr& expr);
 
 /// @brief Checks if a given Operator or Operator Product can change the quantum
 /// numbers from \p source_qns to \p target_qns
 /// @param op_or_op_product the operator or operator product to check
 /// @param target_qns the target quantum numbers
 /// @param source_qns the source quantum numbers
-bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
-                    const qns_t& source_qns = {});
+SEQUANT_MBPT_API bool can_change_qns(const ExprPtr& op_or_op_product,
+                                     const qns_t& target_qns,
+                                     const qns_t& source_qns = {});
 
 /// @brief Checks if a given Operator or Operator Product can raise the vacuum
 /// quantum numbers up to rank \p k
-bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
-                              const unsigned long k);
+SEQUANT_MBPT_API bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
+                                               const unsigned long k);
 
 /// @brief Checks if a given Operator or Operator Product can lower quantum
 /// numbers of rank \p down up to vacuum
-bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
-                                    const unsigned long k);
+SEQUANT_MBPT_API bool lowers_rank_or_lower_to_vacuum(
+    const ExprPtr& op_or_op_product, const unsigned long k);
 
 /// @brief Checks if a given Operator or Operator Product can raise the vacuum
 /// quantum numbers to rank \p k
-bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
-                           const unsigned long k);
+SEQUANT_MBPT_API bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
+                                            const unsigned long k);
 
 /// @brief Checks if a given Operator or Operator Product can lower quantum
 /// numbers of rank \p k down to vacuum
-bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
-                           const unsigned long k);
+SEQUANT_MBPT_API bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
+                                            const unsigned long k);
 
 }  // namespace op
 

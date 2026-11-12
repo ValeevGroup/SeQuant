@@ -1925,8 +1925,10 @@ TEST_CASE("tensor_power", "[elements]") {
     REQUIRE(renamed->is<Product>());
     CHECK(*renamed->as<Product>().factors()[1] == *pow(D3, rational{-1}));
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
     CHECK(diff(*p, *p).empty());
     CHECK(!diff(*p, *pow(D, rational{-2})).empty());
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
     // a proto-indexed Sum is validated by counting index occurrences, which
     // must see the indices of a power's base

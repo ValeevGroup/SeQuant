@@ -1,0 +1,61 @@
+#ifndef SEQUANT_API_HPP
+#define SEQUANT_API_HPP
+
+/// @file api.hpp
+/// Symbol visibility (export/import) annotations for the SeQuant libraries.
+///
+/// All SeQuant libraries are compiled with hidden visibility by default; only
+/// declarations annotated with one of the macros defined here are part of a
+/// shared library's interface. Each library (module) `<MOD>` has two macros:
+///  - `SEQUANT_<MOD>_API` marks the public API of that library.
+///  - `SEQUANT_<MOD>_INTERNAL_API` marks entities that are *not* part of the
+///    public API but which have to be visible for technical reasons (they are
+///    used by another SeQuant library or by inline/template code in a public
+///    header). These may change at any time and must not be used by client
+///    code directly.
+/// Both expand identically; the distinction is purely documentational.
+///
+/// Explicit instantiations of templates that live in library `<MOD>` need a
+/// pair of macros, since GCC/Clang want the attribute on the declaration while
+/// MSVC wants `dllexport` on the definition:
+///  - `extern template class SEQUANT_<MOD>_TEMPLATE_DECL_API Foo<int>;` in the
+///    header (must precede any implicit instantiation of `Foo<int>`),
+///  - `template class SEQUANT_<MOD>_TEMPLATE_DEF_API Foo<int>;` in the library.
+///
+/// Every type whose RTTI is compared across libraries (by `dynamic_cast`,
+/// `catch` or `typeid`) must be exported at class level, a class template via
+/// explicit instantiations; else each library has its own `type_info`, which
+/// libc++ (on Linux and x86_64 macOS) compares by address.
+///
+/// The macros expand to nothing when SeQuant is built as static libraries.
+
+#cmakedefine SEQUANT_SHARED_LIBS
+
+#ifdef SEQUANT_SHARED_LIBS
+#if defined(_WIN32) || defined(__CYGWIN__)
+#define SEQUANT_DSO_EXPORT __declspec(dllexport)
+#define SEQUANT_DSO_IMPORT __declspec(dllimport)
+// explicit instantiation declarations/definitions (see above)
+#define SEQUANT_DSO_TEMPLATE_DECL_EXPORT
+#define SEQUANT_DSO_TEMPLATE_DECL_IMPORT __declspec(dllimport)
+#define SEQUANT_DSO_TEMPLATE_DEF_EXPORT __declspec(dllexport)
+#else
+#define SEQUANT_DSO_EXPORT __attribute__((visibility("default")))
+#define SEQUANT_DSO_IMPORT __attribute__((visibility("default")))
+#define SEQUANT_DSO_TEMPLATE_DECL_EXPORT SEQUANT_DSO_EXPORT
+#define SEQUANT_DSO_TEMPLATE_DECL_IMPORT SEQUANT_DSO_IMPORT
+#define SEQUANT_DSO_TEMPLATE_DEF_EXPORT
+#endif
+#else
+#define SEQUANT_DSO_EXPORT
+#define SEQUANT_DSO_IMPORT
+#define SEQUANT_DSO_TEMPLATE_DECL_EXPORT
+#define SEQUANT_DSO_TEMPLATE_DECL_IMPORT
+#define SEQUANT_DSO_TEMPLATE_DEF_EXPORT
+#endif
+
+// SEQUANT_BUILDING_<MOD> is defined (only) while compiling library <MOD>
+
+// one block per module, generated from SEQUANT_API_MODULES in CMakeLists.txt
+@SEQUANT_API_MODULE_MACROS@
+#endif  // SEQUANT_API_HPP

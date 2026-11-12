@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_CONSTANT_HPP
 #define SEQUANT_EXPRESSIONS_CONSTANT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -33,7 +34,7 @@ X numeric_cast(const sequant::rational &r) {
 /// @brief a constant number
 
 /// This is represented as a "compile-time" complex rational number
-class Constant : public Expr {
+class SEQUANT_SYMB_API Constant : public Expr {
  public:
   using scalar_type = Complex<sequant::rational>;
 

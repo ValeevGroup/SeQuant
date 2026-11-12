@@ -5,6 +5,7 @@
 #ifndef SEQUANT_LOGGER_HPP
 #define SEQUANT_LOGGER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 
 #include <cstddef>
@@ -15,7 +16,17 @@ namespace sequant {
 
 /// controls logging within SeQuant components, only useful for
 /// troubleshooting/learning
+/// @note the instance is process-wide, i.e. shared by all SeQuant libraries:
+/// the accessors below shadow those of Singleton and are defined out-of-line
 struct Logger : public Singleton<Logger> {
+  /// @return the (process-wide) instance
+  SEQUANT_SYMB_API static Logger& instance();
+  /// @return pointer to the (process-wide) instance
+  SEQUANT_SYMB_API static Logger* instance_ptr();
+  /// constructs the instance with the given log level
+  /// @throw Exception if the instance has already been constructed
+  SEQUANT_SYMB_API static Logger& set_instance(int log_level = 0);
+
   bool wick_harness = false;
   bool wick_topology = false;
   bool wick_contract = false;

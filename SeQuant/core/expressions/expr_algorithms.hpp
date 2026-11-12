@@ -5,6 +5,7 @@
 #ifndef SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
 #define SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
@@ -22,9 +23,9 @@ namespace sequant {
 /// @param max_lines_per_align the maximum number of lines in the align before
 /// starting new align block (if zero, will produce single align block)
 /// @param max_terms_per_line the maximum number of terms per line
-std::wstring to_latex_align(const ExprPtr& exprptr,
-                            size_t max_lines_per_align = 0,
-                            size_t max_terms_per_line = 1);
+SEQUANT_SYMB_API std::wstring to_latex_align(const ExprPtr& exprptr,
+                                             size_t max_lines_per_align = 0,
+                                             size_t max_terms_per_line = 1);
 
 template <typename Sequence>
 std::decay_t<Sequence> clone(Sequence&& exprseq) {
@@ -38,13 +39,13 @@ std::decay_t<Sequence> clone(Sequence&& exprseq) {
 /// @param[in] expr an expression
 /// @return number of subexpressions in @p expr, i.e., 0 for atoms (Constant,
 /// Variable, Tensor, etc.), >0 for nontrivial Product or Sum
-std::size_t size(const Expr& expr);
+SEQUANT_SYMB_API std::size_t size(const Expr& expr);
 
 /// @param[in] exprptr (a pointer to) an expression
 /// @return number of subexpressions in @p exprptr , i.e., 0 if @p exprptr is
 /// null or an atom (Constant, Variable, Tensor, etc.), >0 for nontrivial
 /// Product or Sum
-std::size_t size(const ExprPtr& exprptr);
+SEQUANT_SYMB_API std::size_t size(const ExprPtr& exprptr);
 
 /// @param[in] exprptr (a pointer to) an expression
 /// @return begin iterator to the expression range
@@ -110,68 +111,68 @@ T& ExprPtr::as() {
 /// by that summand or factor (or 0), canonicalized on its own
 /// @note the canonicalization options are those of the default context
 /// @return \p expr to facilitate chaining
-ExprPtr& canonicalize(ExprPtr& expr);
+SEQUANT_SYMB_API ExprPtr& canonicalize(ExprPtr& expr);
 
 /// Recursively canonicalizes an Expr; like mutating canonicalize() but works
 /// for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
 /// @note the canonicalization options are those of the default context
 /// @return canonicalized form of \p expr_rv
-ExprPtr canonicalize(ExprPtr&& expr_rv);
+SEQUANT_SYMB_API ExprPtr canonicalize(ExprPtr&& expr_rv);
 
 /// Recursively canonicalizes an Expr and replaces it as needed
 /// @param[in,out] expr expression to be canonicalized; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @note the canonicalization options are those of the default context
 /// @return \p expr to facilitate chaining
-ResultExpr& canonicalize(ResultExpr& expr);
+SEQUANT_SYMB_API ResultExpr& canonicalize(ResultExpr& expr);
 
 /// Recursively canonicalizes an Expr; like mutating canonicalize() but works
 /// for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
 /// @note the canonicalization options are those of the default context
 /// @return canonicalized form of \p expr_rv
-[[nodiscard]] ResultExpr& canonicalize(ResultExpr&& expr);
+[[nodiscard]] SEQUANT_SYMB_API ResultExpr& canonicalize(ResultExpr&& expr);
 
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded
 /// @return \p expr to facilitate chaining
-ExprPtr& expand(ExprPtr& expr);
+SEQUANT_SYMB_API ExprPtr& expand(ExprPtr& expr);
 
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded
 /// @return \p expr to facilitate chaining
-ExprPtr expand(ExprPtr&& expr);
+SEQUANT_SYMB_API ExprPtr expand(ExprPtr&& expr);
 
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded
 /// @return \p expr to facilitate chaining
-ResultExpr& expand(ResultExpr& expr);
+SEQUANT_SYMB_API ResultExpr& expand(ResultExpr& expr);
 
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded
 /// @return The expanded expression
-[[nodiscard]] ResultExpr& expand(ResultExpr&& expr);
+[[nodiscard]] SEQUANT_SYMB_API ResultExpr& expand(ResultExpr&& expr);
 
 /// Recursively flattens Sum of Sum's and Product of Product's
 /// @param[in,out] expr expression to be flattened
 /// @return \p expr to facilitate chaining
-ExprPtr& flatten(ExprPtr& expr);
+SEQUANT_SYMB_API ExprPtr& flatten(ExprPtr& expr);
 
 /// Recursively flattens Sum of Sum's and Product of Product's
 /// @param[in,out] expr expression to be flattened
 /// @return \p expr to facilitate chaining
-ExprPtr flatten(ExprPtr&& expr);
+SEQUANT_SYMB_API ExprPtr flatten(ExprPtr&& expr);
 
 /// Recursively flattens Sum of Sum's and Product of Product's
 /// @param[in,out] expr expression to be flattened
 /// @return \p expr to facilitate chaining
-ResultExpr& flatten(ResultExpr& expr);
+SEQUANT_SYMB_API ResultExpr& flatten(ResultExpr& expr);
 
 /// Recursively flattens Sum of Sum's and Product of Product's
 /// @param[in,out] expr expression to be flattened
 /// @return The expanded expression
-[[nodiscard]] ResultExpr& flatten(ResultExpr&& expr);
+[[nodiscard]] SEQUANT_SYMB_API ResultExpr& flatten(ResultExpr&& expr);
 
 /// Simplifies an Expr by applying cheap transformations (e.g. eliminating
 /// trivial math, flattening sums and products, etc.)
@@ -179,7 +180,7 @@ ResultExpr& flatten(ResultExpr& expr);
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-ExprPtr& rapid_simplify(ExprPtr& expr);
+SEQUANT_SYMB_API ExprPtr& rapid_simplify(ExprPtr& expr);
 
 /// Simplifies an Expr by applying cheap transformations (e.g. eliminating
 /// trivial math, flattening sums and products, etc.)
@@ -187,7 +188,7 @@ ExprPtr& rapid_simplify(ExprPtr& expr);
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-ResultExpr& rapid_simplify(ResultExpr& expr);
+SEQUANT_SYMB_API ResultExpr& rapid_simplify(ResultExpr& expr);
 
 /// Simplifies an Expr by applying cheap transformations (e.g. eliminating
 /// trivial math, flattening sums and products, etc.)
@@ -195,7 +196,7 @@ ResultExpr& rapid_simplify(ResultExpr& expr);
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-[[nodiscard]] ResultExpr& rapid_simplify(ResultExpr&& expr);
+[[nodiscard]] SEQUANT_SYMB_API ResultExpr& rapid_simplify(ResultExpr&& expr);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify
@@ -204,14 +205,14 @@ ResultExpr& rapid_simplify(ResultExpr& expr);
 /// @note the canonicalization options are those of the default context
 /// @sa rapid_simplify()
 /// @return \p expr to facilitate chaining
-ExprPtr& simplify(ExprPtr& expr);
+SEQUANT_SYMB_API ExprPtr& simplify(ExprPtr& expr);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify; like mutating simplify() but works for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be simplified
 /// @note the canonicalization options are those of the default context
 /// @return simplified form of \p expr_rv
-ExprPtr simplify(ExprPtr&& expr_rv);
+SEQUANT_SYMB_API ExprPtr simplify(ExprPtr&& expr_rv);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify
@@ -220,14 +221,14 @@ ExprPtr simplify(ExprPtr&& expr_rv);
 /// @note the canonicalization options are those of the default context
 /// @sa rapid_simplify()
 /// @return \p expr to facilitate chaining
-ResultExpr& simplify(ResultExpr& expr);
+SEQUANT_SYMB_API ResultExpr& simplify(ResultExpr& expr);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify; like mutating simplify() but works for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be simplified
 /// @note the canonicalization options are those of the default context
 /// @return simplified form of \p expr_rv
-[[nodiscard]] ResultExpr& simplify(ResultExpr&& expr);
+[[nodiscard]] SEQUANT_SYMB_API ResultExpr& simplify(ResultExpr&& expr);
 
 /// Simplifies an Expr by a combination of expansion and
 /// rapid_simplify
@@ -235,7 +236,7 @@ ResultExpr& simplify(ResultExpr& expr);
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-ExprPtr& non_canon_simplify(ExprPtr& expr);
+SEQUANT_SYMB_INTERNAL_API ExprPtr& non_canon_simplify(ExprPtr& expr);
 
 /// Simplifies an Expr by a combination of expansion and
 /// rapid_simplify
@@ -243,7 +244,7 @@ ExprPtr& non_canon_simplify(ExprPtr& expr);
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-ResultExpr& non_canon_simplify(ResultExpr& expr);
+SEQUANT_SYMB_INTERNAL_API ResultExpr& non_canon_simplify(ResultExpr& expr);
 
 /// Simplifies an Expr by a combination of expansion and
 /// rapid_simplify
@@ -251,7 +252,8 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa simplify()
 /// @return Simplified expression
-[[nodiscard]] ResultExpr non_canon_simplify(ResultExpr&& expr);
+[[nodiscard]] SEQUANT_SYMB_INTERNAL_API ResultExpr
+non_canon_simplify(ResultExpr&& expr);
 
 }  // namespace sequant
 

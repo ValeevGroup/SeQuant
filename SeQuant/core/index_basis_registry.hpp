@@ -5,6 +5,7 @@
 #ifndef SEQUANT_INDEX_BASIS_REGISTRY_HPP
 #define SEQUANT_INDEX_BASIS_REGISTRY_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/bitset.hpp>
 #include <SeQuant/core/container.hpp>
@@ -237,7 +238,7 @@ struct IndexBasisSpec {
 /// removal; a registry owned by a Context is immutable, so a reference into
 /// it never dangles.
 // clang-format on
-class IndexBasisRegistry {
+class SEQUANT_SYMB_API IndexBasisRegistry {
  public:
   /// label -> basis: a space is the entry under its base_key() with a null
   /// instance, a named basis instance any other entry

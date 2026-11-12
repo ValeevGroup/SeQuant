@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_RESULT_EXPR_HPP
 #define SEQUANT_EXPRESSIONS_RESULT_EXPR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
@@ -32,7 +33,7 @@ namespace sequant {
 /// an explicit name (label) to it.
 ///
 /// @note see AbstractTensor for the description of the model of slots/indices
-class ResultExpr {
+class SEQUANT_SYMB_API ResultExpr {
  public:
   using IndexContainer = container::svector<Index>;
 

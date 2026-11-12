@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 #define SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
@@ -23,7 +24,7 @@ namespace sequant {
 /// @brief Base class for Tensor canonicalizers
 /// To make custom canonicalizer make a derived class and install an instance
 /// of that class in a Context (see Context::set_tensor_canonicalizer())
-class TensorCanonicalizer {
+class SEQUANT_SYMB_API TensorCanonicalizer {
  public:
   using index_comparer_t = tensor_index_comparer_t;
   using index_pair_t = tensor_index_pair_t;
@@ -57,7 +58,7 @@ class TensorCanonicalizer {
 };
 
 /// @brief null Tensor canonicalizer does nothing
-class NullTensorCanonicalizer : public TensorCanonicalizer {
+class SEQUANT_SYMB_API NullTensorCanonicalizer : public TensorCanonicalizer {
  public:
   virtual ~NullTensorCanonicalizer() = default;
 
@@ -69,7 +70,7 @@ class NullTensorCanonicalizer : public TensorCanonicalizer {
   ExprPtr apply(AbstractTensor&) const override;
 };
 
-class DefaultTensorCanonicalizer : public TensorCanonicalizer {
+class SEQUANT_SYMB_API DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;
 
@@ -171,7 +172,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   void tag_indices(AbstractTensor& t) const;
 };
 
-class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
+class SEQUANT_SYMB_INTERNAL_API TensorBlockCanonicalizer
+    : public DefaultTensorCanonicalizer {
  public:
   TensorBlockCanonicalizer() = default;
   ~TensorBlockCanonicalizer() = default;

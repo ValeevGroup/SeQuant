@@ -18,6 +18,7 @@ namespace sequant_boost = boost;
 #error "SeQuant requires Boost 1.81 or later for hashing"
 #endif
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/meta.hpp>
 
 namespace sequant {
@@ -91,7 +92,7 @@ auto hash_value(const T& obj) {
   return sequant_boost::hash_value(obj);
 }
 
-std::size_t hash_value(const ExprPtr& expr);
+SEQUANT_SYMB_API std::size_t hash_value(const ExprPtr& expr);
 
 // clang-format off
 // rationale:

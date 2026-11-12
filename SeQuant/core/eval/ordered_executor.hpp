@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_ORDERED_EXECUTOR_HPP
 #define SEQUANT_EVAL_ORDERED_EXECUTOR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
@@ -217,14 +218,7 @@ struct ReleaseAfter {
 };
 
 /// The per-thread slot behind \c ordered_last_block_skips.
-inline std::size_t& ordered_last_block_skips_slot() {
-  // thread_local, matching ordered_op_counts_slot(): the writer is on the
-  // production path (run_ordered_schedule_pre_results, unconditionally), so a
-  // process-global would be a data race between two concurrent ordered
-  // evaluations, not merely a stale read.
-  static thread_local std::size_t n = 0;
-  return n;
-}
+SEQUANT_EVAL_INTERNAL_API std::size_t& ordered_last_block_skips_slot();
 /// Diagnostic: how many whole batch loops the most recent \c
 /// run_ordered_schedule_pre_results call skipped outright -- a block every one
 /// of whose productions was already resident, so it was not entered at all
@@ -1108,11 +1102,7 @@ void run_ordered_contracted_block(
 }
 
 /// The per-thread slot behind \c ordered_last_cell_table_size.
-inline std::size_t& ordered_last_cell_table_size_slot() {
-  // thread_local -- see ordered_last_block_skips_slot for why.
-  static thread_local std::size_t n = 0;
-  return n;
-}
+SEQUANT_EVAL_INTERNAL_API std::size_t& ordered_last_cell_table_size_slot();
 /// Diagnostic: number of cells in the table built by the most recent
 /// \c run_ordered_schedule_pre_results call (test-facing; per-thread).
 [[nodiscard]] inline std::size_t ordered_last_cell_table_size() {
@@ -1134,11 +1124,8 @@ struct OrderedRegistryResidency {
   std::size_t live = 0, persistent = 0, roots = 0;
 };
 /// The per-thread slot behind \c ordered_last_registry_residency.
-inline OrderedRegistryResidency& ordered_last_registry_residency_slot() {
-  // thread_local -- see ordered_last_block_skips_slot for why.
-  static thread_local OrderedRegistryResidency r;
-  return r;
-}
+SEQUANT_EVAL_INTERNAL_API OrderedRegistryResidency&
+ordered_last_registry_residency_slot();
 /// \return the residency of the most recent \c
 /// run_ordered_schedule_pre_results call (test-facing; per-thread).
 [[nodiscard]] inline OrderedRegistryResidency

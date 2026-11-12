@@ -8,7 +8,9 @@
 
 namespace sequant {
 
-template class WickTheorem<Statistics::BoseEinstein>;
-template class WickTheorem<Statistics::FermiDirac>;
+template class SEQUANT_SYMB_TEMPLATE_DEF_API
+    WickTheorem<Statistics::BoseEinstein>;
+template class SEQUANT_SYMB_TEMPLATE_DEF_API
+    WickTheorem<Statistics::FermiDirac>;
 
 }  // namespace sequant

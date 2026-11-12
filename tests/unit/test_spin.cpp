@@ -199,8 +199,10 @@ TEST_CASE("spin", "[spin]") {
     auto p4 = Index(L"p↓_4");
 
     auto input = ex<Tensor>(L"t", bra{p1, p2}, ket{p3, p4}, particle_symmetric);
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
     REQUIRE(can_expand(input->as<Tensor>()) == true);
     REQUIRE(ms_conserving_columns(input->as<Tensor>()) == true);
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
     auto spin_swap_tensor = swap_spin(input->as<Tensor>());
     REQUIRE_THAT(spin_swap_tensor, EquivalentTo("t{p↓1,p↑2;p↓3,p↑4}"));
@@ -211,8 +213,10 @@ TEST_CASE("spin", "[spin]") {
 
     input = ex<Tensor>(L"t", bra{p1, p3}, ket{p2, p4}, particle_symmetric);
     REQUIRE_THAT(swap_spin(input), EquivalentTo("t{p↓1,p↓3;p↑2,p↑4}"));
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
     REQUIRE(can_expand(input->as<Tensor>()) == false);
     REQUIRE(ms_conserving_columns(input->as<Tensor>()) == false);
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
   }
 
   SECTION("Tensor: expand_antisymm") {
@@ -802,6 +806,7 @@ SECTION("Partial symmetrizer") {
   }
 }
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
 SECTION("Swap bra kets") {
   // Constant
   {
@@ -848,6 +853,7 @@ SECTION("Swap bra kets") {
     REQUIRE_THAT(result, SimplifiesTo("f{i5;i1} + g{i5,i6;a5,a6} t{a6;i2}"));
   }
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
 SECTION("Closed-shell spintrace CCD") {
   // Energy expression
@@ -1393,6 +1399,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
   }
 }
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
 SECTION("Merge P operators") {
   auto P1 = Tensor(reserved::transposition_label(), bra{L"i_1", L"i_2"}, ket{},
                    Symmetry::Symm);
@@ -1407,7 +1414,9 @@ SECTION("Merge P operators") {
   REQUIRE_THAT(P12, EquivalentTo("P̂{i1,i2;a1,a2}:S"));
   REQUIRE_THAT(P34, EquivalentTo("P̂{i1,i2;a1,a2}:S"));
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
 SECTION("Permutation operators") {
   auto A_12 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
                          ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
@@ -1448,6 +1457,7 @@ SECTION("Permutation operators") {
   REQUIRE(P5[4]->size() == 25);
   REQUIRE(P5[5]->size() == 0);
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
 SECTION("Relation in spin P operators") {
   auto input = ex<Tensor>(L"g", bra{L"i_4", L"a_1"}, ket{L"i_1", L"i_2"},

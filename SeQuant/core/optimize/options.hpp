@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
 #define SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
@@ -28,7 +29,7 @@ namespace opt {
 
 /// \return whether \p e is a tensor factor of a product the single-term
 ///         optimizer contracts: a Tensor or a TensorPower
-bool is_tensor_factor(Expr const& e);
+SEQUANT_OPTIMIZE_INTERNAL_API bool is_tensor_factor(Expr const& e);
 
 }  // namespace opt
 
