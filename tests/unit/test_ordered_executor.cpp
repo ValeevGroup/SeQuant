@@ -3121,6 +3121,16 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
       r.builds = total_builds(cache.recompute_tally()) - b0;
       r.peak = mon.hwmark_bytes;
     };
+    // SEQUANT_UT_PEAK_LIVESET=warm: one more evaluation first, so that the
+    // live set dumped below is that of a steady iteration (and the "cold"
+    // row a warm one)
+    if (dump_liveset &&
+        std::string(std::getenv("SEQUANT_UT_PEAK_LIVESET")) == "warm") {
+      Row discard;
+      run(discard, nullptr);
+      peak_total = 0;
+      peak_live.clear();
+    }
     run(o1, doc ? &*doc->run : nullptr);  // COLD
     if (doc) {
       std::ofstream out(doc_path, std::ios::binary);
