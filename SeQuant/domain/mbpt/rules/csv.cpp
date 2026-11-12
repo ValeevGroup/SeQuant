@@ -48,6 +48,16 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
                       toUtf8(csv_basis.space().base_key()));
   };
 
+  // a CSV coefficient tensor: the bra-leg coefficients of an expansion are the
+  // adjoint of its ket-leg ones, so C is Hermitian (C{μ;a} = C{a;μ}^*); like
+  // the overlap (make_overlap) it is particle (column) symmetric
+  auto make_C = [&coeff_tensor_label](const Index& bra_idx,
+                                      const Index& ket_idx) {
+    return ex<Tensor>(coeff_tensor_label, bra({bra_idx}), ket({ket_idx}),
+                      aux({}), Symmetry::Nonsymm, Hermiticity::Hermitian,
+                      ColumnSymmetry::Symm);
+  };
+
   // shortcut for the CSV overlap if csv_basis is orthonormal
   if (orthonormal && tnsr.label() == overlap_label()) {
     SEQUANT_ASSERT(tnsr.bra_rank() == 1     //
@@ -69,22 +79,12 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
       const auto dummy_idx = Index::make_tmp_index(
           csv_basis.has_basis_instance() ? csv_basis : IndexBasis(end.space()));
 
-      return ex<Product>(
-          1,
-          ExprPtrList{ex<Tensor>(coeff_tensor_label,                 //
-                                 bra({bra_idx}), ket({dummy_idx}),  //
-                                 Symmetry::Nonsymm, Hermiticity::Hermitian),
-                      ex<Tensor>(coeff_tensor_label,                 //
-                                 bra({dummy_idx}), ket({ket_idx}),  //
-                                 Symmetry::Nonsymm, Hermiticity::Hermitian)});
+      return ex<Product>(1, ExprPtrList{make_C(bra_idx, dummy_idx),
+                                        make_C(dummy_idx, ket_idx)});
     } else if ((bra_has_proto_indices ? ket_idx : bra_idx).basis() ==
                csv_basis) {
       // the other leg is in the target basis
-      return ex<Product>(
-          1,
-          ExprPtrList{ex<Tensor>(coeff_tensor_label,  //
-                                 bra({bra_idx}), ket({ket_idx}),  //
-                                 Symmetry::Nonsymm, Hermiticity::Hermitian)});
+      return ex<Product>(1, ExprPtrList{make_C(bra_idx, ket_idx)});
     }
   }
 
@@ -96,9 +96,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
     if (idx.has_proto_indices()) {
       require_in_basis_space(idx);
       Index xidx = Index::make_tmp_index(csv_basis);
-      result.append(
-          1, ex<Tensor>(coeff_tensor_label, bra({idx}), ket({xidx}), aux({}),
-                        Symmetry::Nonsymm, Hermiticity::Hermitian));
+      result.append(1, make_C(idx, xidx));
       rbra.emplace_back(std::move(xidx));
     } else
       rbra.emplace_back(idx);
@@ -109,9 +107,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
     if (idx.has_proto_indices()) {
       require_in_basis_space(idx);
       Index xidx = Index::make_tmp_index(csv_basis);
-      result.append(
-          1, ex<Tensor>(coeff_tensor_label, bra({xidx}), ket({idx}), aux({}),
-                        Symmetry::Nonsymm, Hermiticity::Hermitian));
+      result.append(1, make_C(xidx, idx));
       rket.emplace_back(std::move(xidx));
     } else
       rket.emplace_back(idx);
