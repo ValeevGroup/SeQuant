@@ -24,7 +24,8 @@ namespace sequant {
 
 class QuantumNumbersAttr;  // used to constrain TypeAttr ctor
 
-class Index;  // friend of TypeAttr
+class Index;       // friend of TypeAttr
+class IndexSpace;  // friend of TypeAttr and QuantumNumbersAttr
 
 /// @brief TypeAttr denotes the type of index space.
 ///
@@ -137,17 +138,20 @@ class TypeAttr {
   bitset_t bitset = 0;
 
   friend class Index;
+  friend class IndexSpace;
 
   /// makes reserved object
-  static TypeAttr make_reserved() {
+  static constexpr TypeAttr make_reserved() {
     TypeAttr result;
     result.bitset = 0x80000000;
     return result;
   }
 };  // struct TypeAttr
 
-inline const TypeAttr TypeAttr::null;
-inline const TypeAttr TypeAttr::reserved = TypeAttr::make_reserved();
+// constant-initialized: dynamic initialization of inline variables is not
+// ordered reliably (MSVC), and other static data are initialized from these
+inline constinit const TypeAttr TypeAttr::null;
+inline constinit const TypeAttr TypeAttr::reserved = TypeAttr::make_reserved();
 
 /// denotes other quantum numbers (particle type, spin, etc.)
 class QuantumNumbersAttr {
@@ -257,17 +261,18 @@ class QuantumNumbersAttr {
   bitset_t bitset = bitset::null;
 
   friend class Index;
+  friend class IndexSpace;
 
   /// makes reserved object
-  static QuantumNumbersAttr make_reserved() {
+  static constexpr QuantumNumbersAttr make_reserved() {
     QuantumNumbersAttr result;
     result.bitset = bitset::reserved;
     return result;
   }
 };  // struct QuantumNumbersAttr
 
-inline const QuantumNumbersAttr QuantumNumbersAttr::null;
-inline const QuantumNumbersAttr QuantumNumbersAttr::reserved =
+inline constinit const QuantumNumbersAttr QuantumNumbersAttr::null;
+inline constinit const QuantumNumbersAttr QuantumNumbersAttr::reserved =
     QuantumNumbersAttr::make_reserved();
 
 /// @brief a collection of attributes which define a space of (1-particle)
@@ -285,7 +290,7 @@ class IndexSpace {
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
   struct Attr : TypeAttr, QuantumNumbersAttr {
-    Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
+    constexpr Attr(TypeAttr type, QuantumNumbersAttr qns) noexcept
         : TypeAttr(type), QuantumNumbersAttr(qns){};
     Attr(int32_t type, int32_t qns) noexcept
         : TypeAttr(type), QuantumNumbersAttr(qns){};
@@ -368,8 +373,8 @@ class IndexSpace {
     }
 
     /// makes reserved object
-    static Attr make_reserved() {
-      Attr result{Type::reserved, QuantumNumbers::reserved};
+    static constexpr Attr make_reserved() {
+      Attr result{Type::make_reserved(), QuantumNumbers::make_reserved()};
       return result;
     }
   };  // struct Attr
@@ -565,9 +570,8 @@ class IndexSpace {
   Field field_ = Field::Complex;
 };  // class IndexSpace
 
-inline const IndexSpace IndexSpace::null;
-inline const IndexSpace::Attr IndexSpace::Attr::null;
-inline const IndexSpace::Attr IndexSpace::Attr::reserved =
+inline constinit const IndexSpace::Attr IndexSpace::Attr::null;
+inline constinit const IndexSpace::Attr IndexSpace::Attr::reserved =
     IndexSpace::Attr::make_reserved();
 
 inline auto hash_value(const IndexSpace &space) {
