@@ -93,12 +93,24 @@ include(CMakePackageConfigHelpers)
 
 include(compiler)
 
+# the SeQuant libraries (modules); SeQuant/api.hpp defines export macros for each of them
+set(SEQUANT_API_MODULES symb eval optimize export core mbpt eval-ta)
+
+# Helper: sets ${_var} to the name of module ${_module} in macro names (e.g. eval-ta -> EVAL_TA)
+function(sequant_module_macro_name _var _module)
+    string(TOUPPER "${_module}" _name)
+    string(REPLACE "-" "_" _name "${_name}")
+    set(${_var} ${_name} PARENT_SCOPE)
+endfunction()
+
 # Helper: hides all symbols of SeQuant library target ${_target} by default; only declarations
 #         annotated with SEQUANT_<MODULE>_API / SEQUANT_<MODULE>_INTERNAL_API (see SeQuant/api.hpp.in)
 #         are visible. SEQUANT_BUILDING_<MODULE> is defined while compiling the library's sources.
 function(sequant_set_visibility _target _module)
-    string(TOUPPER "${_module}" _module_uc)
-    string(REPLACE "-" "_" _module_uc "${_module_uc}")
+    if (NOT _module IN_LIST SEQUANT_API_MODULES)
+        message(FATAL_ERROR "sequant_set_visibility: module ${_module} is missing in SEQUANT_API_MODULES")
+    endif()
+    sequant_module_macro_name(_module_uc ${_module})
     set_target_properties(${_target} PROPERTIES
             CXX_VISIBILITY_PRESET hidden
             VISIBILITY_INLINES_HIDDEN ON
@@ -989,9 +1001,26 @@ configure_file(
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
 )
 set(SEQUANT_SHARED_LIBS ${BUILD_SHARED_LIBS})
+set(SEQUANT_API_MODULE_MACROS "")
+foreach(_module IN LISTS SEQUANT_API_MODULES)
+    sequant_module_macro_name(_m ${_module})
+    string(APPEND SEQUANT_API_MODULE_MACROS "
+#ifdef SEQUANT_BUILDING_${_m}
+#define SEQUANT_${_m}_API SEQUANT_DSO_EXPORT
+#define SEQUANT_${_m}_TEMPLATE_DECL_API SEQUANT_DSO_TEMPLATE_DECL_EXPORT
+#define SEQUANT_${_m}_TEMPLATE_DEF_API SEQUANT_DSO_TEMPLATE_DEF_EXPORT
+#else
+#define SEQUANT_${_m}_API SEQUANT_DSO_IMPORT
+#define SEQUANT_${_m}_TEMPLATE_DECL_API SEQUANT_DSO_TEMPLATE_DECL_IMPORT
+#define SEQUANT_${_m}_TEMPLATE_DEF_API
+#endif
+#define SEQUANT_${_m}_INTERNAL_API SEQUANT_${_m}_API
+")
+endforeach()
 configure_file(
         ${PROJECT_SOURCE_DIR}/SeQuant/api.hpp.in
         ${PROJECT_BINARY_DIR}/SeQuant/api.hpp
+        @ONLY
 )
 install(FILES ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         ${PROJECT_BINARY_DIR}/SeQuant/api.hpp
