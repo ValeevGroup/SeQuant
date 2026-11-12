@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPR_UTILITIES_HPP
 #define SEQUANT_EXPR_UTILITIES_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -38,7 +39,8 @@ std::string diff(const Expr &lhs, const Expr &rhs);
 ///            be invalid. If the expression is valid, the string will
 ///            be left unchanged.
 /// @returns The validity of the expression
-bool is_valid(const ExprPtr &expr, std::string *msg = nullptr);
+SEQUANT_SYMB_INTERNAL_API bool is_valid(const ExprPtr &expr,
+                                        std::string *msg = nullptr);
 
 /// Checks whether the given expression is valid (i.e. uses
 /// consistent indexing etc.)
@@ -48,7 +50,8 @@ bool is_valid(const ExprPtr &expr, std::string *msg = nullptr);
 ///            be invalid. If the expression is valid, the string will
 ///            be left unchanged.
 /// @returns The validity of the expression
-bool is_valid(const Expr &expr, std::string *msg = nullptr);
+SEQUANT_SYMB_INTERNAL_API bool is_valid(const Expr &expr,
+                                        std::string *msg = nullptr);
 
 /// Checks whether the given expression is valid (i.e. uses
 /// consistent indexing etc.)
@@ -62,14 +65,15 @@ bool is_valid(const Expr &expr, std::string *msg = nullptr);
 ///            be invalid. If the expression is valid, the string will
 ///            be left unchanged.
 /// @returns The validity of the expression
-bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
+SEQUANT_SYMB_INTERNAL_API bool is_valid(const ResultExpr &expr,
+                                        std::string *msg = nullptr);
 
 /// @brief Applies index replacement rules to an ExprPtr
 /// @param expr ExprPtr to transform
 /// @param index_replacements index replacement map
 /// @param scaling_factor to scale the result
 /// @return a substituted and scaled expression pointer
-[[nodiscard]] ExprPtr transform_expr(
+[[nodiscard]] SEQUANT_SYMB_INTERNAL_API ExprPtr transform_expr(
     const ExprPtr &expr, const container::map<Index, Index> &index_replacements,
     Constant::scalar_type scaling_factor = 1);
 [[nodiscard]] ExprPtr transform_expr(
@@ -83,7 +87,8 @@ bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 /// @param expression The expression to modify
 /// @param label The label of the tensor that shall be removed
 /// @returns The removed tensor, if any occurrence has been found
-std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::wstring_view label);
+SEQUANT_SYMB_INTERNAL_API std::optional<ExprPtr> pop_tensor(
+    ExprPtr &expression, std::wstring_view label);
 
 /// Removes the (anti)symmetrization operator, i.e. the tensor labeled
 /// reserved::symm_label() or, if there is none, the one labeled
@@ -91,10 +96,12 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::wstring_view label);
 ///
 /// @param expression The expression to modify
 /// @returns The removed operator, if any
-std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression);
+SEQUANT_SYMB_INTERNAL_API std::optional<ExprPtr> pop_symmetrizer(
+    ExprPtr &expression);
 
 /// @copydoc pop_symmetrizer(ExprPtr&)
-std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression);
+SEQUANT_SYMB_INTERNAL_API std::optional<ExprPtr> pop_symmetrizer(
+    ResultExpr &expression);
 
 namespace detail {
 /// @return a copy of @p expression without its symmetrizer and
@@ -109,8 +116,8 @@ ExprPtr without_symmetrizers(const ExprPtr &expression);
 /// @return the (non-null) indices of @p result that @p term supplies, i.e. uses
 ///         in a bra, ket or aux slot; a head index is never contracted, so one
 ///         that @p term uses in several slots is supplied, too
-container::set<Index> supplied_result_indices(const ResultExpr &result,
-                                              const Expr &term);
+SEQUANT_SYMB_INTERNAL_API container::set<Index> supplied_result_indices(
+    const ResultExpr &result, const Expr &term);
 }  // namespace detail
 
 /// Inverse of pop_symmetrizer: multiplies the given expression from the left
@@ -119,14 +126,14 @@ container::set<Index> supplied_result_indices(const ResultExpr &result,
 /// @param expression The expression to modify
 /// @param symmetrizer The operator to re-attach, as returned by
 /// pop_symmetrizer. If empty, @p expression is left unchanged.
-void push_symmetrizer(ResultExpr &expression,
-                      std::optional<ExprPtr> symmetrizer);
+SEQUANT_SYMB_INTERNAL_API void push_symmetrizer(
+    ResultExpr &expression, std::optional<ExprPtr> symmetrizer);
 
 /// @returns Whether the given expression contains a symmetrization operator,
 /// i.e. a tensor labeled reserved::symm_label(), anywhere
 /// @note The assumption is that there are no cases in which only part of the
 /// expression requires symmetrization
-bool has_symmetrizer(const ExprPtr &expression);
+SEQUANT_SYMB_INTERNAL_API bool has_symmetrizer(const ExprPtr &expression);
 
 /// Generates the expression that symmetrizes the given result over all
 /// cyclic permutations of its bra-ket index pairs, based on the tensor named
@@ -135,12 +142,12 @@ bool has_symmetrizer(const ExprPtr &expression);
 ///
 /// @param result The result to symmetrize
 /// @param precursor_name The name of the not yet symmetrized tensor
-ExprPtr result_symmetrization(const Tensor &result,
-                              std::wstring_view precursor_name);
+SEQUANT_SYMB_INTERNAL_API ExprPtr
+result_symmetrization(const Tensor &result, std::wstring_view precursor_name);
 
 /// @copydoc result_symmetrization(const Tensor&, std::wstring_view)
-ExprPtr result_symmetrization(const ResultExpr &result,
-                              std::wstring_view precursor_name);
+SEQUANT_SYMB_INTERNAL_API ExprPtr result_symmetrization(
+    const ResultExpr &result, std::wstring_view precursor_name);
 
 /// Replaces a given target expression by a given replacement
 ///
@@ -159,8 +166,9 @@ ExprPtr result_symmetrization(const ResultExpr &result,
 /// chaining)
 ///
 /// @note At this time, target must not be a composite expression
-ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
-                 const Expr &replacement);
+SEQUANT_SYMB_INTERNAL_API ExprPtr &replace(ExprPtr &expr,
+                                           const ExprMatcher &target,
+                                           const Expr &replacement);
 
 template <typename EqualityComparator = std::equal_to<>>
 [[deprecated(
@@ -201,8 +209,9 @@ replace(ExprPtr &expr, const ExprPtr &target, const ExprPtr &replacement,
 /// chaining)
 ///
 /// @note At this time, target must not be a composite expression
-ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
-                    const Expr &replacement);
+SEQUANT_SYMB_INTERNAL_API ResultExpr &replace(ResultExpr &expr,
+                                              const ExprMatcher &target,
+                                              const Expr &replacement);
 
 template <typename EqualityComparator = std::equal_to<>>
 [[deprecated(

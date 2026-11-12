@@ -5,6 +5,7 @@
 #ifndef SEQUANT_INDEX_H
 #define SEQUANT_INDEX_H
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
@@ -90,7 +91,7 @@ concept range_of_castables_to_index =
 /// strings. For optimal efficiency and simplicity users are recommended to use
 /// wide strings until further notice.
 // clang-format on
-class Index : public Taggable {
+class SEQUANT_SYMB_API Index : public Taggable {
  public:
   /// ordinals are represented by this type
   using ordinal_type = std::uint64_t;

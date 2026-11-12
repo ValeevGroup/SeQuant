@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
 #define SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
@@ -72,7 +73,7 @@ inline Hermiticity default_hermiticity(OpClass cls) {
 /// Copy semantics is shallow (operator map shared via `std::shared_ptr`),
 /// allowing multiple mbpt::Context objects to share operator definitions.
 /// Use OpRegistry::clone() for deep copies.
-class OpRegistry {
+class SEQUANT_MBPT_API OpRegistry {
  public:
   /// default constructor, creates an empty registry
   OpRegistry()
@@ -215,7 +216,8 @@ class OpRegistry {
 
 /// @return true if the label of @p t, without its adjoint marker, stands for
 /// (see OpRegistry::resolve) an Ex or Deex operator of @p reg
-bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg);
+SEQUANT_MBPT_API bool is_amplitude_tensor(const AbstractTensor& t,
+                                          const OpRegistry& reg);
 
 }  // namespace sequant::mbpt
 

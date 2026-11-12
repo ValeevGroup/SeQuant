@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_UTILITY_EXPRMATCHER_HPP
 #define SEQUANT_CORE_UTILITY_EXPRMATCHER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
@@ -33,7 +34,7 @@ struct ExprMatcherOptions {
   bool operator==(const ExprMatcherOptions &) const = default;
 };
 
-class ExprMatcher {
+class SEQUANT_SYMB_INTERNAL_API ExprMatcher {
  public:
   explicit ExprMatcher(const Expr &expr, ExprMatcherOptions opts = {});
 
@@ -53,17 +54,23 @@ class ExprMatcher {
   ExprMatcherOptions opts_;
 };
 
-bool operator==(const ExprMatcher &matcher, const Expr &expr);
-bool operator==(const ExprMatcher &matcher, const ExprPtr &expr);
-bool operator==(const Expr &expr, const ExprMatcher &matcher);
-bool operator==(const ExprPtr &exp, const ExprMatcher &matcherr);
+SEQUANT_SYMB_INTERNAL_API bool operator==(const ExprMatcher &matcher,
+                                          const Expr &expr);
+SEQUANT_SYMB_INTERNAL_API bool operator==(const ExprMatcher &matcher,
+                                          const ExprPtr &expr);
+SEQUANT_SYMB_INTERNAL_API bool operator==(const Expr &expr,
+                                          const ExprMatcher &matcher);
+SEQUANT_SYMB_INTERNAL_API bool operator==(const ExprPtr &exp,
+                                          const ExprMatcher &matcherr);
 
-std::partial_ordering operator<=>(const ExprMatcher &matcher, const Expr &expr);
-std::partial_ordering operator<=>(const ExprMatcher &matcher,
-                                  const ExprPtr &expr);
-std::partial_ordering operator<=>(const Expr &expr, const ExprMatcher &matcher);
-std::partial_ordering operator<=>(const ExprPtr &expr,
-                                  const ExprMatcher &matcher);
+SEQUANT_SYMB_INTERNAL_API std::partial_ordering operator<=>(
+    const ExprMatcher &matcher, const Expr &expr);
+SEQUANT_SYMB_INTERNAL_API std::partial_ordering operator<=>(
+    const ExprMatcher &matcher, const ExprPtr &expr);
+SEQUANT_SYMB_INTERNAL_API std::partial_ordering operator<=>(
+    const Expr &expr, const ExprMatcher &matcher);
+SEQUANT_SYMB_INTERNAL_API std::partial_ordering operator<=>(
+    const ExprPtr &expr, const ExprMatcher &matcher);
 
 }  // namespace sequant
 

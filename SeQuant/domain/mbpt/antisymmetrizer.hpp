@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP
 #define SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
@@ -63,7 +64,7 @@ class antisymm_element {
 };
 
 /// @brief simple class to call antisymm_element on only products
-class antisymmetrize {
+class SEQUANT_MBPT_API antisymmetrize {
  public:
   ExprPtr result = ex<Constant>(0);
 

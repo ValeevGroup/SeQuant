@@ -2,6 +2,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
 #define SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
 #include <SeQuant/core/utility/aggregate.hpp>
@@ -53,7 +54,7 @@ enum class NormalizationConvention {
 ///
 /// Can be accessed via `get_default_mbpt_context()`. Functions access this global context to validate operator types and properties.
 // clang-format on
-class Context {
+class SEQUANT_MBPT_API Context {
  public:
   struct Defaults {
     constexpr static auto csv = CSV::No;
@@ -127,18 +128,19 @@ class Context {
   NormalizationConvention normalization_convention_ =
       Defaults::normalization_convention;
 
-  friend bool operator==(Context const& left, Context const& right);
+  friend SEQUANT_MBPT_API bool operator==(Context const& left,
+                                          Context const& right);
 };
 
-bool operator!=(Context const& left, Context const& right);
+SEQUANT_MBPT_API bool operator!=(Context const& left, Context const& right);
 
-const Context& get_default_mbpt_context();
+SEQUANT_MBPT_API const Context& get_default_mbpt_context();
 
-void set_default_mbpt_context(const Context& ctx);
+SEQUANT_MBPT_API void set_default_mbpt_context(const Context& ctx);
 
-void set_default_mbpt_context(const Context::Options& options);
+SEQUANT_MBPT_API void set_default_mbpt_context(const Context::Options& options);
 
-void reset_default_mbpt_context();
+SEQUANT_MBPT_API void reset_default_mbpt_context();
 
 /// @brief changes the default mbpt context until the returned object is
 /// destroyed
@@ -146,28 +148,28 @@ void reset_default_mbpt_context();
 /// workers of the parallel primitives (sequant::for_each, etc.) it launches;
 /// set_default_mbpt_context() is not seen by this thread until the scope ends
 /// @note scopes must end in the reverse order of their creation
-[[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
+[[nodiscard]] SEQUANT_MBPT_API sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context& ctx);
 
-[[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
+[[nodiscard]] SEQUANT_MBPT_API sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context::Options& options);
 
 /// predefined operator registries
 
 /// @brief makes a minimal operator registry with only essential operators for
 /// MBPT
-std::shared_ptr<OpRegistry> make_minimal_registry();
+SEQUANT_MBPT_API std::shared_ptr<OpRegistry> make_minimal_registry();
 
 /// @brief make a legacy operator registry with SeQuant's old predefined
 /// operators set
-std::shared_ptr<OpRegistry> make_legacy_registry();
+SEQUANT_MBPT_API std::shared_ptr<OpRegistry> make_legacy_registry();
 
 /// @brief converts an operator label to its OpClass using the default MBPT
 /// context
 /// @param op the operator label
 /// @return the OpClass of the operator
 /// @note returns OpClass::Gen for reserved operator labels
-OpClass to_op_class(const std::wstring& op);
+SEQUANT_MBPT_API OpClass to_op_class(const std::wstring& op);
 
 /// @brief returns the Hermiticity of an operator label using the default MBPT
 /// context
@@ -176,7 +178,7 @@ OpClass to_op_class(const std::wstring& op);
 ///         default_hermiticity(to_op_class(op)))
 /// @note returns Hermiticity::Hermitian for reserved operator labels (they are
 ///       OpClass::Gen)
-Hermiticity op_hermiticity(const std::wstring& op);
+SEQUANT_MBPT_API Hermiticity op_hermiticity(const std::wstring& op);
 
 }  // namespace sequant::mbpt
 

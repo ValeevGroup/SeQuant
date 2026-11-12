@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_SPIN_HPP
 #define SEQUANT_DOMAIN_MBPT_SPIN_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
 #include <SeQuant/domain/mbpt/space_qns.hpp>
@@ -114,13 +115,13 @@ std::wstring spinannotation_replacе(WS&& label, Spin s) {
 /// @{
 
 // make alpha-spin idx
-[[nodiscard]] Index make_spinalpha(const Index& idx);
+[[nodiscard]] SEQUANT_MBPT_API Index make_spinalpha(const Index& idx);
 
 // make beta-spin idx
-[[nodiscard]] Index make_spinbeta(const Index& idx);
+[[nodiscard]] SEQUANT_MBPT_API Index make_spinbeta(const Index& idx);
 
 // make null-spin idx
-[[nodiscard]] Index make_spinfree(const Index& idx);
+[[nodiscard]] SEQUANT_MBPT_API Index make_spinfree(const Index& idx);
 
 /// @}
 
@@ -141,7 +142,7 @@ ExprPtr append_spin(const ExprPtr& expr,
 /// @brief Removes spin label from all indices in an expression
 /// @param expr an ExprPtr with spin indices
 /// @return expr an ExprPtr with spin labels removed
-ExprPtr remove_spin(const ExprPtr& expr);
+SEQUANT_MBPT_API ExprPtr remove_spin(const ExprPtr& expr);
 
 /// @brief Checks that columns conserve Ms (azimuthal spin qn); only
 /// filled columns (with 2 non-null indices) are considered
@@ -168,14 +169,16 @@ bool can_expand(const AbstractTensor& tensor);
 /// @param[in] skip_spinsymm is true, will not expand tensors whose indices
 ///            all have the same spin [default=false]
 /// @return an ExprPtr containing the sum of expanded terms, if antisymmetric
-ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
+SEQUANT_MBPT_API ExprPtr expand_antisymm(const Tensor& tensor,
+                                         bool skip_spinsymm = false);
 
 /// @brief expands all antisymmetric tensors in an expression
 /// @param expr an expression to expand
 /// @param skip_spinsymm is true, will not expand tensors whose indices all have
 /// same spin [default=false]
 /// @return an expression pointer with expanded tensors as a sum
-ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
+SEQUANT_MBPT_API ExprPtr expand_antisymm(const ExprPtr& expr,
+                                         bool skip_spinsymm = false);
 
 /// @brief Generates a vector of replacement maps for antisymmetrization (A)
 /// tensor
@@ -186,22 +189,22 @@ container::svector<container::map<Index, Index>> A_maps(const Tensor& A);
 /// @brief Expand a product containing the antisymmetrization (A) tensor
 /// @param product a Product that may or may not include the antisymmetrizer
 /// @return an ExprPtr containing sum of expanded terms if A is present
-ExprPtr expand_A_op(const ProductPtr& product);
+SEQUANT_MBPT_API ExprPtr expand_A_op(const ProductPtr& product);
 
 /// @brief Write expression in terms of Symmetrizer (S operator)
 /// @param product
 /// @return expression pointer with Symmstrizer operator
-ExprPtr symmetrize_expr(const ProductPtr& product);
+SEQUANT_MBPT_API ExprPtr symmetrize_expr(const ProductPtr& product);
 
 /// @brief Expand an expression containing the antisymmetrization (A) tensor
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if A is present
-ExprPtr symmetrize_expr(const ExprPtr& expr);
+SEQUANT_MBPT_API ExprPtr symmetrize_expr(const ExprPtr& expr);
 
 /// @brief Expand an expression containing the antisymmetrization (A) tensor
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if A is present
-ExprPtr expand_A_op(const ExprPtr& expr);
+SEQUANT_MBPT_API ExprPtr expand_A_op(const ExprPtr& expr);
 
 /// @brief Generates a vector of replacement maps for particle permutation
 /// operator
@@ -212,18 +215,18 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P);
 /// @brief Expand a product containing the particle permutation (P) tensor
 /// @param product a Product that may or may not contain P tensor
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_op(const ProductPtr& product);
+SEQUANT_MBPT_API ExprPtr expand_P_op(const ProductPtr& product);
 
 /// @brief Expand an expression containing the particle permutation (P) tensor
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_op(const ExprPtr& expr);
+SEQUANT_MBPT_API ExprPtr expand_P_op(const ExprPtr& expr);
 
 container::svector<container::map<Index, Index>> S_replacement_maps(
     const Tensor& S);
 
 /// @brief Expand S operator
-ExprPtr S_maps(const ExprPtr& expr);
+SEQUANT_MBPT_API ExprPtr S_maps(const ExprPtr& expr);
 
 // clang-format off
 /// @brief Traces out spin degrees of freedom from fermionic operator moments
@@ -242,19 +245,20 @@ ExprPtr S_maps(const ExprPtr& expr);
 /// @warning the "antisymmetrizer" tensor A is assumed to be at the front of each tensor
 /// network, hence must use "complete" canonicalization to produce the input expression.
 // clang-format on
-ExprPtr closed_shell_spintrace(
+SEQUANT_MBPT_API ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<SlottedIndex>>&
         ext_index_groups = {},
     bool full_expansion = false);
-ExprPtr closed_shell_spintrace(const ExprPtr& expr, EmptyInitializerList,
-                               bool full_expansion = false);
-ExprPtr closed_shell_spintrace(
+SEQUANT_MBPT_API ExprPtr closed_shell_spintrace(const ExprPtr& expr,
+                                                EmptyInitializerList,
+                                                bool full_expansion = false);
+SEQUANT_MBPT_API ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
     bool full_expansion = false);
 
-container::svector<ResultExpr> closed_shell_spintrace(
+SEQUANT_MBPT_API container::svector<ResultExpr> closed_shell_spintrace(
     const ResultExpr& expr, bool full_expansion = false);
 
 // clang-format off
@@ -302,26 +306,26 @@ struct ClosedShellCCSpintraceOptions {
 ///                other traits; the default is to use
 ///                the V2 method
 // clang-format on
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
-                                  ClosedShellCCSpintraceOptions options = {});
+SEQUANT_MBPT_API ExprPtr closed_shell_CC_spintrace(
+    ExprPtr const& expr, ClosedShellCCSpintraceOptions options = {});
 
 /// @sa closed_shell_CC_spintrace
-ExprPtr closed_shell_CC_spintrace_v1(
+SEQUANT_MBPT_API ExprPtr closed_shell_CC_spintrace_v1(
     ExprPtr const& expr,
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V1, .naive_spintrace = false});
 
 /// @sa closed_shell_CC_spintrace
-ExprPtr closed_shell_CC_spintrace_v2(
+SEQUANT_MBPT_API ExprPtr closed_shell_CC_spintrace_v2(
     ExprPtr const& expr,
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
 /// @brief Swap spin labels in a tensor
-Tensor swap_spin(const Tensor& t);
+SEQUANT_MBPT_API Tensor swap_spin(const Tensor& t);
 
 /// @brief Swap spin labels in an expression
-ExprPtr swap_spin(const ExprPtr& expr);
+SEQUANT_MBPT_API ExprPtr swap_spin(const ExprPtr& expr);
 
 /// @brief Merge operators into a single operator (designed for P operator)
 /// @warning Repetition of indices is allowed in a bra or a ket
@@ -357,15 +361,15 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A);
 /// @note this performs full expansion of the antisymmetrizer
 /// @sa open_shell_CC_spintrace
 // clang-format on
-std::vector<ExprPtr> open_shell_spintrace(
+SEQUANT_MBPT_API std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<SlottedIndex>>&
         ext_index_groups,
     const std::optional<std::size_t>& target_spin_case = std::nullopt);
-std::vector<ExprPtr> open_shell_spintrace(
+SEQUANT_MBPT_API std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr, EmptyInitializerList,
     const std::optional<std::size_t>& target_spin_case = std::nullopt);
-std::vector<ExprPtr> open_shell_spintrace(
+SEQUANT_MBPT_API std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
     const std::optional<std::size_t>& target_spin_case = std::nullopt);
@@ -387,7 +391,8 @@ std::vector<ExprPtr> open_shell_spintrace(
 /// front of each tensor network, hence must use "complete" canonicalization to produce
 /// the input expression.
 // clang-format on
-std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
+SEQUANT_MBPT_API std::vector<ExprPtr> open_shell_CC_spintrace(
+    const ExprPtr& expr);
 
 /// @brief Transforms an expression from spin orbital to spin-free (spatial)
 /// orbital form
@@ -404,19 +409,20 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// @return an expression with spin integrated/adapted
 /// @warning The result of this function is not simplified since this is a
 /// building block for more specialized spin-tracing functions
-ExprPtr spintrace(const ExprPtr& expr,
-                  const container::svector<container::svector<SlottedIndex>>&
-                      ext_index_groups = {},
-                  bool spinfree_index_spaces = true);
-ExprPtr spintrace(const ExprPtr& expr, EmptyInitializerList,
-                  bool spinfree_index_spaces = true);
-ExprPtr spintrace(
-    const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups,
-    bool spinfree_index_spaces = true);
+SEQUANT_MBPT_API ExprPtr
+spintrace(const ExprPtr& expr,
+          const container::svector<container::svector<SlottedIndex>>&
+              ext_index_groups = {},
+          bool spinfree_index_spaces = true);
+SEQUANT_MBPT_API ExprPtr spintrace(const ExprPtr& expr, EmptyInitializerList,
+                                   bool spinfree_index_spaces = true);
+SEQUANT_MBPT_API ExprPtr
+spintrace(const ExprPtr& expr,
+          const container::svector<container::svector<Index>>& ext_index_groups,
+          bool spinfree_index_spaces = true);
 
-container::svector<ResultExpr> spintrace(const ResultExpr& expr,
-                                         bool spinfree_index_spaces = true);
+SEQUANT_MBPT_API container::svector<ResultExpr> spintrace(
+    const ResultExpr& expr, bool spinfree_index_spaces = true);
 
 }  // namespace sequant::mbpt
 

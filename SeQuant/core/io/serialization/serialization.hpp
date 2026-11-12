@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_IO_SERIALIZATION_HPP
 #define SEQUANT_CORE_IO_SERIALIZATION_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/index.hpp>
@@ -15,7 +16,7 @@
 
 namespace sequant::io::serialization {
 
-struct SerializationError : Exception {
+struct SEQUANT_SYMB_API SerializationError : Exception {
   std::size_t offset;
   std::size_t length;
 
@@ -71,13 +72,13 @@ struct SerializationOptions {
   T from_string(std::wstring_view input,                              \
                 const DeserializationOptions &options = {}) = delete;
 
-#define SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprType)    \
-  template <>                                                            \
-  ExprType from_string<ExprType>(std::string_view input,                 \
-                                 const DeserializationOptions &options); \
-  template <>                                                            \
-  ExprType from_string<ExprType>(std::wstring_view input,                \
-                                 const DeserializationOptions &options);
+#define SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprType, API)   \
+  template <>                                                                \
+  API ExprType from_string<ExprType>(std::string_view input,                 \
+                                     const DeserializationOptions &options); \
+  template <>                                                                \
+  API ExprType from_string<ExprType>(std::wstring_view input,                \
+                                     const DeserializationOptions &options);
 
 /// \brief Construct expressions from string representations
 ///
@@ -86,25 +87,26 @@ struct SerializationOptions {
 /// \return SeQuant expression.
 SEQUANT_DECLARE_DESERIALIZATION_FUNC;
 
-SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
-SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr, SEQUANT_SYMB_API);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr,
+                                                    SEQUANT_SYMB_API);
 
-#define SEQUANT_DECLARE_SERIALIZATION_FUNC                          \
-  std::wstring to_string(const ResultExpr &expr,                    \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const ExprPtr &expr,                       \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const Expr &expr,                          \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const AbstractTensor &expr,                \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const Tensor &expr,                        \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const Index &index,                        \
-                         const SerializationOptions &options = {}); \
-  template <Statistics S>                                           \
-  std::wstring to_string(const NormalOperator<S> &nop,              \
-                         const SerializationOptions &options = {});
+#define SEQUANT_DECLARE_SERIALIZATION_FUNC(API)                         \
+  API std::wstring to_string(const ResultExpr &expr,                    \
+                             const SerializationOptions &options = {}); \
+  API std::wstring to_string(const ExprPtr &expr,                       \
+                             const SerializationOptions &options = {}); \
+  API std::wstring to_string(const Expr &expr,                          \
+                             const SerializationOptions &options = {}); \
+  API std::wstring to_string(const AbstractTensor &expr,                \
+                             const SerializationOptions &options = {}); \
+  API std::wstring to_string(const Tensor &expr,                        \
+                             const SerializationOptions &options = {}); \
+  API std::wstring to_string(const Index &index,                        \
+                             const SerializationOptions &options = {}); \
+  template <Statistics S>                                               \
+  API std::wstring to_string(const NormalOperator<S> &nop,              \
+                             const SerializationOptions &options = {});
 
 ///
 /// Get a serialized string from an expression.
@@ -120,16 +122,18 @@ SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
 /// \param expr Expression to serialize
 /// \param options Customization options
 /// \return wstring of the expression.
-SEQUANT_DECLARE_SERIALIZATION_FUNC
+SEQUANT_DECLARE_SERIALIZATION_FUNC(SEQUANT_SYMB_API)
 
 // Versioned variants
 namespace v1 {
 SEQUANT_DECLARE_DESERIALIZATION_FUNC;
 
-SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
-SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr,
+                                                    SEQUANT_SYMB_INTERNAL_API);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr,
+                                                    SEQUANT_SYMB_INTERNAL_API);
 
-SEQUANT_DECLARE_SERIALIZATION_FUNC
+SEQUANT_DECLARE_SERIALIZATION_FUNC(SEQUANT_SYMB_INTERNAL_API)
 
 /// \return whether \p label is a BaseKey of this grammar, i.e. a
 /// label that an index can be parsed with: nonempty, and made of letters,

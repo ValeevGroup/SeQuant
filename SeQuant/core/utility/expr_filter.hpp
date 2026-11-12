@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_UTILITY_EXPRFILTER_HPP
 #define SEQUANT_CORE_UTILITY_EXPRFILTER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 
@@ -12,9 +13,9 @@ namespace sequant {
 
 /// A predicate on expressions, composed of rules that are combined either
 /// conjunctively (default) or disjunctively
-class ExpressionFilter {
+class SEQUANT_SYMB_INTERNAL_API ExpressionFilter {
  public:
-  struct Rule {
+  struct SEQUANT_SYMB_INTERNAL_API Rule {
     bool negate = false;
 
     virtual ~Rule() = default;
@@ -42,7 +43,7 @@ class ExpressionFilter {
 
 /// Rule matching expressions that contain (at any depth) a subexpression
 /// matching the given matcher
-struct ContainsRule : ExpressionFilter::Rule {
+struct SEQUANT_SYMB_INTERNAL_API ContainsRule : ExpressionFilter::Rule {
   explicit ContainsRule(ExprMatcher matcher);
 
   bool matches(const Expr &expr) const override;
@@ -52,7 +53,7 @@ struct ContainsRule : ExpressionFilter::Rule {
 
 /// Rule matching expressions that contain (at any depth) a labeled
 /// subexpression whose label fully matches one of the given patterns
-struct LabelRule : ExpressionFilter::Rule {
+struct SEQUANT_SYMB_INTERNAL_API LabelRule : ExpressionFilter::Rule {
   explicit LabelRule(std::vector<std::wregex> patterns);
 
   bool matches(const Expr &expr) const override;
@@ -65,7 +66,8 @@ struct LabelRule : ExpressionFilter::Rule {
 /// that (recursively) contain a match, dropping the rest; for a Product,
 /// keeps every factor (dropping one would change what the product
 /// computes), pruning each factor in turn; leaves are returned unchanged.
-ExprPtr prune_to_matches(const Expr &expr, const ExpressionFilter &filter);
+SEQUANT_SYMB_INTERNAL_API ExprPtr
+prune_to_matches(const Expr &expr, const ExpressionFilter &filter);
 
 }  // namespace sequant
 

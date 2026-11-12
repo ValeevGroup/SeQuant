@@ -324,9 +324,10 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
 }
 
 #define SQ_IMPL1(CHAR)                                              \
-  template std::basic_string<CHAR> greek_characters_to_string_impl< \
-      CHAR, std::char_traits<CHAR>, std::allocator<CHAR>>(          \
-      std::basic_string_view<CHAR>);
+  template SEQUANT_SYMB_TEMPLATE_DEF_API std::basic_string<CHAR>    \
+      greek_characters_to_string_impl<CHAR, std::char_traits<CHAR>, \
+                                      std::allocator<CHAR>>(        \
+          std::basic_string_view<CHAR>);
 
 SQ_IMPL1(char);
 SQ_IMPL1(wchar_t);
@@ -334,10 +335,11 @@ SQ_IMPL1(char8_t);
 SQ_IMPL1(char16_t);
 SQ_IMPL1(char32_t);
 
-#define SQ_IMPL2(CHAR)                                       \
-  template std::basic_string<CHAR> diactrics_to_string_impl< \
-      CHAR, std::char_traits<CHAR>, std::allocator<CHAR>>(   \
-      std::basic_string_view<CHAR>);
+#define SQ_IMPL2(CHAR)                                           \
+  template SEQUANT_SYMB_TEMPLATE_DEF_API std::basic_string<CHAR> \
+      diactrics_to_string_impl<CHAR, std::char_traits<CHAR>,     \
+                               std::allocator<CHAR>>(            \
+          std::basic_string_view<CHAR>);
 
 SQ_IMPL2(char);
 SQ_IMPL2(wchar_t);

@@ -1,6 +1,8 @@
 #ifndef SEQUANT_CORE_EXPORT_COMPUTE_SELECTION_HPP
 #define SEQUANT_CORE_EXPORT_COMPUTE_SELECTION_HPP
 
+#include <SeQuant/api.hpp>
+
 namespace sequant {
 
 /// In a full binary tree, the ComputeSelection determines the left and/or right
@@ -15,12 +17,16 @@ enum class ComputeSelection {
   Both = 0b11,
 };
 
-ComputeSelection operator|(ComputeSelection lhs, ComputeSelection rhs);
-ComputeSelection operator&(ComputeSelection lhs, ComputeSelection rhs);
-ComputeSelection& operator|=(ComputeSelection& lhs, ComputeSelection rhs);
-ComputeSelection& operator&=(ComputeSelection& lhs, ComputeSelection rhs);
+SEQUANT_EXPORT_API ComputeSelection operator|(ComputeSelection lhs,
+                                              ComputeSelection rhs);
+SEQUANT_EXPORT_API ComputeSelection operator&(ComputeSelection lhs,
+                                              ComputeSelection rhs);
+SEQUANT_EXPORT_API ComputeSelection& operator|=(ComputeSelection& lhs,
+                                                ComputeSelection rhs);
+SEQUANT_EXPORT_API ComputeSelection& operator&=(ComputeSelection& lhs,
+                                                ComputeSelection rhs);
 
-ComputeSelection operator~(ComputeSelection selection);
+SEQUANT_EXPORT_API ComputeSelection operator~(ComputeSelection selection);
 
 }  // namespace sequant
 

@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_IRREPS_ANY_HPP
 #define SEQUANT_CORE_IRREPS_ANY_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
 #include <SeQuant/core/irreps/propagation.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -20,7 +21,7 @@ class Variable;
 
 /// Type-erased IRREP (of arbitrary IRREP type). A moved-from object may only
 /// be assigned to or destroyed.
-class AnyIrrep {
+class SEQUANT_SYMB_INTERNAL_API AnyIrrep {
  public:
   template <typename Irrep>
     requires(!std::same_as<std::remove_cvref_t<Irrep>, AnyIrrep>)
@@ -46,7 +47,8 @@ class AnyIrrep {
     return model ? &model->value : nullptr;
   }
 
-  friend bool operator==(const AnyIrrep &lhs, const AnyIrrep &rhs);
+  friend SEQUANT_SYMB_INTERNAL_API bool operator==(const AnyIrrep &lhs,
+                                                   const AnyIrrep &rhs);
 
  private:
   struct Concept {
@@ -79,7 +81,7 @@ class AnyIrrep {
 /// object represents an empty set whose IRREP type is not yet known. It
 /// adopts the IRREP type of the first set it is united with. Empty sets
 /// compare equal regardless of their IRREP type.
-class AnyIrrepSet {
+class SEQUANT_SYMB_INTERNAL_API AnyIrrepSet {
  public:
   /// Creates an empty set
   AnyIrrepSet();
@@ -120,7 +122,8 @@ class AnyIrrepSet {
     return model ? &model->set : nullptr;
   }
 
-  friend bool operator==(const AnyIrrepSet &lhs, const AnyIrrepSet &rhs);
+  friend SEQUANT_SYMB_INTERNAL_API bool operator==(const AnyIrrepSet &lhs,
+                                                   const AnyIrrepSet &rhs);
 
  private:
   struct Concept {
@@ -176,7 +179,7 @@ class AnyIrrepSet {
 /// Type-erased IrrepContext (for arbitrary IRREP algebras). It satisfies
 /// IrrepPropagationContext and can thus be used with irreps_of. A moved-from
 /// object may only be assigned to or destroyed.
-class AnyIrrepContext {
+class SEQUANT_SYMB_INTERNAL_API AnyIrrepContext {
  public:
   using set_type = AnyIrrepSet;
 

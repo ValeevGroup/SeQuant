@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_JULIA_TENSOR_OPERATIONS_HPP
 #define SEQUANT_CORE_EXPORT_JULIA_TENSOR_OPERATIONS_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
@@ -23,7 +24,8 @@
 namespace sequant {
 
 /// Context class for the JuliaTensorOperationsGenerator
-class JuliaTensorOperationsGeneratorContext : public ReorderingContext {
+class SEQUANT_EXPORT_API JuliaTensorOperationsGeneratorContext
+    : public ReorderingContext {
  public:
   using TagMap = std::map<IndexSpace, std::string>;
   using DimMap = std::map<IndexSpace, std::string>;

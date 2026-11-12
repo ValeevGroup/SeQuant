@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_UTILITY_MACROS_H
 #define SEQUANT_CORE_UTILITY_MACROS_H
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <cstdlib>
@@ -120,11 +121,11 @@ constexpr AssertBehavior assert_behavior() {
 #ifdef SEQUANT_ASSERT_ENABLED
 [[noreturn]]
 #endif
-void assert_failed(
-    const std::string &errmsg,
-    std::source_location location = std::source_location::current());
+SEQUANT_SYMB_INTERNAL_API void
+assert_failed(const std::string &errmsg,
+              std::source_location location = std::source_location::current());
 
-[[noreturn]] void throw_failure(
+[[noreturn]] SEQUANT_SYMB_INTERNAL_API void throw_failure(
     const std::string &errmsg,
     std::source_location location = std::source_location::current());
 
@@ -133,7 +134,7 @@ void assert_failed(
 /// report a precondition failure at a location other than the current one.
 /// @param errmsg the failure message
 /// @param location the location to report; by default, the caller's
-[[noreturn]] void enforce_failed(
+[[noreturn]] SEQUANT_SYMB_INTERNAL_API void enforce_failed(
     const std::string &errmsg,
     std::source_location location = std::source_location::current());
 }  // namespace sequant
@@ -171,7 +172,7 @@ void assert_failed(
   } while (0)
 
 namespace sequant {
-[[noreturn]] void abort_msg(
+[[noreturn]] SEQUANT_SYMB_INTERNAL_API void abort_msg(
     const std::string &errmsg,
     std::source_location location = std::source_location::current());
 }  // namespace sequant

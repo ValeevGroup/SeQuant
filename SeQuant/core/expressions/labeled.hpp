@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_LABELED_HPP
 #define SEQUANT_EXPRESSIONS_LABELED_HPP
 
+#include <SeQuant/api.hpp>
 #include <string_view>
 
 namespace sequant {
@@ -8,7 +9,7 @@ namespace sequant {
 /// An object with a string label that be used for defining a canonical order of
 /// expressions (defined at runtime). These labels are not in general
 /// object-unique, i.e. 2 objects that are not equal can return same label.
-class Labeled {
+class SEQUANT_SYMB_API Labeled {
  public:
   Labeled() = default;
   virtual ~Labeled() = default;
@@ -22,7 +23,7 @@ class Labeled {
 };
 
 /// A Labeled object that also allows changing the label
-class MutatableLabeled : public Labeled {
+class SEQUANT_SYMB_API MutatableLabeled : public Labeled {
  public:
   using Labeled::Labeled;
 

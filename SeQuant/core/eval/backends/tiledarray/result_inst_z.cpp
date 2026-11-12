@@ -8,7 +8,7 @@
 
 namespace sequant {
 
-template class ResultTensorTA<
+template class SEQUANT_EVAL_TA_TEMPLATE_DEF_API ResultTensorTA<
     TA::DistArray<TA::Tensor<std::complex<double>>, TA::SparsePolicy>>;
 
 }  // namespace sequant

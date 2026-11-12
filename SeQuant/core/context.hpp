@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_CONTEXT_HPP
 #define SEQUANT_CORE_CONTEXT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
@@ -80,7 +81,7 @@ namespace sequant {
 ///   of the Statistics::Arbitrary context, since a future version may consult
 ///   the statistics-specific context first
 // clang-format off
-class Context {
+class SEQUANT_SYMB_API Context {
  public:
   struct Defaults {
     constexpr static auto vacuum = Vacuum::Physical;
@@ -394,7 +395,7 @@ class Context {
     bool operator==(const CanonicalizationConfig&) const = default;
   };
 
-  friend bool operator==(const Context& ctx1, const Context& ctx2);
+  friend SEQUANT_SYMB_API bool operator==(const Context& ctx1, const Context& ctx2);
 
   /// replaces the canonicalization configuration by a copy owned by this
   /// @return the copy, for the caller to modify
@@ -450,14 +451,14 @@ class Context {
 /// \note the versions of the contexts are ignored, and equal contexts may
 /// have different ones: Context::version() compares index basis registries as
 /// objects, not by value
-bool operator==(const Context& ctx1, const Context& ctx2);
+SEQUANT_SYMB_API bool operator==(const Context& ctx1, const Context& ctx2);
 
 /// Context object inequality comparison
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are not equal
 /// \sa operator==(const Context&, const Context&)
-bool operator!=(const Context& ctx1, const Context& ctx2);
+SEQUANT_SYMB_API bool operator!=(const Context& ctx1, const Context& ctx2);
 
 /// \name manipulation of implicit context for SeQuant
 /// \warning set_default_context(), reset_default_context() and the reads of
@@ -482,7 +483,8 @@ bool default_context_manipulation_threadsafe();
 /// and the rest from the context for Statistics::Arbitrary; a cache of
 /// canonicalization results is therefore keyed on the versions for all
 /// Statistics, not only the one for Statistics::Arbitrary
-std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
+SEQUANT_SYMB_INTERNAL_API std::uint64_t current_context_version(
+    Statistics s = Statistics::Arbitrary);
 
 /// @return a value that changes whenever the canonicalization configuration
 /// of the effective context of any Statistics changes: the versions of the
@@ -490,7 +492,7 @@ std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
 /// Arbitrary contexts in effect on the calling thread (see
 /// current_context_version()) combined with hash::combine. The canonical mark
 /// (see Expr::is_canonical()) is keyed on it.
-std::uint64_t current_contexts_version();
+SEQUANT_SYMB_INTERNAL_API std::uint64_t current_contexts_version();
 
 /// @brief access default Context for the given Statistics
 /// @param s Statistics
@@ -500,7 +502,7 @@ std::uint64_t current_contexts_version();
 /// reset_default_context() replace, on any thread; to hold the context, or
 /// anything obtained by reference from it, beyond a brief read use
 /// get_default_context_snapshot()
-const Context& get_default_context(Statistics s = Statistics::Arbitrary);
+SEQUANT_SYMB_API const Context& get_default_context(Statistics s = Statistics::Arbitrary);
 
 /// @brief copy of the default Context for the given Statistics
 /// @param s Statistics
@@ -510,7 +512,7 @@ const Context& get_default_context(Statistics s = Statistics::Arbitrary);
 /// is cheap, and remains valid when the default context is replaced
 /// @note takes the lock that guards the process-wide context only if that
 /// changed since the previous snapshot on this thread
-Context get_default_context_snapshot(Statistics s = Statistics::Arbitrary);
+SEQUANT_SYMB_API Context get_default_context_snapshot(Statistics s = Statistics::Arbitrary);
 
 /// @brief the index basis registry of the default Context for the given
 /// Statistics
@@ -521,7 +523,7 @@ Context get_default_context_snapshot(Statistics s = Statistics::Arbitrary);
 /// published process-wide contexts, so the lock that guards them is taken only
 /// when they changed since the previous read on this thread; costs one
 /// shared_ptr copy and no Context copy. Null if that context has no registry
-std::shared_ptr<const IndexBasisRegistry> get_default_index_basis_registry(
+SEQUANT_SYMB_API std::shared_ptr<const IndexBasisRegistry> get_default_index_basis_registry(
     Statistics s = Statistics::Arbitrary);
 
 /// @deprecated use get_default_index_basis_registry()
@@ -535,26 +537,26 @@ get_default_index_space_registry(Statistics s = Statistics::Arbitrary) {
 /// get_default_index_basis_registry() (see IndexBasisRegistry::resolve()),
 /// which carries a named basis instance's name, extent, metric and field;
 /// @p basis if there is no such registry
-IndexBasis default_registry_resolved(const IndexBasis& basis);
+SEQUANT_SYMB_INTERNAL_API IndexBasis default_registry_resolved(const IndexBasis& basis);
 
 /// @brief sets default Context for the given Statistics
 /// @param ctx Context object
 /// @param s Statistics
-void set_default_context(Context ctx,
+SEQUANT_SYMB_API void set_default_context(Context ctx,
                          Statistics s = Statistics::Arbitrary);
 
 /// @brief sets default Context for the given Statistics
 /// @param ctx_options Context named-parameter constructor arguments
 /// @param s Statistics
-void set_default_context(Context::Options ctx_options,
+SEQUANT_SYMB_API void set_default_context(Context::Options ctx_options,
                          Statistics s = Statistics::Arbitrary);
 
 /// @brief sets default Context for several given Statistics
 /// @param ctxs a Statistics->Context map
-void set_default_context(const container::map<Statistics, Context>& ctxs);
+SEQUANT_SYMB_API void set_default_context(const container::map<Statistics, Context>& ctxs);
 
 /// @brief resets default Contexts for all statistics to their initial values
-void reset_default_context();
+SEQUANT_SYMB_API void reset_default_context();
 
 /// @brief changes default contexts
 /// @param ctx Context objects for one or more statistics
@@ -572,21 +574,21 @@ void reset_default_context();
 /// workers of the parallel primitives (sequant::for_each, etc.) it launches;
 /// set_default_context() is not seen by this thread until the scope ends
 /// @note scopes must end in the reverse order of their creation
-[[nodiscard]] detail::ImplicitContextResetter<
+[[nodiscard]] SEQUANT_SYMB_API detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(container::map<Statistics, Context> ctx);
 
 /// @brief changes default context for arbitrary statistics
 /// @note equivalent to `set_scoped_default_context({{Statistics::Arbitrary,
 /// ctx}})`
-[[nodiscard]] detail::ImplicitContextResetter<
+[[nodiscard]] SEQUANT_SYMB_API detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(Context ctx);
 
 /// @brief changes default context for arbitrary statistics
 /// @note equivalent to `set_scoped_default_context({{Statistics::Arbitrary,
 /// Context{ctx_options}}})`
-[[nodiscard]] detail::ImplicitContextResetter<
+[[nodiscard]] SEQUANT_SYMB_API detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(Context::Options ctx_options);
 
@@ -595,7 +597,7 @@ set_scoped_default_context(Context::Options ctx_options);
 /// @return a move-only ContextResetter object whose destruction will reset the
 /// default contexts to the previous values
 /// @note see the notes of set_scoped_default_context()
-[[nodiscard]] detail::ImplicitContextResetter<
+[[nodiscard]] SEQUANT_SYMB_INTERNAL_API detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_modified_default_context(
     const std::function<void(Context&)>& modify);
@@ -623,18 +625,18 @@ pin_default_contexts();
 /// @brief returns the particle space defined in the current context
 /// @param qn QuantumNumbers of the space
 /// @return IndexSpace object representing the particle space
-[[nodiscard]] IndexSpace get_particle_space(
+[[nodiscard]] SEQUANT_SYMB_INTERNAL_API IndexSpace get_particle_space(
     const IndexSpace::QuantumNumbers& qn);
 
 /// @brief returns the hole space defined in the current context
 /// @param qn QuantumNumbers of the space
 /// @return IndexSpace object representing the hole space
-[[nodiscard]] IndexSpace get_hole_space(const IndexSpace::QuantumNumbers& qn);
+[[nodiscard]] SEQUANT_SYMB_INTERNAL_API IndexSpace get_hole_space(const IndexSpace::QuantumNumbers& qn);
 
 /// @brief returns the complete space defined in the current context
 /// @param qn QuantumNumbers of the space
 /// @return IndexSpace object representing the complete space
-[[nodiscard]] IndexSpace get_complete_space(
+[[nodiscard]] SEQUANT_SYMB_INTERNAL_API IndexSpace get_complete_space(
     const IndexSpace::QuantumNumbers& qn);
 
 ///@}

@@ -40,7 +40,7 @@ SEQUANT_SYMB_INTERNAL_API int& nthreads_accessor();
 /// thrown by the parallel primitives (sequant::parallel_do, sequant::for_each,
 /// sequant::transform_reduce) when more than one invocation of the work
 /// function throws; a single exception is rethrown as is
-class ParallelExceptions : public Exception {
+class SEQUANT_SYMB_API ParallelExceptions : public Exception {
  public:
   /// the ordinal of a work item (the thread id for parallel_do) and the
   /// exception its invocation threw
@@ -327,7 +327,7 @@ T transform_reduce(SizedRange&& rng, T init, const BinaryReductionOp& reduce,
 #endif
 }
 
-void set_locale();
+SEQUANT_SYMB_API void set_locale();
 
 }  // namespace sequant
 

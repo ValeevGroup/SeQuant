@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_EXPR_HPP
 #define SEQUANT_EXPRESSIONS_EXPR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
@@ -141,7 +142,7 @@ constexpr std::string type_name_of() {
 
 /// State shared by a (recursive) lexicographic comparison of expressions
 /// @sa Expr::lexicographic_compare
-struct LexicographicCompareOptions {
+struct SEQUANT_SYMB_INTERNAL_API LexicographicCompareOptions {
   /// tensor labels that precede all others, in this order
   /// @sa Context::cardinal_tensor_labels
   container::vector<std::wstring> cardinal_tensor_labels;
@@ -195,7 +196,7 @@ struct LexicographicCompareOptions {
 ///    for(const auto& e: c.expr()) {  // iterates over subexpressions
 ///    }
 /// @endcode
-class Expr : public std::enable_shared_from_this<Expr> {
+class SEQUANT_SYMB_API Expr : public std::enable_shared_from_this<Expr> {
  public:
   using hash_type = std::size_t;
   using type_id_type = std::uint64_t;
@@ -743,7 +744,7 @@ inline bool operator==(const Expr &a, const Expr &b) {
 }
 
 /// binary predicate that returns true is 2 expressions differ by a factor
-struct proportional_to {
+struct SEQUANT_SYMB_INTERNAL_API proportional_to {
   /// @param[in] expr1
   /// @param[in] expr2
   /// @return true if @p expr1 is proportional to @p expr2

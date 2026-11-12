@@ -8,6 +8,8 @@
 #ifndef SEQUANT_EVAL_SCHEDULE_DOCUMENT_HPP
 #define SEQUANT_EVAL_SCHEDULE_DOCUMENT_HPP
 
+#include <SeQuant/api.hpp>
+
 #include <cstddef>
 #include <iosfwd>
 #include <map>
@@ -28,7 +30,7 @@ namespace sequant::eval::schedule {
 /// the spelling of \p index in every axis label and mode list of a schedule
 /// document: the V1 serializer's (proto indices joined by ","), as it appears
 /// inside the term's factor strings
-std::string index_label(Index const& index);
+SEQUANT_EVAL_INTERNAL_API std::string index_label(Index const& index);
 
 /// value of the `format` key of every schedule document
 inline constexpr char const* kFormat = "sequant.schedule/1";
@@ -75,8 +77,8 @@ struct TreeShape {
 /// why \p tree is not a tree over \p nfactors factors (a node lacking a
 /// child, a leaf out of range or repeated, a factor unused), or nullopt when
 /// it is
-std::optional<std::string> leaf_permutation_error(TreeShape const& tree,
-                                                  std::size_t nfactors);
+SEQUANT_EVAL_INTERNAL_API std::optional<std::string> leaf_permutation_error(
+    TreeShape const& tree, std::size_t nfactors);
 
 struct TermRecord {
   std::string key = {};
@@ -240,24 +242,25 @@ struct Document {
 };
 
 /// pretty (2-space indent), keys in struct order
-std::string to_json(Document const&);
-void write(Document const&, std::ostream&);
+SEQUANT_EVAL_INTERNAL_API std::string to_json(Document const&);
+SEQUANT_EVAL_INTERNAL_API void write(Document const&, std::ostream&);
 
 /// \throws sequant::Exception on malformed or invalid documents
-Document from_json(std::string_view);
-Document read(std::istream&);
+SEQUANT_EVAL_INTERNAL_API Document from_json(std::string_view);
+SEQUANT_EVAL_INTERNAL_API Document read(std::istream&);
 
 /// a `run` section on its own (a JSON object with the RunRecord keys), as a
 /// run file shipped separately from its document holds it
 /// \throws sequant::Exception on malformed or invalid input
-RunRecord run_from_json(std::string_view);
-std::string to_json(RunRecord const&);
+SEQUANT_EVAL_INTERNAL_API RunRecord run_from_json(std::string_view);
+SEQUANT_EVAL_INTERNAL_API std::string to_json(RunRecord const&);
 
 /// \p json with every '<' and every U+2028/U+2029 line terminator replaced by
 /// its \uXXXX escape, so that the text can be inlined into an HTML <script>
 /// element: a "</script>" inside a JSON string would otherwise end the
 /// element. Denotes the same JSON value as \p json.
-std::string escape_for_html_script(std::string_view json);
+SEQUANT_EVAL_INTERNAL_API std::string escape_for_html_script(
+    std::string_view json);
 
 struct Difference {
   std::string path, left, right;
@@ -266,12 +269,13 @@ struct Difference {
 /// structural comparison; ignores `run`, `producer_*` and, on DAG values,
 /// `hash`, `key`, `first_use`, `last_use`, `modeled_footprint`,
 /// `modeled_size`
-std::vector<Difference> compare(Document const& a, Document const& b);
+SEQUANT_EVAL_INTERNAL_API std::vector<Difference> compare(Document const& a,
+                                                          Document const& b);
 
 /// "roots=<n> terms=<n> values=<n> blocks=<n> depth=<n>"; the last three are
 /// "-" when the document has no `dag` section. depth = the deepest nesting of
 /// the block tree (number of ancestors of a block), not BlockRecord::depth
-std::string summary_line(Document const&);
+SEQUANT_EVAL_INTERNAL_API std::string summary_line(Document const&);
 
 /// The size audit: one row per dag value, ranked by its realized slab
 /// (RunRecord::leaf_bytes for a leaf, else RunRecord::footprint), with the
@@ -288,7 +292,7 @@ std::string summary_line(Document const&);
 /// never produced print 0 realized. Byte columns print as "<n> B" below 1e6
 /// and in MB/GB above; the ratio with two decimals.
 /// \throws Exception when the document has no dag or run section
-std::string size_audit_table(Document const& doc);
+SEQUANT_EVAL_INTERNAL_API std::string size_audit_table(Document const& doc);
 
 }  // namespace sequant::eval::schedule
 

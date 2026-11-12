@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_TENSOR_POWER_HPP
 #define SEQUANT_EXPRESSIONS_TENSOR_POWER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
@@ -19,7 +20,7 @@ namespace sequant {
 ///
 /// The power is taken element by element, hence the indices, and so the
 /// bra/ket/aux structure, are those of the base.
-class TensorPower : public Expr, public AbstractTensor {
+class SEQUANT_SYMB_API TensorPower : public Expr, public AbstractTensor {
  public:
   using exponent_type = rational;
 
@@ -141,7 +142,7 @@ class TensorPower : public Expr, public AbstractTensor {
 ///            TensorPower
 /// @param[in] exponent any rational
 /// @throw Exception if @p base is not supported or the composition is inexact
-ExprPtr pow(ExprPtr base, rational exponent);
+SEQUANT_SYMB_API ExprPtr pow(ExprPtr base, rational exponent);
 
 }  // namespace sequant
 

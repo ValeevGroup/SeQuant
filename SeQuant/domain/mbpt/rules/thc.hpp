@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_RULES_THC_HPP
 #define SEQUANT_DOMAIN_MBPT_RULES_THC_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/space.hpp>
 
@@ -28,11 +29,9 @@ namespace sequant::mbpt {
 /// \param outer_factor_label The label of the outer factor tensors (\f$ B \f$ in the example above).
 /// \param core_tensor_label The label of the core tensor (\f$ C \f$ in the example above).
 // clang-format on
-[[nodiscard]] ExprPtr tensor_hypercontract(ExprPtr const& expr,
-                                           IndexSpace aux_space,
-                                           std::wstring_view tensor_label,
-                                           std::wstring_view outer_factor_label,
-                                           std::wstring_view core_tensor_label);
+[[nodiscard]] SEQUANT_MBPT_API ExprPtr tensor_hypercontract(
+    ExprPtr const& expr, IndexSpace aux_space, std::wstring_view tensor_label,
+    std::wstring_view outer_factor_label, std::wstring_view core_tensor_label);
 
 }  // namespace sequant::mbpt
 

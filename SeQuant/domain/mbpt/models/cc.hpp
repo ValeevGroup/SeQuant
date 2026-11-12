@@ -1,6 +1,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 #define SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -20,7 +21,7 @@ class ExprPtr;
 namespace sequant::mbpt {
 
 /// CC is a derivation engine for the coupled-cluster method
-class CC {
+class SEQUANT_MBPT_API CC {
  public:
   enum class Ansatz {
     /// traditional ansatz

@@ -5,6 +5,7 @@
 #ifndef SEQUANT_TENSOR_NETWORK_V3_H
 #define SEQUANT_TENSOR_NETWORK_V3_H
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -254,16 +255,18 @@ class TensorNetworkV3 {
     init_edges();
   }
 
-  TensorNetworkV3(TensorNetworkV3 &&) noexcept;
-  TensorNetworkV3 &operator=(TensorNetworkV3 &&) noexcept;
+  SEQUANT_SYMB_INTERNAL_API TensorNetworkV3(TensorNetworkV3 &&) noexcept;
+  SEQUANT_SYMB_INTERNAL_API TensorNetworkV3 &operator=(
+      TensorNetworkV3 &&) noexcept;
 
   /// copy constructor
   /// @warning does not copy edges
-  TensorNetworkV3(const TensorNetworkV3 &other);
+  SEQUANT_SYMB_INTERNAL_API TensorNetworkV3(const TensorNetworkV3 &other);
 
   /// copy assignment
   /// @warning does not copy edges
-  TensorNetworkV3 &operator=(const TensorNetworkV3 &other) noexcept;
+  SEQUANT_SYMB_INTERNAL_API TensorNetworkV3 &operator=(
+      const TensorNetworkV3 &other) noexcept;
 
   /// @return const reference to the sequence of tensors
   /// @note after invoking TensorNetworkV3::canonicalize() the order of
@@ -284,7 +287,7 @@ class TensorNetworkV3 {
   /// nullptr; Constant 0 if topological canonicalization finds the network
   /// to be zero by symmetry (see Graph::automorphism_phase()), in which case
   /// the tensors are left as they were
-  ExprPtr canonicalize(
+  SEQUANT_SYMB_INTERNAL_API ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const CanonicalizeOptions &options =
           CanonicalizeOptions::default_options());
@@ -313,7 +316,7 @@ class TensorNetworkV3 {
     /// to detect equivalence
     std::shared_ptr<bliss::Graph> graph;
 
-    [[nodiscard]] size_t hash_value() const;
+    [[nodiscard]] SEQUANT_SYMB_INTERNAL_API size_t hash_value() const;
 
     [[nodiscard]] inline auto get_index_view() const {
       return named_indices_canonical  //
@@ -350,7 +353,7 @@ class TensorNetworkV3 {
   /// different loops are not interchangeable. A null (default) or empty map
   /// leaves the canonicalization at the space-only named coloring.
   /// @return the computed canonicalization metadata
-  SlotCanonicalizationMetadata canonicalize_slots(
+  SEQUANT_SYMB_INTERNAL_API SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
@@ -477,13 +480,13 @@ class TensorNetworkV3 {
   ///     - for tensors with bra<->ket symmetry matching bra and ket slot
   ///     vertices have identical colors.
   // clang-format on
-  Graph create_graph(
+  SEQUANT_SYMB_INTERNAL_API Graph create_graph(
       const CreateGraphOptions &options = make_default_graph_options()) const;
   /// @param graph a graph produced by create_graph()
   /// @param aut_hook if nonempty, called with each automorphism generator of
   /// @p graph found by bliss, as `(n, aut)`
   /// @return the canonical labeling of @p graph
-  static const unsigned int *canonicalize_graph(
+  SEQUANT_SYMB_INTERNAL_API static const unsigned int *canonicalize_graph(
       const Graph &graph,
       const std::function<void(unsigned int, const unsigned int *)> &aut_hook =
           {});
@@ -510,7 +513,7 @@ class TensorNetworkV3 {
   NamedIndexSet pure_proto_indices_;
 
   /// initializes edges_, ext_indices_, and pure_proto_indices_
-  void init_edges();
+  SEQUANT_SYMB_INTERNAL_API void init_edges();
 
   /// Canonicalizes the network graph representation using colored graph
   /// canonicalization

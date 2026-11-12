@@ -216,7 +216,7 @@ struct Annot {
 ///        btas::Tensor, etc.) or a scalar (eg. double, std::complex
 ///        etc.).
 ///
-class Result {
+class SEQUANT_EVAL_API Result {
  public:
   using id_t = size_t;
 

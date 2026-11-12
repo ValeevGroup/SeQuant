@@ -1,6 +1,7 @@
 #ifndef SEQUANT_ASY_COST_HPP
 #define SEQUANT_ASY_COST_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -27,7 +28,7 @@ namespace sequant {
 ///   - `AsyCost({{I, 2}, {A, 4}}, rational{1, 2})` halves the numeric value
 ///     above when extents are substituted.
 ///
-class AsyCost {
+class SEQUANT_SYMB_INTERNAL_API AsyCost {
  public:
   using ExponentMap = container::map<IndexBasis, std::size_t>;
   using ExtentMap = container::map<IndexBasis, std::size_t>;
@@ -167,38 +168,54 @@ class AsyCost {
 
   AsyCost &operator-=(AsyCost const &);
 
-  friend AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs);
+  friend SEQUANT_SYMB_INTERNAL_API AsyCost operator+(AsyCost const &lhs,
+                                                     AsyCost const &rhs);
 
-  friend AsyCost operator*(AsyCost const &lhs, rational scale);
+  friend SEQUANT_SYMB_INTERNAL_API AsyCost operator*(AsyCost const &lhs,
+                                                     rational scale);
 
-  friend AsyCost operator*(rational scale, AsyCost const &lhs);
+  friend SEQUANT_SYMB_INTERNAL_API AsyCost operator*(rational scale,
+                                                     AsyCost const &lhs);
 
-  friend bool operator<(AsyCost const &lhs, AsyCost const &rhs);
+  friend SEQUANT_SYMB_INTERNAL_API bool operator<(AsyCost const &lhs,
+                                                  AsyCost const &rhs);
 
-  friend bool operator==(AsyCost const &lhs, AsyCost const &rhs);
+  friend SEQUANT_SYMB_INTERNAL_API bool operator==(AsyCost const &lhs,
+                                                   AsyCost const &rhs);
 
-  friend bool operator<=(AsyCost const &lhs, AsyCost const &rhs);
+  friend SEQUANT_SYMB_INTERNAL_API bool operator<=(AsyCost const &lhs,
+                                                   AsyCost const &rhs);
 
-  friend bool operator>=(AsyCost const &lhs, AsyCost const &rhs);
+  friend SEQUANT_SYMB_INTERNAL_API bool operator>=(AsyCost const &lhs,
+                                                   AsyCost const &rhs);
 };
 
-AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs);
+SEQUANT_SYMB_INTERNAL_API AsyCost operator+(AsyCost const &lhs,
+                                            AsyCost const &rhs);
 
-AsyCost operator-(AsyCost const &lhs, AsyCost const &rhs);
+SEQUANT_SYMB_INTERNAL_API AsyCost operator-(AsyCost const &lhs,
+                                            AsyCost const &rhs);
 
-AsyCost operator*(AsyCost const &cost, rational scale);
+SEQUANT_SYMB_INTERNAL_API AsyCost operator*(AsyCost const &cost,
+                                            rational scale);
 
-AsyCost operator*(rational scale, AsyCost const &cost);
+SEQUANT_SYMB_INTERNAL_API AsyCost operator*(rational scale,
+                                            AsyCost const &cost);
 
-AsyCost operator/(AsyCost const &cost, rational scale);
+SEQUANT_SYMB_INTERNAL_API AsyCost operator/(AsyCost const &cost,
+                                            rational scale);
 
-bool operator==(AsyCost const &lhs, AsyCost const &rhs);
+SEQUANT_SYMB_INTERNAL_API bool operator==(AsyCost const &lhs,
+                                          AsyCost const &rhs);
 
-bool operator!=(AsyCost const &lhs, AsyCost const &rhs);
+SEQUANT_SYMB_INTERNAL_API bool operator!=(AsyCost const &lhs,
+                                          AsyCost const &rhs);
 
-bool operator<(AsyCost const &lhs, AsyCost const &rhs);
+SEQUANT_SYMB_INTERNAL_API bool operator<(AsyCost const &lhs,
+                                         AsyCost const &rhs);
 
-bool operator>(AsyCost const &lhs, AsyCost const &rhs);
+SEQUANT_SYMB_INTERNAL_API bool operator>(AsyCost const &lhs,
+                                         AsyCost const &rhs);
 
 }  // namespace sequant
 

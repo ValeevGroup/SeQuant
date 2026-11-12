@@ -839,8 +839,8 @@ template <typename ArrayT>
 /// to \p os .
 /// \param world the world object to use for logging
 /// \param label string to prepend to the profile
-void log_ta_tensor_host_memory_use(madness::World& world,
-                                   std::string_view label = "");
+SEQUANT_EVAL_TA_INTERNAL_API void log_ta_tensor_host_memory_use(
+    madness::World& world, std::string_view label = "");
 
 inline void log_ta_tensor_host_memory_use() {
 #if defined(SEQUANT_EVAL_TRACE)
@@ -2041,14 +2041,15 @@ class ResultTensorOfTensorTA final : public Result {
 // with_expr() hands out, which costs GBs of compiler memory per class. The
 // nested results are instantiated over the arena-pinned inner tile
 // (TA::ArenaTensor), the inner tile of a CSV/PNO array.
-extern template class ResultTensorTA<
-    TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>>;
-extern template class ResultTensorTA<
+extern template class SEQUANT_EVAL_TA_TEMPLATE_DECL_API
+    ResultTensorTA<TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>>;
+extern template class SEQUANT_EVAL_TA_TEMPLATE_DECL_API ResultTensorTA<
     TA::DistArray<TA::Tensor<std::complex<double>>, TA::SparsePolicy>>;
-extern template class ResultTensorOfTensorTA<
+extern template class SEQUANT_EVAL_TA_TEMPLATE_DECL_API ResultTensorOfTensorTA<
     TA::DistArray<TA::Tensor<TA::ArenaTensor<double>>, TA::SparsePolicy>>;
-extern template class ResultTensorOfTensorTA<TA::DistArray<
-    TA::Tensor<TA::ArenaTensor<std::complex<double>>>, TA::SparsePolicy>>;
+extern template class SEQUANT_EVAL_TA_TEMPLATE_DECL_API
+    ResultTensorOfTensorTA<TA::DistArray<
+        TA::Tensor<TA::ArenaTensor<std::complex<double>>>, TA::SparsePolicy>>;
 
 /// \brief Restrict a TA::DistArray to a contiguous tile range of one mode.
 ///

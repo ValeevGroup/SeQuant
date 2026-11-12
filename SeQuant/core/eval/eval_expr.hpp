@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_EVAL_EXPR_HPP
 #define SEQUANT_EVAL_EVAL_EXPR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
@@ -80,7 +81,7 @@ enum class EvalOp {
 /// \return True if \p op is unary, i.e. a node of this type evaluates its left
 ///         child only and its right child is a sentinel leaf.
 ///
-[[nodiscard]] bool is_unary(EvalOp op) noexcept;
+[[nodiscard]] SEQUANT_EVAL_INTERNAL_API bool is_unary(EvalOp op) noexcept;
 
 ///
 /// \brief The ResultType enum.
@@ -99,7 +100,7 @@ struct EvalOpSetter;
 /// \details The EvalExpr class itself is not a proper node of the binary tree.
 /// It is rather a data that a node should hold.
 ///
-class EvalExpr {
+class SEQUANT_EVAL_API EvalExpr {
  public:
   friend struct EvalOpSetter;
   using index_vector = Index::index_vector;
@@ -650,10 +651,9 @@ namespace impl {
 ///        tree of a single top-level invocation; do not reset per subtree.
 /// \param inline_ctx the definitions to inline into the leaves of the
 ///        expression; null for none
-FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
-                                  const BinarizationOptions& opts,
-                                  std::size_t& node_counter,
-                                  detail::InlineContext* inline_ctx = nullptr);
+SEQUANT_EVAL_INTERNAL_API FullBinaryNode<EvalExpr> binarize(
+    ExprPtr const&, IndexSet const& uncontract, const BinarizationOptions& opts,
+    std::size_t& node_counter, detail::InlineContext* inline_ctx = nullptr);
 
 /// The head-aware binarization behind binarize(ResultExpr const&, ...):
 /// binarizes the rhs with the head's indices uncontracted, wrapping each
@@ -661,17 +661,17 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
 /// the root with the head.
 /// \param node_counter see binarize(ExprPtr const&, ...) above
 /// \param inline_ctx see binarize(ExprPtr const&, ...) above
-FullBinaryNode<EvalExpr> binarize(ResultExpr const& res,
-                                  const BinarizationOptions& opts,
-                                  std::size_t& node_counter,
-                                  detail::InlineContext* inline_ctx = nullptr);
+SEQUANT_EVAL_INTERNAL_API FullBinaryNode<EvalExpr> binarize(
+    ResultExpr const& res, const BinarizationOptions& opts,
+    std::size_t& node_counter, detail::InlineContext* inline_ctx = nullptr);
 
 /// The non-template part of
 /// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
 /// \param[out] consumed see InlinedSystem::consumed
-container::svector<FullBinaryNode<EvalExpr>> binarize_system(
-    std::span<const ResultExpr> system, const BinarizationOptions& opts,
-    container::svector<bool>& consumed);
+SEQUANT_EVAL_INTERNAL_API container::svector<FullBinaryNode<EvalExpr>>
+binarize_system(std::span<const ResultExpr> system,
+                const BinarizationOptions& opts,
+                container::svector<bool>& consumed);
 }  // namespace impl
 
 ///

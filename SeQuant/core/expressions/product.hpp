@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_PRODUCT_HPP
 #define SEQUANT_EXPRESSIONS_PRODUCT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
@@ -25,7 +26,7 @@ namespace sequant {
 /// by specifying the flatten tag). The commutativity of factors is checked at
 /// runtime for each factor (see CProduct and NCProduct for statically
 /// commutative and noncommutative Product, respectively)
-class Product : public Expr {
+class SEQUANT_SYMB_API Product : public Expr {
  public:
   enum class Flatten { Once, Recursively, Yes = Recursively, No };
 
@@ -372,7 +373,7 @@ class Product : public Expr {
       const Expr &that, const LexicographicCompareOptions &opts) const override;
 };  // class Product
 
-class CProduct : public Product {
+class SEQUANT_SYMB_API CProduct : public Product {
  public:
   using Product::Product;
   CProduct(const Product &other);
@@ -403,7 +404,7 @@ class CProduct : public Product {
   bool static_commutativity() const override;
 };  // class CProduct
 
-class NCProduct : public Product {
+class SEQUANT_SYMB_API NCProduct : public Product {
  public:
   using Product::Product;
   NCProduct(const Product &other);

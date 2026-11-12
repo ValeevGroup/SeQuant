@@ -5,6 +5,7 @@
 #ifndef SEQUANT_TAG_HPP
 #define SEQUANT_TAG_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -13,7 +14,7 @@
 
 namespace sequant {
 
-class bad_any_comparable_cast : public Exception {
+class SEQUANT_SYMB_API bad_any_comparable_cast : public Exception {
  public:
   bad_any_comparable_cast() : Exception("Bad any_comparable_cast") {}
 };
