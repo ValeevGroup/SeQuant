@@ -23,6 +23,10 @@ class ExpressionFilter {
   };
 
   ExpressionFilter() = default;
+  ExpressionFilter(const ExpressionFilter &) = delete;
+  ExpressionFilter(ExpressionFilter &&) = default;
+  ExpressionFilter &operator=(const ExpressionFilter &) = delete;
+  ExpressionFilter &operator=(ExpressionFilter &&) = default;
 
   /// @returns Whether the given expression satisfies this filter. Without any
   /// rules, this is the case if and only if all rules are required.
