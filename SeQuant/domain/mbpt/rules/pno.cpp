@@ -141,6 +141,13 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
              idx.basis().basis_instance() == target_instance;
     };
     if (on_target(x)) continue;
+    // a leg on a cluster that shares no occupied index with the own pair
+    // stays: its overlap would join two unrelated clusters
+    if (opts.connected_legs_only && own_pair && !x.proto_indices().empty() &&
+        !ranges::any_of(x.proto_indices(), [&pair](Index const& p) {
+          return ranges::contains(pair, p);
+        }))
+      continue;
     // sibling summands share a leg's replacement; two integrals of one
     // product do not (x' s{x';x} ... s{x;x''} x''), nor do two targets
     auto it = scope.moved.find(x);

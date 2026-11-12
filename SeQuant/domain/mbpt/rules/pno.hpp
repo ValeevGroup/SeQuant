@@ -99,6 +99,12 @@ struct ProjectionOptions {
   /// `Amplitude` the leg takes this basis as given; under `Integral` it
   /// takes this basis's space and the instance of its cell.
   std::optional<IndexBasis> leg_basis = {};
+  /// under `OwnPair`, move a leg only if the cluster it sits on (its proto
+  /// indices) shares an occupied index with the integral's own pair. A leg on
+  /// an unrelated cluster stays where it is: moving it costs an overlap
+  /// between two clusters with no common index, one block for every pair of
+  /// pairs, where the unmoved leg needs none. Off by default.
+  bool connected_legs_only = false;
 };
 
 /// In each R2 term (residual rank read off the `Ŝ`/`Â` symmetrizer; other

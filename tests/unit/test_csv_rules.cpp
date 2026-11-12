@@ -742,6 +742,76 @@ TEST_CASE("csv-pno-projection-nested-sum-then-sibling", "[mbpt][csv]") {
 // A Kramers-restricted trace expands or strips the residual's Â, so its
 // blocks reach the projection without a symmetrizer: the externals are then
 // the block's own and the rank the number of unoccupied ones.
+TEST_CASE("csv-pno-projection-connected-legs", "[mbpt][csv]") {
+  using namespace sequant;
+  using namespace sequant::tests::csv;
+  using namespace sequant::tests::csv_rules;
+  using enum mbpt::ProjectionTerms;
+
+  ScopedCsvContext scoped;
+  const auto amplitude = [](bool connected_legs_only) {
+    return ProjectionOptions{.terms = ExchangeNonlinear,
+                             .basis = ProjectionBasis::Amplitude,
+                             .connected_legs_only = connected_legs_only};
+  };
+  const std::wstring S2 = L"Ŝ{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>} * ";
+  // both legs on the pair {i_1,i_2}, which shares no index with the own pair
+  // {i_3,i_4} (the "foreign" fixture of csv-pno-projection-fixtures)
+  const std::wstring unrelated =
+      S2 +
+      L"g{i_3,i_4;a_3<i_1,i_2>,a_4<i_1,i_2>}"
+      L" * t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}"
+      L" * t{a_5<i_3,i_4>,a_6<i_3,i_4>;i_3,i_4}"
+      L" * s{a_1<i_1,i_2>;a_5<i_3,i_4>} * s{a_2<i_1,i_2>;a_6<i_3,i_4>}";
+  // one leg on {i_1,i_3}, the other on {i_2,i_4}: each shares an index with
+  // the own pair {i_3,i_4}
+  const std::wstring connected =
+      S2 +
+      L"g{i_3,i_4;a_3<i_1,i_3>,a_4<i_2,i_4>}"
+      L" * t{a_5<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
+      L" * t{a_6<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
+      L" * s{a_1<i_1,i_2>;a_5<i_1,i_3>} * s{a_2<i_1,i_2>;a_6<i_2,i_4>}";
+  // one leg on {i_1,i_3} (connected), the other on {i_1,i_2} (unrelated)
+  const std::wstring mixed = S2 +
+                             L"g{i_3,i_4;a_3<i_1,i_3>,a_4<i_1,i_2>}"
+                             L" * t{a_5<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
+                             L" * t{a_4<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}"
+                             L" * t{a_6<i_4>;i_4}"
+                             L" * s{a_1<i_1,i_2>;a_5<i_1,i_3>}";
+  // rank-1 legs on {i_1} and {i_2}, own pair {i_3,i_4} (the "rank1" fixture)
+  const std::wstring singles =
+      S2 +
+      L"g{i_3,i_4;a_3<i_1>,a_4<i_2>} * t{a_3<i_1>;i_1} * t{a_4<i_2>;i_2}"
+      L" * t{a_5<i_3,i_4>,a_6<i_3,i_4>;i_3,i_4}"
+      L" * s{a_1<i_1,i_2>;a_5<i_3,i_4>} * s{a_2<i_1,i_2>;a_6<i_3,i_4>}";
+
+  SECTION("legs on a cluster unrelated to the own pair stay") {
+    for (std::wstring const& text : {unrelated, singles}) {
+      CAPTURE(toUtf8(text));
+      const ExprPtr input = deserialize(text);
+      CHECK(project(input, amplitude(true)).get() == input.get());
+      // without the option both legs move
+      CHECK(overlaps(project(input, amplitude(false))) == overlaps(input) + 2);
+    }
+  }
+
+  SECTION("legs on a cluster that shares an index with the own pair move") {
+    const ExprPtr input = deserialize(connected);
+    const auto out = project(input, amplitude(true));
+    CHECK(overlaps(out) == overlaps(input) + 2);
+    CHECK(moved_legs(input, out) == 2);
+    CHECK(terse(out) == terse(project(input, amplitude(false))));
+  }
+
+  SECTION("of two legs only the connected one moves") {
+    const ExprPtr input = deserialize(mixed);
+    const auto out = project(input, amplitude(true));
+    CHECK(overlaps(out) == overlaps(input) + 1);
+    CHECK(moved_legs(input, out) == 1);
+    CHECK(overlaps(project(input, amplitude(false))) == overlaps(input) + 2);
+  }
+}
+
 TEST_CASE("csv-pno-projection-kramers-block", "[mbpt][csv]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
