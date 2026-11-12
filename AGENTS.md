@@ -191,6 +191,19 @@ enabled, so it aborts under `ABORT`, and throws `sequant::Exception` under
 `THROW` so that a failed check raises a Python exception: `SEQUANT_PYTHON=ON`
 makes it the default, and any other value warns at configure time.
 
+## Export only what has to be exported
+
+SeQuant's libraries are built with hidden symbol visibility. A new
+out-of-line function or class that other libraries, inline header code, or
+users need must be annotated with `SEQUANT_<MOD>_API` (public) or
+`SEQUANT_<MOD>_INTERNAL_API` (technically required, not public); everything
+else stays hidden. Do not export something only so that a unit test links:
+guard that test with `SEQUANT_UNIT_TESTS_INTERNALS` instead. Process-wide
+mutable state must not live in inline/template code. A type that another
+library `dynamic_cast`s to, catches or compares by `typeid` must be exported
+(a class template via explicit instantiations). See
+`doc/developer/visibility.rst`.
+
 ## Check includes with a non-unity build
 
 Some CI configurations build with `CMAKE_UNITY_BUILD=ON`, which concatenates
