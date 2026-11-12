@@ -625,6 +625,7 @@ set(SeQuant_eval_ta_src
         SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
         SeQuant/core/eval/backends/tiledarray/result.hpp
         SeQuant/core/eval/backends/tiledarray/result.cpp
+        SeQuant/core/eval/backends/tiledarray/tiledarray.hpp
         ${SeQuant_eval_ta_inst_src}
 )
 

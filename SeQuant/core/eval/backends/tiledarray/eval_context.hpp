@@ -5,10 +5,9 @@
 
 #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/tiledarray.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/logger.hpp>
-
-#include <tiledarray.h>
 
 #include <algorithm>
 #include <any>

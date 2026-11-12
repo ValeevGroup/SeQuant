@@ -2,9 +2,8 @@
 
 #ifdef SEQUANT_HAS_TILEDARRAY
 
+#include <SeQuant/core/eval/backends/tiledarray/tiledarray.hpp>
 #include <SeQuant/core/logger.hpp>
-
-#include <tiledarray.h>
 
 #include <atomic>
 #include <cstdlib>

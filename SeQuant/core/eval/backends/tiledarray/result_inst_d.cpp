@@ -1,8 +1,7 @@
 #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/tiledarray.hpp>
 
 #ifdef SEQUANT_HAS_TILEDARRAY
-
-#include <tiledarray.h>
 
 namespace sequant {
 

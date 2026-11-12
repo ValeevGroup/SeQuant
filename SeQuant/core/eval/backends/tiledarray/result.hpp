@@ -7,14 +7,12 @@
 
 #include <SeQuant/api.hpp>
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/tiledarray.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/elementwise.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
-
-#include <TiledArray/einsum/tiledarray.h>
-#include <tiledarray.h>
 
 #include <range/v3/view/iota.hpp>
 
