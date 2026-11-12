@@ -2,7 +2,9 @@
 #define SEQUANT_CORE_EXPORT_GENERATIONOPTIMIZER_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/export/forwarding_generator.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -22,8 +24,12 @@ namespace sequant {
 /// actions before passing them along to the wrapped generator for actual code
 /// generation.
 template <typename MainGenerator, typename MainContext = MainGenerator::Context>
-class GenerationOptimizer final : public Generator<MainContext> {
+class GenerationOptimizer final
+    : public ForwardingGenerator<MainGenerator, MainContext> {
  private:
+  using Base = ForwardingGenerator<MainGenerator, MainContext>;
+  using Base::m_generator;
+
   using Object = std::variant<Tensor, Variable>;
 
   enum class OperationType {
@@ -156,14 +162,9 @@ class GenerationOptimizer final : public Generator<MainContext> {
       str += " ";
 
       if (std::holds_alternative<Tensor>(m_object)) {
-        const Tensor &tensor = std::get<Tensor>(m_object);
-        str += toUtf8(tensor.label());
-        str += ":";
-        for (const Index &idx : tensor.indices()) {
-          str += toUtf8(idx.space().reduce_key(idx.label()));
-        }
+        str += detail::describe(std::get<Tensor>(m_object));
       } else {
-        str += toUtf8(std::get<Variable>(m_object).label());
+        str += detail::describe(std::get<Variable>(m_object));
       }
 
       return str;
@@ -370,8 +371,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
       ComputeOperation, BroadcastAddOperation>;
 
  public:
-  GenerationOptimizer(MainGenerator generator)
-      : m_generator(std::move(generator)) {}
+  GenerationOptimizer(MainGenerator generator) : Base(std::move(generator)) {}
 
   std::string get_format_name() const override {
     return m_generator.get_format_name() + " (optimized)";
@@ -483,41 +483,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
     m_generator.begin_expression(ctx);
   }
 
-  /////////////////////////////////////////////////////////
-  /////////// Pass-through implementations ////////////////
-  /////////////////////////////////////////////////////////
-
-  // clang-format off
-  bool supports_named_sections() const override { return m_generator.supports_named_sections(); }
-  bool requires_named_sections() const override { return m_generator.requires_named_sections(); }
-  bool supports_index_batching() const override { return m_generator.supports_index_batching(); }
-  DeclarationScope index_declaration_scope() const override { return m_generator.index_declaration_scope(); }
-  DeclarationScope variable_declaration_scope() const override { return m_generator.variable_declaration_scope(); }
-  DeclarationScope tensor_declaration_scope() const override { return m_generator.tensor_declaration_scope(); }
-  PrunableScalars prunable_scalars() const override { return m_generator.prunable_scalars(); }
-  std::string represent(const Index &idx, const MainContext &ctx) const override { return m_generator.represent(idx, ctx); }
-  std::string represent(const Tensor &tensor, const MainContext &ctx) const override { return m_generator.represent(tensor, ctx); }
-  std::string represent(const Variable &variable, const MainContext &ctx) const override { return m_generator.represent(variable, ctx); }
-  std::string represent(const Constant &constant, const MainContext &ctx) const override { return m_generator.represent(constant, ctx); }
-  std::string represent(const Power &power, const MainContext &ctx) const override { return m_generator.represent(power, ctx); }
-  std::string represent(const TensorPower &power, const MainContext &ctx) const override { return m_generator.represent(power, ctx); }
-  void declare(const Index &idx, const MainContext &ctx)  override { m_generator.declare(idx, ctx); }
-  void declare(const Variable &variable, UsageSet usage, const MainContext &ctx)  override { m_generator.declare(variable, usage, ctx); }
-  void declare(const Tensor &tensor, UsageSet usage, const MainContext &ctx)  override { m_generator.declare(tensor, usage, ctx); }
-  void all_indices_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_indices_declared(amount, ctx); }
-  void all_variables_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_variables_declared(amount, ctx); }
-  void all_tensors_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_tensors_declared(amount, ctx); }
-  void begin_declarations(DeclarationScope scope, const MainContext &ctx) override { m_generator.begin_declarations(scope, ctx); }
-  void end_declarations(DeclarationScope scope, const MainContext &ctx) override { m_generator.end_declarations(scope, ctx); }
-  void insert_comment(const std::string &comment, const MainContext &ctx) override { m_generator.insert_comment(comment, ctx); }
-  void begin_named_section(std::string_view name, const MainContext &ctx) override { m_generator.begin_named_section(name, ctx); }
-  void end_named_section(std::string_view name, const MainContext &ctx) override { m_generator.end_named_section(name, ctx); }
-  void begin_export(const MainContext &ctx) override { m_generator.begin_export(ctx); }
-  std::string get_generated_code() const override { return m_generator.get_generated_code(); }
-  // clang-format on
-
  private:
-  MainGenerator m_generator;
   container::svector<Operation> m_queue;
   container::svector<Operation> m_cache;
   container::svector<std::pair<std::size_t, std::size_t>> m_paired;
@@ -622,7 +588,15 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void optimize_operation_cache(const MainContext &) {
-    std::size_t erased = 0;
+    // Original (i.e. pre-erasure) positions of all erased operations (sorted)
+    container::svector<std::size_t> erased;
+
+    // Translates an original position into its current one
+    auto current_position = [&erased](std::size_t pos) {
+      auto it = std::ranges::lower_bound(erased, pos);
+      SEQUANT_ASSERT(it == erased.end() || *it != pos);
+      return pos - static_cast<std::size_t>(it - erased.begin());
+    };
 
     // Process paired operations that **might** be removed, provided we can (and
     // want to) reorder other operations to retain a consistent stack.
@@ -632,14 +606,13 @@ class GenerationOptimizer final : public Generator<MainContext> {
     // DOI: 10.1016/j.entcs.2007.02.063
     // In particular, this would almost certainly require explicit tracking of
     // the memory stack during the individual operations.
-    for (auto [first_idx, second_idx] : m_paired) {
-      // Account for previously erased pairs (this simple method only works in
-      // combination with the assumptions under which we are currently doing
-      // erasures - see below)
-      SEQUANT_ASSERT(first_idx >= erased);
-      SEQUANT_ASSERT(second_idx >= erased);
-      first_idx -= erased;
-      second_idx -= erased;
+    for (const auto &[first_pos, second_pos] : m_paired) {
+      // Account for previously erased operations. Note that pairs may cross
+      // (a < b < c < d for the pairs (a, c) and (b, d)) such that an erased
+      // pair can have one endpoint before and one endpoint after a later pair's
+      // endpoint.
+      const std::size_t first_idx = current_position(first_pos);
+      const std::size_t second_idx = current_position(second_pos);
 
       SEQUANT_ASSERT(first_idx < m_cache.size());
       SEQUANT_ASSERT(second_idx < m_cache.size());
@@ -695,7 +668,8 @@ class GenerationOptimizer final : public Generator<MainContext> {
                   m_cache.at(first_alloc_idx));
         m_cache.erase(m_cache.begin() + second_idx);
         m_cache.erase(m_cache.begin() + first_idx);
-        erased += 2;
+        erased.insert(std::ranges::lower_bound(erased, first_pos), first_pos);
+        erased.insert(std::ranges::lower_bound(erased, second_pos), second_pos);
         continue;
       }
 

@@ -589,6 +589,7 @@ set(SeQuant_export_src
         SeQuant/core/export/export.hpp
         SeQuant/core/export/export_expr.cpp
         SeQuant/core/export/export_expr.hpp
+        SeQuant/core/export/forwarding_generator.hpp
         SeQuant/core/export/generator.cpp
         SeQuant/core/export/generator.hpp
         SeQuant/core/export/itf.cpp
@@ -600,6 +601,8 @@ set(SeQuant_export_src
         SeQuant/core/export/name_recycling.hpp
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
+        SeQuant/core/export/stack_checker.cpp
+        SeQuant/core/export/stack_checker.hpp
         SeQuant/core/export/text_generator.hpp
         SeQuant/core/export/utils.hpp
         SeQuant/core/export/utils.cpp

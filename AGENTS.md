@@ -279,6 +279,11 @@ also rejects tabs (except in `.out`, `.cmake`, `.js`, `.xml`, `.css`), CRLF,
 U+00A0 and U+2013 in the files being committed — but only once
 `pre-commit install` has been run in the clone.
 
+Note: running the script **guarantees** formatting using the correct clang-format
+version as long as it exits successfully. It may output about a version mismatch
+with the version found in the environment but the docker fallback will then take
+over.
+
 ## Layout
 
 Library sources live under `SeQuant/` and are built as separate CMake targets;

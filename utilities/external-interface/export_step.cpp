@@ -12,6 +12,7 @@
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/name_recycling.hpp>
+#include <SeQuant/core/export/stack_checker.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/irreps/any.hpp>
@@ -41,6 +42,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 namespace sequant::util::extint {
@@ -231,6 +233,13 @@ void ExportStep::set_options(const nlohmann::json &options) {
       }
 
       optimize_ = value.get<bool>();
+    } else if (key == "check_stack_order") {
+      if (!value.is_boolean()) {
+        throw Exception("Value for " + kind() + " option '" + key +
+                        "' must be a boolean");
+      }
+
+      check_stack_order_ = value.get<bool>();
     } else if (key == "output") {
       if (!value.is_string()) {
         throw Exception("Value for " + kind() + " option '" + key +
@@ -521,12 +530,20 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
       genctx.set_irrep_context(irrep_context_.value());
     }
 
-    if (optimize_) {
-      generated = perform_export(
-          GenerationOptimizer<decltype(generator)>(std::move(generator)),
-          genctx);
+    auto export_with = [&](auto &&gen) {
+      if (optimize_) {
+        return perform_export(
+            GenerationOptimizer<std::decay_t<decltype(gen)>>(std::move(gen)),
+            genctx);
+      }
+      return perform_export(gen, genctx);
+    };
+
+    if (check_stack_order_) {
+      generated = export_with(
+          StackCheckingGenerator<decltype(generator)>(std::move(generator)));
     } else {
-      generated = perform_export(generator, genctx);
+      generated = export_with(std::move(generator));
     }
   } else {
     throw Exception("Unsupported export language '" + language_ + "'");
