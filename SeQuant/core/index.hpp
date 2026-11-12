@@ -100,12 +100,9 @@ class Index : public Taggable {
   const static IndexSpace::Attr default_space_attr;
 
  private:
-  static auto &tmp_index_accessor() {
-    // initialized so that the first call to next_tmp_index will return
-    // min_tmp_index()
-    static std::atomic<std::size_t> index = min_tmp_index() - 1;
-    return index;
-  }
+  /// @return the counter of temporary indices (process-wide, i.e. shared by
+  /// all SeQuant libraries; hence defined out-of-line)
+  static std::atomic<std::size_t> &tmp_index_accessor();
 
   std::optional<ordinal_type> to_ordinal(meta::integral auto i) noexcept {
     if constexpr (std::is_signed_v<decltype(i)>) {
@@ -1091,9 +1088,7 @@ class Index : public Taggable {
 using IndexSet = container::set<Index, Index::FullLabelCompare>;
 using IndexVec = Index::index_vector;
 
-inline const IndexSpace::Attr Index::default_space_attr{
-    IndexSpace::Attr::reserved};
-inline const Index Index::null;
+// N.B. Index::default_space_attr and Index::null are defined in index.cpp
 
 void Index::validate_proto_indices() const {
   if constexpr (assert_enabled()) {
