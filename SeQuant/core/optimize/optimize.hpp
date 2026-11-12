@@ -1,6 +1,7 @@
 #ifndef SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/options.hpp>
@@ -23,19 +24,22 @@ struct OptimizeResult {
 ///              \c IndexBasis::extent(), and the summands of a sum
 ///              are reordered to cluster terms that share intermediates.
 /// \return Optimized expression.
-ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});
+SEQUANT_OPTIMIZE_API ExprPtr optimize(ExprPtr const& expr,
+                                      OptimizeOptions opts = {});
 
 /// \copydoc optimize(ExprPtr const&, OptimizeOptions)
 ///
 /// \return The optimized expression, wrapped in \ref OptimizeResult.
-OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts = {});
+SEQUANT_OPTIMIZE_API OptimizeResult optimize_result(ExprPtr const& expr,
+                                                    OptimizeOptions opts = {});
 
 /// \copydoc optimize(ExprPtr const&, OptimizeOptions)
-ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});
+SEQUANT_OPTIMIZE_API ResultExpr& optimize(ResultExpr& expr,
+                                          OptimizeOptions opts = {});
 
 /// \copydoc optimize(ExprPtr const&, OptimizeOptions)
-[[nodiscard]] ResultExpr& optimize(ResultExpr&& expr,
-                                   OptimizeOptions opts = {});
+[[nodiscard]] SEQUANT_OPTIMIZE_API ResultExpr& optimize(
+    ResultExpr&& expr, OptimizeOptions opts = {});
 
 // Overloads for backwards compatibility
 
@@ -50,18 +54,20 @@ ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});
 /// \return Optimized expression.
 [[deprecated(
     "use the OptimizeOptions"
-    " overload of optimize() instead")]] ExprPtr
+    " overload of optimize() instead")]] SEQUANT_OPTIMIZE_API ExprPtr
 optimize(ExprPtr const& expr, bool reorder_sum);
 
 /// \copydoc optimize(ExprPtr const&, bool)
 [[deprecated(
     "use the OptimizeOptions"
-    " overload of optimize() instead")]] ResultExpr&
+    " overload of optimize() instead")]] SEQUANT_OPTIMIZE_API ResultExpr&
 optimize(ResultExpr& expr, bool reorder_sum);
 
 /// \copydoc optimize(ExprPtr const&, bool)
-[[nodiscard, deprecated("use the OptimizeOptions"
-                        " overload of optimize() instead")]] ResultExpr&
+[[nodiscard,
+  deprecated(
+      "use the OptimizeOptions"
+      " overload of optimize() instead")]] SEQUANT_OPTIMIZE_API ResultExpr&
 optimize(ResultExpr&& expr, bool reorder_sum);
 
 }  // namespace sequant

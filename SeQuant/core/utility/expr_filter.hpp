@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_UTILITY_EXPRFILTER_HPP
 #define SEQUANT_CORE_UTILITY_EXPRFILTER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
@@ -15,9 +16,9 @@ namespace sequant {
 
 /// A predicate on expressions, composed of rules that are combined either
 /// conjunctively (default) or disjunctively
-class ExpressionFilter {
+class SEQUANT_SYMB_API ExpressionFilter {
  public:
-  struct Rule {
+  struct SEQUANT_SYMB_API Rule {
     bool negate = false;
 
     virtual ~Rule() = default;
@@ -45,7 +46,7 @@ class ExpressionFilter {
 
 /// Rule matching expressions that contain (at any depth) a subexpression
 /// matching the given matcher
-struct ContainsRule : ExpressionFilter::Rule {
+struct SEQUANT_SYMB_API ContainsRule : ExpressionFilter::Rule {
   explicit ContainsRule(ExprMatcher matcher);
 
   bool matches(const Expr &expr) const override;
@@ -55,7 +56,7 @@ struct ContainsRule : ExpressionFilter::Rule {
 
 /// Rule matching expressions that contain (at any depth) a labeled
 /// subexpression whose label fully matches one of the given patterns
-struct LabelRule : ExpressionFilter::Rule {
+struct SEQUANT_SYMB_API LabelRule : ExpressionFilter::Rule {
   explicit LabelRule(std::vector<std::wregex> patterns);
 
   bool matches(const Expr &expr) const override;
@@ -75,7 +76,7 @@ struct IndexSpaceCount {
 /// respective bounds. Indices in other spaces are not constrained. If
 /// patterns are given, the tensor's label additionally has to fully match one
 /// of them.
-struct IndexSpaceCountRule : ExpressionFilter::Rule {
+struct SEQUANT_SYMB_API IndexSpaceCountRule : ExpressionFilter::Rule {
   explicit IndexSpaceCountRule(std::vector<IndexSpaceCount> counts,
                                std::vector<std::wregex> label_patterns = {});
 
@@ -87,7 +88,7 @@ struct IndexSpaceCountRule : ExpressionFilter::Rule {
 
 /// Rule matching expressions that contain (at any depth) a tensor with exactly
 /// the given total number of (non-null) indices, i.e. modes
-struct IndexCountRule : ExpressionFilter::Rule {
+struct SEQUANT_SYMB_API IndexCountRule : ExpressionFilter::Rule {
   explicit IndexCountRule(std::size_t count);
 
   bool matches(const Expr &expr) const override;
@@ -100,7 +101,8 @@ struct IndexCountRule : ExpressionFilter::Rule {
 /// that (recursively) contain a match, dropping the rest; for a Product,
 /// keeps every factor (dropping one would change what the product
 /// computes), pruning each factor in turn; leaves are returned unchanged.
-ExprPtr prune_to_matches(const Expr &expr, const ExpressionFilter &filter);
+SEQUANT_SYMB_API ExprPtr prune_to_matches(const Expr &expr,
+                                          const ExpressionFilter &filter);
 
 }  // namespace sequant
 

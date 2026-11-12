@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_RULES_DF_HPP
 #define SEQUANT_DOMAIN_MBPT_RULES_DF_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/space.hpp>
 
@@ -25,9 +26,9 @@ namespace sequant::mbpt {
 /// \return The density-fitted expression (potentially unchanged,
 /// if the target tensor was not contained in the given expression)
 ///
-[[nodiscard]] ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
-                                  std::wstring_view tensor_label,
-                                  std::wstring_view factor_label);
+[[nodiscard]] SEQUANT_MBPT_API ExprPtr
+density_fit(ExprPtr const& expr, IndexSpace aux_space,
+            std::wstring_view tensor_label, std::wstring_view factor_label);
 
 }  // namespace sequant::mbpt
 

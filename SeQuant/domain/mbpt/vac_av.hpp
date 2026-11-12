@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_VAC_AV_HPP
 #define SEQUANT_DOMAIN_MBPT_VAC_AV_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
 #include <range/v3/view/concat.hpp>
@@ -72,7 +73,8 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 /// @pre When the reference differs from the Wick vacuum and the vacuum is not MultiProduct, opts.connect and
 ///      opts.do_not_connect must both be empty.
 // clang-format on
-ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
+SEQUANT_MBPT_API ExprPtr ref_av(ExprPtr expr,
+                                EVOptions<std::wstring> opts = {});
 
 /// @brief computes the vacuum expectation value
 /// @internal evaluates only full contractions in  WickTheorem
@@ -80,7 +82,8 @@ ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
 /// @param[in] opts controls the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
 /// @return the VEV
-ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
+SEQUANT_MBPT_API ExprPtr vac_av(ExprPtr expr,
+                                EVOptions<std::wstring> opts = {});
 
 }  // namespace op
 }  // namespace sequant::mbpt

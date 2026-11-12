@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_IRREPS_TABLE_ALGEBRA_HPP
 #define SEQUANT_CORE_IRREPS_TABLE_ALGEBRA_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
 
@@ -12,7 +13,7 @@ namespace sequant {
 /// IRREP algebra defined by an explicit (symbolic) multiplication table. This
 /// can be used to describe arbitrary (also non-abelian) groups, with IRREPs
 /// being identified by their name.
-class TableAlgebra {
+class SEQUANT_SYMB_INTERNAL_API TableAlgebra {
  public:
   using irrep_type = std::string;
   /// Maps pairs of IRREPs to their product. For every pair of IRREPs, only

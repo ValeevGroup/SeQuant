@@ -5,6 +5,7 @@
 #ifndef SEQUANT_ABSTRACT_TENSOR_HPP
 #define SEQUANT_ABSTRACT_TENSOR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -95,7 +96,7 @@ class TensorCanonicalizer;
 /// intrusively derive it from AbstractTensor and implement all member
 /// functions. This allows to implement heterogeneous containers of objects
 /// that meet the Tensor concept.
-class AbstractTensor {
+class SEQUANT_SYMB_API AbstractTensor {
   inline auto missing_instantiation_for(const char* fn_name) const {
     std::ostringstream oss;
     oss << "AbstractTensor::" << fn_name << " not implemented in class "
@@ -728,13 +729,15 @@ bool expr_type_id_less(const AbstractTensor& a, const AbstractTensor& b);
 /// @param expr input expression
 /// @param label tensor label to find in the expression
 /// @return true if tensor with given label is found
-bool has_tensor(const ExprPtr& expr, std::wstring label);
+SEQUANT_SYMB_INTERNAL_API bool has_tensor(const ExprPtr& expr,
+                                          std::wstring label);
 
 /// @brief Removes tensor with a certain label from an expression
 /// @param expr An expression pointer
 /// @param label Label of the tensor to remove
 /// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
+SEQUANT_SYMB_INTERNAL_API ExprPtr remove_tensor(const ExprPtr& expr,
+                                                std::wstring label);
 
 }  // namespace sequant
 

@@ -1,6 +1,7 @@
 #ifndef SEQUANT_TREEINDEX_H
 #define SEQUANT_TREEINDEX_H
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -17,7 +18,7 @@ namespace sequant {
 /// Represents an index (position) into a tree structure
 /// @note Using this to select a subexpression from an expression tree takes
 /// O(N) time where N = depth()
-class TreeIndex {
+class SEQUANT_SYMB_API TreeIndex {
  public:
   TreeIndex() = default;
 

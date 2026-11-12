@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_REORDERING_CONTEXT_HPP
 #define SEQUANT_CORE_EXPORT_REORDERING_CONTEXT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/memory_layout.hpp>
@@ -16,7 +17,7 @@ class Tensor;
 /// In other words, this class will use existing tensor symmetries to move the
 /// slot belonging to the basis of the largest extent into the slot with highest
 /// cache-locality (depending on the chosen memory layout).
-class ReorderingContext : public ExportContext {
+class SEQUANT_EXPORT_API ReorderingContext : public ExportContext {
  public:
   explicit ReorderingContext(MemoryLayout layout) : m_layout(layout) {}
 

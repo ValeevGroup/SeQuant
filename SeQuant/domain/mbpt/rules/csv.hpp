@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
 #define SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -38,10 +39,11 @@ namespace sequant::mbpt {
 ///         expression itself.
 /// \throw Exception if @p csv_basis has a basis instance that the default
 ///        context's registry does not name
-ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
-                      std::wstring const& coeff_tensor_label = L"C",
-                      container::svector<std::wstring> const& tensor_labels = {
-                          L"f", L"g", sequant::reserved::overlap_label()});
+SEQUANT_MBPT_API ExprPtr
+csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
+              std::wstring const& coeff_tensor_label = L"C",
+              container::svector<std::wstring> const& tensor_labels = {
+                  L"f", L"g", sequant::reserved::overlap_label()});
 
 }  // namespace sequant::mbpt
 

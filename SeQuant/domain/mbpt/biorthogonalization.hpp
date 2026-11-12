@@ -1,6 +1,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZE_HPP
 #define SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZE_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -35,11 +36,11 @@ namespace sequant::mbpt {
 static constexpr double default_biorthogonalizer_pseudoinverse_threshold =
     1e-12;
 
-void biorthogonal_transform(
+SEQUANT_MBPT_API void biorthogonal_transform(
     ResultExpr& expr, double pseudoinverse_threshold =
                           default_biorthogonalizer_pseudoinverse_threshold);
 
-void biorthogonal_transform(
+SEQUANT_MBPT_API void biorthogonal_transform(
     container::svector<ResultExpr>& exprs,
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
@@ -51,13 +52,13 @@ void biorthogonal_transform(
 /// @note uses hardcoded coefficients for ranks 1-5,
 ///  for higher ranks computes coefficients (if Eigen3 is available, else throws
 ///  an exception)
-[[nodiscard]] ExprPtr biorthogonal_transform(
+[[nodiscard]] SEQUANT_MBPT_API ExprPtr biorthogonal_transform(
     const ExprPtr& expr,
     const container::svector<container::svector<sequant::SlottedIndex>>&
         ext_index_groups = {},
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
-[[nodiscard]] ExprPtr biorthogonal_transform(
+[[nodiscard]] SEQUANT_MBPT_API ExprPtr biorthogonal_transform(
     const ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups = {},
@@ -83,10 +84,10 @@ void biorthogonal_transform(
 /// @param ext_idxs A vector of external index groups. The function will not
 /// apply the filtering logic if `ext_idxs.size()` is 2 or less.
 /// @return A new `ExprPtr` representing the filtered and compacted expression.
-ExprPtr WK_biorthogonalization_filter(
+SEQUANT_MBPT_API ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<SlottedIndex>>& ext_idxs);
-ExprPtr WK_biorthogonalization_filter(
+SEQUANT_MBPT_API ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
@@ -103,11 +104,11 @@ ExprPtr WK_biorthogonalization_filter(
 /// projector. If false, NNS projector is not factored out.
 /// @return Expression pointer to the biorthogonalized result with leading S
 /// operator.
-ExprPtr biorthogonal_transform_pre_nnsproject(
+SEQUANT_MBPT_API ExprPtr biorthogonal_transform_pre_nnsproject(
     ExprPtr& expr,
     const container::svector<container::svector<SlottedIndex>>& ext_idxs,
     bool factor_out_nns_projector = true);
-ExprPtr biorthogonal_transform_pre_nnsproject(
+SEQUANT_MBPT_API ExprPtr biorthogonal_transform_pre_nnsproject(
     ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,
     bool factor_out_nns_projector = true);
@@ -121,10 +122,10 @@ namespace detail {
 ///        (set to default_biorth_threshold)
 ///
 /// \return Vector of computed NNS projection coefficients
-[[nodiscard]] std::vector<double> compute_nns_p_coeffs(
-    std::size_t n_particles,
-    double pseudoinverse_threshold =
-        default_biorthogonalizer_pseudoinverse_threshold);
+[[nodiscard]] SEQUANT_MBPT_INTERNAL_API std::vector<double>
+compute_nns_p_coeffs(std::size_t n_particles,
+                     double pseudoinverse_threshold =
+                         default_biorthogonalizer_pseudoinverse_threshold);
 
 /// \brief Computes the biorthogonalizer matrix, the pseudoinverse of the
 /// permutational overlap matrix of \p n_particles particles
@@ -157,7 +158,7 @@ namespace detail {
 /// \param n_particles The rank of external index pairs
 ///
 /// \return The permuted indices
-container::svector<size_t> compute_permuted_indices(
+SEQUANT_MBPT_INTERNAL_API container::svector<size_t> compute_permuted_indices(
     const container::svector<size_t>& indices, size_t perm_rank,
     size_t n_particles);
 

@@ -1,6 +1,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_BERNOULLI_HPP
 #define SEQUANT_DOMAIN_MBPT_BERNOULLI_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -35,7 +36,7 @@ namespace sequant::mbpt::bernoulli {
 /// @param skip1 exclude singles from T
 /// @pre the reference is the Wick vacuum (enforced in every build)
 /// @throw Exception if CSV is enabled
-ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
+SEQUANT_MBPT_API ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
 
 namespace detail {
 

@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_UTILS_HPP
 #define SEQUANT_DOMAIN_MBPT_UTILS_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
@@ -51,8 +52,8 @@ struct LSTOptions {
 ///   When the reference differs from the Wick vacuum use explicit commutators: the reference average of BA need not vanish, so (AB)_c need not reproduce [A,B] under any connectivity.
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
 // clang-format on
-ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
-            LSTOptions options = {});
+SEQUANT_MBPT_API ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
+                             LSTOptions options = {});
 
 /// @brief Screens out terms in the expression \p expr that cannot contribute to
 /// expectation value

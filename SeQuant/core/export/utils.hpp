@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_EXPORT_UTILS_HPP
 #define SEQUANT_CORE_EXPORT_UTILS_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
@@ -26,28 +27,30 @@ namespace sequant::detail {
 /// minus sign of a negative one (so it is valid in an identifier and, unlike a
 /// letter, cannot be read as the tag of a space), to append to a block tag or
 /// dimension name of a mode in that basis; empty if @p idx has none
-std::string basis_instance_tag(const Index &idx);
+SEQUANT_EXPORT_INTERNAL_API std::string basis_instance_tag(const Index &idx);
 
 /// @return the block tag of the mode @p idx: @p space_tag followed by
 /// basis_instance_tag(idx)
 /// @throw Exception if @p idx has a basis instance and @p space_tag ends in a
 /// digit or `_`, which would make the instance indistinguishable from the tag
-std::string block_tag(std::string space_tag, const Index &idx);
+SEQUANT_EXPORT_INTERNAL_API std::string block_tag(std::string space_tag,
+                                                  const Index &idx);
 
 /// @return the dimension name of the mode @p idx: @p space_dim followed by
 /// `_` and basis_instance_tag(idx) if @p idx has a basis instance, since each
 /// basis has its own extent
 /// @throw Exception if @p idx has a basis instance and @p space_dim ends in
 /// `_`, which would make the name of a negative instance ambiguous
-std::string dim_name(std::string space_dim, const Index &idx);
+SEQUANT_EXPORT_INTERNAL_API std::string dim_name(std::string space_dim,
+                                                 const Index &idx);
 
 /// Formats a Power exponent for export framework
 /// @param exponent the rational exponent
 /// @param double_slash if true, use Julia's `//` rational syntax; otherwise
 ///        use `/` (Python style)
 /// @return a string such as `2`, `(-3)`, `(1/2)`, `(-1//3)`
-std::string format_power_exponent(const Power::exponent_type &exponent,
-                                  bool double_slash);
+SEQUANT_EXPORT_INTERNAL_API std::string format_power_exponent(
+    const Power::exponent_type &exponent, bool double_slash);
 
 /// Parenthesizes an already-stringified Power base when needed to keep
 /// exponentiation precedence unambiguous in the target language.
@@ -55,15 +58,16 @@ std::string format_power_exponent(const Power::exponent_type &exponent,
 /// @param base_str @p base already rendered to a string by the caller
 /// @return @p base_str, wrapped in parens iff @p base is a Constant whose
 ///         value is a non-integer or negative real
-std::string format_power_base(const ExprPtr &base, std::string base_str);
+SEQUANT_EXPORT_INTERNAL_API std::string format_power_base(const ExprPtr &base,
+                                                          std::string base_str);
 
 /// @return a short human-readable description of @p tensor (label and index
 /// spaces) for use in diagnostics
-std::string describe(const Tensor &tensor);
+SEQUANT_EXPORT_INTERNAL_API std::string describe(const Tensor &tensor);
 
 /// @return a short human-readable description of @p variable for use in
 /// diagnostics
-std::string describe(const Variable &variable);
+SEQUANT_EXPORT_INTERNAL_API std::string describe(const Variable &variable);
 
 /// Formats a Power for export framework
 /// @param power the Power to format
@@ -73,7 +77,7 @@ std::string describe(const Variable &variable);
 /// @param wrap_conj renders the complex conjugate of its argument, applied to
 ///        a conjugated Variable base and to a conjugated @p power
 /// @return the formatted power
-std::string format_power(
+SEQUANT_EXPORT_INTERNAL_API std::string format_power(
     const Power &power, std::string base_str, std::string_view pow_op,
     bool double_slash,
     const std::function<std::string(std::string)> &wrap_conj);
@@ -85,19 +89,22 @@ std::string format_power(
 ///        language
 /// @param double_slash see format_power_exponent
 /// @return the formatted power
-std::string format_tensor_power(const TensorPower &power, std::string base_str,
-                                std::string_view pow_op, bool double_slash);
+SEQUANT_EXPORT_INTERNAL_API std::string format_tensor_power(
+    const TensorPower &power, std::string base_str, std::string_view pow_op,
+    bool double_slash);
 
 /// @return the tensor that the operand of a broadcast carries: @p operand
 /// itself, the base of a TensorPower, or the one such factor of a Product
 /// with scalars; nullptr if @p operand is a scalar
 /// @throw Exception if @p operand has more than one non-scalar factor or a
 ///        non-scalar that is neither a Tensor nor a TensorPower
-const Tensor *broadcast_operand_tensor(const Expr &operand);
+SEQUANT_EXPORT_INTERNAL_API const Tensor *broadcast_operand_tensor(
+    const Expr &operand);
 
 /// @return whether @p operand_tensor (as from broadcast_operand_tensor) has
 /// the mode @p idx; false if it is null
-bool broadcast_carries(const Tensor *operand_tensor, const Index &idx);
+SEQUANT_EXPORT_INTERNAL_API bool broadcast_carries(const Tensor *operand_tensor,
+                                                   const Index &idx);
 
 /// Renders @p expr in infix notation: sums as `a + b`, products as their
 /// scalar prefactor (if not 1) and factors joined by @p product_separator

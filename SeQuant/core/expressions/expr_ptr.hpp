@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_EXPR_PTR_HPP
 #define SEQUANT_EXPRESSIONS_EXPR_PTR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/traits.hpp>
@@ -15,7 +16,7 @@ namespace sequant {
 
 /// It can be used mostly interchangeably with `std::shared_ptr<Expr>`, but
 /// also provides convenient mathematical operators (`+=`, etc.)
-class ExprPtr : public std::shared_ptr<Expr> {
+class SEQUANT_SYMB_API ExprPtr : public std::shared_ptr<Expr> {
  public:
   using base_type = std::shared_ptr<Expr>;
   using base_type::operator->;
@@ -85,7 +86,7 @@ class ExprPtr : public std::shared_ptr<Expr> {
     return x.get() == nullptr;
   }
 
-  friend bool operator==(const ExprPtr &x, const ExprPtr &y);
+  friend SEQUANT_SYMB_API bool operator==(const ExprPtr &x, const ExprPtr &y);
 
   /// in-place addition operator
 
@@ -161,16 +162,16 @@ using ExprPtrVector = container::svector<ExprPtr>;
 /// @brief computes the adjoint of @p expr
 /// @param[in] expr an Expr object
 /// @return the adjoint of @p expr
-ExprPtr adjoint(const ExprPtr &expr);
+SEQUANT_SYMB_API ExprPtr adjoint(const ExprPtr &expr);
 
-ExprPtr operator*(const ExprPtr &left, const ExprPtr &right);
+SEQUANT_SYMB_API ExprPtr operator*(const ExprPtr &left, const ExprPtr &right);
 
 /// Unlike @code operator*(const ExprPtr&, const ExprPtr&) @endcode this
 /// produces a non-commutative product (i.e. NCProduct)
-ExprPtr operator^(const ExprPtr &left, const ExprPtr &right);
+SEQUANT_SYMB_API ExprPtr operator^(const ExprPtr &left, const ExprPtr &right);
 
-ExprPtr operator+(const ExprPtr &left, const ExprPtr &right);
-ExprPtr operator-(const ExprPtr &left, const ExprPtr &right);
+SEQUANT_SYMB_API ExprPtr operator+(const ExprPtr &left, const ExprPtr &right);
+SEQUANT_SYMB_API ExprPtr operator-(const ExprPtr &left, const ExprPtr &right);
 
 }  // namespace sequant
 

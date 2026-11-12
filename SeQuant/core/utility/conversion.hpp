@@ -1,6 +1,7 @@
 #ifndef SEQUANT_UTILITY_CONVERSION_HPP
 #define SEQUANT_UTILITY_CONVERSION_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -15,7 +16,7 @@
 
 namespace sequant {
 
-class ConversionException : public Exception {
+class SEQUANT_SYMB_API ConversionException : public Exception {
  public:
   using Exception::Exception;
 };

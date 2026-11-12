@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_EXPORT_EXPR_HPP
 #define SEQUANT_CORE_EXPORT_EXPORT_EXPR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/export/compute_selection.hpp>
 
@@ -12,12 +13,12 @@ namespace detail {
 /// @returns The ID for the next export expression. The returned IDs are
 /// guaranteed to be unique
 /// @note This function is reentrant
-std::size_t next_export_expr_id();
+SEQUANT_EXPORT_INTERNAL_API std::size_t next_export_expr_id();
 }  // namespace detail
 
 /// Dedicated Node data class to be used for exporting expressions (i.e. code
 /// generation)
-class ExportExpr : public EvalExpr {
+class SEQUANT_EXPORT_API ExportExpr : public EvalExpr {
  public:
   using EvalExpr::EvalExpr;
 

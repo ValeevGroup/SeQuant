@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_VARIABLE_HPP
 #define SEQUANT_EXPRESSIONS_VARIABLE_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -14,7 +15,7 @@ namespace sequant {
 class ExprPtr;
 
 /// This is represented as a "run-time" complex rational number
-class Variable : public Expr, public MutatableLabeled {
+class SEQUANT_SYMB_API Variable : public Expr, public MutatableLabeled {
  public:
   Variable() = delete;
   virtual ~Variable() = default;

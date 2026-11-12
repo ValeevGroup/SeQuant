@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_SUM_HPP
 #define SEQUANT_EXPRESSIONS_SUM_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
@@ -26,7 +27,7 @@ namespace sequant {
 /// @brief sum of zero or more summands
 
 /// Sum is associative and is flattened automatically.
-class Sum : public Expr {
+class SEQUANT_SYMB_API Sum : public Expr {
  public:
   using summands_type = container::svector<ExprPtr, 2>;
 
@@ -206,7 +207,7 @@ class Sum : public Expr {
 /// @brief utility for eagerly accumulating summands in a hash table
 /// Intended to accumulate summands that are already in canonical form and
 /// produces canonical Sum
-class HashingAccumulator {
+class SEQUANT_SYMB_INTERNAL_API HashingAccumulator {
  public:
   /// @p summand expr to append to the sum
   /// @p flatten if true, and @p summand is a Sum, will flatten the sum

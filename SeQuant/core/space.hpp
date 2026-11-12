@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_SPACE_H
 #define SEQUANT_CORE_SPACE_H
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/fwd.hpp>
 
 #include <SeQuant/core/attr.hpp>
@@ -285,7 +286,7 @@ inline constinit const QuantumNumbersAttr QuantumNumbersAttr::reserved =
 /// useful in symbolic manipulation of indexed expressions, such as tensor
 /// network evaluation; a basis of the space may have an extent of its own
 /// (IndexBasis::extent()).
-class IndexSpace {
+class SEQUANT_SYMB_API IndexSpace {
  public:
   /// @brief Attr describes all attributes of a space (occupancy + quantum
   /// numbers)
@@ -384,7 +385,7 @@ class IndexSpace {
 
   /// exception type thrown when encountered unknown/invalid
   /// IndexSpace::base_key() or Index::label()
-  struct bad_key : Exception {
+  struct SEQUANT_SYMB_API bad_key : Exception {
     bad_key() : Exception("bad key") {}
     template <basic_string_convertible S>
     bad_key(S &&key) : Exception(std::string("bad key: ") + toUtf8(key)) {}
@@ -625,10 +626,10 @@ inline bool includes(const IndexSpace &space, const IndexSpace &subspace) {
          space1.base_key() == space2.base_key();
 }
 
-std::string to_string(IndexSpace::Type type);
-std::string to_string(IndexSpace::QuantumNumbers qns);
-std::string to_string(IndexSpace::Attr attr);
-std::string to_string(const IndexSpace &space);
+SEQUANT_SYMB_API std::string to_string(IndexSpace::Type type);
+SEQUANT_SYMB_API std::string to_string(IndexSpace::QuantumNumbers qns);
+SEQUANT_SYMB_API std::string to_string(IndexSpace::Attr attr);
+SEQUANT_SYMB_API std::string to_string(const IndexSpace &space);
 
 /// true if `std::remove_cvref_t<T>` is an IndexSpace or is convertible to
 /// std::basic_string
