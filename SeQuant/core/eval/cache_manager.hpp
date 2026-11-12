@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_CACHE_MANAGER_HPP
 #define SEQUANT_EVAL_CACHE_MANAGER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
@@ -99,16 +100,10 @@ struct AccessClock {
     static bool const on = std::getenv("SEQUANT_UT_ACCESS_CLOCK") != nullptr;
     return on;
   }
-  static std::size_t& counter() noexcept {
-    static std::size_t c = 0;
-    return c;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::size_t& counter() noexcept;
   /// hash -> final (max) clock at which a value with that hash was read.
-  static std::unordered_map<std::size_t, std::size_t>&
-  last_access_map() noexcept {
-    static std::unordered_map<std::size_t, std::size_t> m;
-    return m;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::unordered_map<std::size_t, std::size_t>&
+  last_access_map() noexcept;
   /// Advance and return the clock (one genuine read == one tick).
   static std::size_t tick() noexcept { return ++counter(); }
   /// Current clock value without advancing (used to timestamp the peak).
@@ -140,14 +135,8 @@ struct LookupMeter {
     static bool const on = std::getenv("SEQUANT_UT_LOOKUP_METER") != nullptr;
     return on;
   }
-  static std::size_t& calls() noexcept {
-    static std::size_t c = 0;
-    return c;
-  }
-  static std::uint64_t& nanos() noexcept {
-    static std::uint64_t n = 0;
-    return n;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::size_t& calls() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::uint64_t& nanos() noexcept;
   /// Time only the find() call in @p f (a nullary functor returning the
   /// iterator); accumulate count + elapsed ns; return f()'s result. Works for
   /// const and non-const maps alike (return type is deduced).
@@ -177,7 +166,6 @@ struct LookupMeter {
                    calls() ? static_cast<double>(nanos()) / calls() : 0.0);
     }
   };
-  inline static Reporter reporter_{};
 };
 
 /// \brief diagnostic (analysis-only, off by default): scoped wall-clock timer
@@ -195,18 +183,9 @@ struct PhaseTimer {
   // backend to a world fence). When present, each Scope fences at both
   // boundaries so async work cannot leak across timer regions and every
   // region's time reflects the work it actually dispatched-and-completed.
-  static std::function<void()>& fence_hook() noexcept {
-    static std::function<void()> h;
-    return h;
-  }
-  static std::size_t& barrier_count() noexcept {
-    static std::size_t c = 0;
-    return c;
-  }
-  static std::uint64_t& barrier_ns() noexcept {
-    static std::uint64_t v = 0;
-    return v;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::function<void()>& fence_hook() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::size_t& barrier_count() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::uint64_t& barrier_ns() noexcept;
   static void barrier() noexcept {
     if (auto const& h = fence_hook()) {
       auto const t0 = std::chrono::steady_clock::now();
@@ -219,12 +198,9 @@ struct PhaseTimer {
     }
   }
   // name -> {total ns, call count}. Leaked so teardown Reporter can read it.
-  static std::map<std::string, std::pair<std::uint64_t, std::uint64_t>>&
-  acc() noexcept {
-    static auto* const m =
-        new std::map<std::string, std::pair<std::uint64_t, std::uint64_t>>();
-    return *m;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::map<
+      std::string, std::pair<std::uint64_t, std::uint64_t>>&
+  acc() noexcept;
   struct Scope {
     char const* name;
     std::chrono::steady_clock::time_point t0;
@@ -252,7 +228,6 @@ struct PhaseTimer {
                      e.first / 1e9, static_cast<unsigned long long>(e.second));
     }
   };
-  inline static Reporter reporter_{};
 };
 
 /// \brief diagnostic (analysis-only, off by default): splits CC-eval wall into
@@ -268,41 +243,18 @@ struct EvalImplTimeline {
     static bool const on = std::getenv("SEQUANT_UT_EVALIMPL") != nullptr;
     return on;
   }
-  static int& depth() noexcept {
-    static thread_local int d = 0;
-    return d;
-  }
-  static std::uint64_t& body_ns() noexcept {
-    static std::uint64_t v = 0;
-    return v;
-  }
-  static std::uint64_t& gap_ns() noexcept {
-    static std::uint64_t v = 0;
-    return v;
-  }
-  static std::size_t& calls() noexcept {
-    static std::size_t v = 0;
-    return v;
-  }
-  static std::chrono::steady_clock::time_point& last_exit() noexcept {
-    static std::chrono::steady_clock::time_point t{};
-    return t;
-  }
-  static bool& have_last() noexcept {
-    static bool b = false;
-    return b;
-  }
-  static std::uint64_t& max_gap_ns() noexcept {
-    static std::uint64_t v = 0;
-    return v;
-  }
+  SEQUANT_EVAL_INTERNAL_API static int& depth() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::uint64_t& body_ns() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::uint64_t& gap_ns() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::size_t& calls() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::chrono::steady_clock::time_point&
+  last_exit() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static bool& have_last() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::uint64_t& max_gap_ns() noexcept;
   // Node-evaluation (prod / TA contraction) time inside the body, fenced so it
   // captures the contraction's full sync+async cost. body - prod == "other
   // inside evaluate_impl" (stack machine, cache access, apply_phase, store).
-  static std::uint64_t& prod_ns() noexcept {
-    static std::uint64_t v = 0;
-    return v;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::uint64_t& prod_ns() noexcept;
   static void note_prod(std::chrono::steady_clock::time_point t0) noexcept {
     if (!enabled()) return;
     PhaseTimer::barrier();  // drain this contraction's async before stopping
@@ -313,10 +265,7 @@ struct EvalImplTimeline {
   }
   // apply_phase (canonicalization-phase tensor multiply) time inside the body:
   // node-eval-adjacent TA work that is not the contraction.
-  static std::uint64_t& phase_ns() noexcept {
-    static std::uint64_t v = 0;
-    return v;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::uint64_t& phase_ns() noexcept;
   static void note_phase(std::chrono::steady_clock::time_point t0) noexcept {
     if (!enabled()) return;
     PhaseTimer::barrier();
@@ -380,7 +329,6 @@ struct EvalImplTimeline {
                    PhaseTimer::barrier_count(), PhaseTimer::barrier_ns() / 1e9);
     }
   };
-  inline static Reporter reporter_{};
 };
 
 /// \brief diagnostic (analysis-only, off by default): counts actual builds at
@@ -404,26 +352,15 @@ struct BuildMeter {
     static bool const on = std::getenv("SEQUANT_UT_BUILD_METER") != nullptr;
     return on;
   }
-  static std::unordered_map<std::size_t, std::size_t>& build_count() noexcept {
-    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
-    return *m;
-  }
-  static std::size_t& total() noexcept {
-    static std::size_t t = 0;
-    return t;
-  }
-  static std::unordered_map<std::size_t, std::string>& label_of() noexcept {
-    static auto* const m = new std::unordered_map<std::size_t, std::string>();
-    return *m;
-  }
-  static std::unordered_map<std::size_t, std::size_t>& read_count() noexcept {
-    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
-    return *m;
-  }
-  static std::unordered_map<std::size_t, std::size_t>& max_life_of() noexcept {
-    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
-    return *m;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::unordered_map<std::size_t, std::size_t>&
+  build_count() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::size_t& total() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::unordered_map<std::size_t, std::string>&
+  label_of() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::unordered_map<std::size_t, std::size_t>&
+  read_count() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::unordered_map<std::size_t, std::size_t>&
+  max_life_of() noexcept;
   /// Record one genuine cache read (access_at hit) of @p hash and its entry's
   /// @p max_life -- ground truth for "is the lifetime >= the real read count?".
   static void on_read(std::size_t hash, std::size_t max_life) noexcept {
@@ -466,7 +403,6 @@ struct BuildMeter {
       }
     }
   };
-  inline static Reporter reporter_{};
 };
 
 /// \brief diagnostic (analysis-only, off by default): measures def-to-use
@@ -489,42 +425,20 @@ struct DefUseMeter {
     static bool const on = std::getenv("SEQUANT_UT_DEFUSE_METER") != nullptr;
     return on;
   }
-  static std::size_t& op_clock() noexcept {
-    static std::size_t c = 0;
-    return c;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::size_t& op_clock() noexcept;
   // Leaked (never destroyed) so the teardown Reporter can safely read them
   // regardless of static-destruction order.
-  static std::unordered_map<std::size_t, std::size_t>& produce_at() noexcept {
-    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
-    return *m;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::unordered_map<std::size_t, std::size_t>&
+  produce_at() noexcept;
   /// distinct-node -> number of store (production) events, exposing recompute:
   /// a node stored more than (iterations) times was rebuilt while cacheable.
-  static std::unordered_map<std::size_t, std::size_t>& store_count() noexcept {
-    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
-    return *m;
-  }
-  static std::size_t& reads() noexcept {
-    static std::size_t r = 0;
-    return r;
-  }
-  static std::uint64_t& sum_dist() noexcept {
-    static std::uint64_t s = 0;
-    return s;
-  }
-  static long double& sum_dist_bytes() noexcept {
-    static long double s = 0;
-    return s;
-  }
-  static long double& sum_bytes() noexcept {
-    static long double s = 0;
-    return s;
-  }
-  static std::size_t& max_dist() noexcept {
-    static std::size_t m = 0;
-    return m;
-  }
+  SEQUANT_EVAL_INTERNAL_API static std::unordered_map<std::size_t, std::size_t>&
+  store_count() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::size_t& reads() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::uint64_t& sum_dist() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static long double& sum_dist_bytes() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static long double& sum_bytes() noexcept;
+  SEQUANT_EVAL_INTERNAL_API static std::size_t& max_dist() noexcept;
   /// Tick the op-clock and record this value's production time.
   static void on_store(std::size_t hash) noexcept {
     if (!enabled()) return;
@@ -578,7 +492,6 @@ struct DefUseMeter {
       }
     }
   };
-  inline static Reporter reporter_{};
 };
 
 /// \brief Values that survive \c CacheManager::reset() across repeated
@@ -605,6 +518,12 @@ struct DefUseMeter {
 /// invariant intermediate behind them. Nothing here is dropped by \c reset()
 /// by design; its lifetime is bounded by \c clear_persistent_values() or by
 /// the cache handle itself going away.
+namespace detail {
+/// the largest working set reported so far by the SEQUANT_UT_PEAK_COMPOSE
+/// diagnostic of CacheManager
+SEQUANT_EVAL_INTERNAL_API std::size_t& peak_compose_max() noexcept;
+}  // namespace detail
+
 class PersistentValueStore {
  public:
   /// Store (or overwrite) the value for @p hash.
@@ -1393,7 +1312,7 @@ class CacheManager {
     static bool const compose =
         std::getenv("SEQUANT_UT_PEAK_COMPOSE") != nullptr;
     if (compose) {
-      static size_t g_max = 0;
+      auto& g_max = eval::detail::peak_compose_max();
       if (current_bytes > g_max) {
         g_max = current_bytes;
         size_t const chain = chain_residency();

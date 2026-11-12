@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_RESULT_HPP
 #define SEQUANT_EVAL_RESULT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 
 #include <SeQuant/core/algorithm.hpp>
@@ -145,13 +146,7 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
 /// so raw values look like 6073936079388559375. The mapping is process-
 /// global and monotonic so the same hash gets the same label across log
 /// lines, which makes a trace easy to follow.
-inline std::string annot_label(std::int64_t key) noexcept {
-  static container::unordered_map<std::int64_t, std::string> labels;
-  static std::size_t next_id = 0;
-  if (auto it = labels.find(key); it != labels.end()) return it->second;
-  auto name = "i" + std::to_string(next_id++);
-  return labels.emplace(key, std::move(name)).first->second;
-}
+SEQUANT_EVAL_INTERNAL_API std::string annot_label(std::int64_t key) noexcept;
 
 template <typename RngOfOrdinals>
 std::string ords_to_labels(RngOfOrdinals const& ords) {

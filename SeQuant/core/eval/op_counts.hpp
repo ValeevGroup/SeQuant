@@ -7,6 +7,8 @@
 #ifndef SEQUANT_CORE_EVAL_OP_COUNTS_HPP
 #define SEQUANT_CORE_EVAL_OP_COUNTS_HPP
 
+#include <SeQuant/api.hpp>
+
 #include <cstddef>
 
 namespace sequant::eval {
@@ -19,10 +21,7 @@ namespace detail {
 /// eval.hpp) and the unit tests, so the per-build tally carries the same cost
 /// the replay computed -- no second flop path. Thread-local; single-threaded
 /// dry-run replay.
-inline double& last_op_flops() noexcept {
-  static thread_local double f = 0.0;
-  return f;
-}
+SEQUANT_EVAL_INTERNAL_API double& last_op_flops() noexcept;
 
 /// Diagnostic: the roofline exec-cost estimate (cm->exec_cost) for the last
 /// costed op, stashed by DryRunOps::record_op_cost alongside
@@ -30,10 +29,7 @@ inline double& last_op_flops() noexcept {
 /// read by \c CacheManager::tally_build (called from eval.hpp) so each
 /// per-build tally entry carries the same time estimate the replay computed.
 /// Thread-local; single-threaded dry-run replay.
-inline double& last_op_exec() noexcept {
-  static thread_local double f = 0.0;
-  return f;
-}
+SEQUANT_EVAL_INTERNAL_API double& last_op_exec() noexcept;
 
 /// Test-facing (and cheap enough to stay live): what the most recent ordered
 /// evaluation did, by op kind.
@@ -59,10 +55,7 @@ struct OrderedOpCounts {
 
 /// The per-thread counters behind \c ordered_op_counts; the executor tallies
 /// into this slot directly.
-inline OrderedOpCounts& ordered_op_counts_slot() noexcept {
-  static thread_local OrderedOpCounts c;
-  return c;
-}
+SEQUANT_EVAL_INTERNAL_API OrderedOpCounts& ordered_op_counts_slot() noexcept;
 
 /// \return a snapshot of \c ordered_op_counts_slot (see \c OrderedOpCounts).
 [[nodiscard]] inline OrderedOpCounts ordered_op_counts() noexcept {
