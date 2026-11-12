@@ -24,6 +24,8 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <typeinfo>
 #include <utility>
 
 namespace sequant {
@@ -519,9 +521,11 @@ class Result {
 
   [[nodiscard]] virtual id_t type_id() const noexcept = 0;
 
+  /// @note the id is keyed by the (mangled) name of `T`, hence agrees across
+  /// shared libraries even though each caches it in its own copy of `id`
   template <typename T>
   [[nodiscard]] static id_t id_for_type() noexcept {
-    static id_t id = next_id();
+    static const id_t id = id_for_name(typeid(T).name());
     return id;
   }
 
@@ -529,7 +533,9 @@ class Result {
   /// mutable: a pending view fills it in from a const get<T>() (set_value())
   mutable std::any value_;
 
-  [[nodiscard]] static id_t next_id() noexcept;
+  /// @return the id of the type with (mangled) name @p name; a new id is
+  /// assigned on the first call for a given name
+  [[nodiscard]] static id_t id_for_name(std::string_view name) noexcept;
 };
 
 ///
