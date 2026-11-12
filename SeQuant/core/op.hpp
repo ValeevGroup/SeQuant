@@ -421,11 +421,10 @@ constexpr std::string statistics_name(Statistics S) {
   SEQUANT_UNREACHABLE;
 }
 
-/// element access to an Expr @p Derived that is a @p Vector : the mutable
-/// accessors invalidate the memoized hash of @p Derived , which must befriend
-/// this class
-/// @note declares no member types, which would make those of @p Vector
-/// ambiguous in @p Derived
+/// element access to an Expr @p Derived that holds its elements in a @p Vector
+/// (member `elements_`): the mutable accessors invalidate the memoized hash of
+/// @p Derived , which must befriend this class
+/// @note declares no member types; @p Derived declares those of @p Vector
 template <typename Derived, typename Vector>
 class VectorExprAccess {
  public:
@@ -483,12 +482,12 @@ class VectorExprAccess {
 
  private:
   const Vector &vector() const {
-    return static_cast<const Vector &>(static_cast<const Derived &>(*this));
+    return static_cast<const Derived &>(*this).elements_;
   }
   Vector &mutable_vector() {
     auto &derived = static_cast<Derived &>(*this);
     derived.reset_hash_value();
-    return static_cast<Vector &>(derived);
+    return derived.elements_;
   }
 };
 
@@ -497,10 +496,13 @@ class VectorExprAccess {
 /// @brief Operator is a sequence of Op objects
 ///
 /// @tparam S specifies the particle statistics
+/// @note holds the Op objects as a member rather than deriving from the
+/// container, since exporting a class from a Windows DLL also exports (and
+/// fully instantiates) its base classes, which `container::svector` does not
+/// support
 template <Statistics S = Statistics::FermiDirac>
 class Operator
-    : public container::svector<Op<S>>,
-      public Expr,
+    : public Expr,
       public detail::VectorExprAccess<Operator<S>, container::svector<Op<S>>> {
   using access_type =
       detail::VectorExprAccess<Operator<S>, container::svector<Op<S>>>;
@@ -510,7 +512,10 @@ class Operator
   using base_type = container::svector<Op<S>>;
   static constexpr Statistics statistics = S;
 
-  // iterate over this using the base_type
+  using value_type = typename base_type::value_type;
+  using size_type = typename base_type::size_type;
+  using reference = typename base_type::reference;
+  using const_reference = typename base_type::const_reference;
   using iterator = typename base_type::iterator;
   using const_iterator = typename base_type::const_iterator;
 
@@ -526,21 +531,25 @@ class Operator
   using access_type::rbegin;
   using access_type::rend;
   using access_type::resize;
-  using base_type::cbegin;
-  using base_type::cend;
-  using base_type::empty;
-  using base_type::size;
   using access_type::operator[];
+  auto cbegin() const { return elements_.cbegin(); }
+  auto cend() const { return elements_.cend(); }
+  auto crbegin() const { return elements_.crbegin(); }
+  auto crend() const { return elements_.crend(); }
+  bool empty() const { return elements_.empty(); }
+  std::size_t size() const { return elements_.size(); }
+  std::size_t capacity() const { return elements_.capacity(); }
+  void reserve(std::size_t n) { elements_.reserve(n); }
 
   Operator() = default;
-  explicit Operator(std::initializer_list<Op<S>> ops) : base_type(ops) {}
-  explicit Operator(base_type &&ops) : base_type(std::move(ops)) {}
+  explicit Operator(std::initializer_list<Op<S>> ops) : elements_(ops) {}
+  explicit Operator(base_type &&ops) : elements_(std::move(ops)) {}
   template <typename I>
   Operator(Action action, std::initializer_list<I> indices)
-      : base_type(make_ops(action, indices)) {}
+      : elements_(make_ops(action, indices)) {}
 
-  operator const base_type &() const & { return *this; }
-  operator base_type &&() && { return std::move(*this); }
+  operator const base_type &() const & { return elements_; }
+  operator base_type &&() && { return std::move(elements_); }
 
   /// @brief adjoint of an Operator is a reversed string of the adjoints of its
   /// ops
@@ -591,6 +600,8 @@ class Operator
   bool static_equal(const Expr &that) const override;
 
  protected:
+  base_type elements_;
+
   /// orders by the Op objects (lexicographically)
   std::weak_ordering static_lexicographic_compare(
       const Expr &that, const LexicographicCompareOptions &opts) const override;
@@ -614,8 +625,7 @@ class Operator
     auto compute_hash = [this]() {
       using std::begin;
       using std::end;
-      const auto &ops = static_cast<const base_type &>(*this);
-      auto value = hash::range(begin(ops), end(ops));
+      auto value = hash::range(begin(elements_), end(elements_));
       return value;
     };
     if (!hash_value_) {
@@ -652,9 +662,8 @@ bool Operator<S>::static_equal(const Expr &that) const {
 template <Statistics S>
 std::weak_ordering Operator<S>::static_lexicographic_compare(
     const Expr &that, const LexicographicCompareOptions &) const {
-  const auto &this_ops = static_cast<const base_type &>(*this);
-  const auto &that_ops =
-      static_cast<const base_type &>(static_cast<const Operator &>(that));
+  const auto &this_ops = elements_;
+  const auto &that_ops = static_cast<const Operator &>(that).elements_;
   return std::lexicographical_compare_three_way(
       this_ops.begin(), this_ops.end(), that_ops.begin(), that_ops.end(),
       [](const Op<S> &a, const Op<S> &b) {
@@ -696,12 +705,16 @@ class NormalOperator : public Operator<S>,
   using base_type = Operator<S>;
   using vector_type = typename Operator<S>::base_type;
 
-  // iterate over this using the base_type
+  using value_type = typename Operator<S>::value_type;
+  using size_type = typename Operator<S>::size_type;
+  using reference = typename Operator<S>::reference;
+  using const_reference = typename Operator<S>::const_reference;
   using iterator = typename Operator<S>::iterator;
   using const_iterator = typename Operator<S>::const_iterator;
 
   using base_type::at;
   using base_type::begin;
+  using base_type::capacity;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::emplace_back;
@@ -947,7 +960,7 @@ class NormalOperator : public Operator<S>,
     bool mutated = false;
     // iterated as the vector: the mutable begin()/end() would reset the hash
     // even if no index changes
-    ranges::for_each(static_cast<vector_type &>(*this), [&](auto &&op) {
+    ranges::for_each(this->elements_, [&](auto &&op) {
       if (op.index().transform(index_map)) mutated = true;
     });
     if (mutated) this->reset_hash_value();
@@ -1234,10 +1247,11 @@ bool NormalOperator<S>::static_equal(const Expr &that) const {
 /// ordered with respect to same vacuum
 ///
 /// @tparam S specifies the particle statistics
+/// @note holds the NormalOperator objects as a member rather than deriving
+/// from the container, see Operator
 template <Statistics S = Statistics::FermiDirac>
 class NormalOperatorSequence
-    : public container::svector<NormalOperator<S>>,
-      public Expr,
+    : public Expr,
       public detail::VectorExprAccess<NormalOperatorSequence<S>,
                                       container::svector<NormalOperator<S>>> {
   using access_type =
@@ -1247,6 +1261,12 @@ class NormalOperatorSequence
 
  public:
   using base_type = container::svector<NormalOperator<S>>;
+  using value_type = typename base_type::value_type;
+  using size_type = typename base_type::size_type;
+  using reference = typename base_type::reference;
+  using const_reference = typename base_type::const_reference;
+  using iterator = typename base_type::iterator;
+  using const_iterator = typename base_type::const_iterator;
   static constexpr Statistics statistics = S;
 
   using access_type::at;
@@ -1259,11 +1279,11 @@ class NormalOperatorSequence
   using access_type::rbegin;
   using access_type::rend;
   using access_type::resize;
-  using base_type::cbegin;
-  using base_type::cend;
-  using base_type::empty;
-  using base_type::size;
   using access_type::operator[];
+  auto cbegin() const { return elements_.cbegin(); }
+  auto cend() const { return elements_.cend(); }
+  bool empty() const { return elements_.empty(); }
+  std::size_t size() const { return elements_.size(); }
 
   /// constructs an empty sequence
   NormalOperatorSequence() { check_vacuum(); }
@@ -1273,19 +1293,19 @@ class NormalOperatorSequence
             typename = std::enable_if_t<
                 (std::is_convertible_v<NOps, NormalOperator<S>> && ...)>>
   NormalOperatorSequence(NOps &&...operators)
-      : base_type({std::forward<NOps>(operators)...}) {
+      : elements_({std::forward<NOps>(operators)...}) {
     check_vacuum();
   }
 
   /// constructs from an initializer list of normal operators
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
-      : base_type(operators) {
+      : elements_(operators) {
     check_vacuum();
   }
 
   /// constructs from an initializer list of Ops
   NormalOperatorSequence(std::initializer_list<Op<S>> operators)
-      : base_type(operators.begin(), operators.end()) {
+      : elements_(operators.begin(), operators.end()) {
     check_vacuum();
   }
 
@@ -1306,11 +1326,11 @@ class NormalOperatorSequence
   template <typename... Args>
   NormalOperator<S> &emplace_back(Args &&...args) {
     push_back(NormalOperator<S>(std::forward<Args>(args)...));
-    return base_type::back();
+    return elements_.back();
   }
 
-  operator const base_type &() const & { return *this; }
-  operator base_type &&() && { return std::move(*this); }
+  operator const base_type &() const & { return elements_; }
+  operator base_type &&() && { return std::move(elements_); }
 
   /// @return the total number of `Op<S>` objects in this
   /// @warning not to be confused with `NormalOperatorSequence<S>::size()` that
@@ -1361,6 +1381,7 @@ class NormalOperatorSequence
   }
 
  private:
+  base_type elements_;
   Vacuum vacuum_ = Vacuum::Physical;
   /// ensures that all operators use same vacuum, and sets vacuum_
   /// @note an empty sequence takes the default context's vacuum, its only
@@ -1404,8 +1425,8 @@ class NormalOperatorSequence
       const LexicographicCompareOptions &opts) const override {
     const auto &that_cast = static_cast<const NormalOperatorSequence &>(that);
     if (auto cmp = this->vacuum() <=> that_cast.vacuum(); cmp != 0) return cmp;
-    const auto &this_nops = static_cast<const base_type &>(*this);
-    const auto &that_nops = static_cast<const base_type &>(that_cast);
+    const auto &this_nops = elements_;
+    const auto &that_nops = that_cast.elements_;
     return std::lexicographical_compare_three_way(
         this_nops.begin(), this_nops.end(), that_nops.begin(), that_nops.end(),
         [&opts](const NormalOperator<S> &a, const NormalOperator<S> &b) {
