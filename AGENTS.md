@@ -201,7 +201,8 @@ else stays hidden. Do not export something only so that a unit test links:
 guard that test with `SEQUANT_UNIT_TESTS_INTERNALS` instead. Process-wide
 mutable state must not live in inline/template code. A type that another
 library `dynamic_cast`s to, catches or compares by `typeid` must be exported
-(a class template via explicit instantiations). See
+(a class template via explicit instantiations). Include TiledArray only via
+`SeQuant/core/eval/backends/tiledarray/tiledarray.hpp`. See
 `doc/developer/visibility.rst`.
 
 ## Check includes with a non-unity build
