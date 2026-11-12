@@ -26,8 +26,10 @@ The macros are defined in the configured header ``SeQuant/api.hpp`` (see ``SeQua
 
 Rules:
 
-#. Only entities *defined out of line* (in a ``.cpp`` file, or explicitly instantiated) need an annotation; header-only inline
-   functions and templates never do.
+#. Functions and variables need an annotation only if they are *defined out of line* (in a ``.cpp`` file, or explicitly
+   instantiated); header-only inline functions and function templates do not. Types are different: a type whose RTTI crosses
+   libraries must be exported even if it is header-only, a class template through explicit instantiations (see `RTTI across
+   libraries`_).
 #. Annotate the first declaration, in the header. Out-of-line friend functions are not covered by a class-level annotation: annotate
    the ``friend`` declaration itself.
 #. Export polymorphic classes and exception types at class level (``class SEQUANT_SYMB_API Foo``), so their vtable and RTTI are shared
@@ -59,6 +61,11 @@ boundaries must therefore be exported:
 * a header-defined class template is exported through explicit instantiations in its library (see
   ``SEQUANT_<MOD>_TEMPLATE_DECL_API``), e.g. ``Operator<S>``, ``NormalOperator<S>``, ``NormalOperatorSequence<S>`` for both
   statistics;
+* on Windows, ``dllexport`` of a class also exports, and hence fully instantiates, its template base classes. Not every class
+  template supports that (e.g. ``container::svector``), so an exported class should hold a container as a member rather than derive
+  from it (as ``Operator<S>`` and ``NormalOperatorSequence<S>`` do). Also avoid covariant return types in virtual members of exported
+  explicit instantiations: MSVC rejects their thunks (C2908); and declare their copy/move constructors and assignment operators
+  explicitly (``= default``): MSVC does not export implicitly declared move operations;
 * the visibility of a template instantiation is also limited by that of its template arguments, so a user type used as such an
   argument (e.g. an irrep type) must not be hidden in the user's library either.
 
