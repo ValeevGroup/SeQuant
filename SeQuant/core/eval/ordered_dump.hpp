@@ -330,6 +330,29 @@ void dump_occs_of(Table const& table, Rich const& rich,
       } else {
         std::cerr << "(root)";
       }
+      // what the occurrence opens, what encloses it (with each opener), and
+      // the loops it reduces
+      std::cerr << " point=" << occ.point << " opens={";
+      for (auto const& [ix, k] : occ.opens)
+        std::cerr << toUtf8(std::wstring(ix.full_label())) << ":"
+                  << (k == BatchModeType::Contracted ? "C" : "E") << " ";
+      std::cerr << "} ectx={";
+      for (std::size_t k = 0; k < occ.ectx.size(); ++k) {
+        std::cerr << toUtf8(std::wstring(occ.ectx[k].first.full_label()))
+                  << "@pt"
+                  << (k < occ.ectx_opener_point.size()
+                          ? occ.ectx_opener_point[k]
+                          : 0);
+        if (k < occ.ectx_opener_point.size())
+          if (auto it = point_to.find(occ.ectx_opener_point[k]);
+              it != point_to.end())
+            std::cerr << "(v" << it->second.first << ")";
+        std::cerr << " ";
+      }
+      std::cerr << "} reduced={";
+      for (auto const& [rm, rs] : occ.reduced_slot)
+        std::cerr << toUtf8(std::wstring(rm.full_label())) << "#" << rs << " ";
+      std::cerr << "}";
       std::cerr << "\n";
     }
     for (auto const& r : table.reads) {

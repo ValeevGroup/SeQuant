@@ -169,6 +169,64 @@ TEST_CASE("classify-two-same-space", "[legality]") {
 }
 
 // ===========================================================================
+// classify_axis: an occurrence that opens the loop over an axis itself is
+// read assembled, even when the loop enclosing it carries the same instance.
+// That happens when the value is sliced by a term loop in one tree and opens
+// its own loop under a whole reader in another whose term loop was given the
+// same identity: the reader there is produced whole, so the value must leave
+// its loop assembled for it.
+// ===========================================================================
+TEST_CASE("classify-own-open-is-assembled", "[legality]") {
+  using sequant::Index;
+  using sequant::container::svector;
+  using sequant::eval::classify_axis;
+  using sequant::eval::LoopInstance;
+  using sequant::eval::LoopRole;
+  using sequant::eval::OccurrenceAxisRole;
+  using sequant::eval::OccurrenceRec;
+  using sequant::eval::OccurrenceRole;
+
+  auto const i_1 = Index{L"i_1"};
+  auto const i_2 = Index{L"i_2"};
+  svector<Index> const carried{i_2};
+
+  // sliced by the enclosing term loop over i_2
+  OccurrenceRec lock;
+  lock.point = 3;
+  lock.consumer_point = 4;
+  lock.carried = carried;
+  lock.home = {i_2};
+  lock.loop_slot = {3};
+  lock.ectx.push_back({i_2, {0u, 4u}});
+  lock.ectx_opener_point.push_back(9);
+
+  // opens its own loop over i_2, inside another term's loop over i_1
+  OccurrenceRec own;
+  own.point = 13;
+  own.consumer_point = 14;
+  own.carried = carried;
+  own.home = {i_2};
+  own.loop_slot = {3};
+  own.opens.push_back({i_2, sequant::BatchModeType::External});
+  own.ectx.push_back({i_1, {0u, 4u}});
+  own.ectx_opener_point.push_back(19);
+
+  svector<OccurrenceRec> const occurrences{lock, own};
+  // both enclosing loops are the one instance (i, 3)
+  auto const enclosing = [](OccurrenceRec const&) {
+    return svector<LoopInstance>{{L"i", 3}};
+  };
+
+  svector<OccurrenceAxisRole> per_occ;
+  svector<Index> const contracted_below{};
+  CHECK(classify_axis(carried, contracted_below, i_2, occurrences, enclosing,
+                      &per_occ) == LoopRole::LoopLocal);
+  REQUIRE(per_occ.size() == 2);
+  CHECK(per_occ[0].role == OccurrenceRole::Lockstep);
+  CHECK(per_occ[1].role == OccurrenceRole::Assembled);
+}
+
+// ===========================================================================
 // classify_axis: a value with two occurrences, one read inside the loop
 // instance that slices it (lockstep) and one read where that instance is not
 // running (the value opens the loop itself; its consumer reads it whole).

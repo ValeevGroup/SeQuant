@@ -2874,6 +2874,17 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           if (occ_slot != lvl.loop_slot) continue;
           if (std::wstring(occ.carried[pos].basis().base_key()) != lvl.space)
             continue;
+          // A mode this occurrence opens the loop over itself is read
+          // assembled by its consumer (the loop closes at the operand's own
+          // node), even when the consumer happens to be produced inside
+          // another run of that loop instance; the consumer's own slicing,
+          // below, decides.
+          if (std::any_of(occ.opens.begin(), occ.opens.end(),
+                          [&](auto const& o) {
+                            return o.second == BatchModeType::External &&
+                                   o.first == occ.carried[pos];
+                          }))
+            continue;
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos, id_of(lvl), consumer_vid, leg));
           self_sliced = true;
