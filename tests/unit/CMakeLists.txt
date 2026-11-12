@@ -26,6 +26,7 @@ set(symb_test_sources
     "test_tensor.cpp"
     "test_tensor_network.cpp"
     "test_utilities.cpp"
+    "test_visibility.cpp"
     "test_wick.cpp"
 )
 if (NOT BUILD_SHARED_LIBS)  # tests non-exported internals (see SEQUANT_UNIT_TESTS_INTERNALS below)
