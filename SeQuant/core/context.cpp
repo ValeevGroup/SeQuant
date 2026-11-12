@@ -22,6 +22,15 @@
 
 namespace sequant {
 
+namespace detail {
+
+ImplicitContextOverlays& implicit_context_overlays() {
+  thread_local ImplicitContextOverlays overlays;
+  return overlays;
+}
+
+}  // namespace detail
+
 namespace {
 
 // process-wide immutable defaults, shared so that default-constructed
