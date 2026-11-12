@@ -1,11 +1,14 @@
 #ifndef SEQUANT_CORE_UTILITY_CONTEXT_HPP
 #define SEQUANT_CORE_UTILITY_CONTEXT_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <cstring>
 #include <iterator>
 #include <memory>
+#include <typeinfo>
 #include <utility>
 #include <vector>
 
@@ -20,6 +23,14 @@
 /// \note a process-wide change (set_implicit_context(),
 /// reset_implicit_context()) is not seen by a thread with overlays until its
 /// scopes end
+/// \warning implicit_context_instance() holds a function-local static; since
+/// SeQuant libraries are built with hidden symbol visibility, each shared
+/// library has its own copy of it. Hence getting/setting the process-wide
+/// context of a given `Ctx` must only be instantiated in (the non-inline
+/// functions of) the one library that owns `Ctx`. The thread's overlays
+/// (see implicit_context_overlays()) and their keys (see
+/// implicit_context_key()) are shared by all libraries, i.e. querying the
+/// overlays of a `Ctx` is fine anywhere.
 
 /// @{
 
@@ -32,23 +43,30 @@ inline Ctx& implicit_context_instance() {
 }
 
 /// a scoped overlay of the implicit context whose type is identified by `key`
+/// (see implicit_context_key())
 struct ImplicitContextOverlay {
-  const void* key;
+  const char* key;
   std::shared_ptr<const void> ctx;
 };
 
 /// the overlays of this thread, innermost last
 using ImplicitContextOverlays = std::vector<ImplicitContextOverlay>;
 
-inline ImplicitContextOverlays& implicit_context_overlays() {
-  thread_local ImplicitContextOverlays overlays;
-  return overlays;
+/// @return the overlays of this thread (shared by all SeQuant libraries)
+SEQUANT_SYMB_INTERNAL_API ImplicitContextOverlays& implicit_context_overlays();
+
+/// @return the key that identifies the overlays of `Ctx`
+/// @note the key is the (implementation-defined, but unique) name of `Ctx`
+/// rather than an address: those would differ between shared libraries
+/// @sa implicit_context_key_equal()
+template <typename Ctx>
+const char* implicit_context_key() {
+  return typeid(Ctx).name();
 }
 
-template <typename Ctx>
-const void* implicit_context_key() {
-  static const char key = 0;
-  return &key;
+/// @return whether @p key1 and @p key2 identify the same `Ctx`
+inline bool implicit_context_key_equal(const char* key1, const char* key2) {
+  return key1 == key2 || std::strcmp(key1, key2) == 0;
 }
 
 /// @return the innermost overlay of this thread for `Ctx`, or nullptr
@@ -57,7 +75,7 @@ template <typename Ctx>
 const Ctx* implicit_context_overlay() {
   const auto& overlays = implicit_context_overlays();
   for (auto it = overlays.rbegin(); it != overlays.rend(); ++it) {
-    if (it->key == implicit_context_key<Ctx>())
+    if (implicit_context_key_equal(it->key, implicit_context_key<Ctx>()))
       return static_cast<const Ctx*>(it->ctx.get());
   }
   return nullptr;
