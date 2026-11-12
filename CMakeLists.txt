@@ -943,7 +943,13 @@ configure_file(
         ${PROJECT_SOURCE_DIR}/SeQuant/version.hpp.in
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
 )
+set(SEQUANT_SHARED_LIBS ${BUILD_SHARED_LIBS})
+configure_file(
+        ${PROJECT_SOURCE_DIR}/SeQuant/api.hpp.in
+        ${PROJECT_BINARY_DIR}/SeQuant/api.hpp
+)
 install(FILES ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
+        ${PROJECT_BINARY_DIR}/SeQuant/api.hpp
         DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}/SeQuant")
 
 # Create the version file
