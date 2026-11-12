@@ -539,8 +539,8 @@ class Operator
   Operator(Action action, std::initializer_list<I> indices)
       : base_type(make_ops(action, indices)) {}
 
-  operator base_type &() const & { return *this; }
-  operator base_type &&() && { return *this; }
+  operator const base_type &() const & { return *this; }
+  operator base_type &&() && { return std::move(*this); }
 
   /// @brief adjoint of an Operator is a reversed string of the adjoints of its
   /// ops
@@ -1310,7 +1310,7 @@ class NormalOperatorSequence
   }
 
   operator const base_type &() const & { return *this; }
-  operator base_type &&() && { return *this; }
+  operator base_type &&() && { return std::move(*this); }
 
   /// @return the total number of `Op<S>` objects in this
   /// @warning not to be confused with `NormalOperatorSequence<S>::size()` that
