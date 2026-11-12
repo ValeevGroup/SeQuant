@@ -1003,7 +1003,7 @@ on the result of the previous one.
    Unlike most other steps, :code:`substitute` does not propagate the named aliases of its inputs onto its outputs - downstream steps need to reference
    its outputs via the auto-generated :code:`<step_id>.<index>` scheme (or via this step's own :code:`outputs` property). Additionally, if none of the
    expressions belonging to a given input end up changed by any substitution, that input is dropped from the output entirely rather than being passed
-   through unchanged.
+   through unchanged (unless :code:`keep_unchanged` is set).
 
 
 to_export_tree
@@ -1011,6 +1011,10 @@ to_export_tree
 
 Converts the given expressions into a tree data structure suitable for exports.
 
+   * - :code:`keep_unchanged`
+     - Whether an input that none of the substitutions changed is still emitted (as is), so that there is exactly one output per input, in input order.
+     - false
+     - No
 .. list-table::
    :header-rows: 1
 

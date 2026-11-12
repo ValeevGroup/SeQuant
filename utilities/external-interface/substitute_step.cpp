@@ -68,6 +68,13 @@ void SubstituteStep::set_options(const nlohmann::json &options) {
         throw Exception("Unknown value '" + value.get<std::string>() +
                         "' for option '" + key + "' for " + kind());
       }
+    } else if (key == "keep_unchanged") {
+      if (!value.is_boolean()) {
+        throw Exception("Option '" + key + "' for " + kind() +
+                        " requires boolean argument");
+      }
+
+      keep_unchanged_ = value.get<bool>();
     } else if (key == "result_relabeling") {
       if (!value.is_object()) {
         throw Exception("Option '" + key + "' for " + kind() +
@@ -109,8 +116,7 @@ std::size_t SubstituteStep::process(std::string_view id_prefix,
     }
   }
 
-  if (input.unchanged()) {
-    // Nothing changed
+  if (input.unchanged() && !keep_unchanged_) {
     return 0;
   }
 
