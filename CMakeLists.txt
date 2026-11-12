@@ -390,6 +390,7 @@ set(SeQuant_symb_src
         SeQuant/core/basis.cpp
         SeQuant/core/basis.hpp
         SeQuant/core/index_basis_registry.cpp
+        SeQuant/core/logger.cpp
         SeQuant/core/index_basis_registry.hpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
