@@ -9,11 +9,13 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/topological.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <functional>
+#include <map>
 #include <optional>
 #include <ranges>
 #include <set>
@@ -361,6 +363,43 @@ std::size_t CSEStep::run(std::string_view step_id, ExecutionContext &ctx,
     if (group_of[i] != ungrouped) {
       members[group_of[i]].push_back(i);
     }
+  }
+
+  // Merging puts the members into a single dataset, for which the export only
+  // honors the intra-dataset order. Dependencies between members (e.g. set by a
+  // dependencies step) would otherwise be lost, so order the members such that
+  // producers precede their consumers.
+  for (std::vector<std::size_t> &group_members : members) {
+    std::map<std::size_t, std::size_t> producer_of;
+    for (std::size_t pos = 0; pos < group_members.size(); ++pos) {
+      for (const ExportTreeData::Entry &entry :
+           convert_data<ExportTreeData>(datasets[group_members[pos]].data.get())
+               .entries) {
+        producer_of.emplace(entry.tree->id(), pos);
+      }
+    }
+
+    std::vector<std::size_t> order =
+        topological_order_indexed(group_members.size(), [&](std::size_t pos) {
+          std::set<std::size_t> deps;
+          for (const ExportTreeData::Entry &entry :
+               convert_data<ExportTreeData>(
+                   datasets[group_members[pos]].data.get())
+                   .entries) {
+            for (std::size_t id : entry.dependencies) {
+              auto it = producer_of.find(id);
+              if (it != producer_of.end() && it->second != pos) {
+                deps.insert(it->second);
+              }
+            }
+          }
+          return deps;
+        });
+
+    std::vector<std::size_t> sorted;
+    sorted.reserve(order.size());
+    for (std::size_t pos : order) sorted.push_back(group_members[pos]);
+    group_members = std::move(sorted);
   }
 
   detail::AliasPropagator propagator(ctx, step_id);
