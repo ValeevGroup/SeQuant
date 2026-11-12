@@ -465,6 +465,7 @@ TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -1081,10 +1082,12 @@ TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
   // Mirror a specific MPQC input (z820 w20 csv-cck-diag.json: batch
   // peak_threshold 25e9, optimize objective dense_time_space) via env.
   if (char const* pt = std::getenv("SEQUANT_UT_PEAK_THRESHOLD"))
     policy.peak_threshold = std::atof(pt);
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -1569,6 +1572,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   policy.persistent_only = false;
   policy.peak_threshold =
       orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
+  policy.infeasible_is_error = false;  // may be over budget
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -1989,6 +1993,7 @@ TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
   // THE mirrored setting (the walk fixture reads it from
   // SEQUANT_UT_PEAK_THRESHOLD; here it is set directly).
   policy.peak_threshold = 25e9;
+  policy.infeasible_is_error = false;  // may be over budget
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -2236,10 +2241,12 @@ TEST_CASE("mirrored-w20-mixed-pass-dump",
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
   // Mirror a specific MPQC input (z820 w20 csv-cck-diag.json: batch
   // peak_threshold 25e9, optimize objective dense_time_space) via env.
   if (char const* pt = std::getenv("SEQUANT_UT_PEAK_THRESHOLD"))
     policy.peak_threshold = std::atof(pt);
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -2428,6 +2435,7 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -2807,6 +2815,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
            ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
            : 100.0) *
       1e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   // SEQUANT_UT_DRYRUN_HOLD=1: the search may hold an amplitude-independent
   // operand outside the loop that slices its consumer; one of at least
@@ -3504,6 +3513,7 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
   policy.scheduler = sequant::BatchScheduler::ordered;
 
   auto axes_map = std::make_shared<std::unordered_map<
@@ -3711,6 +3721,7 @@ TEST_CASE("w20-peak-composition", "[w20-peak-composition]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4568,6 +4579,7 @@ TEST_CASE("ordered-assemble-dest-size", "[ordered][assemble-dest]") {
   policy.persistent_only = false;
   policy.peak_threshold =
       orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4885,6 +4897,7 @@ TEST_CASE("ordered-invariant-escape-once", "[ordered][block-skip]") {
   policy.persistent_only = false;
   policy.peak_threshold =
       orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -5070,6 +5083,7 @@ TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
   policy.persistent_only = false;
   policy.peak_threshold = orderedexec_structure_budget(
       25e9, kOrderedExecWater20_pVDZF12, 1);  // THE mirrored setting
+  policy.infeasible_is_error = false;         // may be over budget
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -5404,6 +5418,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     policy.accumulation_factor = 1.0;
     policy.persistent_only = false;
     policy.peak_threshold = 1e11;
+    policy.infeasible_is_error = false;  // may be over budget
 
     auto axes_map = std::make_shared<std::unordered_map<
         sequant::Expr const*,
@@ -5710,6 +5725,7 @@ TEST_CASE("ordered-lockstep-vs-whole-escape",
     return t.label() == L"t";
   };
   policy.peak_threshold = 8000;
+  policy.infeasible_is_error = false;  // may be over budget
   policy.scheduler = sequant::BatchScheduler::ordered;
 
   auto axes = std::make_shared<std::unordered_map<

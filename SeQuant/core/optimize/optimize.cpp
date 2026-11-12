@@ -113,6 +113,7 @@ ExprPtr single_term_dp(Product const& prod, OptimizeOptions const& opts,
   cost.accumulation_factor = opts.batch_policy.accumulation_factor;
   cost.hold = opts.batch_policy.hold;
   cost.infeasible_peak_slack = opts.batch_policy.infeasible_peak_slack;
+  cost.infeasible_is_error = opts.batch_policy.infeasible_is_error;
   cost.peak_threshold = opts.batch_policy.peak_threshold;
   cost.prune_outer_products = opts.prune_outer_products;
   cost.batch_spectator_indices = opts.batch_policy.batch_spectator_indices;
@@ -371,10 +372,23 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
               "so that every summand is a term");
     Sum::summands_type new_smands(in_sum.size());
 
+    // Terms no schedule of which fits the peak budget (term, its smallest
+    // modeled peak in bytes): collected over the whole sum and reported once,
+    // so the caller learns the smallest budget every term fits rather than
+    // meeting the terms one at a time.
+    std::mutex infeasible_mutex;
+    container::vector<std::pair<std::size_t, double>> infeasible;
+    double infeasible_budget = 0;
     auto do_term = [&](std::size_t i) {
-      new_smands[i] = optimize_impl(in_sum.summand(i), opts,
-                                    /*reorder=*/false,
-                                    /*parallel_outer=*/false);
+      try {
+        new_smands[i] = optimize_impl(in_sum.summand(i), opts,
+                                      /*reorder=*/false,
+                                      /*parallel_outer=*/false);
+      } catch (PeakBudgetInfeasible const& e) {
+        std::scoped_lock lock{infeasible_mutex};
+        infeasible.emplace_back(i, e.min_peak_bytes);
+        infeasible_budget = e.budget_bytes;
+      }
     };
 
     // Thread-safety of the parallel branch rests on two invariants; do NOT
@@ -398,6 +412,28 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
       sequant::for_each(indices, do_term);
     } else {
       for (std::size_t i = 0; i < in_sum.size(); ++i) do_term(i);
+    }
+    if (!infeasible.empty()) {
+      std::sort(infeasible.begin(), infeasible.end());
+      double need = 0;
+      std::string list;
+      for (auto const& [i, bytes] : infeasible) {
+        need = std::max(need, bytes);
+        list += (list.empty() ? "" : ", ") + std::to_string(i) + " (" +
+                std::to_string(bytes) + ")";
+      }
+      throw PeakBudgetInfeasible(
+          std::to_string(infeasible.size()) + " of " +
+              std::to_string(in_sum.size()) +
+              " terms have no schedule that fits the peak memory budget of " +
+              std::to_string(infeasible_budget) +
+              " bytes; the smallest budget all of them fit is " +
+              std::to_string(need) +
+              " bytes. Terms (smallest modeled peak, bytes): " + list +
+              ". Raise the budget, make more index spaces batchable, or "
+              "unset BatchPolicy::infeasible_is_error to schedule them over "
+              "budget.",
+          infeasible_budget, need);
     }
 
     // Pinned whole Sum (scheduled implies no nested Sum, so this is the root):

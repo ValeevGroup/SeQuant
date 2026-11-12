@@ -522,6 +522,7 @@ pin_optimize(sequant::ExprPtr const& canon) {
     return 10;
   };
   policy.peak_threshold = 1e5;
+  policy.infeasible_is_error = false;  // may be over budget
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -856,6 +857,7 @@ sequant::OptimizeOptions session_opts() {
     return 10;
   };
   policy.peak_threshold = 1e5;
+  policy.infeasible_is_error = false;  // may be over budget
   sequant::OptimizeOptions opts;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = pin_extent;
@@ -1326,6 +1328,7 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
     return std::size_t{7};
   };
   opts2.batch_policy.peak_threshold = 1e9;
+  opts2.batch_policy.infeasible_is_error = false;  // may be over budget
   REQUIRE_NOTHROW(check_fingerprint(
       fp, fingerprint_of(forest, {"R"}, opts2, {L"a", L"i"})));
 
@@ -1461,6 +1464,7 @@ sequant::BatchPolicy external_occ_policy() {
   };
   policy.batch_spectator_indices = true;
   policy.peak_threshold = 1;
+  policy.infeasible_is_error = false;  // may be over budget
   return policy;
 }
 
@@ -2192,6 +2196,7 @@ Document build_document(sequant::ExprPtr const& sum,
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
 
   sequant::OptimizeOptions opts;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;

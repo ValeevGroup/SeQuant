@@ -2,10 +2,12 @@
 #define SEQUANT_CORE_BATCH_POLICY_HPP
 
 #include <SeQuant/core/utility/aggregate.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <cstddef>
 #include <functional>
 #include <limits>
+#include <string>
 
 namespace sequant {
 
@@ -176,6 +178,31 @@ struct BatchPolicy {
   /// peak then switches that term's batching off. A small value (e.g. 0.25)
   /// keeps the overage close to the unavoidable one.
   double infeasible_peak_slack = std::numeric_limits<double>::infinity();
+
+  /// Whether a term none of whose schedules fits \c peak_threshold is an
+  /// error (default): optimization then throws \c PeakBudgetInfeasible,
+  /// naming every such term and the smallest budget all terms fit. When
+  /// false the term is scheduled anyway, over budget: the time-first
+  /// objective by \c infeasible_peak_slack, the peak-first one with its
+  /// smallest-peak schedule. Turn it off to use an unreachable budget as a
+  /// request to batch as hard as possible.
+  bool infeasible_is_error = true;
+};
+
+/// Thrown by the optimizer when a term has no schedule whose modeled peak
+/// fits BatchPolicy::peak_threshold and BatchPolicy::infeasible_is_error is
+/// set. For one term: \c min_peak_bytes is that term's smallest modeled
+/// peak. For a sum: the largest of its terms' smallest peaks, i.e. the
+/// smallest budget every term fits, with the terms listed in what().
+class PeakBudgetInfeasible : public Exception {
+ public:
+  PeakBudgetInfeasible(std::string const& msg, double budget_bytes,
+                       double min_peak_bytes)
+      : Exception(msg),
+        budget_bytes(budget_bytes),
+        min_peak_bytes(min_peak_bytes) {}
+  double budget_bytes;
+  double min_peak_bytes;
 };
 
 }  // namespace sequant

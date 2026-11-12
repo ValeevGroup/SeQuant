@@ -549,6 +549,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.peak_threshold = 100e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -640,6 +641,7 @@ TEST_CASE("node-axes-match-binarize", "[optimize][batch][r1-offbyone]") {
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.peak_threshold = 100e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -940,6 +942,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[dryrun-df]") {
     };
     opts.batch_policy.accumulation_factor = 1.0;
     opts.batch_policy.peak_threshold = peak_threshold;
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
     opts.volatile_weight = vol_weight;
     if (use_roofline) {
       opts.roofline.machine_balance = 200.0;
@@ -1987,7 +1990,8 @@ TEST_CASE("giant-term-replay", "[dryrun-eval]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;  // DP-side knob only; the runtime evaluator
-                                 // never consults peak_threshold.
+  policy.infeasible_is_error = false;  // may be over budget
+                                       // never consults peak_threshold.
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2292,6 +2296,7 @@ TEST_CASE("perf-first-no-4pao", "[dryrun-objective]") {
              ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
              : 40.0) *
         1e9;
+    policy.infeasible_is_error = false;  // may be over budget
 
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2703,6 +2708,7 @@ TEST_CASE("external-occ-sizing", "[dryrun-occ-sizing]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40.0 * 1e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2927,6 +2933,7 @@ TEST_CASE("c60-perf-first-audit", "[dryrun-c60-batchability-audit]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = kThrGB * 1e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   struct TermVerdict {
     std::size_t t = 0;
@@ -3257,6 +3264,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -3596,6 +3604,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   // Optimize (perf-first) + binarize the giant, carrying the per-node batch
   // modes so the binarized tree matches the real schedule.
@@ -4787,6 +4796,7 @@ sequant::BatchPolicy nested_contracted_policy() {
     return ix.space().base_key() == L"i" ? 3 : 7;
   };
   policy.peak_threshold = 1;
+  policy.infeasible_is_error = false;  // may be over budget
   return policy;
 }
 
@@ -4906,6 +4916,7 @@ TEST_CASE("meter-ordered-batched-adjoint-leaf", "[meter][batch]") {
     policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"R"; };
     // below this term's unbatched peak (133120 B), so a node is sliced
     policy.peak_threshold = 100000;
+    policy.infeasible_is_error = false;  // may be over budget
     policy.scheduler = scheduler;
 
     OptimizeOptions opts;

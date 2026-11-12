@@ -7566,6 +7566,7 @@ TEST_CASE("dp_external_placement_correctness",
     opts.batch_policy.batch_target_size = bts;
     opts.batch_policy.batch_spectator_indices = true;
     opts.batch_policy.peak_threshold = 1.0e3;  // tiny budget => force external
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
     opts.term_batch_axes = axes_map;
 
     auto optimized = optimize(expr, opts);

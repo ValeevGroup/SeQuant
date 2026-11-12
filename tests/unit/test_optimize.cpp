@@ -2189,6 +2189,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
                      .volatile_weight = 100.0,
                      .footprint_weight = 0.0};
   po_cost.peak_threshold = 1.0;  // near-zero => infeasible => min-peak fallback
+  po_cost.infeasible_is_error = false;  // may be over budget
   po_cost.is_batchable_contracted_index = is_batch;
   po_cost.batch_target_size = bts;
   po_cost.inner_pow = ip;
@@ -2367,6 +2368,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
                    .volatile_weight = 100.0,
                    .footprint_weight = 0.0};
   tight.peak_threshold = 1.0;
+  tight.infeasible_is_error = false;  // may be over budget
   tight.is_batchable_contracted_index = is_batch;
   tight.batch_target_size = bts;
   tight.inner_pow = ip;
@@ -2551,6 +2553,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
                     .roofline = {},
                     .accumulation_factor = lambda};
     cost.peak_threshold = 1.0;
+    cost.infeasible_is_error = false;  // may be over budget
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
     cost.inner_pow = ip;
@@ -2599,6 +2602,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
                     .roofline = {},
                     .accumulation_factor = 0.0};
     cost.peak_threshold = 1.0;
+    cost.infeasible_is_error = false;  // may be over budget
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
     cost.inner_pow = ip;
@@ -2702,6 +2706,7 @@ TEST_CASE("peak-threshold-gating", "[optimize][threshold]") {
                     .volatile_weight = 100.0,
                     .footprint_weight = 0.0};
     cost.peak_threshold = peak_threshold;
+    cost.infeasible_is_error = false;  // may be over budget
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
     cost.inner_pow = ip;
@@ -2738,6 +2743,7 @@ TEST_CASE("peak-threshold-gating", "[optimize][threshold]") {
                     .volatile_weight = 100.0,
                     .footprint_weight = 0.0};
     cost.peak_threshold = peak_threshold;
+    cost.infeasible_is_error = false;  // may be over budget
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
     cost.inner_pow = ip;
@@ -3067,6 +3073,69 @@ TEST_CASE("an over-budget term stays near its smallest peak when asked to",
   CHECK(run(0.0)[0] == min_peak);
 }
 
+// BatchPolicy::infeasible_is_error (default on): a term none of whose
+// schedules fits the budget is an error, reported once for the whole sum with
+// the smallest budget every term fits; a budget at that value is accepted.
+TEST_CASE("an unmet peak budget is an error unless asked otherwise",
+          "[optimize][batch][threshold]") {
+  using namespace sequant;
+  auto ctx_copy = get_default_context_snapshot();
+  {
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent(L"a", 3ul);
+    ctx_copy.set(std::move(reg));
+  }
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
+  auto is_F = [](Index const& ix) { return ix.basis().base_key() == L"F"; };
+
+  // two terms; the second is small and has nothing to batch
+  auto expr = deserialize(
+      L"g{F1;a1} h{a1;a2} t{a2;F1} + "
+      L"g{a3;a1} h{a1;a2} t{a2;a3}",
+      {.def_perm_symm = Symmetry::Nonsymm});
+  REQUIRE(expr->is<Sum>());
+
+  auto run = [&](double budget, bool is_error) {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+      return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+    };
+    opts.batch_policy.is_batchable_contracted_index = is_F;
+    opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 1;
+    };
+    opts.batch_policy.peak_threshold = budget;
+    opts.batch_policy.infeasible_is_error = is_error;
+    opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
+      return t.label() == L"t";
+    };
+    opts.volatile_weight = 20.0;
+    return optimize(expr, opts);
+  };
+
+  // the default is on
+  CHECK(BatchPolicy{}.infeasible_is_error);
+  double need = 0;
+  try {
+    run(1.0, true);
+    FAIL("a 1-byte budget was accepted");
+  } catch (PeakBudgetInfeasible const& e) {
+    CHECK(e.budget_bytes == 1.0);
+    need = e.min_peak_bytes;
+    CHECK(need > 1.0);
+    // both terms are over a 1-byte budget and both are named
+    CHECK(std::string(e.what()).find("2 of 2 terms") != std::string::npos);
+  }
+  // asked otherwise: scheduled over budget
+  CHECK(run(1.0, false));
+  // the reported budget is one every term fits ...
+  CHECK(run(need, true));
+  // ... and it is the smallest such
+  CHECK_THROWS_AS(run(need * 0.999, true), PeakBudgetInfeasible);
+}
+
 // The held operand's stamp reaches the evaluation tree, and its home is
 // outside its consumer's loop: the schedule maker then produces it at the
 // root scope.
@@ -3101,6 +3170,7 @@ TEST_CASE("a held operand is homed outside its consumer's loop",
       return 1;
     };
     opts.batch_policy.peak_threshold = 9000.0;
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
     opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
       return t.label() == L"t";
     };
@@ -3280,6 +3350,7 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   opts.batch_policy.is_batchable_contracted_index = is_batch;
   opts.batch_policy.batch_target_size = bts;
   opts.batch_policy.peak_threshold = 1.0;  // tiny budget => force batching
+  opts.batch_policy.infeasible_is_error = false;  // may be over budget
   opts.term_batch_axes = axes_map;
 
   auto optimized = optimize(expr, opts);
@@ -4456,6 +4527,7 @@ TEST_CASE("optimize-tensor-power-factors", "[optimize][tensor-power]") {
       return 10;
     };
     opts.batch_policy.peak_threshold = 1e5;
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
     opts.term_batch_axes = std::make_shared<std::unordered_map<
         Expr const*, container::vector<NodeBatchAnnotation>>>();
     return opts;

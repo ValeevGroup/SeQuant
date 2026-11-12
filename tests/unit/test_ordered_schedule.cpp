@@ -1069,6 +1069,7 @@ struct OrderedSchedFixture {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,

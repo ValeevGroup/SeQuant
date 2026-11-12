@@ -216,6 +216,8 @@ struct CostParams {
   HoldPolicy hold = {};
   /// Threaded from BatchPolicy::infeasible_peak_slack.
   double infeasible_peak_slack = std::numeric_limits<double>::infinity();
+  /// Threaded from BatchPolicy::infeasible_is_error.
+  bool infeasible_is_error = true;
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public

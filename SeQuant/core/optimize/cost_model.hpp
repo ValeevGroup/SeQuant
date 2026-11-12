@@ -717,6 +717,12 @@ struct PeakBatchedModel {
   /// See BatchPolicy::infeasible_peak_slack; +infinity takes the cheapest.
   double infeasible_peak_slack = std::numeric_limits<double>::infinity();
 
+  /// When true, \ref select_root throws \c PeakBudgetInfeasible for a term
+  /// none of whose schedules fits \ref peak_threshold instead of choosing an
+  /// over-budget one. See BatchPolicy::infeasible_is_error, which sets it;
+  /// off here, for a model built directly.
+  bool infeasible_is_error = false;
+
   /// \return true iff a whole value of \p elems elements lives in the slow
   ///         space of \ref hold
   bool in_slow_space(double elems) const {
@@ -1565,6 +1571,7 @@ struct PeakBatchedModel {
           pbest = i;
       bool const fit = pbest >= 0;  // a schedule met the ceiling
       if (!fit) {
+        throw_if_infeasible_is_error(rootf);
         // Nothing fits the budget. The overage is then kept close to the
         // unavoidable one: among the points whose peak is within
         // infeasible_peak_slack of the smallest peak on the frontier, min
@@ -1600,6 +1607,7 @@ struct PeakBatchedModel {
           best = i;
       }
     if (!any_feasible) {
+      throw_if_infeasible_is_error(rootf);
       // Infeasible: no schedule fits the budget. Fall back to min peak.
       double minpeak = std::numeric_limits<double>::max();
       for (int i = 0; i < static_cast<int>(rootf.size()); ++i)
@@ -1609,6 +1617,23 @@ struct PeakBatchedModel {
         }
     }
     return best;
+  }
+
+  /// Throws \c PeakBudgetInfeasible, carrying the smallest peak on the root
+  /// frontier \p rootf, when \ref infeasible_is_error is set; called by \ref
+  /// select_root once it has found that no point fits \ref peak_threshold.
+  template <typename Frontier>
+  void throw_if_infeasible_is_error(Frontier const& rootf) const {
+    if (!infeasible_is_error) return;
+    double min_peak = std::numeric_limits<double>::max();
+    for (auto const& pt : rootf) min_peak = std::min(min_peak, pt.peak);
+    double const min_bytes = min_peak * numeric_size;
+    throw PeakBudgetInfeasible(
+        "no schedule of this term fits the peak memory budget of " +
+            std::to_string(peak_threshold) +
+            " bytes: its smallest modeled peak is " +
+            std::to_string(min_bytes) + " bytes",
+        peak_threshold, min_bytes);
   }
 
   /// The children of a chosen frontier point, in the canonical `lp_first`
