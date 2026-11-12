@@ -8,10 +8,13 @@
 
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 
 #include <iostream>
+#include <limits>
 
 TEST_CASE("index", "[elements][index]") {
   using namespace sequant;
@@ -47,6 +50,15 @@ TEST_CASE("index", "[elements][index]") {
                           std::to_wstring(Index::min_tmp_index() - 1)));
     REQUIRE_THROWS(
         Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
+
+    // the ordinal reserved internally to encode "no ordinal" is rejected
+    if constexpr (sequant::assert_behavior() !=
+                  sequant::AssertBehavior::Abort) {
+      constexpr auto max_ordinal =
+          std::numeric_limits<Index::ordinal_type>::max();
+      REQUIRE_THROWS_AS(Index(L"i_" + std::to_wstring(max_ordinal)),
+                        sequant::Exception);
+    }
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");

@@ -8,6 +8,7 @@
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <utility>
@@ -22,7 +23,7 @@ namespace sequant::mbpt {
 /// CC is a derivation engine for the coupled-cluster method
 class CC {
  public:
-  enum class Ansatz {
+  enum class Ansatz : std::uint8_t {
     /// traditional ansatz
     T,
     /// traditional orbital-optimized (singles-free) ansatz
@@ -33,7 +34,7 @@ class CC {
     oU
   };
 
-  enum class HbarExpansion {
+  enum class HbarExpansion : std::uint8_t {
     /// standard Baker-Campbell-Hausdorff commutator expansion
     BCH,
     /// Bernoulli expansion, 10.1063/1.5030344 (U ansatz only)

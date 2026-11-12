@@ -36,6 +36,7 @@
 #include <range/v3/view/zip.hpp>
 
 #include <bitset>
+#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <ranges>
@@ -649,7 +650,7 @@ class WickTheorem {
     return input_->vacuum() != Vacuum::MultiProduct;
   }
 
-  enum class TopologicalPartitionType { NormalOperator, Index };
+  enum class TopologicalPartitionType : std::uint8_t { NormalOperator, Index };
 
   /// the number of partitions of the topologically equivalent NormalOperator's
   /// objects in the NormalOperatorSequence

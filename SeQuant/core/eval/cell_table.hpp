@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -53,12 +54,12 @@ struct CellScope {
 /// How a cell's content comes to be: computed by a build step (\c Build),
 /// accumulated from another cell's per-batch partials (\c Assemble), or
 /// handed over by the leaf evaluator (\c Leaf).
-enum class ProductionKind { Build, Assemble, Leaf };
+enum class ProductionKind : std::uint8_t { Build, Assemble, Leaf };
 
 /// How an \c Assemble production combines the partials of its source: summing
 /// them into one value (\c Sum) or scattering each into its own block of the
 /// target (\c Scatter).
-enum class AssembleKind { Sum, Scatter };
+enum class AssembleKind : std::uint8_t { Sum, Scatter };
 
 /// How one cell is produced: its \c ProductionKind plus, for an \c Assemble,
 /// the source cell whose per-batch partials it consumes and how they combine.

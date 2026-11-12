@@ -1,13 +1,15 @@
 #ifndef SEQUANT_TENSOR_NETWORK_VERTEX_H
 #define SEQUANT_TENSOR_NETWORK_VERTEX_H
 
+#include <cstdint>
+
 namespace sequant {
 
 /// types of vertices created on a colored graph representation of a tensor
 /// network
 
 /// @sa TensorNetworkV3
-enum class VertexType {
+enum class VertexType : std::uint8_t {
   /// represent a Index object
   Index,
   /// represent a bundle of indices that serve as protoindices to Index objects

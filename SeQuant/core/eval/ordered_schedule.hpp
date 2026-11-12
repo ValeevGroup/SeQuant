@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <limits>
@@ -49,7 +50,7 @@ namespace sequant::eval {
 ///
 /// \brief What happens to a value at the close of its home \c ScopeBlock.
 ///
-enum class OutputKind {
+enum class OutputKind : std::uint8_t {
   Transient,          //!< the value's home is this block; nothing carries out.
                       //!< \note a Transient value never appears in
                       //!< any block's \c outputs list -- it is realized purely
@@ -759,7 +760,11 @@ pass_step_cycle_edges(
       n + block_node.size());
 
   // Steps of one level of one nest in one pass.
-  enum class Kind { BlockNeedsBuild, BuildNeedsBlock, BuildNeedsBuild };
+  enum class Kind : std::uint8_t {
+    BlockNeedsBuild,
+    BuildNeedsBlock,
+    BuildNeedsBuild
+  };
   struct LevelEdge {
     std::size_t nest, depth;
     int pass;

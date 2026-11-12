@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <sstream>
@@ -34,7 +35,7 @@ constexpr bool is_full_binary_node<FullBinaryNode<T>>{true};
 }  // namespace meta
 
 /// Full-binary node visit orders.
-enum class TreeTraversal {
+enum class TreeTraversal : std::uint8_t {
   None = 0,
   PreOrder = 0b001,
   PostOrder = 0b010,

@@ -7,6 +7,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -72,7 +73,7 @@ bool is_tensor_factor(Expr const& e);
 /// Naming: `Dense{Primary}{Secondary}`, `Space` = peak/size, `Time` = perf.
 ///
 /// Leaves room for `Sparse*` models later.
-enum class ObjectiveFunction {
+enum class ObjectiveFunction : std::uint8_t {
   /// Floating-point operation count (the default).
   DenseFLOPs,
   /// \deprecated Use \c DenseTimeSpace. Result-tensor storage elements summed
@@ -98,7 +99,7 @@ enum class ObjectiveFunction {
 
 /// Whether to reorder summands so terms with shared intermediates appear
 /// closer to each other.
-enum class ReorderSum { Reorder, NoReorder };
+enum class ReorderSum : std::uint8_t { Reorder, NoReorder };
 
 /// Common-subexpression-elimination (CSE) options for single-term
 /// optimization. `subnet` recognizes equivalent subnetworks while searching for

@@ -182,9 +182,9 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
+      canon_phase_{p},
       expr_{ex.clone()},
       canon_indices_{std::move(ixs)},
-      canon_phase_{p},
       hash_value_{h},
       connectivity_{std::move(connectivity)} {
   if (connectivity_ != nullptr) {
@@ -286,6 +286,11 @@ std::string EvalExpr::label() const noexcept {
 }
 
 std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
+
+const EvalBatchInfo& EvalExpr::batch_info() const noexcept {
+  static const EvalBatchInfo defaults;
+  return batch_.get() ? *batch_.get() : defaults;
+}
 
 bool EvalExpr::has_connectivity_graph() const noexcept {
   return connectivity_ != nullptr;

@@ -2041,7 +2041,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // intermediate (all-full mask; or an External-only / no node_slice_mask
   // entry, e.g. gC) lands. Off path (no order-aware annotations, hence no \c
   // stamp_lifetime_masks External stamps): every mask is empty (all-full,
-  // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
+  // \c EvalExpr::sliced_modes() default-constructed), so the veto never fires
   // and every candidate is admitted.
   // Only the selected nodes are copied by value here -- into the cache map and,
   // for the frontier, into the owning set the returned is_persistent closes

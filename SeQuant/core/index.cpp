@@ -22,20 +22,19 @@ void Index::reset_tmp_index() noexcept {
 
 std::wstring Index::to_latex() const noexcept {
   std::wstring protos{};
-  const auto instance = basis_.unnamed_instance();
+  const auto instance = basis_->unnamed_instance();
   if (has_proto_indices() || instance) {
     protos += L"^{";
     for (auto&& pidx : proto_indices()) protos += pidx.to_latex();
-    if (instance) protos += basis_.instance_suffix();
+    if (instance) protos += basis_->instance_suffix();
     protos += L"}";
   }
   std::wstring sfx;
-  if (ordinal_)
-    sfx =
-        std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
-                                           : std::format(L"{{{}}}", *ordinal_));
-  return std::format(L"{{{}{}{}}}", io::latex::utf_to_string(basis_.base_key()),
-                     sfx, protos);
+  if (has_ordinal())
+    sfx = std::format(L"_{}", ordinal_ < 10 ? std::to_wstring(ordinal_)
+                                            : std::format(L"{{{}}}", ordinal_));
+  return std::format(L"{{{}{}{}}}",
+                     io::latex::utf_to_string(basis_->base_key()), sfx, protos);
 }
 
 std::string Index::ascii_label() const {
@@ -80,20 +79,18 @@ Index Index::replace_basis_instance(
     IndexBasis::optional_instance basis_instance) const {
   Index result(*this);
   result.basis_ =
-      default_registry_resolved(IndexBasis(space(), basis_instance));
-  result.label_.reset();
-  result.full_label_.reset();
+      &intern(default_registry_resolved(IndexBasis(space(), basis_instance)));
+  result.labels_.reset();
   return result;
 }
 
 void Index::rebase(IndexSpace space) {
   // a name and the metadata belong to the instance of the old space; in
   // another space the instance is whatever the default registry knows it as
-  if (space != basis_.space())
-    basis_ = default_registry_resolved(
-        IndexBasis(std::move(space), basis_.basis_instance()));
-  label_.reset();
-  full_label_.reset();
+  if (space != basis_->space())
+    basis_ = &intern(default_registry_resolved(
+        IndexBasis(std::move(space), basis_->basis_instance())));
+  labels_.reset();
 }
 
 }  // namespace sequant

@@ -7120,9 +7120,15 @@ namespace {
 void copy_batch_annotations(
     sequant::FullBinaryNode<sequant::EvalExpr> const& from,
     sequant::FullBinaryNode<sequant::EvalExprTA>& to) {
+  const auto& mask = from->node_slice_mask();
   const_cast<sequant::EvalExprTA&>(*to).set_node_slice_mask(
-      from->node_slice_mask());
-  const_cast<sequant::EvalExprTA&>(*to).set_sliced_modes(from->sliced_modes());
+      sequant::container::svector<
+          std::pair<sequant::Index, sequant::BatchModeType>>(mask.begin(),
+                                                             mask.end()));
+  const auto& sliced = from->sliced_modes();
+  const_cast<sequant::EvalExprTA&>(*to).set_sliced_modes(
+      sequant::container::svector<sequant::Index>(sliced.begin(),
+                                                  sliced.end()));
   const_cast<sequant::EvalExprTA&>(*to).set_batch_order_aware(
       from->batch_order_aware());
   const_cast<sequant::EvalExprTA&>(*to).set_batch_effective_count(

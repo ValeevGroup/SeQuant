@@ -108,34 +108,38 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   };
 
  private:
-  using index_container_type = container::svector<Index>;
+  // Tensors typically have few bra/ket indices and (almost) never aux indices;
+  // since sizeof(Index) is large, the inline capacities are kept small.
+  using index_container_type = container::svector<Index, 3>;
+  using aux_container_type = container::svector<Index, 2>;
   static auto make_indices(IndexList indices) { return indices; }
+  template <typename Container = index_container_type>
   static auto make_indices(WstrList index_labels) {
-    index_container_type result;
+    Container result;
     result.reserve(index_labels.size());
     for (const auto &label : index_labels) {
       result.push_back(Index{label});
     }
     return result;
   }
+  template <typename Container = index_container_type>
   static auto make_indices(
       std::initializer_list<const wchar_t *> index_labels) {
-    index_container_type result;
+    Container result;
     result.reserve(index_labels.size());
     for (const auto &label : index_labels) {
       result.push_back(Index{label});
     }
     return result;
   }
-  template <typename IndexRange>
-  static index_container_type make_indices(IndexRange &&indices) {
-    if constexpr (std::is_same_v<index_container_type,
-                                 std::decay_t<IndexRange>>) {
+  template <typename Container = index_container_type, typename IndexRange>
+  static Container make_indices(IndexRange &&indices) {
+    if constexpr (std::is_same_v<Container, std::decay_t<IndexRange>>) {
       return std::forward<IndexRange>(indices);
     } else {
       using ranges::begin;
       using ranges::end;
-      return index_container_type(begin(indices), end(indices));
+      return Container(begin(indices), end(indices));
     }
   }
 
@@ -382,15 +386,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       : label_(toUtf16(std::forward<S>(label))),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
-        aux_(make_indices(aux_indices)),
-        symmetry_(rsym.symmetry),
-        braket_symmetry_(rsym.braket_symmetry),
-        hermiticity_(rsym.hermiticity),
-        column_symmetry_(rsym.column_symmetry),
+        aux_(make_indices<aux_container_type>(aux_indices)),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
-            ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+            ket_, [](const Index &idx) { return static_cast<bool>(idx); })),
+        symmetry_(rsym.symmetry),
+        braket_symmetry_(rsym.braket_symmetry),
+        hermiticity_(rsym.hermiticity),
+        column_symmetry_(rsym.column_symmetry) {
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -400,20 +404,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   template <basic_string_convertible S>
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
-         aux<index_container_type> &&aux_indices, reserved_tag,
+         aux<aux_container_type> &&aux_indices, reserved_tag,
          ResolvedSymmetries rsym)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
-        symmetry_(rsym.symmetry),
-        braket_symmetry_(rsym.braket_symmetry),
-        hermiticity_(rsym.hermiticity),
-        column_symmetry_(rsym.column_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
-            ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+            ket_, [](const Index &idx) { return static_cast<bool>(idx); })),
+        symmetry_(rsym.symmetry),
+        braket_symmetry_(rsym.braket_symmetry),
+        hermiticity_(rsym.hermiticity),
+        column_symmetry_(rsym.column_symmetry) {
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -437,7 +441,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   template <basic_string_convertible S>
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
-         aux<index_container_type> &&aux_indices, reserved_tag,
+         aux<aux_container_type> &&aux_indices, reserved_tag,
          const TensorSymmetries &syms = {})
       // base_field() takes its arguments by value and the indices are moved
       // only in the delegated ctor's member-init list, so this reads them
@@ -564,7 +568,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   template <basic_string_convertible S>
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
-         aux<index_container_type> &&aux_indices,
+         aux<aux_container_type> &&aux_indices,
          std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
          std::optional<ColumnSymmetry> ps = std::nullopt)
@@ -688,7 +692,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   template <basic_string_convertible S>
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
-         aux<index_container_type> &&aux_indices, TensorSymmetries syms)
+         aux<aux_container_type> &&aux_indices, TensorSymmetries syms)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), std::move(aux_indices), reserved_tag{},
                syms) {
@@ -738,7 +742,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   }
   /// @return the aux slot range (empty slots are occupied by null indices)
   const auto &aux() const { return aux_; }
-  void set_aux(index_container_type indices) {
+  void set_aux(aux_container_type indices) {
     aux_ = sequant::aux(std::move(indices));
     reset_hash_value();
   }
@@ -885,7 +889,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         // aux
         if (!this->aux_.empty()) {
           result += L"[";
-          const index_container_type &__aux = this->aux();
+          const aux_container_type &__aux = this->aux();
           for (std::size_t i = 0; i < aux_rank(); ++i) {
             result += io::latex::to_string(__aux[i]);
 
@@ -966,7 +970,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   std::wstring label_{};
   sequant::bra<index_container_type> bra_{};
   sequant::ket<index_container_type> ket_{};
-  sequant::aux<index_container_type> aux_{};
+  sequant::aux<aux_container_type> aux_{};
+  mutable std::optional<hash_type>
+      bra_hash_value_;  // memoized byproduct of memoizing_hash()
+  std::uint32_t bra_net_rank_;
+  std::uint32_t ket_net_rank_;
   Symmetry symmetry_ = Symmetry::Nonsymm;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::Nonsymm;
   // field-agnostic abstract trait; braket_symmetry_ is its resolution against
@@ -980,10 +988,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   // distinct canonicalization behavior yet); revisit if that changes.
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
-  mutable std::optional<hash_type>
-      bra_hash_value_;  // memoized byproduct of memoizing_hash()
-  std::size_t bra_net_rank_;
-  std::size_t ket_net_rank_;
 
   /// @param column_symmetry_specified whether the column symmetry was spelled
   ///        out by the caller rather than defaulted; a *specified* value that

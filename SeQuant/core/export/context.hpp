@@ -5,6 +5,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <memory>
@@ -18,13 +19,13 @@ namespace sequant {
 
 /// Different options for what to do when loading a tensor in the sense of
 /// bringing it into memory to make it available for subsequent operations
-enum class LoadStrategy {
+enum class LoadStrategy : std::uint8_t {
   Load,
   Create,
 };
 
 /// Different options for when to (re)set a tensor's value to zero
-enum class ZeroStrategy {
+enum class ZeroStrategy : std::uint8_t {
   NeverZero = 0,
   ZeroOnLoad = 1,
   ZeroOnCreate = 1 << 1,
@@ -59,7 +60,7 @@ class AnyIrrepContext;
 class AnyIrrepSet;
 
 /// The origin of the IRREPs of a tensor (block) registered during export
-enum class IrrepOrigin {
+enum class IrrepOrigin : std::uint8_t {
   /// IRREPs of a leaf tensor as obtained from the IRREP context. Repeated
   /// registrations must agree.
   Input,
@@ -99,7 +100,7 @@ class ExportIrrepDataHolder {
 }  // namespace detail
 
 /// Different ways a given tensor/variable can be used in a given code.
-enum class Usage {
+enum class Usage : std::uint8_t {
   None = 0,
   Result = 0b001,
   Intermediate = 0b010,
