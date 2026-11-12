@@ -96,6 +96,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
     }
   }
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
   SECTION("hardcoded tables match the computed pseudoinverse") {
     using Catch::Matchers::WithinAbs;
     constexpr double tolerance = 1e-12;
@@ -125,6 +126,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       }
     }
   }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
   SECTION("error") {
     const std::vector<std::vector<std::wstring>> inputs = {
