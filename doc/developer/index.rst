@@ -16,3 +16,4 @@ repeats, the :doc:`User Guide </user/guide/index>`, which covers the public API 
    cost_model
    batched_evaluation
    export
+   visibility
