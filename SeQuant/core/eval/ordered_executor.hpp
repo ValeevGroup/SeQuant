@@ -885,97 +885,14 @@ void run_ordered_contracted_block(
     ctx.push_back({block.axis, block.level, {e_lo, e_hi}, std::nullopt});
     bs_cache.set_batch_context(ctx);
 
-    for (std::size_t at = 0; at != block.steps.size(); ++at) {
-      Step const& step = block.steps[at];
-      // Whatever becomes of this step -- run, skipped, or a whole nested loop
-      // -- the cells whose last reader it holds are let go once it is done.
-      ReleaseAfter const release_after{registry, release_plan, block, at};
-      if (auto const* build = std::get_if<BuildStep>(&step.value)) {
-        // This BuildStep's own Build cell -- at this exact scope (this block,
-        // entered from ectx) -- is the consumer every operand fetch inside the
-        // compute_cell call below resolves against (CellReadResolver::fetch).
-        // A miss means the table and the schedule tree disagree about what
-        // this step builds.
-        auto const build_cell =
-            registry.build_cell_at(build->value_id, block_scope);
-        if (!build_cell)
-          throw Exception(
-              "evaluate_ordered_schedule: no Build cell for value " +
-              std::to_string(build->value_id) +
-              " at this scope (cell table/schedule disagreement), block "
-              "depth " +
-              std::to_string(block.level.depth) + " slot " +
-              std::to_string(block.level.loop_slot));
-        built[build->value_id] = 1;
-        // A loop-invariant cell homed inside a loop is produced on its first
-        // visit and reused by every later batch (the table's own flag; the
-        // registry keeps it until an instance it is bound to clears it).
-        // Residency decides this first, ahead of the skip set: a
-        // `produce_if_absent` cell that a per-batch clear has emptied must be
-        // re-produced, whatever an enclosing scope's per-visit set -- computed
-        // before that clear -- still says about it.
-        bool const pia_resident = table->cells[*build_cell].produce_if_absent &&
-                                  registry.peek(*build_cell) != nullptr;
-        // Cache-halt second: nothing reads this cell this visit. (A
-        // `produce_if_absent` cell that is not resident still falls through to
-        // here, so a cell the call-wide set has genuinely killed is not
-        // rebuilt for nobody -- but a cell that is merely marked by some
-        // enclosing scope's per-visit seed does not elide a production the
-        // clear above made necessary, because such a cell is never seeded:
-        // see the per-visit set at this block's entry.)
-        // Resident and reused, or cache-halted.
-        if (pia_resident || vskip[*build_cell]) continue;
-        // Read the env once per translation unit, not once per step of every
-        // batch of every block.
-        static bool const block_diag_build =
-            detail::dump_enabled("SEQUANT_UT_BLOCK_DIAG");
-        if (block_diag_build)
-          detail::dump_block_build(block.axis, e_lo, e_hi, build->value_id,
-                                   *build_cell,
-                                   rich.cells[build->value_id].hash % 100000u);
-        node_t const& build_node = resolve(build->value_id);
-        registry.set(
-            *build_cell,
-            canonical(build_node,
-                      compute_cell<EvalTrace>(build_node, *build_cell, resolver,
-                                              leaf_evaluator, bs_cache, ctx)));
-        if (recorder)
-          recorder->built(build->value_id, registry.peek(*build_cell));
-        // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
-        // hash, for cross-schedule comparison of term values.
-        if (static bool const dump_build_norms =
-                detail::dump_enabled("SEQUANT_DUMP_ROOT_NORMS");
-            dump_build_norms && ectx.empty())
-          detail::dump_build_norm(build->value_id,
-                                  rich.cells[build->value_id].hash,
-                                  detail::dump_norm2_of([&] {
-                                    return registry.peek(*build_cell);
-                                  }));
-      } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
-        run_ordered_contracted_block<EvalTrace>(
-            *child, vmap, rich, ordered, leaf_evaluator, bs_cache, target, ctx,
-            built, is_volatile, table, registry, resolver, vskip, release_plan,
-            make_scope_guard, recorder);
-      } else {
-        // The Step variant has exactly BuildStep/ScopeBlock alternatives;
-        // a valueless-by-exception or future third alternative is a schedule
-        // this executor cannot interpret. Refusal, hence a throw: an elided
-        // assert would silently skip the step, dropping a production.
-        throw Exception(
-            "evaluate_ordered_schedule: unsupported Step variant in block at "
-            "depth " +
-            std::to_string(block.level.depth) + " slot " +
-            std::to_string(block.level.loop_slot));
-      }
-    }
-
-    // ---- Assemble steps: fold this batch's partial into each output. ----
-    for (std::size_t k = 0; k != block.outputs.size(); ++k) {
+    // ---- Assemble step: fold this batch's partial into output k. Run at
+    // the output's position among the steps (ScopeBlock::output_position).
+    auto const assemble_output = [&](std::size_t k) {
       ReleaseAfter const release_after{registry, release_plan, block,
                                        block.steps.size() + k};
       // The Assemble is not performed this batch (nor, then, the implicit
       // per-batch build it would have run).
-      if (out_skip[k]) continue;
+      if (out_skip[k]) return;
       auto const vid = block.outputs[k].first;
       TableCell const& a = table->cells[out_cells[k]];
       CellId const src = a.production.source;
@@ -1088,7 +1005,98 @@ void run_ordered_contracted_block(
           dest[k]->write_into_slice(*part, pos, range->first, range->second);
         }
       }
+    };
+    auto const assemble_outputs_at = [&](std::size_t n_steps_done) {
+      for (std::size_t k = 0; k != block.outputs.size(); ++k)
+        if (block.output_position(k) == n_steps_done) assemble_output(k);
+    };
+
+    for (std::size_t at = 0; at != block.steps.size(); ++at) {
+      assemble_outputs_at(at);
+      Step const& step = block.steps[at];
+      // Whatever becomes of this step -- run, skipped, or a whole nested loop
+      // -- the cells whose last reader it holds are let go once it is done.
+      ReleaseAfter const release_after{registry, release_plan, block, at};
+      if (auto const* build = std::get_if<BuildStep>(&step.value)) {
+        // This BuildStep's own Build cell -- at this exact scope (this block,
+        // entered from ectx) -- is the consumer every operand fetch inside the
+        // compute_cell call below resolves against (CellReadResolver::fetch).
+        // A miss means the table and the schedule tree disagree about what
+        // this step builds.
+        auto const build_cell =
+            registry.build_cell_at(build->value_id, block_scope);
+        if (!build_cell)
+          throw Exception(
+              "evaluate_ordered_schedule: no Build cell for value " +
+              std::to_string(build->value_id) +
+              " at this scope (cell table/schedule disagreement), block "
+              "depth " +
+              std::to_string(block.level.depth) + " slot " +
+              std::to_string(block.level.loop_slot));
+        built[build->value_id] = 1;
+        // A loop-invariant cell homed inside a loop is produced on its first
+        // visit and reused by every later batch (the table's own flag; the
+        // registry keeps it until an instance it is bound to clears it).
+        // Residency decides this first, ahead of the skip set: a
+        // `produce_if_absent` cell that a per-batch clear has emptied must be
+        // re-produced, whatever an enclosing scope's per-visit set -- computed
+        // before that clear -- still says about it.
+        bool const pia_resident = table->cells[*build_cell].produce_if_absent &&
+                                  registry.peek(*build_cell) != nullptr;
+        // Cache-halt second: nothing reads this cell this visit. (A
+        // `produce_if_absent` cell that is not resident still falls through to
+        // here, so a cell the call-wide set has genuinely killed is not
+        // rebuilt for nobody -- but a cell that is merely marked by some
+        // enclosing scope's per-visit seed does not elide a production the
+        // clear above made necessary, because such a cell is never seeded:
+        // see the per-visit set at this block's entry.)
+        // Resident and reused, or cache-halted.
+        if (pia_resident || vskip[*build_cell]) continue;
+        // Read the env once per translation unit, not once per step of every
+        // batch of every block.
+        static bool const block_diag_build =
+            detail::dump_enabled("SEQUANT_UT_BLOCK_DIAG");
+        if (block_diag_build)
+          detail::dump_block_build(block.axis, e_lo, e_hi, build->value_id,
+                                   *build_cell,
+                                   rich.cells[build->value_id].hash % 100000u);
+        node_t const& build_node = resolve(build->value_id);
+        registry.set(
+            *build_cell,
+            canonical(build_node,
+                      compute_cell<EvalTrace>(build_node, *build_cell, resolver,
+                                              leaf_evaluator, bs_cache, ctx)));
+        if (recorder)
+          recorder->built(build->value_id, registry.peek(*build_cell));
+        // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
+        // hash, for cross-schedule comparison of term values.
+        if (static bool const dump_build_norms =
+                detail::dump_enabled("SEQUANT_DUMP_ROOT_NORMS");
+            dump_build_norms && ectx.empty())
+          detail::dump_build_norm(build->value_id,
+                                  rich.cells[build->value_id].hash,
+                                  detail::dump_norm2_of([&] {
+                                    return registry.peek(*build_cell);
+                                  }));
+      } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
+        run_ordered_contracted_block<EvalTrace>(
+            *child, vmap, rich, ordered, leaf_evaluator, bs_cache, target, ctx,
+            built, is_volatile, table, registry, resolver, vskip, release_plan,
+            make_scope_guard, recorder);
+      } else {
+        // The Step variant has exactly BuildStep/ScopeBlock alternatives;
+        // a valueless-by-exception or future third alternative is a schedule
+        // this executor cannot interpret. Refusal, hence a throw: an elided
+        // assert would silently skip the step, dropping a production.
+        throw Exception(
+            "evaluate_ordered_schedule: unsupported Step variant in block at "
+            "depth " +
+            std::to_string(block.level.depth) + " slot " +
+            std::to_string(block.level.loop_slot));
+      }
     }
+
+    assemble_outputs_at(block.steps.size());
   }
 
   // ---- Block close: each Assemble step's running result is its cell. ----

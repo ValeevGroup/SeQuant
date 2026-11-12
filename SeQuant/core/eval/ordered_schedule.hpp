@@ -101,6 +101,15 @@ struct ScopeBlock {
                                   //!< not \c svector).
   container::svector<std::pair<std::size_t, OutputKind>>
       outputs{};  //!< value_id -> how it leaves this block on close.
+  /// Parallel to \c outputs, or empty: how many of \c steps are done, in each
+  /// batch, before the output's partial is produced and folded into its
+  /// running result. An output placed right after the last step it reads
+  /// from lets those operands go before the steps that follow. Empty: every
+  /// output comes after all the steps. See \c output_position.
+  container::svector<std::size_t> output_after{};
+
+  /// \return the number of steps done before output \p k is assembled.
+  [[nodiscard]] std::size_t output_position(std::size_t k) const;
 
   // Note: `steps` deliberately has no default member initializer: `{}` here
   // would instantiate std::vector<Step>'s default constructor in-class,
@@ -173,6 +182,9 @@ inline ScopeBlock::ScopeBlock(ScopeBlock&&) = default;
 inline ScopeBlock& ScopeBlock::operator=(ScopeBlock const&) = default;
 inline ScopeBlock& ScopeBlock::operator=(ScopeBlock&&) = default;
 inline ScopeBlock::~ScopeBlock() = default;
+inline std::size_t ScopeBlock::output_position(std::size_t k) const {
+  return k < output_after.size() ? output_after[k] : steps.size();
+}
 
 ///
 /// \brief The whole ordered schedule: the root block plus the total value
@@ -2450,6 +2462,56 @@ namespace detail {
   // consumer_point, so a split operand resolves to the specific consumed
   // value (not an ambiguous node hash).
   out.operand_vids = g.depends_on;
+
+  // Place each output in its block's step sequence: right after the last
+  // step that produces something it reads -- an operand, or the value itself
+  // (its own build, or the nested block it is forwarded from) -- and no
+  // earlier than an output of the same block listed before it that it reads.
+  // Done on the finished tree: the pass forks above re-cut the steps.
+  {
+    // \return every value produced anywhere inside \p b
+    auto const place = [&](auto const& self,
+                           ScopeBlock& b) -> container::svector<std::size_t> {
+      container::svector<std::size_t> made;
+      std::unordered_map<std::size_t, std::size_t> made_by;  // value -> step
+      for (std::size_t i = 0; i < b.steps.size(); ++i) {
+        if (auto const* build = std::get_if<BuildStep>(&b.steps[i].value)) {
+          made_by.emplace(build->value_id, i);
+          made.push_back(build->value_id);
+        } else {
+          // an output may read what a block nested deeper completes: an
+          // escape chain skips the levels its value is invariant on
+          for (std::size_t v :
+               self(self, std::get<ScopeBlock>(b.steps[i].value))) {
+            made_by[v] = i;
+            made.push_back(v);
+          }
+        }
+      }
+      for (auto const& o : b.outputs) made.push_back(o.first);
+      if (b.outputs.empty()) return made;
+      b.output_after.assign(b.outputs.size(), 0);
+      std::unordered_map<std::size_t, std::size_t> out_at;  // value -> k
+      for (std::size_t k = 0; k < b.outputs.size(); ++k) {
+        std::size_t const vid = b.outputs[k].first;
+        std::size_t after = 0;
+        auto const need = [&](std::size_t v) {
+          if (auto const it = made_by.find(v); it != made_by.end())
+            after = std::max(after, it->second + 1);
+        };
+        need(vid);
+        for (std::size_t o : requires_of(vid)) {
+          need(o);
+          if (auto const it = out_at.find(o); it != out_at.end())
+            after = std::max(after, b.output_after[it->second]);
+        }
+        b.output_after[k] = after;
+        out_at.emplace(vid, k);
+      }
+      return made;
+    };
+    (void)place(place, out.root);
+  }
 
   if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
     detail::dump_schedule_tree(out.root, 0);
