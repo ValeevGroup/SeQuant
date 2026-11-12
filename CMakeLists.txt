@@ -541,8 +541,10 @@ set(SeQuant_eval_src
         SeQuant/core/eval/legality.hpp
         SeQuant/core/eval/lifetime_mask.hpp
         SeQuant/core/eval/node_batch_annotation.hpp
+        SeQuant/core/eval/op_counts.cpp
         SeQuant/core/eval/op_counts.hpp
         SeQuant/core/eval/ordered_dump.hpp
+        SeQuant/core/eval/ordered_executor.cpp
         SeQuant/core/eval/ordered_executor.hpp
         SeQuant/core/eval/ordered_schedule.hpp
         SeQuant/core/eval/disk_spill.hpp
