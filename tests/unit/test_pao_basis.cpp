@@ -39,8 +39,8 @@ std::shared_ptr<IndexBasisRegistry> sized_registry(
 
 /// csv_cc_context over the sized registry, with tmp ordinals allowed in parsed
 /// text
-Context gate_context() {
-  auto ctx = csv::csv_cc_context(sized_registry());
+Context gate_context(std::optional<Field> field = {}) {
+  auto ctx = csv::csv_cc_context(sized_registry(field));
   ctx.set_first_dummy_index_ordinal(1000000);
   return ctx;
 }
@@ -127,7 +127,11 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
               auto const& tnsr = x->as<Tensor>();
               const std::wstring label(tnsr.label());
               CAPTURE(toUtf8(label));
-              if (label == L"C") ++n_C;
+              if (label == L"C") {
+                ++n_C;
+                // like the overlap
+                CHECK(tnsr.column_symmetry() == ColumnSymmetry::Symm);
+              }
               if (label == L"C" || label == L"g" || label == L"f" ||
                   label == reserved::overlap_label())
                 CHECK(tnsr.braket_symmetry() == hermitian);
@@ -139,6 +143,22 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
             /* atoms_only = */ true);
       CHECK(n_C > 0);
     }
+  }
+  SECTION("half-transforming either leg of a DF factor is one intermediate") {
+    // Σ C{a;μ̃} g{μ̃;i;Κ} and Σ C{μ̃;a} g{i;μ̃;Κ} are one object when g and C
+    // are bra-ket symmetric (real field); canonicalization must fold them
+    auto scoped_real = set_scoped_default_context(gate_context(Field::Real));
+    const IndexBasis real_pao =
+        get_default_context().index_basis_registry()->retrieve(L"μ̃");
+    auto half_transform = [&real_pao](std::wstring_view g) {
+      ExprPtr e = mbpt::csv_transform(deserialize<ExprPtr>(g), real_pao);
+      REQUIRE(e->is<Product>());
+      return canonicalize(std::move(e));
+    };
+    const ExprPtr bra_leg = half_transform(L"g{a_1<i_1>;i_2;Κ_1}:N-S-S");
+    const ExprPtr ket_leg = half_transform(L"g{i_2;a_1<i_1>;Κ_1}:N-S-S");
+    CAPTURE(toUtf8(serialize(bra_leg)), toUtf8(serialize(ket_leg)));
+    CHECK(bra_leg == ket_leg);
   }
   SECTION("slot layout: the PAO basis sorts after every basis of a") {
     const IndexSpace a = ctx.index_basis_registry()->retrieve_space(L"a");
