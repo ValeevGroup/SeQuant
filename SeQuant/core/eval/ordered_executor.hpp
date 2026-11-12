@@ -1503,7 +1503,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // it is not resident, so a read of it is charged to its consumer as an
   // operand like any other buffer the registry does not hold.
   ExternalStore const registry_store{
-      .bytes = [&registry, &cache, on_disk, disk_spill]() -> std::size_t {
+      .bytes = [&registry, &cache, on_disk, disk_spill,
+                cell_hash]() -> std::size_t {
         std::size_t bytes = 0, disk_bytes = 0;
         registry.for_each_live([&](CellId c, ResultPtr const& v) {
           if (on_disk(c, v))
@@ -1513,8 +1514,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         });
         if (disk_spill) {
           disk_spill->bytes_on_disk = disk_bytes;
-          disk_spill->peak_bytes_on_disk =
-              std::max(disk_spill->peak_bytes_on_disk, disk_bytes);
+          if (disk_bytes > disk_spill->peak_bytes_on_disk) {
+            disk_spill->peak_bytes_on_disk = disk_bytes;
+            if (disk_spill->record_peak_on_disk) {
+              disk_spill->peak_on_disk.clear();
+              registry.for_each_live([&](CellId c, ResultPtr const& v) {
+                if (on_disk(c, v))
+                  disk_spill->peak_on_disk.emplace_back(cell_hash(c),
+                                                        v->size_in_bytes());
+              });
+            }
+          }
         }
         return bytes;
       },

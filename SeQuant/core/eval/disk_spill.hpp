@@ -3,6 +3,8 @@
 
 #include <cstddef>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace sequant::eval {
 
@@ -37,6 +39,10 @@ struct DiskSpill {
   /// with the working set, i.e. only while the eval trace is on.
   std::size_t bytes_on_disk = 0;
   std::size_t peak_bytes_on_disk = 0;
+  /// If set, \c peak_on_disk lists the values on disk at the high-water
+  /// mark, as (value hash, bytes).
+  bool record_peak_on_disk = false;
+  std::vector<std::pair<std::size_t, std::size_t>> peak_on_disk;
   /// Stores of an on-disk value: how many, and their bytes.
   std::size_t n_writes = 0;
   std::size_t bytes_written = 0;
