@@ -1496,6 +1496,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
                                    c.value_id);
           else
             preferred.push_back({{chain.back(), *key}, c.value_id});
+          // every loop further out encloses the opened one too. Where the
+          // loops between are opened by one occurrence no pair above links
+          // them (an occurrence's own opens carry no order among themselves),
+          // so the order is stated here, as a preference
+          for (std::size_t k = 0; k + 1 < chain.size(); ++k)
+            if (chain[k] != *key)
+              preferred.push_back({{chain[k], *key}, c.value_id});
         }
         for (std::size_t k = 1; k < chain.size(); ++k) {
           if (chain[k - 1] == chain[k]) continue;
@@ -1507,10 +1514,11 @@ RichSchedule compute_dag_boulevard(R const& forest,
             preferred.push_back({{chain[k - 1], chain[k]}, c.value_id});
         }
       }
-    // Two External loops opened by different occurrences: the values between
-    // the two openers are inside the outer loop only, so the builder can home
-    // them in the nest only if it nests the loops as the DP did. Unlike the
-    // pairs above this is a preference: loops fused across trees may nest in
+    // Two External loops opened by different occurrences, or a loop and one
+    // opened inside it but not directly: the values between the two openers
+    // are inside the outer loop only, so the builder can home them in the
+    // nest only if it nests the loops as the DP did. Unlike the pairs above
+    // this is a preference: loops fused across trees may nest in
     // opposite orders in two of them, and then the builder's own order (and a
     // pass split) stands. A pair is taken unless the pairs so far already
     // order the two loops the other way.
