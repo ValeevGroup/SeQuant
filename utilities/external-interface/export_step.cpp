@@ -551,8 +551,24 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
 
   SEQUANT_ASSERT(!generated.empty());
 
-  std::ofstream stream(filepath_);
+  const std::filesystem::path path(filepath_);
+  if (path.has_parent_path()) {
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec) {
+      throw Exception("Failed to create output directory '" +
+                      path.parent_path().string() + "' for " + kind() + ": " +
+                      ec.message());
+    }
+  }
+
+  std::ofstream stream(path);
   stream << generated;
+  stream.flush();
+  if (!stream) {
+    throw Exception("Failed to write output file '" + path.string() + "' for " +
+                    kind());
+  }
 
   return 0;
 }
