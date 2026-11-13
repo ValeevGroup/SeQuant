@@ -37,7 +37,7 @@ prints the absolute path so the output is easy to locate.
 | | `convention` | registry: `min_sr`/`sr`/`mr`/`f12` | `sr` |
 | | `aux` | factorization spaces to register: `["df"]` (Κ) and/or `["thc"]` (L) | none |
 | `sizes` | `<label>` | approximate size per index space, e.g. `{"i": 10, "a": 38}` | — |
-| `optimize` | `objective` | `dense_flops` / `dense_size` / `dense_peak_size` | `dense_flops` |
+| `optimize` | `objective` | `dense_flops` / `dense_time_space` (flops first, peak memory as tie-break) / `dense_space_time` (`dense_peak_size` is its old name) / `dense_size`; the last two are deprecated in `sequant::ObjectiveFunction` | `dense_flops` |
 | | `volatile_leaf` | amplitude label being solved (e.g. `t`, `R`); empty disables volatile weighting | `R` |
 | | `reorder`, `cse_subnet`, `volatile_weight`, `machine_balance`, `fast_mem_elems` | forwarded to `sequant::OptimizeOptions`\* | see `OptSpec` |
 | `cache` | `enabled` | run the cache-reuse simulation | `true` |

@@ -12,6 +12,7 @@
 #include <CLI/CLI.hpp>
 #include <nlohmann/json.hpp>
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
@@ -171,11 +172,20 @@ ResultExpr parse_equation(const std::string& text) {
 /// Cost Analysis
 
 ObjectiveFunction objective_of(const std::string& s) {
-  if (s == "dense_size") return ObjectiveFunction::DenseSize;
-  if (s == "dense_peak_size") return ObjectiveFunction::DensePeakSize;
-  if (s == "dense_flops") return ObjectiveFunction::DenseFLOPs;
-  throw Exception(
-      "unknown objective (want dense_size|dense_peak_size|dense_flops): " + s);
+  // JSON spelling -> objective; dense_peak_size is the old name of
+  // dense_space_time
+  static const container::map<std::string, ObjectiveFunction> objectives = {
+      {"dense_flops", ObjectiveFunction::DenseFLOPs},
+      {"dense_size", ObjectiveFunction::DenseSize},
+      {"dense_peak_size", ObjectiveFunction::DensePeakSize},
+      {"dense_space_time", ObjectiveFunction::DenseSpaceTime},
+      {"dense_time_space", ObjectiveFunction::DenseTimeSpace},
+  };
+  if (auto it = objectives.find(s); it != objectives.end()) return it->second;
+  std::string known;
+  for (const auto& [name, _] : objectives)
+    known += (known.empty() ? "" : "|") + name;
+  throw Exception("unknown objective (want " + known + "): " + s);
 }
 
 // Classify each index as Occupied / Virtual / other (aux) by matching its space
