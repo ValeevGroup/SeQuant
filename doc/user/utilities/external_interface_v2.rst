@@ -710,8 +710,11 @@ tensor contractions, chosen so as to minimize the configured :code:`objective`.
      - Default
      - Required
    * - :code:`objective`
-     - Cost metric to minimize when factorizing contractions: :code:`DenseFLOPs` (the floating-point operation count).
-     - :code:`DenseFLOPs`
+     - Cost metric to minimize when factorizing contractions. :code:`DenseFLOPs` minimizes the floating-point operation count.
+       :code:`DenseTimeSpace` also minimizes the operation count, but breaks ties in favor of the lower peak memory (the combined size of all
+       simultaneously live tensors). :code:`DenseTimeSpaceBatched` additionally allows slicing indices into batches to stay below a peak-memory
+       budget; it requires the :code:`batch` option (see below).
+     - :code:`DenseTimeSpace`
      - No
    * - :code:`reorder_sums`
      - Whether summands of a sum may be reordered so that terms sharing common intermediates end up next to each other.
@@ -719,23 +722,71 @@ tensor contractions, chosen so as to minimize the configured :code:`objective`.
      - No
    * - :code:`cse`
      - Whether to perform common-subexpression elimination while searching for a single term's evaluation order. :code:`subnet` recognizes equivalent
-       subnetworks (more search effort, potentially fewer operations); :code:`none` disables this. Not to be confused with the standalone :code:`cse`
-       step, which operates across a whole processing tree rather than within a single term.
+       subnetworks (more search effort, potentially fewer operations) and requires the :code:`DenseFLOPs` objective; :code:`none` disables this.
+       Not to be confused with the standalone :code:`cse` step, which operates across a whole processing tree rather than within a single term.
      - :code:`none`
      - No
    * - :code:`intermediate_size_penalty`
-     - Per-intermediate memory-footprint penalty added to the cost of a contraction (only consulted when :code:`objective` is :code:`DenseFLOPs`).
+     - Per-intermediate memory-footprint penalty added to the cost of a contraction (requires the :code:`DenseFLOPs` objective if non-zero).
      - 0.0
      - No
    * - :code:`prune_outer_products`
      - Whether to prune disconnected (outer-product) subsets from the search space while looking for the best evaluation order.
      - true
      - No
+   * - :code:`batch`
+     - Batching policy for the :code:`DenseTimeSpaceBatched` objective (and only valid together with it). See below.
+     - -
+     - Only for :code:`DenseTimeSpaceBatched`
    * - :code:`replay`
      - Configures the treatment of expressions that are evaluated repeatedly (e.g. once per iteration of an iterative solver), in which only some
        tensors (the *volatile* ones, e.g. amplitudes) change between evaluations. See below.
      - -
      - No
+
+:code:`batch` is an object with the following properties. Indices are identified by the label of their index space, which has to be one of the
+labels given in :code:`index_spaces`:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`peak_threshold`
+     - Peak-memory budget in bytes (assuming 8 bytes per tensor element). Among the evaluation orders that fit into it, the one with the fewest operations is chosen.
+     - -
+     - Yes
+   * - :code:`contracted`
+     - Array of index space labels whose indices may be batched where they are summed over.
+     - :code:`[]`
+     - At least one of :code:`contracted` and :code:`external`
+   * - :code:`external`
+     - Array of index space labels whose indices may be batched where they are open on the result. Requires :code:`spectator_indices`.
+     - :code:`[]`
+     - At least one of :code:`contracted` and :code:`external`
+   * - :code:`target_size`
+     - Upper bound for the number of elements of a batchable index in a single batch. Either an integer (for all batchable spaces) or an object
+       mapping every batchable space label to its bound.
+     - -
+     - Yes
+   * - :code:`spectator_indices`
+     - Whether indices that are open on the result but contracted nowhere may be batched. Required for :code:`external` to have an effect (and only valid together with a non-empty :code:`external`).
+     - false
+     - No
+   * - :code:`persistent_only`
+     - Whether to restrict batching to subexpressions that do not contain volatile tensors. Requires :code:`replay`.
+     - false
+     - No
+   * - :code:`accumulation_factor`
+     - Footprint multiplier for the in-flight contribution that co-resides with a batch-accumulated intermediate.
+     - 0.0
+     - No
+
+.. note::
+   The batching only influences the choice of the evaluation order. The exported code is not sliced accordingly; use the :code:`batch_indices` step
+   for batching the results of the generated code.
 
 :code:`replay` is an object with the following properties:
 

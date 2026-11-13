@@ -51,7 +51,10 @@
 			"inputs": [
 				"traced.en",
 				"biorth"
-			]
+			],
+			"options": {
+				"objective": "DenseFLOPs"
+			}
 		},
 		{
 			"id": "sorted",
