@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a035299c37593fccb0feda3007e7f5329:
+
+Template Function sequant::canonical_operand_cmp
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_node_compare.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::canonical_operand_cmp(TreeNode const&, TreeNode const&)
+   :project: SeQuant

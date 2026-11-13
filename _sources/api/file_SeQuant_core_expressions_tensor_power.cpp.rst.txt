@@ -1,0 +1,72 @@
+
+.. _file_SeQuant_core_expressions_tensor_power.cpp:
+
+File tensor_power.cpp
+=====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/tensor_power.cpp``)
+----------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_tensor_power.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expressions/constant.hpp`` (:ref:`file_SeQuant_core_expressions_constant.hpp`)
+
+- ``SeQuant/core/expressions/power.hpp`` (:ref:`file_SeQuant_core_expressions_power.hpp`)
+
+- ``SeQuant/core/expressions/tensor.hpp`` (:ref:`file_SeQuant_core_expressions_tensor.hpp`)
+
+- ``SeQuant/core/expressions/tensor_power.hpp`` (:ref:`file_SeQuant_core_expressions_tensor_power.hpp`)
+
+- ``SeQuant/core/expressions/variable.hpp`` (:ref:`file_SeQuant_core_expressions_variable.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1adc2e3c492cd3e3c45c8a47c25f13d4f1`
+

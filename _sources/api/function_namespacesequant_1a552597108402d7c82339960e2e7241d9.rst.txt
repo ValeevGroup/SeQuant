@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a552597108402d7c82339960e2e7241d9:
+
+Function sequant::base_field()
+==============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::base_field()
+   :project: SeQuant

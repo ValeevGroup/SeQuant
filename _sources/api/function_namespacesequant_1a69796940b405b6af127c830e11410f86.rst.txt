@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a69796940b405b6af127c830e11410f86:
+
+Template Function sequant::resolve_by_pattern
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::resolve_by_pattern(std::vector<std::pair<ExprMatcher, IrrepSet<Irrep>>>)
+   :project: SeQuant

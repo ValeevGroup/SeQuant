@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a9c1e04a0126da567cef1f20d6b444022:
+
+Typedef sequant::ResultPtr
+==========================
+
+- Defined in :ref:`file_SeQuant_core_eval_fwd.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ResultPtr
+   :project: SeQuant

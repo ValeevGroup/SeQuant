@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad05cdbcfe9f11d10525a67cdaa9abbfc:
+
+Template Function sequant::ts_swap_counter_is_even
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_swap.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::ts_swap_counter_is_even()
+   :project: SeQuant

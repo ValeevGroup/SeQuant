@@ -1,0 +1,14 @@
+.. _exhale_define_binary__node_8hpp_1a81a0ec9cd8ea87fb4650316b18cce254:
+
+Define TRAVERSAL_TO_TEMPLATE_ARG
+================================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: TRAVERSAL_TO_TEMPLATE_ARG
+   :project: SeQuant

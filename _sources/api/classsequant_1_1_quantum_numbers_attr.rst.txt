@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_quantum_numbers_attr:
+
+Class QuantumNumbersAttr
+========================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Type
+************
+
+- ``public sequant::IndexSpace::Attr`` (:ref:`exhale_struct_structsequant_1_1_index_space_1_1_attr`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::QuantumNumbersAttr
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

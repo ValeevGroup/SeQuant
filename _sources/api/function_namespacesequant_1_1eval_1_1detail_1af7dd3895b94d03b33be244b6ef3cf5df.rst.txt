@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1af7dd3895b94d03b33be244b6ef3cf5df:
+
+Function sequant::eval::detail::ordered_last_cell_table_size
+============================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_last_cell_table_size()
+   :project: SeQuant

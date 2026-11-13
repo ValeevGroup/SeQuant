@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab993c47fe670b3299f552d9f547d5782:
+
+Template Function sequant::to_expr(meta::eval_node auto const&, LeafMap&&)
+==========================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_expr(meta::eval_node auto const&, LeafMap&&)
+   :project: SeQuant

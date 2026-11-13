@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1latex_1a4714e4ae6ecbc6d5f463973e993b907a:
+
+Function sequant::io::latex::latex_exponent
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_io_latex_latex.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::latex::latex_exponent(const rational&)
+   :project: SeQuant

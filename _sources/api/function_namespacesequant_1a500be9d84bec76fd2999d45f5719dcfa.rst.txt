@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a500be9d84bec76fd2999d45f5719dcfa:
+
+Template Function sequant::find_position
+========================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::find_position(const Range&, const T&)
+   :project: SeQuant

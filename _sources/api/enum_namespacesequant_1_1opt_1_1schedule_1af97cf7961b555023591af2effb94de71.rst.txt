@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1opt_1_1schedule_1af97cf7961b555023591af2effb94de71:
+
+Enum ModeKind
+=============
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.cpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::opt::schedule::ModeKind
+   :project: SeQuant

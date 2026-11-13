@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a013c9a9deafdbbd9379ffa7c97ad23ff:
+
+Function sequant::mbpt::project_integral_domains
+================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_pno.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::project_integral_domains(ExprPtr const&, ProjectionOptions const&)
+   :project: SeQuant

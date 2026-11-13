@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1ac896cae2d14356574cc286fd31732bde:
+
+Function sequant::mbpt::bernoulli::detail::nested_commutator_coefficients
+=========================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_bernoulli.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::bernoulli::detail::nested_commutator_coefficients(std::size_t)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9c72394119763f0d198660cbf96d4525:
+
+Function sequant::bcre(Index)
+=============================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bcre(Index)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a9ab6b66f07ef2886111bec030fd9b332:
+
+Function sequant::eval::detail::enumerate_realized_levels
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::enumerate_realized_levels(ScopeBlock const&, container::vector<DagScopeLevel>&)
+   :project: SeQuant

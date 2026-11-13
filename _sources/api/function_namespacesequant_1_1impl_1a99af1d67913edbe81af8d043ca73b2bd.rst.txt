@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1impl_1a99af1d67913edbe81af8d043ca73b2bd:
+
+Function sequant::impl::binarize(ResultExpr const&, const BinarizationOptions&, std::size_t&, detail::InlineContext \*)
+=======================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::impl::binarize(ResultExpr const&, const BinarizationOptions&, std::size_t&, detail::InlineContext *)
+   :project: SeQuant

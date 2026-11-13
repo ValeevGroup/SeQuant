@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1not__in:
+
+Template Struct not_in
+======================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::not_in
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

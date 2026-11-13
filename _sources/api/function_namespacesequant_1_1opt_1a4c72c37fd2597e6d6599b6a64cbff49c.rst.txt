@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a4c72c37fd2597e6d6599b6a64cbff49c:
+
+Template Function sequant::opt::min_usage_filter
+================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::min_usage_filter(std::size_t, std::size_t)
+   :project: SeQuant

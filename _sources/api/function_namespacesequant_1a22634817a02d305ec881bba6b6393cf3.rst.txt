@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a22634817a02d305ec881bba6b6393cf3:
+
+Template Function sequant::bcrex
+================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bcrex(Index, Attr&&...)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9f8f86b7b06c7d939a30f6ad27b29cf0:
+
+Function sequant::prune_to_matches
+==================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_filter.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::prune_to_matches(const Expr&, const ExpressionFilter&)
+   :project: SeQuant

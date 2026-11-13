@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1adee4f3d822724518bce4307bc784f4f9:
+
+Template Function sequant::deserialize(std::string_view, const io::serialization::DeserializationOptions&)
+==========================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_shorthands.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::deserialize(std::string_view, const io::serialization::DeserializationOptions&)
+   :project: SeQuant

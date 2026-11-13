@@ -1,0 +1,46 @@
+
+.. _program_listing_file_SeQuant_core_optimize_fusion.hpp:
+
+Program Listing for File fusion.hpp
+===================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_fusion.hpp>` (``SeQuant/core/optimize/fusion.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_OPT_FUSION_HPP
+   #define SEQUANT_OPT_FUSION_HPP
+   
+   #include <SeQuant/core/expr.hpp>
+   
+   namespace sequant::opt {
+   
+   
+   class Fusion {
+    public:
+     Fusion(Product const& lhs, Product const& rhs);
+   
+     ExprPtr left() const;
+   
+     ExprPtr right() const;
+   
+     static ExprPtr fuse_left(Product const& lhs, Product const& rhs);
+   
+     static ExprPtr fuse_right(Product const& lhs, Product const& rhs);
+   
+     static rational gcd_rational(rational const& left, rational const& right);
+   
+     static std::array<rational, 3> fuse_scalar(rational const& left,
+                                                rational const& right);
+   
+    private:
+     ExprPtr left_;
+   
+     ExprPtr right_;
+   };
+   
+   }  // namespace sequant::opt
+   
+   #endif  // SEQUANT_OPT_FUSION_HPP

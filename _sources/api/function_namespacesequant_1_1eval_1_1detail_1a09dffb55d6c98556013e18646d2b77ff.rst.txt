@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a09dffb55d6c98556013e18646d2b77ff:
+
+Function sequant::eval::detail::dump_registry_residency
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_dump.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::dump_registry_residency(std::size_t, std::size_t, std::size_t)
+   :project: SeQuant

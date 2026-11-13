@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac75356610ebf55ae10a37c694ad85eea:
+
+Function sequant::get_default_index_basis_registry
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_default_index_basis_registry()
+   :project: SeQuant

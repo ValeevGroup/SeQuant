@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a45d4db2927670854340b36f3eac733b7:
+
+Template Function sequant::make_extent_array_ops
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_extent_array_ops.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_extent_array_ops(std::map<std::wstring, std::size_t>, MakeZeros)
+   :project: SeQuant

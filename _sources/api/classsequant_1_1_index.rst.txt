@@ -1,0 +1,40 @@
+.. _exhale_class_classsequant_1_1_index:
+
+Class Index
+===========
+
+- Defined in :ref:`file_SeQuant_core_index.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_index_1_1_full_label_compare`
+- :ref:`exhale_struct_structsequant_1_1_index_1_1_index_factory_tag`
+- :ref:`exhale_struct_structsequant_1_1_index_1_1_label_compare`
+- :ref:`exhale_struct_structsequant_1_1_index_1_1_type_compare`
+- :ref:`exhale_struct_structsequant_1_1_index_1_1_type_equality`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Taggable`` (:ref:`exhale_class_classsequant_1_1_taggable`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Index
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

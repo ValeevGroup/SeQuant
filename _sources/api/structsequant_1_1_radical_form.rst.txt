@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_radical_form:
+
+Struct RadicalForm
+==================
+
+- Defined in :ref:`file_SeQuant_core_math.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::RadicalForm
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

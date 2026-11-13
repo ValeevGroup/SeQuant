@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a5df71c18ca95a2dc9964443ec44dc0d8:
+
+Function sequant::get_hole_space
+================================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_hole_space()
+   :project: SeQuant

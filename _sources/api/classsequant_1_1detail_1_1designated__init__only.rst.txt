@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1designated__init__only:
+
+Class designated_init_only
+==========================
+
+- Defined in :ref:`file_SeQuant_core_utility_aggregate.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::designated_init_only
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

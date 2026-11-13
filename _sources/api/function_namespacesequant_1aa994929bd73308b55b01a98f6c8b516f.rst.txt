@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa994929bd73308b55b01a98f6c8b516f:
+
+Function sequant::is_adjoint_label
+==================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::is_adjoint_label(std::wstring_view)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1aa191ee50f9a05de5fed8f8d48fe4383b:
+
+Typedef sequant::TensorNetwork
+==============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::TensorNetwork
+   :project: SeQuant

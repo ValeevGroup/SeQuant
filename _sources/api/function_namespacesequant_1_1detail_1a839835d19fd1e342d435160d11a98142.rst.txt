@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a839835d19fd1e342d435160d11a98142:
+
+Function sequant::detail::supplied_result_indices
+=================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::supplied_result_indices(const ResultExpr&, const Expr&)
+   :project: SeQuant

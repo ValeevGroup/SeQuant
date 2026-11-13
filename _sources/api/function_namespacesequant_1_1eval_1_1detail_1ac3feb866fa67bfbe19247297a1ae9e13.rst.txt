@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1ac3feb866fa67bfbe19247297a1ae9e13:
+
+Template Function sequant::eval::detail::deepest_visible_form
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_table.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::deepest_visible_form(CellTable const&, Candidates const&, CellScope const&)
+   :project: SeQuant

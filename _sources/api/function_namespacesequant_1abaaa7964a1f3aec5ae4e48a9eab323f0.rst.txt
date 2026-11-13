@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1abaaa7964a1f3aec5ae4e48a9eab323f0:
+
+Template Function sequant::sort_via_ordinals
+============================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::sort_via_ordinals(Sequence&, const LessThan&)
+   :project: SeQuant

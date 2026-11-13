@@ -1,0 +1,57 @@
+
+.. _file_SeQuant_domain_mbpt_rdm.hpp:
+
+File rdm.hpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/rdm.hpp``)
+--------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_rdm.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/domain/mbpt/antisymmetrizer.hpp`` (:ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`)
+
+- ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__decompositions`
+

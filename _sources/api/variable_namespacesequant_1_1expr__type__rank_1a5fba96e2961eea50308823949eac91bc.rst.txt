@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1expr__type__rank_1a5fba96e2961eea50308823949eac91bc:
+
+Variable sequant::expr_type_rank::bnoperator
+============================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::expr_type_rank::bnoperator
+   :project: SeQuant

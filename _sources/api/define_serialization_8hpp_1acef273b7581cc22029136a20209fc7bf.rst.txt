@@ -1,0 +1,14 @@
+.. _exhale_define_serialization_8hpp_1acef273b7581cc22029136a20209fc7bf:
+
+Define SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION
+==========================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_serialization.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION
+   :project: SeQuant

@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_stack_checking_generator:
+
+Template Class StackCheckingGenerator
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_export_stack_checker.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::ForwardingGenerator< MainGenerator, MainGenerator::Context >`` (:ref:`exhale_class_classsequant_1_1_forwarding_generator`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::StackCheckingGenerator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a2c62743dc495bdda4bc987a38e494c28:
+
+Function sequant::eval::opened_instance
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::opened_instance(OccurrenceRec const&, Index const&, BatchModeType)
+   :project: SeQuant

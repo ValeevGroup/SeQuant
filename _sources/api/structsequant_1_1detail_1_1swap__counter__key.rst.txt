@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1swap__counter__key:
+
+Template Struct swap_counter_key
+================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::swap_counter_key
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

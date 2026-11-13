@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae90161b80f359722ceeddb1d0476c09c:
+
+Template Function sequant::product
+==================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_algebra.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::product(const A&, const IrrepSet<typename A::irrep_type>&, const IrrepSet<typename A::irrep_type>&)
+   :project: SeQuant

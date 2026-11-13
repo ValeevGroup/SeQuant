@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a6a47c1ab725085d55ef36a21ad9ad9b7:
+
+Function sequant::optimize(ExprPtr const&, bool)
+================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::optimize(ExprPtr const&, bool)
+   :project: SeQuant

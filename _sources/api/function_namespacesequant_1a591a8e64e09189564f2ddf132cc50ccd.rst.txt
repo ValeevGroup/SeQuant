@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a591a8e64e09189564f2ddf132cc50ccd:
+
+Function sequant::git_revision
+==============================
+
+- Defined in :ref:`file_SeQuant_version.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::git_revision()
+   :project: SeQuant

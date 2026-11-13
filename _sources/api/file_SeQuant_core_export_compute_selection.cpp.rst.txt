@@ -1,0 +1,62 @@
+
+.. _file_SeQuant_core_export_compute_selection.cpp:
+
+File compute_selection.cpp
+==========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/compute_selection.cpp``)
+----------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_compute_selection.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/compute_selection.hpp`` (:ref:`file_SeQuant_core_export_compute_selection.hpp`)
+
+- ``type_traits``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a265e203170f4dc0b628f530f7beffad3`
+
+- :ref:`exhale_function_namespacesequant_1a8ca7867d601842c0523bdbd2e02c3959`
+
+- :ref:`exhale_function_namespacesequant_1aa63e6935c1502379fa7408a7226c92e0`
+
+- :ref:`exhale_function_namespacesequant_1abc60a86d9ec435dc6cd4f81622152e8e`
+
+- :ref:`exhale_function_namespacesequant_1af1ac4f94598ccd82c2d32f456b781991`
+

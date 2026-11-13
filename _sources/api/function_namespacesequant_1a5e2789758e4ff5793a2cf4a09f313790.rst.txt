@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a5e2789758e4ff5793a2cf4a09f313790:
+
+Template Function sequant::evaluate_symm
+========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::evaluate_symm(Args&&...)
+   :project: SeQuant

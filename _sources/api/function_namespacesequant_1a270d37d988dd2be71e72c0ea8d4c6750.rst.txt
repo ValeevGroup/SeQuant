@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a270d37d988dd2be71e72c0ea8d4c6750:
+
+Function sequant::to_wstring(CanonicalizationMethod)
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_options.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wstring(CanonicalizationMethod)
+   :project: SeQuant

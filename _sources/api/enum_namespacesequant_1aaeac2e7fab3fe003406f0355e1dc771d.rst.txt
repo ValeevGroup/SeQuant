@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d:
+
+Enum BraKetSlotTypesetting
+==========================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::BraKetSlotTypesetting
+   :project: SeQuant

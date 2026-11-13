@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_inline_context_1_1_tensor_match:
+
+Struct InlineContext::TensorMatch
+=================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_struct_structsequant_1_1detail_1_1_inline_context`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::InlineContext::TensorMatch
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

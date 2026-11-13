@@ -1,0 +1,24 @@
+
+.. _namespace_sequant__mbpt__antisymm:
+
+Namespace sequant::mbpt::antisymm
+=================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1antisymm_1ab8eb3db3b1cd4b6a685620d544e602c7`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1antisymm_1ae4fa3ca467bc2bff6db8dd73b6889607`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1antisymm_1a813265822e89cf0e898741935dfc7b55`

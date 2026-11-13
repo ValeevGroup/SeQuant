@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a5127ad522b2f656080907dc1398f6029:
+
+Enum ComputeSelection
+=====================
+
+- Defined in :ref:`file_SeQuant_core_export_compute_selection.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::ComputeSelection
+   :project: SeQuant

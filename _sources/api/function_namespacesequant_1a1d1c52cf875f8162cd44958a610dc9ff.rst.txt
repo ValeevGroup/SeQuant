@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1d1c52cf875f8162cd44958a610dc9ff:
+
+Template Function sequant::canonical_children(TreeNode const&)
+==============================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_node_compare.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::canonical_children(TreeNode const&)
+   :project: SeQuant

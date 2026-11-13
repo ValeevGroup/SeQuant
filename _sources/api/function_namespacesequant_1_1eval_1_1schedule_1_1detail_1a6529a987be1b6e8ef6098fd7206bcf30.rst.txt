@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1schedule_1_1detail_1a6529a987be1b6e8ef6098fd7206bcf30:
+
+Function sequant::eval::schedule::detail::role_name(OccurrenceRole)
+===================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_schedule_dag_record.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::schedule::detail::role_name(OccurrenceRole)
+   :project: SeQuant

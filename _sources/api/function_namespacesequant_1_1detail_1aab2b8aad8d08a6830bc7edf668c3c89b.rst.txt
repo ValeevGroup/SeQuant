@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1aab2b8aad8d08a6830bc7edf668c3c89b:
+
+Template Function sequant::detail::get_parent_ptr
+=================================================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::get_parent_ptr(Node&&)
+   :project: SeQuant

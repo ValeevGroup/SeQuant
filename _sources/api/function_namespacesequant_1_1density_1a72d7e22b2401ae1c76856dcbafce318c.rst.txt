@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1density_1a72d7e22b2401ae1c76856dcbafce318c:
+
+Template Function sequant::density::make_cumulant(const NormalOperator<S>&)
+===========================================================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::density::make_cumulant(const NormalOperator<S>&)
+   :project: SeQuant

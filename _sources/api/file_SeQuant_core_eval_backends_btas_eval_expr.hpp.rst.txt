@@ -1,0 +1,32 @@
+
+.. _file_SeQuant_core_eval_backends_btas_eval_expr.hpp:
+
+File eval_expr.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval_backends_btas>` (``SeQuant/core/eval/backends/btas``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/backends/btas/eval_expr.hpp``)
+--------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_backends_btas_eval_expr.hpp.rst
+
+
+
+
+
+
+
+
+

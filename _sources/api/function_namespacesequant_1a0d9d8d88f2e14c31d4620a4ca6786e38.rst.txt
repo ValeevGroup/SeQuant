@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0d9d8d88f2e14c31d4620a4ca6786e38:
+
+Function sequant::throw_failure
+===============================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::throw_failure(const std::string&, const std::source_location)
+   :project: SeQuant

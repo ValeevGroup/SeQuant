@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a2570bc38c949708b5861eaf6789c607f:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::ProtoLabel, label, instance)
+====================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::ProtoLabel, label, instance)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a24dc945342a21b5422dc243755bd5053:
+
+Function sequant::current_contexts_version
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::current_contexts_version()
+   :project: SeQuant

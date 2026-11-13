@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4763321c66b566986ce04e5dd6ddafd9:
+
+Function sequant::replace(ExprPtr&, const ExprMatcher&, const Expr&)
+====================================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::replace(ExprPtr&, const ExprMatcher&, const Expr&)
+   :project: SeQuant

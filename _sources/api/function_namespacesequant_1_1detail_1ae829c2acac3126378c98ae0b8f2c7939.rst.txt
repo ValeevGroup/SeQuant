@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1ae829c2acac3126378c98ae0b8f2c7939:
+
+Function sequant::detail::dim_name
+==================================
+
+- Defined in :ref:`file_SeQuant_core_export_utils.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::dim_name(std::string, const Index&)
+   :project: SeQuant

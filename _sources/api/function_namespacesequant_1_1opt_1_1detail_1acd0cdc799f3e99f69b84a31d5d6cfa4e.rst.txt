@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1acd0cdc799f3e99f69b84a31d5d6cfa4e:
+
+Template Function sequant::opt::detail::contractible_adjacency
+==============================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::contractible_adjacency(TensorNetwork const&, TIdxs const&)
+   :project: SeQuant

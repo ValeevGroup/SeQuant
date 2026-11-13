@@ -1,0 +1,126 @@
+
+.. _program_listing_file_SeQuant_core_expressions_tensor_power.hpp:
+
+Program Listing for File tensor_power.hpp
+=========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_expressions_tensor_power.hpp>` (``SeQuant/core/expressions/tensor_power.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EXPRESSIONS_TENSOR_POWER_HPP
+   #define SEQUANT_EXPRESSIONS_TENSOR_POWER_HPP
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/expressions/abstract_tensor.hpp>
+   #include <SeQuant/core/expressions/expr.hpp>
+   #include <SeQuant/core/expressions/expr_ptr.hpp>
+   #include <SeQuant/core/rational.hpp>
+   
+   #include <compare>
+   #include <memory>
+   #include <string>
+   #include <type_traits>
+   
+   namespace sequant {
+   
+   class TensorPower : public Expr, public AbstractTensor {
+    public:
+     using exponent_type = rational;
+   
+     TensorPower() = delete;
+     virtual ~TensorPower() = default;
+     TensorPower(const TensorPower& other);
+     TensorPower(TensorPower&&) = default;
+     TensorPower& operator=(const TensorPower& other);
+     TensorPower& operator=(TensorPower&&) = default;
+   
+     TensorPower(ExprPtr base, exponent_type exponent);
+   
+     const ExprPtr& base() const;
+   
+     const AbstractTensor& base_tensor() const;
+   
+     const exponent_type& exponent() const;
+   
+     static constexpr type_rank_type type_rank = expr_type_rank::tensor_power;
+     static constexpr std::string static_type_name(
+         std::type_identity<TensorPower> = {}) {
+       return "sequant::TensorPower";
+     }
+   
+     type_id_type type_id() const override;
+   
+     bool is_scalar() const override;
+   
+     ExprPtr clone() const override;
+   
+     void adjoint() override;
+   
+     ExprPtr canonicalize(CanonicalizeOptions opts =
+                              CanonicalizeOptions::default_options()) override;
+   
+     std::wstring to_latex() const override;
+   
+     bool operator<(const AbstractTensor& that) const override;
+   
+    private:
+     Symmetry _symmetry() const override;
+     BraKetSymmetry _braket_symmetry() const override;
+     ColumnSymmetry _column_symmetry() const override;
+   
+     // the rest of the AbstractTensor interface forwards to the base; mutating
+     // members flush the memoized hash
+     AbstractTensor* _clone() const override;
+     std::shared_ptr<AbstractTensor> _clone_shared() const override;
+     const_any_view_randsz _bra() const override;
+     const_any_view_randsz _ket() const override;
+     const_any_view_randsz _aux() const override;
+     const_any_view_rand _braket() const override;
+     const_any_view_rand _braketaux() const override;
+     const_any_view_rand _slots() const override;
+     std::size_t _bra_rank() const override;
+     std::size_t _bra_net_rank() const override;
+     std::size_t _ket_rank() const override;
+     std::size_t _ket_net_rank() const override;
+     std::size_t _aux_rank() const override;
+     std::size_t _num_slots() const override;
+     std::size_t _num_indices() const override;
+     Hermiticity _hermiticity() const override;
+     Field _base_field() const override;
+     std::size_t _color() const override;
+     std::size_t _color_salt() const override;
+     bool _is_cnumber() const override;
+     std::wstring_view _label() const override;
+     std::wstring _to_latex() const override;
+     std::size_t _hash_value() const override;
+     bool _transform_indices(
+         const container::map<Index, Index>& index_map) override;
+     void _reset_tags() override;
+     void _swap_bra_ket() override;
+     any_view_randsz _bra_mutable() override;
+     any_view_randsz _ket_mutable() override;
+     any_view_randsz _aux_mutable() override;
+   
+     ExprPtr base_;
+     exponent_type exponent_;
+   
+     AbstractTensor& base_tensor_mut();
+   
+     hash_type memoizing_hash() const override;
+   
+     bool static_equal(const Expr& that) const override;
+   
+     bool static_less_than(const Expr& that) const override;
+   
+     std::weak_ordering static_lexicographic_compare(
+         const Expr& that, const LexicographicCompareOptions& opts) const override;
+   };
+   
+   ExprPtr pow(ExprPtr base, rational exponent);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EXPRESSIONS_TENSOR_POWER_HPP

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_index_space_count:
+
+Struct IndexSpaceCount
+======================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_filter.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexSpaceCount
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

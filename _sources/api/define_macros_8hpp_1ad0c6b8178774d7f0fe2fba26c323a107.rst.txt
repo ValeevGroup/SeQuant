@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1ad0c6b8178774d7f0fe2fba26c323a107:
+
+Define SEQUANT_ASSERT_IGNORE
+============================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_ASSERT_IGNORE
+   :project: SeQuant

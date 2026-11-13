@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1opt_1_1_name_recycling_result:
+
+Struct NameRecyclingResult
+==========================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::opt::NameRecyclingResult
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

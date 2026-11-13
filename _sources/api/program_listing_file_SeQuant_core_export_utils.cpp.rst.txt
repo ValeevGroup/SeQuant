@@ -1,0 +1,157 @@
+
+.. _program_listing_file_SeQuant_core_export_utils.cpp:
+
+Program Listing for File utils.cpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_export_utils.cpp>` (``SeQuant/core/export/utils.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Ajay Melekamburath on 4/27/26.
+   //
+   
+   #include <SeQuant/core/export/utils.hpp>
+   
+   #include <SeQuant/core/expressions/constant.hpp>
+   #include <SeQuant/core/expressions/expr.hpp>
+   #include <SeQuant/core/expressions/variable.hpp>
+   #include <SeQuant/core/rational.hpp>
+   #include <SeQuant/core/utility/exception.hpp>
+   #include <SeQuant/core/utility/string.hpp>
+   
+   #include <algorithm>
+   #include <cctype>
+   #include <cstdint>
+   #include <sstream>
+   #include <string>
+   #include <utility>
+   
+   namespace sequant::detail {
+   
+   std::string describe(const Tensor &tensor) {
+     std::string str = toUtf8(tensor.label());
+     str += ":";
+     for (const Index &idx : tensor.indices()) {
+       str += toUtf8(idx.space().reduce_key(idx.label()));
+     }
+     return str;
+   }
+   
+   std::string describe(const Variable &variable) {
+     return toUtf8(variable.label());
+   }
+   
+   std::string basis_instance_tag(const Index &idx) {
+     if (!idx.basis().has_basis_instance()) return {};
+     // widened so that the magnitude of the most negative instance fits
+     const std::int64_t instance = *idx.basis().basis_instance();
+     return instance < 0 ? "_" + std::to_string(-instance)
+                         : std::to_string(instance);
+   }
+   
+   std::string block_tag(std::string space_tag, const Index &idx) {
+     const auto instance = basis_instance_tag(idx);
+     if (!instance.empty() && !space_tag.empty() &&
+         (std::isdigit(static_cast<unsigned char>(space_tag.back())) ||
+          space_tag.back() == '_'))
+       throw Exception("export: the tag '" + space_tag + "' of the space of " +
+                       toUtf8(idx.full_label()) +
+                       " ends in a digit or '_', so a basis instance appended to "
+                       "it cannot be told from the tag; tag the space otherwise");
+     return space_tag += instance;
+   }
+   
+   std::string dim_name(std::string space_dim, const Index &idx) {
+     const auto instance = basis_instance_tag(idx);
+     if (instance.empty()) return space_dim;
+     if (!space_dim.empty() && space_dim.back() == '_')
+       throw Exception("export: the dimension name '" + space_dim +
+                       "' of the space of " + toUtf8(idx.full_label()) +
+                       " ends in '_', so the name of a basis instance appended "
+                       "to it is ambiguous; name the dimension otherwise");
+     return space_dim += "_" + instance;
+   }
+   
+   std::string format_power_exponent(const Power::exponent_type &exponent,
+                                     bool double_slash) {
+     std::stringstream ss;
+     if (denominator(exponent) == 1) {
+       const auto n = numerator(exponent);
+       if (n < 0) {
+         ss << "(" << n << ")";
+       } else {
+         ss << n;
+       }
+     } else {
+       ss << "(" << numerator(exponent) << (double_slash ? "//" : "/")
+          << denominator(exponent) << ")";
+     }
+     return ss.str();
+   }
+   
+   std::string format_power_base(const ExprPtr &base, std::string base_str) {
+     if (base->is<Constant>()) {
+       const auto &v = base->as<Constant>().value();
+       if (v.imag() == 0 &&
+           (denominator(v.real()) != 1 || numerator(v.real()) < 0)) {
+         return "(" + std::move(base_str) + ")";
+       }
+     }
+     return base_str;
+   }
+   
+   std::string format_power(
+       const Power &power, std::string base_str, std::string_view pow_op,
+       bool double_slash,
+       const std::function<std::string(std::string)> &wrap_conj) {
+     const ExprPtr &base = power.base();
+     if (base->is<Variable>() && base->as<Variable>().conjugated()) {
+       base_str = wrap_conj(std::move(base_str));
+     }
+     auto s = format_power_base(base, std::move(base_str)) + std::string(pow_op) +
+              format_power_exponent(power.exponent(), double_slash);
+     if (power.conjugated()) s = wrap_conj(std::move(s));
+     return s;
+   }
+   
+   std::string format_tensor_power(const TensorPower &power, std::string base_str,
+                                   std::string_view pow_op, bool double_slash) {
+     return std::move(base_str) + std::string(pow_op) +
+            format_power_exponent(power.exponent(), double_slash);
+   }
+   
+   const Tensor *broadcast_operand_tensor(const Expr &operand) {
+     auto tensor_of = [](const Expr &e) -> const Tensor * {
+       if (e.is<Tensor>()) return &e.as<Tensor>();
+       if (e.is<TensorPower>() && e.as<TensorPower>().base()->is<Tensor>())
+         return &e.as<TensorPower>().base()->as<Tensor>();
+       if (e.is_scalar()) return nullptr;
+       throw Exception("export: cannot broadcast a " + e.type_name());
+     };
+   
+     if (!operand.is<Product>()) return tensor_of(operand);
+   
+     const Tensor *tensor = nullptr;
+     for (const ExprPtr &factor : operand.as<Product>().factors()) {
+       if (const Tensor *t = tensor_of(*factor)) {
+         if (tensor)
+           throw Exception(
+               "export: the operand of a broadcast has more than one tensor "
+               "factor");
+         tensor = t;
+       }
+     }
+     return tensor;
+   }
+   
+   bool broadcast_carries(const Tensor *operand_tensor, const Index &idx) {
+     if (!operand_tensor) return false;
+     auto indices = operand_tensor->const_indices();
+     return std::ranges::find(indices, idx) != std::ranges::end(indices);
+   }
+   
+   }  // namespace sequant::detail

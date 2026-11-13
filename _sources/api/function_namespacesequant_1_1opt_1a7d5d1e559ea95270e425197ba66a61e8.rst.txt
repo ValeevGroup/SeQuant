@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a7d5d1e559ea95270e425197ba66a61e8:
+
+Function sequant::opt::is_tensor_factor
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::is_tensor_factor(Expr const&)
+   :project: SeQuant

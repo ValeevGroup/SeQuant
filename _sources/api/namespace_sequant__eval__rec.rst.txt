@@ -1,0 +1,35 @@
+
+.. _namespace_sequant__eval__rec:
+
+Namespace sequant::eval::rec
+============================
+
+
+One use-site of a value, kept alongside the folded ``ValueCell``. Inline capacities of the per-node, per-occurrence and per-value records below (``NodeRec``, ``OccurrenceRec``, ``ValueCell``). There is one record per forest node, so the records are sized for the common case rather than boost::container::small_vector's default of 8 elements: an ``Index`` is 232 bytes, so the default made an ``Index`` list 1.9 KB and a ``ValueCell``, which inlined 8 occurrence records, 102 KB  about 1.5 GB of mostly unused inline storage for the 2550-term UCC energy of h2o+. An ``Index`` list holds up to 3 inline (a CSV-CCSDT residual's occupied indices); the operand, slot and loop lists 2; longer lists spill to the heap. 
+
+
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1rec_1ae17a2bef2216dbd12b57b1ee2a76cba4`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1rec_1a5f3d8672b066d902b66f9705a5fbd323`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1rec_1a6811f8565b11b49a1ef9f4d5a2fdb208`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1rec_1a6c18e4fc28aca8856a81c4990f560fc7`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1rec_1ad0c841e106c94a14f03fb4c9ed73de33`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1rec_1a31a7991d268b13ec688e343d1b794013`

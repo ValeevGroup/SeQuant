@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1af4078530e89ffe3183263b878b20a8db:
+
+Function sequant::detail::node0(std::ranges::range auto&&)
+==========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::node0(std::ranges::range auto&&)
+   :project: SeQuant

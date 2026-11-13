@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1adc608ead17c4bcb8f0404491da04ed7b:
+
+Template Function sequant::fcrex
+================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::fcrex(Index, Attr&&...)
+   :project: SeQuant

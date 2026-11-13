@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a4f3c0b7c21ccdb88c5cba4f377602d35:
+
+Function sequant::mbpt::make_legacy_registry
+============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::make_legacy_registry()
+   :project: SeQuant

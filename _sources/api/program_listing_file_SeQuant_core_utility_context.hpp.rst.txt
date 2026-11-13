@@ -1,0 +1,140 @@
+
+.. _program_listing_file_SeQuant_core_utility_context.hpp:
+
+Program Listing for File context.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_context.hpp>` (``SeQuant/core/utility/context.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_UTILITY_CONTEXT_HPP
+   #define SEQUANT_CORE_UTILITY_CONTEXT_HPP
+   
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <algorithm>
+   #include <iterator>
+   #include <memory>
+   #include <utility>
+   #include <vector>
+   
+   
+   
+   namespace sequant::detail {
+   
+   template <typename Ctx>
+   inline Ctx& implicit_context_instance() {
+     static Ctx instance_;
+     return instance_;
+   }
+   
+   struct ImplicitContextOverlay {
+     const void* key;
+     std::shared_ptr<const void> ctx;
+   };
+   
+   using ImplicitContextOverlays = std::vector<ImplicitContextOverlay>;
+   
+   inline ImplicitContextOverlays& implicit_context_overlays() {
+     thread_local ImplicitContextOverlays overlays;
+     return overlays;
+   }
+   
+   template <typename Ctx>
+   const void* implicit_context_key() {
+     static const char key = 0;
+     return &key;
+   }
+   
+   template <typename Ctx>
+   const Ctx* implicit_context_overlay() {
+     const auto& overlays = implicit_context_overlays();
+     for (auto it = overlays.rbegin(); it != overlays.rend(); ++it) {
+       if (it->key == implicit_context_key<Ctx>())
+         return static_cast<const Ctx*>(it->ctx.get());
+     }
+     return nullptr;
+   }
+   
+   template <typename Ctx>
+   const Ctx& get_implicit_context() {
+     if (const auto* overlay = implicit_context_overlay<Ctx>()) return *overlay;
+     return implicit_context_instance<Ctx>();
+   }
+   
+   template <typename Ctx>
+   void set_implicit_context(const Ctx& ctx) {
+     implicit_context_instance<Ctx>() = ctx;
+   }
+   
+   template <typename Ctx>
+   void reset_implicit_context() {
+     implicit_context_instance<Ctx>() = Ctx{};
+   }
+   
+   template <typename Ctx>
+   struct ImplicitContextResetter {
+     ImplicitContextResetter() = default;
+     explicit ImplicitContextResetter(const void* overlay) noexcept
+         : overlay_(overlay) {}
+     ~ImplicitContextResetter() noexcept {
+       if (overlay_) {
+         auto& overlays = implicit_context_overlays();
+         const auto it = std::find_if(
+             overlays.rbegin(), overlays.rend(),
+             [this](const auto& o) { return o.ctx.get() == overlay_; });
+         SEQUANT_ASSERT(it != overlays.rend() && it == overlays.rbegin() &&
+                        "scoped contexts must end in the reverse order of their "
+                        "creation, on the thread that created them");
+         if (it != overlays.rend()) overlays.erase(std::next(it).base());
+       }
+     }
+   
+     // neither copyable nor movable: a moved-from resetter would still hold
+     // overlay_ and pop the live scope; returning by value relies on guaranteed
+     // copy elision
+     ImplicitContextResetter(const ImplicitContextResetter&) = delete;
+     ImplicitContextResetter(ImplicitContextResetter&&) = delete;
+     ImplicitContextResetter& operator=(const ImplicitContextResetter&) = delete;
+     ImplicitContextResetter& operator=(ImplicitContextResetter&&) = delete;
+   
+    private:
+     const void* overlay_ = nullptr;
+   };
+   
+   template <typename Ctx>
+   ImplicitContextResetter<Ctx> set_scoped_implicit_context(Ctx ctx) {
+     auto overlay = std::make_shared<const Ctx>(std::move(ctx));
+     const void* overlay_ptr = overlay.get();
+     implicit_context_overlays().push_back(
+         {implicit_context_key<Ctx>(), std::move(overlay)});
+     return ImplicitContextResetter<Ctx>(overlay_ptr);
+   }
+   
+   class ImplicitContextOverlaysScope {
+    public:
+     explicit ImplicitContextOverlaysScope(const ImplicitContextOverlays& overlays)
+         : active_(!overlays.empty() || !implicit_context_overlays().empty()) {
+       if (active_)
+         previous_ = std::exchange(implicit_context_overlays(), overlays);
+     }
+     ~ImplicitContextOverlaysScope() {
+       if (active_) implicit_context_overlays() = std::move(previous_);
+     }
+   
+     ImplicitContextOverlaysScope(const ImplicitContextOverlaysScope&) = delete;
+     ImplicitContextOverlaysScope& operator=(const ImplicitContextOverlaysScope&) =
+         delete;
+   
+    private:
+     bool active_;
+     ImplicitContextOverlays previous_;
+   };
+   
+   }  // namespace sequant::detail
+   
+   
+   #endif  // SEQUANT_CORE_UTILITY_CONTEXT_HPP

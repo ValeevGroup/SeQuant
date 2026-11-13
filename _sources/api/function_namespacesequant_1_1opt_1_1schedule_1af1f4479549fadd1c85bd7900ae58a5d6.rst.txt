@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1schedule_1af1f4479549fadd1c85bd7900ae58a5d6:
+
+Function sequant::opt::schedule::record_term
+============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::schedule::record_term(ExprPtr const&, ExprPtr const&, container::vector<NodeBatchAnnotation> const&)
+   :project: SeQuant

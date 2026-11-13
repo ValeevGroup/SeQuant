@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a32bbaadc34f90c3ee7ec513f338898c8:
+
+Template Function sequant::permute
+==================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::permute(const ArrayLike&, const Permutation&)
+   :project: SeQuant

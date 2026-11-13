@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1eval_1_1_release_plan:
+
+Struct ReleasePlan
+==================
+
+- Defined in :ref:`file_SeQuant_core_eval_release_plan.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::ReleasePlan
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

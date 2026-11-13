@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aed6f650287625fd8ed6f5127b7cb4732:
+
+Template Function sequant::irreps_of(const Expr&, const Ctx&)
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::irreps_of(const Expr&, const Ctx&)
+   :project: SeQuant

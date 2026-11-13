@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa7cf95ed64c9f8852a65e178ebafc31d:
+
+Function sequant::get_default_index_space_registry
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_context.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_default_index_space_registry()
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a99eab6d698bdc394adfab564f7e416de:
+
+Template Function sequant::detail::log_result
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::log_result(Args const&...)
+   :project: SeQuant

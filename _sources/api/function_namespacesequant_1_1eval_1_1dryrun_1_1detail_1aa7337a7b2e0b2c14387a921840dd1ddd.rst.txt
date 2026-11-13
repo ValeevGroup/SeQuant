@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1aa7337a7b2e0b2c14387a921840dd1ddd:
+
+Function sequant::eval::dryrun::detail::overrides_of
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::dryrun::detail::overrides_of(Result const&)
+   :project: SeQuant

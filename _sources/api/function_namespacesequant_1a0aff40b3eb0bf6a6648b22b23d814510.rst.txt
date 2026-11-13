@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0aff40b3eb0bf6a6648b22b23d814510:
+
+Function sequant::to_latex_align
+================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_latex_align(const ExprPtr&, size_t, size_t)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a56420416534fd50043ea6cf6494b7492:
+
+Enum IndexBasisMetric
+=====================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::IndexBasisMetric
+   :project: SeQuant

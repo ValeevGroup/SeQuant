@@ -1,0 +1,22 @@
+.. _dir_SeQuant_core_io_latex:
+
+
+Directory latex
+===============
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io>` (``SeQuant/core/io``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/io/latex``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_io_latex_latex.cpp`
+- :ref:`file_SeQuant_core_io_latex_latex.hpp`
+
+

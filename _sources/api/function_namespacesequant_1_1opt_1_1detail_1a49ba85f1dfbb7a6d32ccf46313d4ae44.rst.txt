@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a49ba85f1dfbb7a6d32ccf46313d4ae44:
+
+Template Function sequant::opt::detail::init_results
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::init_results(TensorNetwork const&, TIdxs const&, container::vector<OptRes>&, container::vector<char> const *)
+   :project: SeQuant

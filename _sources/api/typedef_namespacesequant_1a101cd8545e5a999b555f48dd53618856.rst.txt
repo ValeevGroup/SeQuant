@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a101cd8545e5a999b555f48dd53618856:
+
+Typedef sequant::rational
+=========================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::rational
+   :project: SeQuant

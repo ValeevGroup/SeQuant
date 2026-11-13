@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4fd676a97e354d8c681ef2ff875a2a5c:
+
+Template Function sequant::irrep_to_string
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_algebra.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::irrep_to_string(const Irrep&)
+   :project: SeQuant
