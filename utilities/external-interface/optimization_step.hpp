@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -23,6 +24,8 @@ class OptimizationStep
     : public OneByOneProcessingStep<ExpressionData, true,
                                     InputAccess::WorkingCopy> {
  public:
+  OptimizationStep();
+
   std::string kind() const override;
 
   bool accepts_options() const override;
@@ -50,6 +53,10 @@ class OptimizationStep
   std::optional<ReplayOptions> replay_;
 
   void set_replay_options(const nlohmann::json &options);
+  void set_batch_options(const nlohmann::json &options);
+  void check_batch_spaces() const;
+
+  std::set<std::string> batch_labels_;
 };
 
 }  // namespace sequant::util::extint

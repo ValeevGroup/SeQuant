@@ -387,6 +387,161 @@ TEST_CASE("optimize step", "[extint]") {
                         Catch::Matchers::ContainsSubstring("mandatory"));
   }
 
+  SECTION("deprecated objectives are rejected") {
+    for (const char *objective :
+         {"DenseSize", "DensePeakSize", "DensePeakSizeBatched"}) {
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(step.set_options(json{{"objective", objective}}),
+                          Catch::Matchers::ContainsSubstring("Invalid value"));
+    }
+    for (const char *objective : {"DenseFLOPs", "DenseTimeSpace"}) {
+      OptimizationStep step;
+      REQUIRE_NOTHROW(step.set_options(json{{"objective", objective}}));
+    }
+  }
+
+  SECTION("options that depend on the objective") {
+    // DenseTimeSpace is the default objective
+    {
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(
+          step.set_options(json{{"intermediate_size_penalty", 1.0}}),
+          Catch::Matchers::ContainsSubstring("DenseFLOPs"));
+    }
+    {
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(step.set_options(json{{"cse", "subnet"}}),
+                          Catch::Matchers::ContainsSubstring("DenseFLOPs"));
+    }
+    {
+      OptimizationStep step;
+      REQUIRE_NOTHROW(step.set_options(json{{"cse", "none"}}));
+    }
+    {
+      OptimizationStep step;
+      REQUIRE_NOTHROW(
+          step.set_options(json{{"objective", "DenseFLOPs"},
+                                {"cse", "subnet"},
+                                {"intermediate_size_penalty", 1.0}}));
+    }
+  }
+
+  SECTION("batch options") {
+    const json batch = {
+        {"peak_threshold", 1e9}, {"contracted", {"a"}}, {"target_size", 100}};
+    {
+      OptimizationStep step;
+      REQUIRE_NOTHROW(step.set_options(
+          json{{"objective", "DenseTimeSpaceBatched"}, {"batch", batch}}));
+    }
+    {
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(
+          step.set_options(json{{"objective", "DenseTimeSpaceBatched"}}),
+          Catch::Matchers::ContainsSubstring("requires the 'batch'"));
+    }
+    {
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(
+          step.set_options(json{{"batch", batch}}),
+          Catch::Matchers::ContainsSubstring("DenseTimeSpaceBatched"));
+    }
+
+    auto with_batch = [](json b) {
+      return json{{"objective", "DenseTimeSpaceBatched"}, {"batch", b}};
+    };
+    for (const char *mandatory : {"peak_threshold", "target_size"}) {
+      json incomplete = batch;
+      incomplete.erase(mandatory);
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(step.set_options(with_batch(incomplete)),
+                          Catch::Matchers::ContainsSubstring("mandatory"));
+    }
+    {
+      json no_space = batch;
+      no_space.erase("contracted");
+      OptimizationStep step;
+      REQUIRE_THROWS_AS(step.set_options(with_batch(no_space)), Exception);
+    }
+    {
+      json missing_size = batch;
+      missing_size["target_size"] = {{"i", 10}};
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(step.set_options(with_batch(missing_size)),
+                          Catch::Matchers::ContainsSubstring("'a'"));
+    }
+    {
+      json external_only = batch;
+      external_only.erase("contracted");
+      external_only["external"] = {"a"};
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(
+          step.set_options(with_batch(external_only)),
+          Catch::Matchers::ContainsSubstring("spectator_indices"));
+      external_only["spectator_indices"] = true;
+      OptimizationStep other;
+      REQUIRE_NOTHROW(other.set_options(with_batch(external_only)));
+    }
+    {
+      json spectators = batch;
+      spectators["spectator_indices"] = true;
+      OptimizationStep step;
+      REQUIRE_THROWS_AS(step.set_options(with_batch(spectators)), Exception);
+    }
+    {
+      json persistent = batch;
+      persistent["persistent_only"] = true;
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(step.set_options(with_batch(persistent)),
+                          Catch::Matchers::ContainsSubstring("replay"));
+      json options = with_batch(persistent);
+      options["replay"] = {{"volatile", "T2"}};
+      OptimizationStep other;
+      REQUIRE_NOTHROW(other.set_options(options));
+    }
+    {
+      json unknown_space = batch;
+      unknown_space["contracted"] = {"no_such_space"};
+      ExecutionContext ctx;
+      seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+      OptimizationStep step;
+      step.set_options(with_batch(unknown_space));
+      REQUIRE_THROWS_WITH(step.run("opt", ctx, {"in.0"}),
+                          Catch::Matchers::ContainsSubstring("no_such_space"));
+    }
+    {
+      json bad = batch;
+      bad["unknown"] = true;
+      OptimizationStep step;
+      REQUIRE_THROWS_AS(step.set_options(with_batch(bad)), Exception);
+    }
+    {
+      json bad = batch;
+      bad["peak_threshold"] = -1;
+      OptimizationStep step;
+      REQUIRE_THROWS_AS(step.set_options(with_batch(bad)), Exception);
+    }
+  }
+
+  SECTION("factorizes with each objective") {
+    for (const json &options : {json{{"objective", "DenseFLOPs"}},
+                                json{{"objective", "DenseTimeSpace"}},
+                                json{{"objective", "DenseTimeSpaceBatched"},
+                                     {"batch",
+                                      {{"peak_threshold", 1e9},
+                                       {"contracted", {"i"}},
+                                       {"target_size", 10}}}}}) {
+      ExecutionContext ctx;
+      seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S "
+                      L"T1{a2;i2}:A-H-S"});
+      OptimizationStep step;
+      step.set_options(options);
+      REQUIRE(step.run("opt", ctx, {"in.0"}) == 1);
+      REQUIRE_NOTHROW(convert_data<ExpressionData>(
+          ctx.get_data("opt.0").front().data.get()));
+    }
+  }
+
   SECTION("factorizes a contraction into ExpressionData") {
     ExecutionContext ctx;
     seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
