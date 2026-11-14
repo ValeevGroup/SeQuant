@@ -327,7 +327,9 @@ inline void collect_productions(ScopeBlock const& block,
 ///   - ordinals are unique among same-axis (\c IndexBasis::base_key())
 ///     sibling blocks within a parent;
 ///   - every \c ScopeBlock::outputs value_id is < \c sched.num_values;
-///   - single-producer (SSA-like), with the multi-level escape chain allowed:
+///   - single-producer (SSA-like) within each pass of a nest, with the
+///     multi-level escape chain allowed (a value read in more than one pass of
+///     its nest is produced in each, and nowhere else twice):
 ///     no value_id is built (\c BuildStep) more than once; a built value_id may
 ///     also escape only through its own chain -- every block listing it in \c
 ///     outputs either holds its \c BuildStep or is an ancestor of the block
@@ -354,63 +356,130 @@ inline void collect_productions(ScopeBlock const& block,
     return false;
 
   container::svector<ScopeBlock const*> path;
-  container::vector<detail::OutputSite> builds;
-  container::vector<detail::OutputSite> sites;
-  detail::collect_productions(sched.root, path, builds, sites);
+  container::vector<detail::OutputSite> all_builds;
+  container::vector<detail::OutputSite> all_sites;
+  detail::collect_productions(sched.root, path, all_builds, all_sites);
 
-  // (a) no value_id built more than once.
+  // A value may be produced once per pass of a nest: the pass blocks of a
+  // nest are the root's child blocks over one loop instance (same space and
+  // slot), told apart by latitude, and a value read from more than one of
+  // them is built in each (\c build_ordered_schedule, "Rebuilds"). So the
+  // single-producer rules (a)-(c) below hold within each root-level block,
+  // and a value produced in two of them must have them be two passes of one
+  // nest, with the same sites in each. A root-scope build (path = root only)
+  // is its own group.
+  std::map<ScopeBlock const*, std::pair<container::vector<detail::OutputSite>,
+                                        container::vector<detail::OutputSite>>>
+      groups;
+  auto const top_of = [](detail::OutputSite const& s) -> ScopeBlock const* {
+    return s.path.size() > 1 ? s.path[1] : nullptr;
+  };
+  for (auto const& b : all_builds) groups[top_of(b)].first.push_back(b);
+  for (auto const& s : all_sites) groups[top_of(s)].second.push_back(s);
   {
-    container::vector<std::size_t> b;
-    for (auto const& s : builds) b.push_back(s.value_id);
-    std::sort(b.begin(), b.end());
-    if (auto const it = std::adjacent_find(b.begin(), b.end()); it != b.end())
-      return false;
-  }
-  // (b) a built value_id may also escape, but only through its own chain:
-  // every block listing it in `outputs` must either be the block holding its
-  // BuildStep (built and escaped in one block -- a mixed-pass member of a
-  // forced split: its in-nest readers take the per-batch cell, the other pass
-  // takes the assembled form) or an ancestor of it (the chain levels above
-  // the production site). An escape in a sibling or descendant of the
-  // production site is a second, unrelated producer.
-  {
-    std::unordered_map<std::size_t, detail::OutputSite const*> build_of;
-    for (auto const& b : builds) build_of.emplace(b.value_id, &b);
-    for (auto const& s : sites) {
-      auto const it = build_of.find(s.value_id);
-      if (it == build_of.end()) continue;
-      auto const& home = it->second->path;
-      bool ok = s.path.size() <= home.size();
-      for (std::size_t k = 0; ok && k < s.path.size(); ++k)
-        ok = s.path[k] == home[k];
-      if (!ok) return false;
+    // per value and top block: how it is produced there -- the depth of each
+    // of its sites and what the site is (-1 a build, else the output kind)
+    using Shape = std::set<std::pair<std::size_t, int>>;
+    std::unordered_map<std::size_t, std::map<ScopeBlock const*, Shape>> made;
+    for (auto const& b : all_builds)
+      made[b.value_id][top_of(b)].insert({b.path.size(), -1});
+    for (auto const& s : all_sites)
+      for (auto const& [ovid, okind] : s.path.back()->outputs)
+        if (ovid == s.value_id)
+          made[s.value_id][top_of(s)].insert(
+              {s.path.size(), static_cast<int>(okind)});
+    for (auto const& [vid, by_top] : made) {
+      (void)vid;
+      if (by_top.size() == 1) continue;
+      // two or more passes of one nest. The value is produced the same way
+      // in each, except that a pass may leave out an assembled form none of
+      // its readers takes: the builds agree, and one pass has every site.
+      ScopeBlock const* const top0 = by_top.begin()->first;
+      Shape all;
+      for (auto const& [top, shape] : by_top) {
+        if (top == nullptr) return false;
+        if (top != top0 && (top->level.space != top0->level.space ||
+                            top->level.loop_slot != top0->level.loop_slot ||
+                            std::wstring(top->axis.basis().base_key()) !=
+                                std::wstring(top0->axis.basis().base_key()) ||
+                            top->latitude_ordinal == top0->latitude_ordinal))
+          return false;
+        all.insert(shape.begin(), shape.end());
+      }
+      auto const builds_of = [](Shape const& sh) {
+        Shape b;
+        for (auto const& e : sh)
+          if (e.second == -1) b.insert(e);
+        return b;
+      };
+      bool one_has_all = false;
+      for (auto const& [top, shape] : by_top) {
+        (void)top;
+        if (builds_of(shape) != builds_of(all)) return false;
+        one_has_all = one_has_all || shape == all;
+      }
+      if (!one_has_all) return false;
     }
   }
-  // (c) a value_id's escape sites (>1 => a multi-level chain) must lie on one
-  // root-to-node nesting path: distinct depths, and every shorter path a
-  // prefix of the deepest (so each is an ancestor of the next).
-  {
-    std::unordered_map<std::size_t,
-                       container::svector<detail::OutputSite const*>>
-        by_vid;
-    for (auto const& s : sites) by_vid[s.value_id].push_back(&s);
-    for (auto const& [vid, ss] : by_vid) {
-      (void)vid;
-      if (ss.size() == 1) continue;
-      detail::OutputSite const* deepest = ss.front();
-      for (auto const* s : ss)
-        if (s->path.size() > deepest->path.size()) deepest = s;
-      std::unordered_set<std::size_t> depths;
-      for (auto const* s : ss) {
-        if (!depths.insert(s->path.size()).second)  // same depth
-          return false;
-        if (s->path.size() > deepest->path.size()) return false;
-        for (std::size_t k = 0; k < s->path.size(); ++k)
-          if (s->path[k] != deepest->path[k])  // not an ancestor
-            return false;
+  for (auto const& [top, group] : groups) {
+    (void)top;
+    auto const& builds = group.first;
+    auto const& sites = group.second;
+
+    // (a) no value_id built more than once.
+    {
+      container::vector<std::size_t> b;
+      for (auto const& s : builds) b.push_back(s.value_id);
+      std::sort(b.begin(), b.end());
+      if (auto const it = std::adjacent_find(b.begin(), b.end()); it != b.end())
+        return false;
+    }
+    // (b) a built value_id may also escape, but only through its own chain:
+    // every block listing it in `outputs` must either be the block holding its
+    // BuildStep (built and escaped in one block -- a mixed-pass member of a
+    // forced split: its in-nest readers take the per-batch cell, the other pass
+    // takes the assembled form) or an ancestor of it (the chain levels above
+    // the production site). An escape in a sibling or descendant of the
+    // production site is a second, unrelated producer.
+    {
+      std::unordered_map<std::size_t, detail::OutputSite const*> build_of;
+      for (auto const& b : builds) build_of.emplace(b.value_id, &b);
+      for (auto const& s : sites) {
+        auto const it = build_of.find(s.value_id);
+        if (it == build_of.end()) continue;
+        auto const& home = it->second->path;
+        bool ok = s.path.size() <= home.size();
+        for (std::size_t k = 0; ok && k < s.path.size(); ++k)
+          ok = s.path[k] == home[k];
+        if (!ok) return false;
       }
     }
-  }
+    // (c) a value_id's escape sites (>1 => a multi-level chain) must lie on one
+    // root-to-node nesting path: distinct depths, and every shorter path a
+    // prefix of the deepest (so each is an ancestor of the next).
+    {
+      std::unordered_map<std::size_t,
+                         container::svector<detail::OutputSite const*>>
+          by_vid;
+      for (auto const& s : sites) by_vid[s.value_id].push_back(&s);
+      for (auto const& [vid, ss] : by_vid) {
+        (void)vid;
+        if (ss.size() == 1) continue;
+        detail::OutputSite const* deepest = ss.front();
+        for (auto const* s : ss)
+          if (s->path.size() > deepest->path.size()) deepest = s;
+        std::unordered_set<std::size_t> depths;
+        for (auto const* s : ss) {
+          if (!depths.insert(s->path.size()).second)  // same depth
+            return false;
+          if (s->path.size() > deepest->path.size()) return false;
+          for (std::size_t k = 0; k < s->path.size(); ++k)
+            if (s->path[k] != deepest->path[k])  // not an ancestor
+              return false;
+        }
+      }
+    }
+  }  // groups
   return true;
 }
 
@@ -687,10 +756,13 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 ///   value that is the source of no bumping edge has its level as its base.
 /// Reverse sweep (consumers before operands): a non-pinned value with at
 /// least one consumer is lifted to max(base, min over its direct consumers'
-/// passes), so a value whose readers all sit later is built with them; a
-/// value with readers in several passes keeps its base (and is materialized
-/// by the builder's materialization rule when a later same-nest reader needs
-/// it).
+/// passes), so a value whose readers all sit later is built with them.
+/// Readers that nothing holds in an earlier pass are then gathered into the
+/// pass of the latest reader of a value they share (see "Reader co-location"
+/// in \c forced_split_levels). A value whose readers still sit in several
+/// passes is in the earliest of them; \c build_ordered_schedule builds it
+/// again in the later ones, or keeps it assembled when a copy cannot serve a
+/// reader (its step 2c).
 ///
 /// Every dependency edge points to an equal or earlier pass. With only
 /// LoopCarried bumps present (no Reduction-source bump fires) the passes
@@ -707,6 +779,15 @@ struct ForcedSplitLevels {
                 //!< and takes part in the dependency graph); absent for a
                 //!< value with no legality cell, which \c pass() below
                 //!< reports as pass 0 rather than throwing.
+  /// (reader, source) edges of the last round on which the reader needs the
+  /// source's completed form (a carried source, or a reduction read inside
+  /// its own loop): a copy of the source built in the reader's pass could not
+  /// serve such a read.
+  std::set<std::pair<std::size_t, std::size_t>> completion_edges;
+  /// (reader, source) edges bumped only to keep the steps of a pass
+  /// orderable: a copy of the source in the reader's pass would bring the
+  /// cycle back.
+  std::set<std::pair<std::size_t, std::size_t>> order_edges;
   int max_pass = 0;
   int pass(std::size_t vid) const {
     auto const it = pass_of.find(vid);
@@ -748,12 +829,23 @@ struct ForcedSplitSite {
 /// strongly connected set of steps gives up its edges into the set; which
 /// block does is a choice -- any of them breaks the cycles through it -- and
 /// it falls on the block with the fewest such edges.
+///
+/// This overload takes the graph abstractly -- \p n nodes, \p is_leaf, the
+/// operands \p operands_of each node reads, its \p site and its \p pass --
+/// so that a caller can pose the question for a graph in which a value built
+/// in several passes is one node per pass (\c build_ordered_schedule's
+/// rebuild plan).
 inline container::vector<std::pair<std::size_t, std::size_t>>
 pass_step_cycle_edges(
-    RichSchedule const& rich, OrderedScheduleDepGraph const& g,
+    std::size_t n, std::function<bool(std::size_t)> const& is_leaf,
+    std::function<container::svector<std::size_t> const&(std::size_t)> const&
+        operands_of,
     container::vector<std::optional<ForcedSplitSite>> const& site,
-    ForcedSplitLevels const& levels) {
-  std::size_t const n = rich.cells.size();
+    std::function<int(std::size_t)> const& pass_of_node) {
+  struct {
+    std::function<int(std::size_t)> const& f;
+    int pass(std::size_t v) const { return f(v); }
+  } const levels{pass_of_node};
   container::vector<std::pair<std::size_t, std::size_t>> out;
 
   // Root steps: a root value is its own node, a (nest, pass) block is a node
@@ -782,12 +874,9 @@ pass_step_cycle_edges(
 
   // The edges between values of one pass, each visited with \p f(v, o).
   auto const for_each_pass_edge = [&](auto&& f) {
-    for (std::size_t v = 0; v < n; ++v) {
-      auto const it = g.depends_on.find(v);
-      if (it == g.depends_on.end()) continue;
-      for (std::size_t o : it->second)
-        if (!rich.cells[o].is_leaf && levels.pass(o) == levels.pass(v)) f(v, o);
-    }
+    for (std::size_t v = 0; v < n; ++v)
+      for (std::size_t o : operands_of(v))
+        if (!is_leaf(o) && levels.pass(o) == levels.pass(v)) f(v, o);
   };
 
   for_each_pass_edge([&](std::size_t v, std::size_t o) {
@@ -889,6 +978,23 @@ pass_step_cycle_edges(
       out.push_back({v, o});
   });
   return out;
+}
+
+/// \c pass_step_cycle_edges for the values of \p rich at the passes of \p
+/// levels.
+inline container::vector<std::pair<std::size_t, std::size_t>>
+pass_step_cycle_edges(
+    RichSchedule const& rich, OrderedScheduleDepGraph const& g,
+    container::vector<std::optional<ForcedSplitSite>> const& site,
+    ForcedSplitLevels const& levels) {
+  static container::svector<std::size_t> const none{};
+  return pass_step_cycle_edges(
+      rich.cells.size(), [&](std::size_t v) { return rich.cells[v].is_leaf; },
+      [&](std::size_t v) -> container::svector<std::size_t> const& {
+        auto const it = g.depends_on.find(v);
+        return it == g.depends_on.end() ? none : it->second;
+      },
+      site, [&](std::size_t v) { return levels.pass(v); });
 }
 
 /// Assigns every value of \p rich its pass level (see \c ForcedSplitLevels),
@@ -995,6 +1101,8 @@ inline ForcedSplitLevels forced_split_levels(
       bumped;
   for (;;) {
     r.pinned = r.carried;
+    r.completion_edges.clear();
+    r.order_edges.clear();
     bumped.clear();
     std::unordered_map<std::size_t, int> base;
     base.reserve(n);
@@ -1010,6 +1118,10 @@ inline ForcedSplitLevels forced_split_levels(
               reduction_sources.count(o) != 0 && inside(v, o);
           bool const bump = carried_read || inside_reduction ||
                             order_bumps.count({v, o}) != 0;
+          if (carried_read || inside_reduction)
+            r.completion_edges.insert({v, o});
+          else if (bump)
+            r.order_edges.insert({v, o});
           if (bump) {
             r.pinned.insert(o);
             bumped.push_back({v, o,
@@ -1035,6 +1147,116 @@ inline ForcedSplitLevels forced_split_levels(
     }
 
     if (!site_of) break;
+
+    // Reader co-location. A bump is a lower bound on a reader's pass, and
+    // nothing bounds a pass from above, so a reader left in an early pass
+    // only because nothing pushed it later can join the later readers of an
+    // operand it shares with them. That operand, built per batch, is then
+    // built in one pass of its nest instead of once per pass that reads it.
+    //
+    // split_count is the number of passes of its own nest, beyond the first,
+    // in which a value is read. A move raises the early readers of one value
+    // to the pass of its latest reader, raises their consumers as the bumps
+    // require, lets operands follow their readers (the reverse lift), and
+    // repeats for every value the move left read in more passes than before.
+    // It is kept only if it lowers the total split count and adds no pass;
+    // the count falls with each move kept, so the moves end.
+    {
+      auto const same_nest = [&](std::size_t a, std::size_t b) {
+        return site[a] && site[b] && site[a]->nest == site[b]->nest;
+      };
+      auto const counted = [&](std::size_t v) {
+        return !rich.cells[v].is_leaf && site[v] && r.pinned.count(v) == 0;
+      };
+      using PassMap = std::unordered_map<std::size_t, int>;
+      auto const reader_passes = [&](std::size_t v, PassMap const& pass) {
+        std::set<int> ps;
+        auto const cit = g.consumers_of.find(v);
+        if (cit != g.consumers_of.end())
+          for (std::size_t u : cit->second)
+            if (same_nest(u, v)) ps.insert(pass.at(u));
+        return ps;
+      };
+      auto const splits_of = [&](std::size_t v, PassMap const& pass) {
+        if (!counted(v)) return std::size_t{0};
+        std::size_t const np = reader_passes(v, pass).size();
+        return np == 0 ? std::size_t{0} : np - 1;
+      };
+      auto const split_count = [&](PassMap const& pass) {
+        std::size_t c = 0;
+        for (std::size_t v = 0; v < n; ++v) c += splits_of(v, pass);
+        return c;
+      };
+      int cap = 0;
+      for (auto const& [v, p] : r.pass_of) cap = std::max(cap, p);
+      // Raises x to pass k and its consumers with it; false if that needs a
+      // pass beyond cap.
+      std::function<bool(std::size_t, int, PassMap&)> raise =
+          [&](std::size_t x, int k, PassMap& pass) -> bool {
+        if (pass.at(x) >= k) return true;
+        if (k > cap) return false;
+        pass[x] = k;
+        auto const cit = g.consumers_of.find(x);
+        if (cit == g.consumers_of.end()) return true;
+        for (std::size_t c : cit->second) {
+          bool const bumped_edge = r.completion_edges.count({c, x}) != 0 ||
+                                   r.order_edges.count({c, x}) != 0;
+          if (!raise(c, bumped_edge ? k + 1 : k, pass)) return false;
+        }
+        return true;
+      };
+      auto const lift = [&](PassMap& pass) {
+        for (auto it = topo.rbegin(); it != topo.rend(); ++it) {
+          std::size_t const v = *it;
+          if (r.pinned.count(v)) continue;
+          auto const cit = g.consumers_of.find(v);
+          if (cit == g.consumers_of.end() || cit->second.empty()) continue;
+          int mn = std::numeric_limits<int>::max();
+          for (std::size_t u : cit->second) mn = std::min(mn, pass.at(u));
+          pass[v] = std::max({pass.at(v), base.at(v), mn});
+        }
+      };
+      // Raises the same-nest readers of v to the pass of its latest one.
+      auto const gather = [&](std::size_t v, PassMap& pass) -> bool {
+        auto const ps = reader_passes(v, pass);
+        if (ps.size() < 2) return true;
+        int const k = *ps.rbegin();
+        for (std::size_t u : g.consumers_of.at(v))
+          if (same_nest(u, v) && !raise(u, k, pass)) return false;
+        return true;
+      };
+      for (bool moved = true; moved;) {
+        moved = false;
+        std::size_t const now = split_count(r.pass_of);
+        if (now == 0) break;
+        for (std::size_t v : topo) {
+          if (splits_of(v, r.pass_of) == 0) continue;
+          PassMap trial = r.pass_of;
+          bool ok = gather(v, trial);
+          for (bool again = ok; again;) {
+            again = false;
+            lift(trial);
+            for (std::size_t w = 0; w < n && ok; ++w)
+              if (splits_of(w, trial) > splits_of(w, r.pass_of)) {
+                ok = gather(w, trial);
+                again = true;
+              }
+            if (!ok) break;
+          }
+          if (!ok || split_count(trial) >= now) continue;
+          if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
+            for (std::size_t x = 0; x < n; ++x)
+              if (trial.at(x) != r.pass_of.at(x))
+                std::wcerr << L"[levels] v" << x << L" moved to pass "
+                           << trial.at(x) << L" (readers of v" << v
+                           << L" gathered)\n";
+          r.pass_of = std::move(trial);
+          moved = true;
+          break;
+        }
+      }
+    }
+
     std::size_t const before = order_bumps.size();
     for (auto const& e : pass_step_cycle_edges(rich, g, site, r))
       order_bumps.insert(e);
@@ -1081,6 +1303,11 @@ struct ForkedSubchain {
 /// outputs to strand"; such a side must still be emitted for its outputs, else
 /// a whole nested loop is silently dropped.
 ///
+/// \p keeps_output, when given, further filters the escape \c outputs of the
+/// predicate-true side: an output is kept only if it also holds for (value,
+/// block). The per-pass builder uses it to leave out of a pass the assembled
+/// form of a value built again there that no reader of that pass takes.
+///
 /// The relative order of the surviving steps is preserved. The input list is
 /// already topologically valid (every \c ScopeBlock was built through \c
 /// ordered_schedule_topo_sort_steps), and a subsequence of a valid order is
@@ -1089,7 +1316,9 @@ struct ForkedSubchain {
 ///
 inline ForkedSubchain fork_subchain(
     container::vector<Step> const& steps,
-    std::function<bool(std::size_t)> const& in_consumer) {
+    std::function<bool(std::size_t)> const& in_consumer,
+    std::function<bool(std::size_t, ScopeBlock const&)> const& keeps_output =
+        {}) {
   ForkedSubchain out;
   for (Step const& step : steps) {
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
@@ -1098,13 +1327,15 @@ inline ForkedSubchain fork_subchain(
       continue;
     }
     auto const& block = std::get<ScopeBlock>(step.value);
-    ForkedSubchain sub = fork_subchain(block.steps, in_consumer);
+    ForkedSubchain sub = fork_subchain(block.steps, in_consumer, keeps_output);
     auto const make_side = [&](container::vector<Step>&& side_steps,
                                bool consumer_side) {
       // This side's escape outputs: those whose value lands on this side.
       container::svector<std::pair<std::size_t, OutputKind>> side_outputs;
       for (auto const& o : block.outputs)
-        if (in_consumer(o.first) == consumer_side) side_outputs.push_back(o);
+        if (in_consumer(o.first) == consumer_side &&
+            (!consumer_side || !keeps_output || keeps_output(o.first, block)))
+          side_outputs.push_back(o);
       // Emit the per-side loop when it has surviving steps *or* surviving
       // outputs. An all-escape loop -- one with no BuildStep, whose scatter
       // values are contracted at the output step itself -- is legitimate and
@@ -1786,6 +2017,217 @@ namespace detail {
     }
   };
 
+  // 2c. Rebuilds. A value built per batch inside a nest is visible only to
+  // the traversal that builds it. A reader of it in a later pass of the nest
+  // is served by building the value again in that pass, per batch, exactly
+  // where the reader's own term has it -- never by assembling it over the
+  // loops it is sliced by, which would give it a residence no occurrence of
+  // it asked for. \c rebuilt_in[v] lists the passes, other than its own, in
+  // which v is built again.
+  //
+  // The copy reads v's operands in the later pass, so an operand that is
+  // itself visible only per batch is built again there too, and so on down
+  // to operands with a form resident outside the nest's loops. A copy cannot
+  // serve a read that needs the value complete: the read of a carried
+  // source, of a reduction from inside its own loop, or one moved to a later
+  // pass only to keep that pass's steps orderable (the copy would close the
+  // cycle again). Such a reader keeps the assembled form (the materialization
+  // rule below), and \c unserved records why.
+  std::unordered_map<std::size_t, std::set<int>> rebuilt_in;
+  container::vector<std::tuple<std::size_t, std::size_t, wchar_t const*>>
+      unserved;  // (value, later-pass reader, why no copy can serve it)
+  {
+    // Values that keep an assembled form because some later-pass reader of
+    // theirs cannot be served by a copy; that form resides outside the nest's
+    // loops, so every other reader can use it too and no copy of the value is
+    // ever needed.
+    std::set<std::size_t> assembled;
+    // (value, pass) copies found to leave the pass's steps unorderable.
+    std::set<std::pair<std::size_t, int>> denied;
+    // v is visible to its nest's traversals only per batch: it is loop-local
+    // on an instance of its home nest that nothing escapes (neither a role
+    // sharing that depth nor an occurrence reading it assembled).
+    auto const per_batch_only = [&](std::size_t v) -> bool {
+      if (assembled.count(v)) return false;
+      auto const cit = cl_by_vid.find(v);
+      if (cit == cl_by_vid.end()) return false;  // a leaf
+      CellLegality const& c2 = *cit->second;
+      auto const hd = local_home_depth(c2);
+      if (!hd) return false;
+      std::size_t const nest = type_cluster[*hd];
+      std::set<std::size_t> escaped;
+      for (std::size_t pos = 0; pos < c2.per_axis.size(); ++pos) {
+        AxisClass const& ac = c2.per_axis[pos];
+        bool const esc =
+            ac.role != LoopRole::LoopLocal ||
+            std::any_of(ac.per_occurrence.begin(), ac.per_occurrence.end(),
+                        [](OccurrenceAxisRole const& o) {
+                          return o.role == OccurrenceRole::Assembled;
+                        });
+        if (!esc) continue;
+        auto const d = depth_of_instance(
+            std::wstring{ac.axis.basis().base_key()}, slot_of(c2, pos));
+        if (d) escaped.insert(*d);
+      }
+      for (std::size_t pos = 0; pos < c2.per_axis.size(); ++pos) {
+        if (c2.per_axis[pos].role != LoopRole::LoopLocal) continue;
+        auto const d = depth_of_instance(
+            std::wstring{c2.per_axis[pos].axis.basis().base_key()},
+            slot_of(c2, pos));
+        if (d && type_cluster[*d] == nest && !escaped.count(*d)) return true;
+      }
+      return false;
+    };
+    // Whether v can be built in pass k, with every value that has to be
+    // built there along with it added to \p plan; \p why names what rules it
+    // out.
+    std::function<bool(std::size_t, int, std::set<std::size_t>&,
+                       wchar_t const*&)>
+        can_build_in = [&](std::size_t v, int k, std::set<std::size_t>& plan,
+                           wchar_t const*& why) -> bool {
+      if (pass_of(v) == k || plan.count(v)) return true;
+      if (auto const it = rebuilt_in.find(v);
+          it != rebuilt_in.end() && it->second.count(k))
+        return true;
+      if (!per_batch_only(v)) return true;  // has a resident form
+      if (denied.count({v, k})) {
+        why = L"a copy would leave the pass's steps unorderable";
+        return false;
+      }
+      plan.insert(v);
+      for (std::size_t o : requires_of(v)) {
+        if (!per_batch_only(o)) continue;
+        if (levels.completion_edges.count({v, o})) {
+          why = L"an operand of the copy must be complete";
+          return false;
+        }
+        if (levels.order_edges.count({v, o})) {
+          why = L"an operand of the copy is separated from it for step order";
+          return false;
+        }
+        if (!can_build_in(o, k, plan, why)) return false;
+      }
+      return true;
+    };
+    container::vector<std::optional<detail::ForcedSplitSite>> site(
+        rich.cells.size());
+    for (std::size_t v = 0; v < rich.cells.size(); ++v) site[v] = site_of(v);
+    for (;;) {
+      rebuilt_in.clear();
+      std::size_t const assembled_before = assembled.size();
+      for (CellLegality const& c2 : legality.cells) {
+        auto const it2 = value_id_of.find(c2.hash);
+        if (it2 == value_id_of.end()) continue;
+        std::size_t const v = it2->second;
+        if (rich.cells[v].is_leaf || assembled.count(v)) continue;
+        auto const hd = local_home_depth(c2);
+        if (!hd) continue;
+        std::size_t const nest = type_cluster[*hd];
+        auto const cons = g.consumers_of.find(v);
+        if (cons == g.consumers_of.end()) continue;
+        for (std::size_t u : cons->second) {
+          int const k = pass_of(u);
+          if (k <= pass_of(v)) continue;
+          auto const uit = cl_by_vid.find(u);
+          if (uit == cl_by_vid.end()) continue;
+          auto const uh = production_depth(*uit->second);
+          if (!uh || type_cluster[*uh] != nest) continue;
+          wchar_t const* why = nullptr;
+          if (levels.completion_edges.count({u, v}))
+            why = L"the reader needs it complete";
+          else if (levels.order_edges.count({u, v}))
+            why = L"the reader is separated from it for step order";
+          std::set<std::size_t> plan;
+          if (!why && can_build_in(v, k, plan, why)) {
+            for (std::size_t w : plan) rebuilt_in[w].insert(k);
+          } else {
+            unserved.push_back({v, u, why ? why : L"?"});
+            assembled.insert(v);
+            break;
+          }
+        }
+      }
+      if (assembled.size() != assembled_before) continue;
+      if (rebuilt_in.empty()) break;
+      // The steps of every pass must stay orderable with the copies in it
+      // (see pass_step_cycle_edges): pose that for the graph in which each
+      // copy is a node of its own, reading the operands of its pass.
+      std::size_t const n0 = rich.cells.size();
+      std::map<std::pair<std::size_t, int>, std::size_t> copy_node;
+      container::vector<std::pair<std::size_t, int>> copy_of;  // node - n0
+      for (auto const& [v, ps] : rebuilt_in)
+        for (int k : ps) {
+          copy_node.emplace(std::pair{v, k}, n0 + copy_of.size());
+          copy_of.push_back({v, k});
+        }
+      std::size_t const nx = n0 + copy_of.size();
+      container::vector<container::svector<std::size_t>> xops(nx);
+      container::vector<std::optional<detail::ForcedSplitSite>> xsite(nx);
+      container::vector<int> xpass(nx);
+      for (std::size_t x = 0; x < nx; ++x) {
+        std::size_t const v = x < n0 ? x : copy_of[x - n0].first;
+        int const k = x < n0 ? pass_of(v) : copy_of[x - n0].second;
+        xsite[x] = site[v];
+        xpass[x] = k;
+        for (std::size_t o : requires_of(v)) {
+          if (pass_of(o) == k)
+            xops[x].push_back(o);
+          else if (auto const cn = copy_node.find({o, k});
+                   cn != copy_node.end())
+            xops[x].push_back(cn->second);
+        }
+      }
+      auto const cyc = detail::pass_step_cycle_edges(
+          nx,
+          [&](std::size_t x) {
+            return rich.cells[x < n0 ? x : copy_of[x - n0].first].is_leaf;
+          },
+          [&](std::size_t x) -> container::svector<std::size_t> const& {
+            return xops[x];
+          },
+          xsite, [&](std::size_t x) { return xpass[x]; });
+      if (cyc.empty()) break;
+      std::size_t const denied_before = denied.size();
+      for (auto const& [a, b] : cyc)
+        for (std::size_t x : {a, b})
+          if (x >= n0) denied.insert(copy_of[x - n0]);
+      if (denied.size() == denied_before) {
+        // a cycle the copies take part in only through their block: give up
+        // every copy in the passes it runs through
+        std::set<int> bad;
+        for (auto const& [a, b] : cyc) bad.insert(xpass[a]);
+        for (auto const& c : copy_of)
+          if (bad.count(c.second)) denied.insert(c);
+      }
+      if (denied.size() == denied_before) break;  // not about the copies
+    }
+    if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
+      detail::dump_sched_rebuilds(rebuilt_in, unserved);
+  }
+  // The escapes that exist only because some occurrence reads the value
+  // assembled over a loop it is local on: (value, depth) -> the readers at
+  // those occurrences. A pass in which the value is built again carries that
+  // escape only if one of those readers is in it.
+  std::map<std::pair<std::size_t, std::size_t>, std::set<std::size_t>>
+      assembled_readers;
+  auto const occ_points = point_occurrences(rich);
+  // Every pass v is built in: its own and those it is built again in.
+  auto const in_pass = [&](std::size_t v, int k) -> bool {
+    if (pass_of(v) == k) return true;
+    auto const it = rebuilt_in.find(v);
+    return it != rebuilt_in.end() && it->second.count(k) != 0;
+  };
+  auto const share_a_pass = [&](std::size_t a, std::size_t b) -> bool {
+    if (pass_of(a) == pass_of(b)) return true;
+    if (in_pass(a, pass_of(b)) || in_pass(b, pass_of(a))) return true;
+    auto const ia = rebuilt_in.find(a);
+    auto const ib = rebuilt_in.find(b);
+    if (ia == rebuilt_in.end() || ib == rebuilt_in.end()) return false;
+    for (int k : ia->second)
+      if (ib->second.count(k)) return true;
+    return false;
+  };
+
   for (CellLegality const& cl : legality.cells) {
     auto const vid_it = value_id_of.find(cl.hash);
     SEQUANT_ASSERT(vid_it != value_id_of.end());
@@ -1896,6 +2338,15 @@ namespace detail {
       if (it == escapes.end()) {
         escapes.push_back({*d, OutputKind::AccumulateScatter});
         materialized_across_split = true;
+        // who reads this form: the consumers at the assembled occurrences
+        auto& readers = assembled_readers[{vid, *d}];
+        for (OccurrenceAxisRole const& o : ac.per_occurrence) {
+          if (o.role != OccurrenceRole::Assembled) continue;
+          auto const pit = occ_points.find(o.point);
+          if (pit == occ_points.end()) continue;
+          auto const rd = occ_points.find(pit->second.occ->consumer_point);
+          if (rd != occ_points.end()) readers.insert(rd->second.value_id);
+        }
       } else if (it->second == OutputKind::AccumulateSum) {
         it->second = OutputKind::AccumulateScatter;
       }
@@ -1938,6 +2389,8 @@ namespace detail {
       if (cons_it == g.consumers_of.end()) return out;
       for (std::size_t u : cons_it->second) {
         if (pass_of(u) <= pass_of(vid)) continue;
+        // served by a copy of this value built in the reader's pass (2c)
+        if (in_pass(vid, pass_of(u))) continue;
         auto const uit = cl_by_vid.find(u);
         if (uit == cl_by_vid.end()) continue;
         auto const uh = production_depth(*uit->second);
@@ -2161,7 +2614,7 @@ namespace detail {
           bool same_pass_only) -> container::svector<std::size_t> {
     container::svector<std::size_t> needs;
     for (std::size_t o : requires_of(v))
-      if (!same_pass_only || pass_of(o) == pass_of(v)) needs.push_back(o);
+      if (!same_pass_only || share_a_pass(o, v)) needs.push_back(o);
     return needs;
   };
   auto const make_block =
@@ -2239,8 +2692,13 @@ namespace detail {
   std::map<std::size_t, std::set<int>> nest_passes;
   for (std::size_t d = 0; d < n; ++d) {
     auto& ps = nest_passes[type_cluster[d]];
-    for (std::size_t v : buckets[d].build_ids) ps.insert(pass_of(v));
-    for (auto const& o : buckets[d].outputs) ps.insert(pass_of(o.first));
+    auto const add = [&](std::size_t v) {
+      ps.insert(pass_of(v));
+      if (auto const it = rebuilt_in.find(v); it != rebuilt_in.end())
+        ps.insert(it->second.begin(), it->second.end());
+    };
+    for (std::size_t v : buckets[d].build_ids) add(v);
+    for (auto const& o : buckets[d].outputs) add(o.first);
   }
   if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
     detail::dump_sched_nests(nest_passes, cluster_min,
@@ -2249,7 +2707,7 @@ namespace detail {
                                for (std::size_t d = 0; d < n; ++d) {
                                  if (type_cluster[d] != c) continue;
                                  for (std::size_t v : buckets[d].build_ids)
-                                   if (pass_of(v) == k) ++cnt;
+                                   if (in_pass(v, k)) ++cnt;
                                }
                                return cnt;
                              });
@@ -2390,16 +2848,29 @@ namespace detail {
           };
 
       for (int k : passes) {
-        auto const in_pass = [&](std::size_t v) { return pass_of(v) == k; };
-        detail::ForkedSubchain forked =
-            detail::fork_subchain(pending_steps, in_pass);
+        auto const in_this_pass = [&](std::size_t v) { return in_pass(v, k); };
+        // an escape of bucket \p depth is emitted in this pass
+        auto const output_in_this_pass = [&](std::size_t v,
+                                             std::size_t depth) -> bool {
+          if (pass_of(v) == k) return true;
+          auto const it = assembled_readers.find({v, depth});
+          if (it == assembled_readers.end()) return true;  // a role's escape
+          return std::any_of(it->second.begin(), it->second.end(),
+                             [&](std::size_t u) { return in_pass(u, k); });
+        };
+        detail::ForkedSubchain forked = detail::fork_subchain(
+            pending_steps, in_this_pass,
+            [&](std::size_t v, ScopeBlock const& b) {
+              return output_in_this_pass(v, b.level.depth - 1);
+            });
         // The "consumer" side of the two-way fork is the predicate-true side.
         container::svector<std::size_t> builds;
         for (std::size_t v : bucket.build_ids)
-          if (in_pass(v)) builds.push_back(v);
+          if (in_this_pass(v)) builds.push_back(v);
         container::svector<std::pair<std::size_t, OutputKind>> outs;
         for (auto const& o : bucket.outputs)
-          if (in_pass(o.first)) outs.push_back(o);
+          if (in_this_pass(o.first) && output_in_this_pass(o.first, d))
+            outs.push_back(o);
         auto metas = meta_for(forked.consumer);
         emit_pass(k, builds, outs, std::move(forked.consumer),
                   std::move(metas));

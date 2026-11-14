@@ -160,6 +160,21 @@ void dump_sched_materialize(Ids const& ids) {
   std::wcerr << L"\n";
 }
 
+/// \brief `[sched-rebuild]`: the values built again in a later pass of their
+/// nest (\p rebuilt_in: value -> passes), and the (value, reader, reason)
+/// triples a copy cannot serve, which keep the assembled form.
+template <typename Rebuilt, typename Unserved>
+void dump_sched_rebuilds(Rebuilt const& rebuilt_in, Unserved const& unserved) {
+  for (auto const& [v, ps] : rebuilt_in) {
+    std::wcerr << L"[sched-rebuild] v" << v << L" built again in pass";
+    for (int k : ps) std::wcerr << L" " << k;
+    std::wcerr << L"\n";
+  }
+  for (auto const& [v, u, why] : unserved)
+    std::wcerr << L"[sched-rebuild] v" << v << L" stays assembled for reader v"
+               << u << L": " << why << L"\n";
+}
+
 /// \brief `[sched-nest]`: per nest, its outermost depth and the passes emitted
 /// there, each with the number of builds it carries. \p count(cluster, pass)
 /// returns that build count.
