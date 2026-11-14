@@ -244,6 +244,46 @@ TEST_CASE("dryrun size regime prices a composite by its basis instance",
         Catch::Approx(9.0e4));
 }
 
+TEST_CASE("dryrun size regime scales the composites of a listed space",
+          "[dryrun][sizing][basis]") {
+  using namespace sequant;
+  eval::dryrun::SizeRegime r;
+  r.space_extent = {{L"i", 10u}, {L"a", 300u}, {L"p", 310u}};
+  eval::dryrun::SizeRegime::CsvMomentTables listed;
+  // every table varies with k, so a check also pins the column it reads
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
+    auto const dk = static_cast<double>(k);
+    r.csv_pno_moment[k] = 14.0 + dk;
+    r.csv_osv_moment[k] = 9.0 + dk;
+    listed.pno[k] = 19.0 + dk;
+    listed.osv[k] = 12.0 + dk;
+  }
+  constexpr IndexBasis::instance_type P = 10;
+  const Index i1(L"i_1"), i2(L"i_2");
+  // the tables count the members of one sector of p (say one spin flavour)
+  // and a composite of p spans two: its domain, hence every power mean of
+  // it, is twice the table's
+  const Index wide(L"p_1", {i1, i2}), narrow(L"a_1", {i1, i2});
+  r.csv_moment_by_instance[eval::dryrun::SizeRegime::csv_basis_key(wide.space(),
+                                                                   P)] = listed;
+  r.csv_moment_by_instance[eval::dryrun::SizeRegime::csv_basis_key(
+      narrow.space(), P)] = listed;
+  r.csv_space_scale[std::wstring{wide.space().base_key()}] = 2.0;
+  // the default tables, whatever the rank and the group size
+  CHECK(r.inner_pow(wide, 1) == Catch::Approx(2 * 15.0));
+  CHECK(r.inner_pow(wide, 3) == Catch::Approx(2 * 17.0));
+  CHECK(r.inner_pow(Index(L"p_2", {i1}), 2) == Catch::Approx(2 * 11.0));
+  // the tables of a listed instance
+  CHECK(r.inner_pow(wide.replace_basis_instance(P), 2) ==
+        Catch::Approx(2 * 21.0));
+  // a space that is not listed keeps its tables' moments
+  CHECK(r.inner_pow(narrow, 1) == Catch::Approx(15.0));
+  CHECK(r.inner_pow(narrow.replace_basis_instance(P), 2) ==
+        Catch::Approx(21.0));
+  // a plain index of the listed space is sized by its extent alone
+  CHECK(r.inner_pow(Index(L"p_3"), 1) == Catch::Approx(310.0));
+}
+
 TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
           "[dryrun-probe]") {
   // Replaces the (unreachable) two K-anchor checks: pick one concrete index

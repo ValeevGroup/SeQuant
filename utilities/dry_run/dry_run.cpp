@@ -580,6 +580,9 @@ dr::SizeRegime make_size_regime(const Driver& cfg,
         if (!ix.has_proto_indices())
           regime.space_extent[std::wstring(ix.space().base_key())] =
               idx_to_extent(ix);
+        else if (const auto scale = union_factor(cfg, ix); scale != 1.0)
+          // the meter counts the members the optimizer's sizing counts
+          regime.csv_space_scale[std::wstring(ix.space().base_key())] = scale;
     });
   return regime;
 }

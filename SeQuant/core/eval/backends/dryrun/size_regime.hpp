@@ -144,6 +144,17 @@ struct SizeRegime {
   /// Sum_pairs d_A d_B, exact when d_A and d_B are proportional.
   std::map<csv_basis_key_type, CsvMomentTables> csv_moment_by_instance;
 
+  /// Multiplier on the moments of the composites of a space, keyed by the
+  /// composite's IndexSpace::base_key(); a space that is not listed has
+  /// multiplier 1. For a caller whose tables count the members of one sector
+  /// of a space while a composite of that space spans several: tables
+  /// measured per spin flavour, say, and a spin-free composite that spans
+  /// both flavours' members (multiplier 2). The k-th power mean of a domain
+  /// c * d is c times that of d, so one multiplier serves every group size.
+  /// It applies to the default tables and to an instance's alike; a plain
+  /// index is sized by its extent and is not scaled.
+  std::map<std::wstring, double> csv_space_scale;
+
   /// \return the flat extent of the proto-free index \p ix's
   ///         \c IndexBasis::base_key(); throws \c std::out_of_range if the
   ///         key is not present in \c space_extent (fail loud rather than
@@ -177,7 +188,9 @@ struct SizeRegime {
   ///         index (\p k in [1, kMaxCompositeGroup], else throws), or \c
   ///         pow(extent, k) for a plain (non-composite) index. The tables are
   ///         the composite's basis instance's if csv_moment_by_instance lists
-  ///         it, else the default ones. Rank is determined by the number of
+  ///         it, else the default ones; the moment is multiplied by the
+  ///         composite's space's csv_space_scale entry, if it has one. Rank is
+  ///         determined by the number of
   ///         proto indices: 1 => OSV (occupied single), 2 => PNO (occupied
   ///         pair), >= 3 => the rank-specific table if present, else the PNO
   ///         (rank-2) table.
@@ -193,14 +206,24 @@ struct SizeRegime {
       return std::pow(static_cast<double>(extent(composite)),
                       static_cast<double>(k));
     auto const rank = protos.size();
+    auto const scale = composite_scale(composite);
     if (!csv_moment_by_instance.empty())
       if (auto const& instance = composite.basis().basis_instance())
         if (auto const it = csv_moment_by_instance.find(
                 csv_basis_key(composite.space(), *instance));
             it != csv_moment_by_instance.end())
-          return it->second.moment(rank, k);
-    return detail::csv_moment(csv_osv_moment, csv_pno_moment,
-                              csv_moment_by_rank, rank, k);
+          return scale * it->second.moment(rank, k);
+    return scale * detail::csv_moment(csv_osv_moment, csv_pno_moment,
+                                      csv_moment_by_rank, rank, k);
+  }
+
+  /// \return the multiplier csv_space_scale lists for the space of
+  ///         \p composite, 1 if it lists none
+  [[nodiscard]] double composite_scale(Index const& composite) const {
+    if (csv_space_scale.empty()) return 1.0;
+    auto const it =
+        csv_space_scale.find(std::wstring{composite.space().base_key()});
+    return it != csv_space_scale.end() ? it->second : 1.0;
   }
 
   [[nodiscard]] std::function<std::size_t(Index const&)> idx_to_extent() const {

@@ -86,7 +86,7 @@ A composite index of cluster rank `r` in a group of `k` composites of one
 cluster is sized by `p^(1/k) * max(2, M_k)` of its rank's moments and
 occupancy `p`, a pair (`r >= 2`) never by less than its RMS (`k >= 2`), so the
 group carries the grid's sparsity once; `csv.union_composites` doubles it for a
-spin-free composite.
+spin-free composite, for the optimizer and for the meter alike.
 
 > [!IMPORTANT]
 > The equations are fixed in the driver. Steps their producer took before the
