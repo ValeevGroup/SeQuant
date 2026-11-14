@@ -58,6 +58,13 @@ namespace detail {
 ///        the same left-first post-order the sequence itself was built in
 ///        (see \ref opt::detail::run_single_term_opt_axes). Cleared (left
 ///        empty) otherwise. Ignored (must stay null) for every other metric.
+/// \param target_idxs Indices that must remain open in the final result (e.g.
+///        the result indices of the expression being optimized). The cost model
+///        sizes intermediates under the assumption that these are never summed
+///        away, which matters whenever a result index occurs on more than one
+///        factor (grid or Laplace indices shared by several tensors, as in
+///        THC-like products). Empty (default) recovers the legacy behavior of
+///        inferring openness from index multiplicities alone.
 /// \return Optimal evaluation sequence under the chosen cost metric. If there
 ///         are equivalent optimal sequences then the result is the one that
 ///         keeps the order of tensors in the network as original as possible.
@@ -66,11 +73,13 @@ template <ObjectiveFunction Metric, has_index_extent IdxToSz>
 EvalSequence single_term_opt(
     TensorNetwork const& network, IdxToSz&& idxsz, bool subnet_cse,
     CostParams const& cost = {},
-    container::vector<NodeBatchAnnotation>* out_axes = nullptr) {
+    container::vector<NodeBatchAnnotation>* out_axes = nullptr,
+    IndexSet const& target_idxs = {}) {
   if (out_axes) out_axes->clear();
   // the slot counts recover an external slot index on their own, but not an
   // index carried only as a protoindex of the externals, so declare them all
-  auto const& tidxs = network.ext_indices();
+  auto tidxs = network.ext_indices();
+  tidxs.insert(target_idxs.begin(), target_idxs.end());
   // Unpack the cost knobs into the names the recurrence arms below use, so the
   // arms are unchanged. (void)-cast all, since each if-constexpr arm uses only
   // a subset.
@@ -228,13 +237,16 @@ EvalSequence single_term_opt(
 ///        the \c -1-handling arm of the loop below). Left empty if \p prod
 ///        has fewer than 3 factors (no factorization is performed) or if
 ///        \p Metric != DenseSpaceTimeBatched.
+/// \param target_idxs Indices that must remain open in the final result (see
+///       the detail overload). Empty (default) preserves the legacy behavior.
 ///
 template <ObjectiveFunction Metric = ObjectiveFunction::DenseFLOPs,
           has_index_extent IdxToSz>
 ExprPtr single_term_opt(
     Product const& prod, IdxToSz&& idxsz, bool subnet_cse = false,
     CostParams const& cost = {},
-    container::vector<NodeBatchAnnotation>* out_axes = nullptr) {
+    container::vector<NodeBatchAnnotation>* out_axes = nullptr,
+    IndexSet const& target_idxs = {}) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -259,9 +271,9 @@ ExprPtr single_term_opt(
   auto const tensors =
       prod | filter([](ExprPtr const& e) { return is_tensor_factor(*e); }) |
       ranges::to_vector;
-  auto seq = detail::single_term_opt<Metric>(TensorNetwork{tensors},
-                                             std::forward<IdxToSz>(idxsz),
-                                             subnet_cse, cost, out_axes);
+  auto seq = detail::single_term_opt<Metric>(
+      TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse, cost,
+      out_axes, target_idxs);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {

@@ -99,7 +99,8 @@ void log_chosen_factorization(ExprPtr const& result,
 /// batched objectives fill \p out_axes (one entry per contraction node,
 /// left-first post-order) when it is non-null; the others never see it.
 ExprPtr single_term_dp(Product const& prod, OptimizeOptions const& opts,
-                       container::vector<NodeBatchAnnotation>* out_axes) {
+                       container::vector<NodeBatchAnnotation>* out_axes,
+                       IndexSet const& target_idxs) {
   bool const subnet_cse = opts.CSE.subnet;
   // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
   // Batching config (both role predicates, batch_target_size, inner_pow,
@@ -123,23 +124,23 @@ ExprPtr single_term_dp(Product const& prod, OptimizeOptions const& opts,
   cost.batch_persistent_only = opts.batch_policy.persistent_only;
   if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
     return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-        prod, opts.idx_to_extent, subnet_cse, cost);
+        prod, opts.idx_to_extent, subnet_cse, cost, nullptr, target_idxs);
   if (opts.objective_function == ObjectiveFunction::DenseSize)
     return opt::single_term_opt<ObjectiveFunction::DenseSize>(
-        prod, opts.idx_to_extent, subnet_cse, cost);
+        prod, opts.idx_to_extent, subnet_cse, cost, nullptr, target_idxs);
   if (opts.objective_function == ObjectiveFunction::DenseSpaceTime)
     return opt::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
-        prod, opts.idx_to_extent, subnet_cse, cost);
+        prod, opts.idx_to_extent, subnet_cse, cost, nullptr, target_idxs);
   if (opts.objective_function == ObjectiveFunction::DenseTimeSpace)
     return opt::single_term_opt<ObjectiveFunction::DenseTimeSpace>(
-        prod, opts.idx_to_extent, subnet_cse, cost);
+        prod, opts.idx_to_extent, subnet_cse, cost, nullptr, target_idxs);
   if (opts.objective_function == ObjectiveFunction::DenseSpaceTimeBatched)
     return opt::single_term_opt<ObjectiveFunction::DenseSpaceTimeBatched>(
-        prod, opts.idx_to_extent, subnet_cse, cost, out_axes);
+        prod, opts.idx_to_extent, subnet_cse, cost, out_axes, target_idxs);
   SEQUANT_ASSERT(opts.objective_function ==
                  ObjectiveFunction::DenseTimeSpaceBatched);
   return opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
-      prod, opts.idx_to_extent, subnet_cse, cost, out_axes);
+      prod, opts.idx_to_extent, subnet_cse, cost, out_axes, target_idxs);
 }
 
 /// Stores \p node_axes under \p optimized in opts.term_batch_axes (non-null).
@@ -172,7 +173,8 @@ void store_term_axes(OptimizeOptions const& opts, Expr const* optimized,
 /// and is reported by PinSession::finish. Otherwise the DP runs on the
 /// canonical term, so the recorded labels are the output's labels. Recording
 /// adds record_term of the result.
-ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
+ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts,
+                           IndexSet const& target_idxs) {
   auto canon = opt::schedule::canonical_term(term);
   auto key = opt::schedule::term_key(canon);
   bool pure = opt::is_tensor_factor(*canon) || canon->is<Constant>();
@@ -203,7 +205,8 @@ ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
     node_axes = std::move(pinned.nodes);
     opts.pinned->bind(result.get(), key);
   } else if (canon->is<Product>()) {
-    result = single_term_dp(canon->as<Product>(), opts, &node_axes);
+    result =
+        single_term_dp(canon->as<Product>(), opts, &node_axes, target_idxs);
   } else {
     result = canon;
   }
@@ -219,16 +222,17 @@ ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
 
 /// Optimize a Product that contains only tensor (opt::is_tensor_factor) and
 /// scalar factors.
-ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
+ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts,
+                         IndexSet const& target_idxs = {}) {
   if (opts.pinned || opts.recording)
-    return opt_scheduled_term(ex<Product>(prod), opts);
+    return opt_scheduled_term(ex<Product>(prod), opts, target_idxs);
   // Filled by either batched objective when term_batch_axes is set; every
   // other objective leaves it empty, so the term_batch_axes insertion below is
   // then a no-op-shaped empty-vector entry (harmless: the binarizer only
   // consumes entries for summands a batched objective annotated).
   container::vector<NodeBatchAnnotation> node_axes;
-  ExprPtr result =
-      single_term_dp(prod, opts, opts.term_batch_axes ? &node_axes : nullptr);
+  ExprPtr result = single_term_dp(
+      prod, opts, opts.term_batch_axes ? &node_axes : nullptr, target_idxs);
   if (opts.term_batch_axes)
     store_term_axes(opts, result.get(), std::move(node_axes));
   if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
@@ -245,7 +249,8 @@ inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 /// non-scalar factors by substituting placeholder tensors with target indices,
 /// optimizing the resulting tensor-only product, then swapping the originals
 /// back in.
-ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
+ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts,
+                          IndexSet const& target_idxs = {}) {
   // a pin cannot rebuild a mixed product; a recording lists it as not
   // pinnable and optimizes it as usual, with the placeholder product below
   // kept out of the record (it is not a term of the root)
@@ -264,15 +269,17 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
       new_factors.emplace_back(f);
     } else {
       non_tensors[i] = f;
-      auto target_idxs = get_unique_indices(f);
+      auto placeholder_idxs = get_unique_indices(f);
       new_factors.emplace_back(ex<Tensor>(
           std::wstring(placeholder_label_prefix) + std::to_wstring(i),
-          bra(target_idxs.bra), ket(target_idxs.ket), aux(target_idxs.aux)));
+          bra(placeholder_idxs.bra), ket(placeholder_idxs.ket),
+          aux(placeholder_idxs.aux)));
     }
   }
 
   auto result = opt_pure_product(
-      Product{prod.scalar(), new_factors, Product::Flatten::No}, inner);
+      Product{prod.scalar(), new_factors, Product::Flatten::No}, inner,
+      target_idxs);
 
   auto replacer = [&non_tensors](ExprPtr& out) {
     if (!out->is<Tensor>()) return;
@@ -344,19 +351,23 @@ void relocate_records(
 /// Recursive workhorse. \p parallel_outer controls whether the (single)
 /// outermost Sum's summands are processed in parallel; nested recursive
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
+/// \p target_idxs are the result indices that must remain open (forwarded to
+/// the single-term optimizer); they apply to every summand of a Sum.
 ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
-                      bool reorder, bool parallel_outer) {
+                      bool reorder, bool parallel_outer,
+                      IndexSet const& target_idxs = {}) {
   bool const scheduled = opts.pinned || opts.recording;
   // under pinning or recording, a lone Tensor or Constant is a term too
   if (scheduled && !expr->is<Product>() && !expr->is<Sum>())
-    return opt_scheduled_term(expr, opts);
+    return opt_scheduled_term(expr, opts, target_idxs);
 
   if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
     bool pure = ranges::all_of(prod, [](auto&& x) {
       return opt::is_tensor_factor(*x) || x->is_scalar();
     });
-    return pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
+    return pure ? opt_pure_product(prod, opts, target_idxs)
+                : opt_mixed_product(prod, opts, target_idxs);
   }
 
   if (expr->is<Sum>()) {
@@ -372,7 +383,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     auto do_term = [&](std::size_t i) {
       new_smands[i] = optimize_impl(in_sum.summand(i), opts,
                                     /*reorder=*/false,
-                                    /*parallel_outer=*/false);
+                                    /*parallel_outer=*/false, target_idxs);
     };
 
     // Thread-safety of the parallel branch rests on two invariants; do NOT
@@ -492,7 +503,19 @@ OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
 }
 
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {
-  expr.expression() = optimize(expr.expression(), std::move(opts));
+  // The result indices must stay open throughout the evaluation; hand them to
+  // the optimizer so intermediates carrying them are sized (and priced)
+  // correctly. This only matters when a result index occurs on more than one
+  // factor (e.g. grid or Laplace indices shared by several tensors, as in
+  // THC-like products); otherwise openness follows from multiplicity alone.
+  IndexSet target_idxs;
+  if (expr.produces_tensor()) {
+    for (const Index& idx : expr.indices()) target_idxs.insert(idx);
+  }
+  if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
+  expr.expression() = optimize_impl(expr.expression(), opts,
+                                    opts.reorder == ReorderSum::Reorder,
+                                    /*parallel_outer=*/true, target_idxs);
   return expr;
 }
 
