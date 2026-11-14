@@ -2815,7 +2815,11 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
            ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
            : 100.0) *
       1e9;
-  policy.infeasible_is_error = false;  // may be over budget
+  // SEQUANT_UT_DRYRUN_INFEASIBLE_ERROR=1: a term with no schedule within the
+  // budget is named with its smallest peak (PeakBudgetInfeasible) and left
+  // out of the report, instead of being scheduled over budget
+  policy.infeasible_is_error =
+      std::getenv("SEQUANT_UT_DRYRUN_INFEASIBLE_ERROR") != nullptr;
 
   // SEQUANT_UT_DRYRUN_HOLD=1: the search may hold an amplitude-independent
   // operand outside the loop that slices its consumer; one of at least
