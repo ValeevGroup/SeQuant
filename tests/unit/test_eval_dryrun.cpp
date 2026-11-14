@@ -4099,6 +4099,33 @@ TEST_CASE("meter-policy-executor", "[meter]") {
   CHECK(ord_report.peak_bytes > 0.0);
   CHECK(ord_report.builds_total > 0);
   CHECK(ord_report.scheduler == sequant::BatchScheduler::ordered);
+  CHECK_FALSE(ord_report.peak_bytes_steady.has_value());
+  CHECK(ord_report.disk_peak_bytes == 0.0);
+
+  // ---- a second, steady evaluation: the first one's report is unchanged,
+  // and with nothing volatile here the steady one builds nothing new. ----
+  {
+    sequant::eval::dryrun::MeterOptions opts;
+    opts.steady_iteration = true;
+    auto const two = meter(forest, policy, regime, cfg, nullptr, opts);
+    CHECK(two.peak_bytes == ord_report.peak_bytes);
+    CHECK(two.builds_total == ord_report.builds_total);
+    REQUIRE(two.peak_bytes_steady.has_value());
+    CHECK(*two.peak_bytes_steady <= two.peak_bytes);
+  }
+
+  // ---- disk accounting: with every value eligible by size, whatever the
+  // schedule can keep on disk leaves the peak. ----
+  {
+    sequant::eval::DiskSpill disk;
+    disk.min_bytes = 0;
+    sequant::eval::dryrun::MeterOptions opts;
+    opts.disk = &disk;
+    auto const spilled = meter(forest, policy, regime, cfg, nullptr, opts);
+    CHECK(spilled.peak_bytes <= ord_report.peak_bytes);
+    CHECK(spilled.disk_peak_bytes ==
+          static_cast<double>(disk.peak_bytes_on_disk));
+  }
 
   // ---- forest descent: the SAME forest/policy, scheduler reset. ----
   policy.scheduler = sequant::BatchScheduler::forest_descent;
