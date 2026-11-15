@@ -132,33 +132,32 @@ template <typename ArrayT>
   return r;
 }
 
-/// \return a zero \p ArrayT over \p trange. Under a sparse policy with a
-/// positive SparseShape threshold its shape is all zero, so it holds no tiles;
-/// otherwise every tile is set, zero-filled for a regular array and holding
-/// empty inner tensors (so tot_inner_rank() == 0) for a tensor of tensors.
+/// \return a zero \p ArrayT over \p trange. Under a sparse policy its shape is
+/// all zero, so it holds no tiles; under a dense policy every tile is set,
+/// zero-filled for a regular array and holding empty inner tensors (so
+/// tot_inner_rank() == 0) for a tensor of tensors.
+/// \note TiledArray keeps the SparseShape threshold at or above the smallest
+/// normal value, so a tile of zero norm is always a zero tile.
 template <typename ArrayT>
 [[nodiscard]] ArrayT make_zero_array(TA::World& world,
                                      TA::TiledRange const& trange) {
   using shape_type = typename ArrayT::shape_type;
   if constexpr (!shape_type::is_dense()) {
-    // A tile is zero only if its norm is below the threshold, so under a zero
-    // threshold even a zero norm marks a tile nonzero: the shape would claim
-    // tiles that are never set.
-    if (shape_type::threshold() > 0)
-      return ArrayT(world, trange,
-                    shape_type(typename shape_type::value_type(0), trange));
-  }
-  using value_type = typename ArrayT::value_type;
-  ArrayT result(world, trange);
-  if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
-    for (auto it = result.begin(); it != result.end(); ++it)
-      if (result.is_local(it.index())) *it = value_type{it.make_range()};
+    return ArrayT(world, trange,
+                  shape_type(typename shape_type::value_type(0), trange));
   } else {
-    result.fill_local(typename ArrayT::numeric_type(0));
+    using value_type = typename ArrayT::value_type;
+    ArrayT result(world, trange);
+    if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
+      for (auto it = result.begin(); it != result.end(); ++it)
+        if (result.is_local(it.index())) *it = value_type{it.make_range()};
+    } else {
+      result.fill_local(typename ArrayT::numeric_type(0));
+    }
+    world.gop.fence();
+    note_fence();
+    return result;
   }
-  world.gop.fence();
-  note_fence();
-  return result;
 }
 
 ///

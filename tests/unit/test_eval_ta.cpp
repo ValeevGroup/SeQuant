@@ -5621,25 +5621,19 @@ TEST_CASE("ta_array_ops_sparse_tot_zeros_hold_no_tiles",
   CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<ToTArray>())));
 }
 
-TEST_CASE("ta_array_ops_zeros_under_zero_threshold",
-          "[eval][batched-external]") {
-  // Under a zero SparseShape threshold even a zero norm marks a tile nonzero,
-  // so an all-zero shape cannot express an empty destination: make_zeros
-  // must allocate every tile, zero-filled (flat) or with empty inner tensors
-  // (nested) -- the same path a dense array takes.
-  using TArrayD = TA::TSpArrayD;
-  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+TEST_CASE("ta_array_ops_zeros_dense", "[eval][batched-external]") {
+  // A dense array has no shape to express an empty destination with, so
+  // make_zeros must allocate every tile, zero-filled (flat) or with empty
+  // inner tensors (nested). (A sparse array never takes this path: TiledArray
+  // keeps the SparseShape threshold positive, so its zero shape holds no
+  // tiles.)
+  using TArrayD = TA::TArrayD;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::DensePolicy>;
   using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
-  using shape_t = TA::SparseShape<float>;
-  struct ThresholdResetter {
-    float const saved = shape_t::threshold();
-    ~ThresholdResetter() { shape_t::threshold(saved); }
-  } const threshold_resetter;
-  shape_t::threshold(0);
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
-                                                     /*nvirt=*/4, /*naux=*/12};
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
+                                                    /*nvirt=*/4, /*naux=*/12};
   yield_.set_max_tile(4);
   auto const aops = yield_.array_ops<ToTArray>();
 
