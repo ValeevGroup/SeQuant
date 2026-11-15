@@ -775,8 +775,6 @@ container::svector<size_t> compute_permuted_indices(
 
 }  // namespace detail
 
-namespace {
-
 // clang-format off
 /// \brief Provides the closed-shell triplet residual assembly row over the
 /// (n!)^2 external slot permutations
@@ -835,7 +833,86 @@ ExprPtr triplet_expr_for(const ExprPtr& term,
   return transform_expr(term, replacements, w);
 }
 
-}  // namespace
+/// Overlap matrix of the triplet state over the (n!)^2 slot permutations
+Eigen::MatrixXd triplet_overlap_matrix(std::size_t n_particles) {
+  const auto num_perms = static_cast<std::size_t>(factorial(n_particles));
+  const auto dim = boost::numeric_cast<Eigen::Index>(num_perms * num_perms);
+
+  // bra slot -> ket slot map of primitive idx
+  auto pairing = [&](std::size_t idx) {
+    perm::Permutation result = perm::unrank(idx / num_perms, n_particles);
+    result->invert();
+    result->postMultiply(perm::unrank(idx % num_perms, n_particles));
+    return result;
+  };
+  auto triplet_bra = [&](std::size_t idx) {
+    return perm::unrank(idx / num_perms, n_particles)->image(0);
+  };
+
+  Eigen::MatrixXd G(dim, dim);
+  G.setZero();
+
+  for (std::size_t row = 0; row < dim; ++row) {
+    perm::Permutation ref = pairing(row);
+    ref->invert();
+    const auto row_triplet = triplet_bra(row);
+
+    G(row, row) = std::pow(-2, n_particles);
+
+    for (std::size_t col = row + 1; col < dim; ++col) {
+      perm::Permutation current = pairing(col);
+      current->postMultiply(ref);
+
+      auto cycles = current->toDisjointCycles(n_particles);
+      const auto col_triplet = triplet_bra(col);
+      const bool same_cycle =
+          std::any_of(cycles.begin(), cycles.end(), [&](const auto& cycle) {
+            return std::find(cycle.begin(), cycle.end(), row_triplet) !=
+                       cycle.end() &&
+                   std::find(cycle.begin(), cycle.end(), col_triplet) !=
+                       cycle.end();
+          });
+      if (!same_cycle) continue;
+
+      std::size_t n_cycles = std::distance(cycles.begin(), cycles.end());
+      auto entry = std::pow(-2, n_cycles);
+
+      G(row, col) = entry;
+      G(col, row) = entry;
+    }
+  }
+
+  if (n_particles % 2 != 0) {
+    G *= -1;
+  }
+
+  SEQUANT_ASSERT(G.isApprox(G.transpose()));
+
+  return G;
+}
+
+/// rank of the triplet overlap matrix
+sequant::intmax_t triplet_rank(std::size_t n) {
+  return 3 * factorial(2 * n) / (factorial(n + 2) * factorial(n - 1));
+}
+
+/// last row of the pseudoinverse of the triplet overlap matrix; the hardcoded
+/// triplet residual row differs from it by a null-space vector (for now)
+std::vector<double> compute_triplet_biorthogonalizer_coeffs(
+    std::size_t n_particles, double threshold) {
+  auto overlap = triplet_overlap_matrix(n_particles);
+
+  // Find Pseudo Inverse
+  auto decomp = Eigen::CompleteOrthogonalDecomposition<decltype(overlap)>();
+  decomp.setThreshold(threshold);
+  decomp.compute(overlap);
+  SEQUANT_ASSERT(decomp.rank() == triplet_rank(n_particles));
+
+  Eigen::MatrixXd pinv = decomp.pseudoInverse();
+  SEQUANT_ASSERT(pinv.isApprox(pinv.transpose()));
+
+  return detail::flatten_row_major(pinv.row(pinv.rows() - 1));
+}
 
 ExprPtr triplet_combined_residual(
     const ExprPtr& V,
@@ -954,6 +1031,19 @@ container::svector<size_t> compute_permuted_indices_bra_ket(
       compute_permuted_indices(ket_slots, perm_index % num_perms, n_particles);
   ords.insert(ords.end(), permuted_ket.begin(), permuted_ket.end());
   return ords;
+}
+
+std::vector<double> compute_triplet_nns_p_coeffs(std::size_t n_particles,
+                                                 double threshold) {
+  const auto overlap = triplet_overlap_matrix(n_particles);
+  const auto pinv_row =
+      compute_triplet_biorthogonalizer_coeffs(n_particles, threshold);
+  // G and pinv(G) are symmetric, so the last row of G pinv(G) is G times the
+  // last row of pinv(G)
+  return flatten_row_major(
+      overlap *
+      Eigen::Map<const Eigen::VectorXd>(
+          pinv_row.data(), boost::numeric_cast<Eigen::Index>(pinv_row.size())));
 }
 
 }  // namespace detail

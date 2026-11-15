@@ -334,11 +334,21 @@ template <typename T>
       });
 }
 
+/// \brief Computes one row of the triplet NNS projector that
+/// hardcoded_triplet_nns_projector tabulates
+/// \param n_particles The rank of external index pairs
+/// \param pseudoinverse_threshold The threshold to compute the pseudoinverse
+/// \return Vector of the (n!)^2 computed NNS projection weights
+[[nodiscard]] std::vector<double> compute_triplet_nns_p_coeffs(
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+
 // clang-format off
 /// \brief Provides the identity row of the closed-shell triplet NNS
 /// projector, hardcoded to avoid numerical precision loss.
 ///
-/// The first row of G.pinv(G), and G being the overlap matrix of
+/// The last row of G.pinv(G), and G being the overlap matrix of
 /// the triplet primitives
 /// \param n_particles The rank of external index pairs
 ///
