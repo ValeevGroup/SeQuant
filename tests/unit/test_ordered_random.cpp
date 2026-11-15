@@ -28,9 +28,11 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -414,7 +416,39 @@ struct Sim {
               0)
         continue;
       reg->clear_bound_to(block.level.key());
+      // an output is assembled where the schedule places it among the steps
+      auto const assemble_output = [&](std::size_t k) {
+        ed::ReleaseAfter const release_after{*reg, plan, block,
+                                             block.steps.size() + k};
+        if (out_skip[k]) return;
+        auto const vid = block.outputs[k].first;
+        CellId const src = t.cells[out_cells[k]].production.source;
+        TableCell const& s = t.cells[src];
+        if (s.production.kind == ProductionKind::Build &&
+            s.scope == block_scope && !built_here.count(vid))
+          set(src, compute(src));
+        bool const takes_it = use_plan && plan.last_assemble[out_cells[k]] &&
+                              !t.cells[src].persistent;
+        if (!reg->peek(src)) {
+          err("Assemble read of absent " + ed::cell_str(t, src) + " by " +
+              ed::cell_str(t, out_cells[k]));
+          return;
+        }
+        ++reads;
+        ResultPtr part = takes_it ? reg->take(src) : reg->read(src);
+        if (takes_it) {
+          ++takes;
+          if (part.use_count() != 1)
+            err("Assemble take of " + ed::cell_str(t, src) + " not sole-held");
+        }
+        if (!acc[k]) acc[k] = fresh();
+      };
+      auto const assemble_outputs_at = [&](std::size_t n_steps_done) {
+        for (std::size_t k = 0; k != block.outputs.size(); ++k)
+          if (block.output_position(k) == n_steps_done) assemble_output(k);
+      };
       for (std::size_t at = 0; at != block.steps.size(); ++at) {
+        assemble_outputs_at(at);
         Step const& step = block.steps[at];
         ed::ReleaseAfter const release_after{*reg, plan, block, at};
         if (auto const* build = std::get_if<BuildStep>(&step.value)) {
@@ -431,32 +465,7 @@ struct Sim {
           run_block(std::get<ScopeBlock>(step.value), block_scope, vskip);
         }
       }
-      for (std::size_t k = 0; k != block.outputs.size(); ++k) {
-        ed::ReleaseAfter const release_after{*reg, plan, block,
-                                             block.steps.size() + k};
-        if (out_skip[k]) continue;
-        auto const vid = block.outputs[k].first;
-        CellId const src = t.cells[out_cells[k]].production.source;
-        TableCell const& s = t.cells[src];
-        if (s.production.kind == ProductionKind::Build &&
-            s.scope == block_scope && !built_here.count(vid))
-          set(src, compute(src));
-        bool const takes_it = use_plan && plan.last_assemble[out_cells[k]] &&
-                              !t.cells[src].persistent;
-        if (!reg->peek(src)) {
-          err("Assemble read of absent " + ed::cell_str(t, src) + " by " +
-              ed::cell_str(t, out_cells[k]));
-          continue;
-        }
-        ++reads;
-        ResultPtr part = takes_it ? reg->take(src) : reg->read(src);
-        if (takes_it) {
-          ++takes;
-          if (part.use_count() != 1)
-            err("Assemble take of " + ed::cell_str(t, src) + " not sole-held");
-        }
-        if (!acc[k]) acc[k] = fresh();
-      }
+      assemble_outputs_at(block.steps.size());
     }
     for (std::size_t k = 0; k != block.outputs.size(); ++k) {
       if (out_skip[k]) continue;
@@ -646,6 +655,79 @@ TEST_CASE("random schedules: every block level is orderable",
     }
   }
   CHECK(built > refused);
+}
+
+TEST_CASE(
+    "random schedules: an output is assembled right after the last "
+    "step it reads from",
+    "[ordered-schedule][random]") {
+  auto const policy = random_policy();
+  std::size_t n_outputs = 0, n_early = 0;
+  for (int mode : modes) {
+    std::mt19937_64 rng(3000 + mode);
+    for (std::size_t it = 0; it < n_graphs_per_mode; ++it) {
+      auto const vs = random_graph(rng, mode);
+      INFO("mode " << mode << " graph " << it << ":" << spec(vs));
+      RichSchedule rich;
+      LegalitySchedule legality;
+      build(vs, rich, legality);
+      std::optional<OrderedSchedule> sched;
+      try {
+        sched = build_ordered_schedule(rich, legality, policy, {L"i"});
+      } catch (sequant::Exception const&) {
+        continue;
+      }
+      auto const g = ed::ordered_schedule_dep_graph(rich);
+      // \return every value produced anywhere inside the block
+      std::function<std::set<std::size_t>(ScopeBlock const&)> check =
+          [&](ScopeBlock const& b) {
+            std::set<std::size_t> made;
+            std::vector<std::set<std::size_t>> made_by(b.steps.size());
+            for (std::size_t i = 0; i < b.steps.size(); ++i) {
+              if (auto const* bs = std::get_if<BuildStep>(&b.steps[i].value))
+                made_by[i].insert(bs->value_id);
+              else
+                made_by[i] = check(std::get<ScopeBlock>(b.steps[i].value));
+              made.insert(made_by[i].begin(), made_by[i].end());
+            }
+            CHECK((b.output_after.empty() ||
+                   b.output_after.size() == b.outputs.size()));
+            for (std::size_t k = 0; k < b.outputs.size(); ++k) {
+              std::size_t const vid = b.outputs[k].first;
+              std::set<std::size_t> reads{vid};
+              if (auto const d = g.depends_on.find(vid);
+                  d != g.depends_on.end())
+                reads.insert(d->second.begin(), d->second.end());
+              auto const feeds = [&](std::size_t i) {
+                return std::any_of(
+                    made_by[i].begin(), made_by[i].end(),
+                    [&](std::size_t v) { return reads.count(v) != 0; });
+              };
+              std::size_t const pos = b.output_position(k);
+              REQUIRE(pos <= b.steps.size());
+              // nothing it reads is produced by a step that comes later
+              for (std::size_t i = pos; i < b.steps.size(); ++i)
+                CHECK(!feeds(i));
+              // and it does not wait for a step it has no use for, unless an
+              // output of this block that it reads waits there too
+              bool waits_for_output = false;
+              for (std::size_t j = 0; j < k; ++j)
+                if (reads.count(b.outputs[j].first) &&
+                    b.output_position(j) == pos)
+                  waits_for_output = true;
+              if (pos > 0 && !waits_for_output) CHECK(feeds(pos - 1));
+              ++n_outputs;
+              if (pos < b.steps.size()) ++n_early;
+              made.insert(vid);
+            }
+            return made;
+          };
+      (void)check(sched->root);
+    }
+  }
+  CHECK(n_outputs > 0);
+  // the placement is not vacuous: some outputs do come before later steps
+  CHECK(n_early > 0);
 }
 
 TEST_CASE("random schedules: the release plan never releases early",

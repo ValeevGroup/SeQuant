@@ -47,6 +47,13 @@ struct NodeBatchAnnotation {
   /// physical loop once instead of once-per-carrying-node. Default empty (off
   /// path and every non-open node). See \c EvalExpr::batch_loops_opened_here.
   container::svector<std::pair<Index, BatchModeType>> opened_here{};
+  /// True iff the cost model priced this node as produced at the root scope
+  /// although loops opened above it slice modes it carries: it is built once,
+  /// outside those loops (in loops of its own if \c opened_here names any),
+  /// and its consumer reads slices of the whole value. The schedule maker
+  /// gives the node, and the subtree below it, a home that starts from an
+  /// empty enclosing nest. See \c HoldPolicy and \c EvalExpr::root_scope.
+  bool root_scope = false;
   /// Effective use count; see the class doc.
   std::size_t effective_count = 1;
   /// True iff the order-aware cost model emitted this node (set for every node

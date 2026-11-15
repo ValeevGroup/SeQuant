@@ -43,6 +43,13 @@ struct BackendArrayOps {
       axis_batches;
 
   /// True iff both closures are installed (a batched run requires them).
+  /// Optional: like \c make_zeros , but the result is the on-disk form of
+  /// the zero value (\c Result::is_on_disk ), to be assembled by
+  /// \c write_into_slice without ever being whole in memory. Empty if the
+  /// backend cannot.
+  std::function<ResultPtr(container::vector<Index> const& descriptor)>
+      make_zeros_on_disk;
+
   explicit operator bool() const noexcept {
     return static_cast<bool>(make_zeros) && static_cast<bool>(axis_batches);
   }

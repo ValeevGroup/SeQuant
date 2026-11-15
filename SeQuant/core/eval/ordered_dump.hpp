@@ -160,6 +160,21 @@ void dump_sched_materialize(Ids const& ids) {
   std::wcerr << L"\n";
 }
 
+/// \brief `[sched-rebuild]`: the values built again in a later pass of their
+/// nest (\p rebuilt_in: value -> passes), and the (value, reader, reason)
+/// triples a copy cannot serve, which keep the assembled form.
+template <typename Rebuilt, typename Unserved>
+void dump_sched_rebuilds(Rebuilt const& rebuilt_in, Unserved const& unserved) {
+  for (auto const& [v, ps] : rebuilt_in) {
+    std::wcerr << L"[sched-rebuild] v" << v << L" built again in pass";
+    for (int k : ps) std::wcerr << L" " << k;
+    std::wcerr << L"\n";
+  }
+  for (auto const& [v, u, why] : unserved)
+    std::wcerr << L"[sched-rebuild] v" << v << L" stays assembled for reader v"
+               << u << L": " << why << L"\n";
+}
+
 /// \brief `[sched-nest]`: per nest, its outermost depth and the passes emitted
 /// there, each with the number of builds it carries. \p count(cluster, pass)
 /// returns that build count.
@@ -330,6 +345,29 @@ void dump_occs_of(Table const& table, Rich const& rich,
       } else {
         std::cerr << "(root)";
       }
+      // what the occurrence opens, what encloses it (with each opener), and
+      // the loops it reduces
+      std::cerr << " point=" << occ.point << " opens={";
+      for (auto const& [ix, k] : occ.opens)
+        std::cerr << toUtf8(std::wstring(ix.full_label())) << ":"
+                  << (k == BatchModeType::Contracted ? "C" : "E") << " ";
+      std::cerr << "} ectx={";
+      for (std::size_t k = 0; k < occ.ectx.size(); ++k) {
+        std::cerr << toUtf8(std::wstring(occ.ectx[k].first.full_label()))
+                  << "@pt"
+                  << (k < occ.ectx_opener_point.size()
+                          ? occ.ectx_opener_point[k]
+                          : 0);
+        if (k < occ.ectx_opener_point.size())
+          if (auto it = point_to.find(occ.ectx_opener_point[k]);
+              it != point_to.end())
+            std::cerr << "(v" << it->second.first << ")";
+        std::cerr << " ";
+      }
+      std::cerr << "} reduced={";
+      for (auto const& [rm, rs] : occ.reduced_slot)
+        std::cerr << toUtf8(std::wstring(rm.full_label())) << "#" << rs << " ";
+      std::cerr << "}";
       std::cerr << "\n";
     }
     for (auto const& r : table.reads) {

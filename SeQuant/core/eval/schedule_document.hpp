@@ -189,6 +189,10 @@ struct BlockRecord {
   std::vector<StepRecord> steps;
   /// (value id, "AccumulateSum"|"AccumulateScatter")
   std::vector<std::pair<std::string, std::string>> outputs;
+  /// Parallel to \c outputs, or empty: the number of \c steps done before
+  /// each output is assembled; empty means after all of them
+  /// (ScopeBlock::output_after).
+  std::vector<std::size_t> output_after;
 };
 
 struct LoopRecord {
