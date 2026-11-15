@@ -88,6 +88,15 @@ inline void drain_lazy_cleanup(ArrayT const& arr) {
     wait_counter().fetch_add(1, std::memory_order_relaxed);
   }
 }
+/// waits for the deferred cleanup of \p arr's world (see
+/// TA::DistArray::wait_for_lazy_cleanup) and records the wait, whatever the
+/// drain policy: for the operations that must not leave tasks behind (the
+/// on-disk form writes and reads its tiles through them)
+template <typename ArrayT>
+void wait_for_lazy_cleanup(ArrayT const& arr) {
+  ArrayT::wait_for_lazy_cleanup(arr.world());
+  wait_counter().fetch_add(1, std::memory_order_relaxed);
+}
 inline std::atomic<long long>& slice_ns() {
   static std::atomic<long long> c{0};
   return c;
