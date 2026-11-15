@@ -1,5 +1,7 @@
 #include <SeQuant/core/eval/schedule_document.hpp>
 
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -10,6 +12,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
+#include <cstdio>
 #include <initializer_list>
 #include <istream>
 #include <iterator>
@@ -200,6 +203,8 @@ json to_j(ValueRecord const& v) {
   j["persistent"] = v.persistent;
   j["first_use"] = v.first_use;
   j["last_use"] = v.last_use;
+  j["modeled_footprint"] = v.modeled_footprint;
+  j["modeled_size"] = v.modeled_size;
   j["build_site"] = strs_j(v.build_site);
   j["home_floor"] = strs_j(v.home_floor);
   j["forced_split_axes"] = strs_j(v.forced_split_axes);
@@ -284,6 +289,7 @@ json to_j(RunRecord const& r) {
   j["footprint"] = sizemap_j(r.footprint);
   j["size"] = sizemap_j(r.size);
   j["builds"] = sizemap_j(r.builds);
+  j["leaf_bytes"] = sizemap_j(r.leaf_bytes);
   j["planner"] = strmap_j(r.planner);
   return j;
 }
@@ -332,6 +338,15 @@ std::size_t as_size(json const& v, std::string const& what,
 
 std::size_t get_size(json const& j, char const* key, std::string const& where) {
   return as_size(need(j, key, where), std::string("'") + key + "'", where);
+}
+
+/// \p key's size when present, else \p dflt: for fields added after documents
+/// without them were written
+std::size_t get_size_or(json const& j, char const* key, std::size_t dflt,
+                        std::string const& where) {
+  auto const it = j.find(key);
+  if (it == j.end()) return dflt;
+  return as_size(*it, std::string("'") + key + "'", where);
 }
 
 int get_int(json const& j, char const* key, std::string const& where) {
@@ -643,6 +658,8 @@ ValueRecord value_r(json const& j) {
   v.persistent = get_bool(j, "persistent", w);
   v.first_use = get_size(j, "first_use", w);
   v.last_use = get_size(j, "last_use", w);
+  v.modeled_footprint = get_size_or(j, "modeled_footprint", 0, w);
+  v.modeled_size = get_size_or(j, "modeled_size", 0, w);
   v.build_site = get_strs(j, "build_site", w);
   v.home_floor = get_strs(j, "home_floor", w);
   v.forced_split_axes = get_strs(j, "forced_split_axes", w);
@@ -732,6 +749,7 @@ RunRecord run_r(json const& j) {
   // absent in run files written before the key
   if (j.contains("size")) r.size = sizemap_r(j, "size", w);
   r.builds = sizemap_r(j, "builds", w);
+  if (j.contains("leaf_bytes")) r.leaf_bytes = sizemap_r(j, "leaf_bytes", w);
   r.planner = strmap_r(j, "planner", w);
   return r;
 }
@@ -839,9 +857,11 @@ struct Differ {
 
   void value(std::string const& path, ValueRecord const& a,
              ValueRecord const& b) {
-    // all fields except hash, key, first_use, last_use
+    // all fields except hash, key, first_use, last_use and the modeled
+    // sizes, which depend on the cost model the document was priced with
     auto ja = to_j(a), jb = to_j(b);
-    for (auto const* k : {"hash", "key", "first_use", "last_use"}) {
+    for (auto const* k : {"hash", "key", "first_use", "last_use",
+                          "modeled_footprint", "modeled_size"}) {
       ja.erase(k);
       jb.erase(k);
     }
@@ -1042,6 +1062,91 @@ std::string summary_line(Document const& d) {
   } else {
     os << " values=- blocks=- depth=-";
   }
+  return os.str();
+}
+
+namespace {
+std::string human_bytes(double b) {
+  char buf[64];
+  if (b < 1e6)
+    std::snprintf(buf, sizeof buf, "%.0f B", b);
+  else if (b < 1e9)
+    std::snprintf(buf, sizeof buf, "%.1f MB", b / 1e6);
+  else
+    std::snprintf(buf, sizeof buf, "%.2f GB", b / 1e9);
+  return buf;
+}
+}  // namespace
+
+std::string size_audit_table(Document const& doc) {
+  if (!doc.dag || !doc.run)
+    throw Exception(
+        "size_audit_table: the document needs dag and run sections");
+  auto const& values = doc.dag->values;
+  auto const& run = *doc.run;
+  struct Row {
+    std::string id, modes;
+    bool persistent;
+    std::size_t modeled_slab, modeled_full, realized_slab, realized_full,
+        builds;
+  };
+  std::vector<Row> rows;
+  rows.reserve(values.size());
+  auto const lookup = [](std::map<std::string, std::size_t> const& m,
+                         std::string const& k) -> std::size_t {
+    auto const it = m.find(k);
+    return it == m.end() ? 0 : it->second;
+  };
+  // the realized and the modeled slab of every value over its liveness
+  // interval: the two peaks below are one sweep each over these
+  container::svector<LiveInterval> realized, modeled;
+  realized.reserve(values.size());
+  modeled.reserve(values.size());
+  for (auto const& v : values) {
+    std::string modes;
+    for (auto const& m : v.result_modes)
+      modes += (modes.empty() ? "" : " ") + m;
+    // a leaf is fetched, not produced: its realized bytes live in leaf_bytes
+    std::size_t const leaf = lookup(run.leaf_bytes, v.id);
+    std::size_t const slab = leaf ? leaf : lookup(run.footprint, v.id);
+    std::size_t const full = leaf ? leaf : lookup(run.size, v.id);
+    rows.push_back({v.id, modes, v.persistent, v.modeled_footprint,
+                    v.modeled_size, slab, full, lookup(run.builds, v.id)});
+    realized.push_back({v.first_use, v.last_use, double(slab)});
+    modeled.push_back({v.first_use, v.last_use, double(v.modeled_footprint)});
+  }
+  std::stable_sort(rows.begin(), rows.end(), [](Row const& a, Row const& b) {
+    return a.realized_slab > b.realized_slab;
+  });
+  std::ostringstream os;
+  os << "size audit: " << rows.size() << " values (realized-descending)\n"
+     << "  realized slab | modeled slab | ratio | realized full | modeled full"
+        " | builds | P/V | value | modes\n";
+  for (auto const& r : rows) {
+    char ratio[32];
+    if (r.modeled_slab == 0)
+      std::snprintf(ratio, sizeof ratio, "n/a");
+    else
+      std::snprintf(ratio, sizeof ratio, "%.2f",
+                    double(r.realized_slab) / double(r.modeled_slab));
+    os << "  " << human_bytes(double(r.realized_slab)) << " | "
+       << human_bytes(double(r.modeled_slab)) << " | " << ratio << " | "
+       << human_bytes(double(r.realized_full)) << " | "
+       << human_bytes(double(r.modeled_full)) << " | " << r.builds << " | "
+       << (r.persistent ? 'P' : 'V') << " | " << r.id << " | " << r.modes
+       << "\n";
+  }
+  auto const print_peak = [&](char const* which,
+                              container::svector<LiveInterval> const& iv) {
+    PeakProfile const p = interval_peak_sweep(iv);
+    os << "  " << which << " peak " << human_bytes(p.peak_bytes)
+       << " at static point " << p.binding_point << "\n  live at the " << which
+       << " peak:";
+    for (std::size_t const i : p.live_at_binding) os << ' ' << values[i].id;
+    os << "\n";
+  };
+  print_peak("modeled", modeled);
+  print_peak("realized", realized);
   return os.str();
 }
 

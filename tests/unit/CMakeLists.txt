@@ -146,6 +146,15 @@ if (SEQUANT_HAS_TILEDARRAY)
         SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_source_files_properties(${eval_ta_test_sources}
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+    # the water STO-3G integrals of the eval integration test, read with its
+    # own reader (data_info, eval_utils.hpp)
+    set(eval_data_dir "${CMAKE_CURRENT_SOURCE_DIR}/../integration/eval")
+    target_sources(unit_tests-sequant-eval-ta-obj PRIVATE
+        "${eval_data_dir}/data_info.cpp")
+    target_include_directories(unit_tests-sequant-eval-ta-obj PRIVATE
+        "${eval_data_dir}")
+    target_compile_definitions(unit_tests-sequant-eval-ta-obj PRIVATE
+        SEQUANT_EVAL_DATA_DIR="${eval_data_dir}")
 endif()
 
 ##########################
@@ -200,6 +209,7 @@ set(eval_dryrun_test_sources
     "test_eval_ordered.cpp"
     "test_legality.cpp"
     "test_ordered_executor.cpp"
+    "test_ordered_random.cpp"
     "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
     "test_schedule_document.cpp"
@@ -221,17 +231,6 @@ target_link_libraries(unit_tests-sequant-eval-dryrun-obj
 # two files' identically-named symbols and they collide. Give this file its
 # own TU.
 set_source_files_properties("test_eval_ordered.cpp"
-    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-# test_eval_dryrun.cpp opens with `#define SEQUANT_EVAL_TRACE 1` to flip
-# Trace::Default to Trace::On for its WHOLE translation unit (its
-# [dryrun][peak] cases need the compile-time-gated note_working_set() calls
-# inside the batched custom evaluator's nested evaluate_impl() re-entries;
-# those follow the evaluator's EvalTrace template parameter, which these cases
-# leave at its Trace::Default). Under a Unity build this file is concatenated
-# AFTER siblings that already pulled in SeQuant/core/eval/eval.hpp, so the
-# Trace enum is fixed at Off before the define is seen and the define silently
-# becomes a no-op. Give this file its own TU so the define is honoured.
-set_source_files_properties("test_eval_dryrun.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # test_ordered_executor.cpp (~5.4 kLOC) and test_ordered_schedule.cpp (~3.2
 # kLOC) are by far the largest sources here and both instantiate deep

@@ -9,6 +9,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
 #include <SeQuant/core/op.hpp>
@@ -485,7 +486,7 @@ struct Transformer {
   }
 
   ExprPtr operator()(const io::serialization::v1::ast::Power &power) const {
-    // build base from Number or Variable
+    // build base from Number, Variable or Tensor
     ExprPtr base = boost::apply_visitor(*this, power.base);
 
     // exponent must be a rational, reject otherwise
@@ -503,10 +504,21 @@ struct Transformer {
         static_cast<std::int64_t>(power.exponent.numerator),
         static_cast<std::int64_t>(power.exponent.denominator));
 
-    auto pw = ex<Power>(std::move(base), std::move(exponent));
-    if (power.conjugated) {
-      pw->as<Power>().conjugate();
+    if (power.conjugated && base->is<AbstractTensor>()) {
+      auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
+      throw SerializationError(offset, length,
+                               "a conjugated tensor power is not supported; "
+                               "adjoint the base instead");
     }
+
+    auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
+    ExprPtr pw;
+    try {
+      pw = pow(std::move(base), std::move(exponent));
+    } catch (const Exception &e) {
+      throw SerializationError(offset, length, e.what());
+    }
+    if (power.conjugated) pw->adjoint();
     return pw;
   }
 };

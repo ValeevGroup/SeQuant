@@ -57,6 +57,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include "csv_size_fixtures.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -515,9 +516,9 @@ TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
   auto const is_K = [](sequant::Index const& ix) {
     return ix.basis().base_key() == L"Κ";
   };
-  auto const carries_type =
-      [&](sequant::container::svector<sequant::Index> const& v,
-          auto const& pred) { return std::any_of(v.begin(), v.end(), pred); };
+  auto const carries_type = [&](auto const& v, auto const& pred) {
+    return std::any_of(v.begin(), v.end(), pred);
+  };
   auto const vmap = sequant::eval::build_value_node_map(forest);
 
   std::optional<std::size_t> mu_mu_hash;
@@ -1450,18 +1451,10 @@ TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
       return it != vmap.end() &&
              sequant::subtree_any(*it->second, is_volatile_node);
     };
-    // The static gate must validate the same lives
-    // the executor enforces at runtime -- real per-loop-instance batch
-    // counts, not the constant-1 stub (which under-counts a value read from
-    // outside n*m nested real batches, exactly the gap that made
-    // CellRegistry::read throw "read past its life" before ordered_executor
-    // wired the real function into run_ordered_schedule_pre_results).
-    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
-        ordered, target, &aops);
     in.operands_of = orderedexec_per_leg_operands(rich, vmap);
     auto const table = sequant::eval::build_cell_table(in);
-    auto const violations = sequant::eval::validate_cell_table(
-        table, ordered.root, in.n_batches_of);
+    auto const violations =
+        sequant::eval::validate_cell_table(table, ordered.root);
     // The report goes to stderr as well as to Catch2. MEASURED (Catch2 v3.9.1,
     // this build, console/compact reporters and --verbosity high): an
     // UNSCOPED_INFO emitted immediately before a failing REQUIRE in this
@@ -1520,8 +1513,8 @@ TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
 // [w20-auxocc-walk] fixture. This checks structure only (one Build per
 // BuildStep, one Assemble per block output entry, at least one Leaf, every
 // Assemble strictly enclosing its source, every Build cell's sliced entries
-// naming an enclosing loop instance of its own scope) -- reads and lives are
-// checked separately.
+// naming an enclosing loop instance of its own scope) -- reads are checked
+// separately.
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
@@ -1613,10 +1606,6 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   REQUIRE(sequant::eval::well_formed(ordered));
   auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
   auto const vmap = sequant::eval::build_value_node_map(forest);
-  // Real per-loop batch counts for n_batches_of (see
-  // the walk-gate case's own note); aops is otherwise unused in this
-  // static-only fixture.
-  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
 
   sequant::eval::CellTableInputs in;
   in.ordered = &ordered;
@@ -1636,8 +1625,6 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
                     n->as_tensor().label() == L"t";
            });
   };
-  in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
-      ordered, policy.batch_target_size, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
 
@@ -1856,7 +1843,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   // Validate the derived table once; reuse the same violations both for the
   // life-rule count and the final full-table check.
   auto const violations =
-      sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of);
+      sequant::eval::validate_cell_table(table, ordered.root);
   std::size_t life_violations = 0;
   for (auto const& v : violations)
     if (v.rule == "life") ++life_violations;
@@ -1999,13 +1986,11 @@ TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
                     n->as_tensor().label() == L"t";
            });
   };
-  in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
-      ordered, policy.batch_target_size, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
 
   auto const violations2 =
-      sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of);
+      sequant::eval::validate_cell_table(table, ordered.root);
   for (auto const& v : violations2)
     UNSCOPED_INFO("[" << v.rule << "] " << v.what);
   for (auto const& [cid, pos] : table.unresolved)
@@ -2573,15 +2558,13 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
     CHECK(b2 == b1);
   }
 
-  // Skipped consumers spend the reads they will not perform (CellRegistry::
-  // forgo, called at every skip site -- see ordered_forgo_reads): so when the
-  // walk is over, the ONLY things the registry is still holding are the cells
-  // that are held ON PURPOSE -- the persistent ones (they survive into the
-  // next evaluation) and the forest roots (just handed to the caller as
-  // pre_results, read by nobody in the table). Anything else would be a
-  // non-persistent intermediate whose declared life never ran out: it would
-  // pin its memory for the rest of the evaluation and keep looking shared to
-  // every later reader, which is what disables in-place accumulation.
+  // Every cell is let go where the schedule places its last reader, whether
+  // or not that reader ran (see ReleasePlan): so when the walk is over, the
+  // ONLY things the registry is still holding are the cells that are held ON
+  // PURPOSE -- the persistent ones (they survive into the next evaluation)
+  // and the forest roots (just handed to the caller as pre_results).
+  // Anything else would be a non-persistent intermediate that pins its
+  // memory for the rest of the evaluation.
   {
     auto const res = sequant::eval::detail::ordered_last_registry_residency();
     INFO("registry residency after iteration 2: live="
@@ -2849,7 +2832,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
         forest, std::move(labels), opts, mode_order);
     doc->roots = roots;
     doc->dag = sched::record_dag(rich, legality, *ordered_opt, forest, roots,
-                                 is_volatile_node);
+                                 is_volatile_node, cm.get(), block_of);
     value_id_of = [&doc](std::size_t vid) {
       return doc->dag->values.at(vid).id;
     };
@@ -2909,8 +2892,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   std::unordered_map<std::size_t, std::size_t> hash_to_cell;
   for (std::size_t i = 0; i < rich.cells.size(); ++i)
     hash_to_cell.emplace(rich.cells[i].hash, i);
-  auto const space_sig =
-      [](sequant::container::svector<sequant::Index> const& v) -> std::wstring {
+  auto const space_sig = [](auto const& v) -> std::wstring {
     std::wstring s;
     for (std::size_t i = 0; i < v.size(); ++i) {
       if (i) s += L",";
@@ -3373,6 +3355,18 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   direct_cache.set_recompute_tally_enabled(true);
   sequant::eval::PeakMonitor direct_mon;
   direct_cache.set_peak_monitor(&direct_mon);
+  // This schedule is batched, so most samples are taken inside a batch loop
+  // and the rest at the outermost scope: neither kind may leave out a value
+  // that is alive when it is taken.
+  std::size_t n_samples = 0, n_below_live = 0;
+  direct_mon.on_sample =
+      [&](std::size_t total, std::size_t,
+          std::vector<sequant::eval::PeakLiveEntry> const& live) {
+        std::size_t live_bytes = 0;
+        for (auto const& e : live) live_bytes += e.bytes;
+        ++n_samples;
+        if (total < live_bytes) ++n_below_live;
+      };
   ResultPtr direct_result;
   try {
     direct_result =
@@ -3416,6 +3410,8 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   CAPTURE(direct_mon.hwmark_bytes, meter_report.peak_bytes);
 
   CHECK(direct_mon.hwmark_bytes > 0);
+  CHECK(n_samples > 0);
+  CHECK(n_below_live == 0);
   CHECK(meter_report.peak_bytes > 0.0);
   CHECK(meter_report.scheduler == sequant::BatchScheduler::ordered);
 
@@ -3546,8 +3542,7 @@ TEST_CASE("w20-peak-composition", "[w20-peak-composition]") {
   auto const is_K = [](sequant::Index const& ix) {
     return ix.basis().base_key() == L"Κ";
   };
-  auto const space_sig =
-      [](sequant::container::svector<sequant::Index> const& v) -> std::wstring {
+  auto const space_sig = [](auto const& v) -> std::wstring {
     std::wstring s;
     for (std::size_t i = 0; i < v.size(); ++i) {
       if (i) s += L",";
@@ -4221,7 +4216,6 @@ TEST_CASE("ordered-leaf-first-touch-read", "[ordered][cell_registry]") {
     sequant::eval::TableCell leaf;
     leaf.value_id = 0;
     leaf.production.kind = sequant::eval::ProductionKind::Leaf;
-    leaf.life = 1;
     table.cells.push_back(leaf);
     sequant::eval::TableCell build;
     build.value_id = 1;
@@ -4425,13 +4419,9 @@ TEST_CASE("ordered-assemble-dest-size", "[ordered][assemble-dest]") {
     return it != vmap.end() &&
            sequant::subtree_any(*it->second, is_volatile_node);
   };
-  in.n_batches_of =
-      sequant::eval::detail::ordered_n_batches_by_loop(ordered, target, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
-  REQUIRE(
-      sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of)
-          .empty());
+  REQUIRE(sequant::eval::validate_cell_table(table, ordered.root).empty());
 
   // (1) The two-level shape is present: a Scatter Assemble at the ROOT scope
   // whose per-batch source is itself a partial (reduced on an inner loop, or
@@ -4747,8 +4737,6 @@ TEST_CASE("ordered-invariant-escape-once", "[ordered][block-skip]") {
       return it != vmap.end() &&
              sequant::subtree_any(*it->second, is_volatile_node);
     };
-    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
-        ordered, target, &aops);
     in.operands_of = orderedexec_per_leg_operands(rich, vmap);
     auto const table = sequant::eval::build_cell_table(in);
     std::size_t n_invariant_escapes = 0;
@@ -4926,7 +4914,7 @@ TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
     return it != vmap.end() &&
            sequant::subtree_any(*it->second, is_volatile_node);
   };
-  in.n_batches_of =
+  auto const n_batches_of =
       sequant::eval::detail::ordered_n_batches_by_loop(ordered, target, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
@@ -4944,7 +4932,7 @@ TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
   // The loop it is bound to is a real, MULTI-batch loop of this schedule --
   // otherwise "once per batch of the enclosing loop" and "once" coincide and
   // the assertion below would be vacuous.
-  std::size_t const n_bound_batches = in.n_batches_of(bound_key);
+  std::size_t const n_bound_batches = n_batches_of(bound_key);
   INFO("produce_if_absent cell#"
        << *bound_pia << " (value " << pia.value_id << ", scope depth "
        << pia.scope.path.size() << ") is bound to a loop of " << n_bound_batches
@@ -5007,7 +4995,6 @@ TEST_CASE("ordered-pia-unbound-seed", "[ordered][pia-rebind]") {
   bound.scope.path = {{outer, 0}, {inner, 0}};
   bound.sliced = {{0, outer}};
   bound.produce_if_absent = true;
-  bound.life = 1;
   t.cells.push_back(bound);
   // cell 1: same home, bound to nothing at all.
   TableCell unbound;
@@ -5015,7 +5002,6 @@ TEST_CASE("ordered-pia-unbound-seed", "[ordered][pia-rebind]") {
   unbound.production.kind = ProductionKind::Build;
   unbound.scope.path = {{outer, 0}, {inner, 0}};
   unbound.produce_if_absent = true;
-  unbound.life = 1;
   t.cells.push_back(unbound);
 
   CellRegistry reg(t);
@@ -5105,6 +5091,39 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     CHECK(counts.probes == 0);
     CHECK(counts.builds == n_build_steps);
     CHECK(counts.assembles == 0);  // no batch loop => no Assemble step
+  }
+
+  SECTION("a result that another result reads, over repeated evaluations") {
+    // The first root is an operand of the second. The caller reads both, so
+    // the first is neither released after its reader nor left unproduced on
+    // a later evaluation, when the second -- held from the first evaluation
+    // -- no longer needs it.
+    std::vector<ScalarNode> forest{scalar_tree(L"a * b"),
+                                   scalar_tree(L"(a * b) * c")};
+    ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
+
+    sequant::BatchPolicy const policy;
+    SizeRegime const regime;
+    CostModel const cm{regime};
+    auto const block_of = [](Index const&) -> std::size_t { return 1; };
+    RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+    auto const legality = analyze_legality(rich, forest, policy);
+    OrderedSchedule const ordered =
+        build_ordered_schedule(rich, legality, policy, {});
+
+    auto cache = sequant::CacheManager<ScalarNode>::empty();
+    std::function<std::size_t(Index const&)> const target =
+        [](Index const&) -> std::size_t { return 1; };
+    for (int evaluation = 0; evaluation < 3; ++evaluation) {
+      INFO("evaluation " << evaluation);
+      ResultPtr const got = evaluate_ordered_schedule(forest, ordered, rich,
+                                                      ScalarEvalExpr::annot_t{},
+                                                      yield, cache, target);
+      REQUIRE(got);
+      // the roots are summed: a*b + (a*b)*c
+      CHECK(got->as<ResultScalar<double>>().value() ==
+            Catch::Approx(-7.0 - 50.75));
+    }
   }
 
   SECTION("batched water-20 residual: assembles fire, still zero probes") {
@@ -5247,13 +5266,11 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
       return it != vmap.end() &&
              sequant::subtree_any(*it->second, is_volatile_node);
     };
-    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
+    auto const n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
         ordered, target, &aops);
     in.operands_of = orderedexec_per_leg_operands(rich, vmap);
     auto const table = sequant::eval::build_cell_table(in);
-    REQUIRE(
-        sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of)
-            .empty());
+    REQUIRE(sequant::eval::validate_cell_table(table, ordered.root).empty());
 
     // EVERY build the executor performs is the production of a Build cell of
     // this table -- an "implicit" build (an Assemble step producing its own
@@ -5277,7 +5294,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
       std::size_t reps = 1;
       for (auto const& [key, lat] : c.scope.path) {
         (void)lat;
-        reps *= std::max<std::size_t>(1, in.n_batches_of(key));
+        reps *= std::max<std::size_t>(1, n_batches_of(key));
       }
       max_builds += reps;
     }
@@ -5298,7 +5315,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
       for (auto const& [key, lat] :
            table.cells[c.production.source].scope.path) {
         (void)lat;
-        reps *= std::max<std::size_t>(1, in.n_batches_of(key));
+        reps *= std::max<std::size_t>(1, n_batches_of(key));
       }
       max_assembles += reps;
     }
@@ -5333,6 +5350,17 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     CHECK(again.builds == counts.builds);
     CHECK(again.assembles == counts.assembles);
     CHECK(again.probes == 0);
+
+    // Every cell is let go once the step holding its last reader is done,
+    // including the cells read from inside batch loops, where no single read
+    // is the last. On this cold run nothing is left in the registry but what
+    // is held on purpose: the persistent cells and the forest's results.
+    auto const res = sequant::eval::detail::ordered_last_registry_residency();
+    INFO("registry residency: live=" << res.live
+                                     << " persistent=" << res.persistent
+                                     << " roots=" << res.roots);
+    CHECK(res.live > 0);
+    CHECK(res.live == res.persistent + res.roots);
   }
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
@@ -5578,4 +5606,301 @@ TEST_CASE("ordered-lockstep-vs-whole-escape",
   REQUIRE_NOTHROW((void)sequant::eval::evaluate_ordered_multiroot(
       forest, ordered, rich, {""},
       sequant::eval::dryrun::DryRunLeafEvaluator{cm}, cache, target));
+}
+
+// Two roots sharing the leaf D: root 1 reads it, root 2 raises it element-wise
+// under a loop over i_1 its root contracts. The ordered multi-root executor
+// fetches D once for both roots, builds the batched loop through the Power
+// node, and assembles each root to the size of its unbatched evaluation.
+TEST_CASE("ordered-multiroot-batched-power",
+          "[ordered-executor][tensor-power]") {
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  std::vector<EvalNodeDryRun> forest{
+      sequant::binarize<EvalExprDryRun>(base_term()),
+      sequant::binarize<EvalExprDryRun>(hadamard_power_term())};
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(forest[1].right().right()->op_type() == sequant::EvalOp::Power);
+  REQUIRE(forest[1].right().right().left()->hash_value() ==
+          forest[0].right()->hash_value());
+  stamp_occ_loop(forest[1]);
+  auto const policy = occ_contracted_policy();
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 10u}, {L"a", 20u}};
+  auto const cm = std::make_shared<CostModel const>(regime);
+  auto const rich = sequant::eval::compute_dag_boulevard(
+      forest, *cm, policy.batch_target_size);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  sequant::eval::OrderedSchedule ordered;
+  REQUIRE_NOTHROW(ordered = sequant::eval::build_ordered_schedule(
+                      rich, legality, policy, {}));
+
+  // the i_1 loop is realized
+  bool occ_block = false;
+  std::function<void(sequant::eval::ScopeBlock const&)> const find_occ =
+      [&](sequant::eval::ScopeBlock const& b) {
+        if (b.axis.nonnull() && b.axis.space().base_key() == L"i")
+          occ_block = true;
+        for (auto const& st : b.steps)
+          if (auto const* child =
+                  std::get_if<sequant::eval::ScopeBlock>(&st.value))
+            find_occ(*child);
+      };
+  find_occ(ordered.root);
+  CHECK(occ_block);
+
+  // leaf fetches by label
+  DryRunLeafEvaluator const dry{cm};
+  std::map<std::wstring, std::size_t> fetches;
+  auto const yield = [&](EvalNodeDryRun const& n) -> sequant::ResultPtr {
+    ++fetches[std::wstring{n->as_tensor().label()}];
+    return dry(n);
+  };
+  auto cache = sequant::cache_manager(forest);
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
+  sequant::container::svector<sequant::ResultPtr> res;
+  REQUIRE_NOTHROW(res = sequant::eval::evaluate_ordered_multiroot(
+                      forest, ordered, rich,
+                      sequant::container::svector<std::string>(forest.size()),
+                      yield, cache, policy.batch_target_size));
+  auto const counts = sequant::eval::detail::ordered_op_counts();
+  // D is fetched once for both roots; root 1 builds its one product, root 2
+  // the power, the Hadamard product and the contraction once per batch of
+  // i_1 (extent 10, batches of 1)
+  CHECK(fetches.at(L"D") == 1);
+  CHECK(counts.builds == 1 + 3 * 10);
+
+  // each root's result has the size of its unbatched evaluate()
+  REQUIRE(res.size() == forest.size());
+  for (std::size_t r = 0; r < forest.size(); ++r) {
+    CAPTURE(r);
+    REQUIRE(res[r]);
+    auto const ref = sequant::evaluate(forest[r], dry);
+    REQUIRE(ref);
+    REQUIRE(ref->size_in_bytes() == 10 * 10 * 8);  // E{i_3;i_2}
+    CHECK(res[r]->size_in_bytes() == ref->size_in_bytes());
+  }
+}
+
+TEST_CASE("record_dag prices values when given a cost model",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // one tree, one term: the root record's single term key names the term
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b")};
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  std::vector<sched::RootRecord> roots(1);
+  roots[0].label = "R";
+  roots[0].terms.resize(1);
+  roots[0].terms[0].key = "2 a b";
+  // unpriced: every modeled field stays 0
+  auto const bare = sched::record_dag(rich, legality, ordered, forest, roots);
+  REQUIRE(bare.values.size() == rich.cells.size());
+  for (auto const& v : bare.values) {
+    CHECK(v.modeled_footprint == 0);
+    CHECK(v.modeled_size == 0);
+  }
+  // priced: each value carries what the model says for its own cell
+  auto const priced = sched::record_dag(rich, legality, ordered, forest, roots,
+                                        {}, &cm, block_of);
+  REQUIRE(priced.values.size() == rich.cells.size());
+  for (std::size_t v = 0; v < rich.cells.size(); ++v) {
+    auto const& c = rich.cells[v];
+    CHECK(priced.values[v].modeled_footprint ==
+          sequant::eval::detail::cell_footprint(c.carried, c.home_modes, cm,
+                                                block_of));
+    CHECK(priced.values[v].modeled_size ==
+          cm.memsize(sequant::container::svector<sequant::Index>(
+              c.carried.begin(), c.carried.end())));
+  }
+}
+
+TEST_CASE("size audit sweeps the realized peak over the run's measured sizes",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // 2 * a * b: a, b, their product, the constant and the scaled product; a
+  // production's operands are live through its own point, so three scalars
+  // are co-resident at the product (a, b, a*b) and again at the scaling
+  // (a*b, 2, 2*a*b)
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b")};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}}};
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  sched::Document doc;
+  doc.roots.resize(1);
+  doc.roots[0].label = "R";
+  doc.roots[0].terms.resize(1);
+  doc.roots[0].terms[0].key = "2 a b";
+  doc.dag = sched::record_dag(rich, legality, ordered, forest, doc.roots, {},
+                              &cm, block_of);
+  REQUIRE(doc.dag->values.size() == 5);
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+  sched::RunRecord run;
+  std::function<std::string(std::size_t)> const id_of = [&doc](std::size_t v) {
+    return doc.dag->values.at(v).id;
+  };
+  (void)sequant::eval::evaluate_ordered_multiroot(
+      forest, ordered, rich,
+      sequant::container::svector<std::string>(forest.size()), yield, cache,
+      block_of, sequant::make_no_scope_guard{}, {}, &run, id_of);
+  // every production of a scalar leaves sizeof(double) bytes; the leaves a,
+  // b and 2 were fetched and measured, never built
+  REQUIRE(run.footprint.size() == 2);
+  for (auto const& [id, bytes] : run.footprint) CHECK(bytes == sizeof(double));
+  REQUIRE(run.leaf_bytes.size() == 3);
+  for (auto const& [id, bytes] : run.leaf_bytes) {
+    CHECK(bytes == sizeof(double));
+    CHECK(run.builds.count(id) == 0);
+  }
+  doc.run = std::move(run);
+  std::string const table = sched::size_audit_table(doc);
+  // three scalars at the product's point, which is the lower of the two
+  // equal maxima; the realized peak is what the executor measured swept
+  // over the dag's liveness, not what the cell registry happened to hold
+  // (it gives a taken operand away before the production that reads it is
+  // stored)
+  std::string const live_at_peak = [&] {
+    std::string s;
+    for (std::size_t v = 0; v < 3; ++v) s += ' ' + doc.dag->values[v].id;
+    return s;
+  }();
+  CAPTURE(table);
+  CHECK(table.find("realized peak 24 B at static point 2") !=
+        std::string::npos);
+  CHECK(table.find("live at the realized peak:" + live_at_peak + "\n") !=
+        std::string::npos);
+}
+
+TEST_CASE("run record measures persistent values seeded from the previous run",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // no leaf is volatile, so the root is persistent: the second evaluation on
+  // the same cache seeds it from the store and builds nothing (every other
+  // value's only consumer is skipped), yet the record must still price it
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b")};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}}};
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  std::vector<sched::RootRecord> roots(1);
+  roots[0].label = "R";
+  roots[0].terms.resize(1);
+  roots[0].terms[0].key = "2 a b";
+  auto const dag = sched::record_dag(rich, legality, ordered, forest, roots);
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+  std::function<std::string(std::size_t)> const id_of = [&dag](std::size_t v) {
+    return dag.values.at(v).id;
+  };
+  auto const evaluate = [&](sched::RunRecord& run) {
+    return sequant::eval::evaluate_ordered_multiroot(
+        forest, ordered, rich,
+        sequant::container::svector<std::string>(forest.size()), yield, cache,
+        block_of, sequant::make_no_scope_guard{}, {}, &run, id_of);
+  };
+  sched::RunRecord first, second;
+  auto const r1 = evaluate(first);
+  auto const r2 = evaluate(second);
+  REQUIRE(r1.size() == 1);
+  REQUIRE(r2.size() == 1);
+  CHECK(r1[0]->get<double>() == r2[0]->get<double>());
+  REQUIRE(!first.builds.empty());
+  CHECK(second.builds.empty());
+  CHECK(second.leaf_bytes.empty());
+  std::size_t persistent = 0;
+  for (auto const& v : dag.values) {
+    if (v.persistent) {
+      ++persistent;
+      // seeded: held at the bytes the first run measured, not built
+      REQUIRE(second.footprint.count(v.id) == 1);
+      CHECK(second.footprint.at(v.id) == first.footprint.at(v.id));
+      CHECK(second.size.at(v.id) == first.size.at(v.id));
+    } else {
+      CHECK(second.footprint.count(v.id) == 0);
+    }
+  }
+  CHECK(persistent == 1);
+}
+
+TEST_CASE("run record records a seeded persistent leaf as a leaf",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // a * b with b volatile: a is a non-volatile leaf whose only consumer is
+  // volatile, so its leaf cell stays persistent and the second evaluation
+  // seeds it instead of fetching it; it is still a leaf, so its bytes go to
+  // leaf_bytes, never to footprint
+  std::vector<ScalarNode> forest{scalar_tree(L"a * b")};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}}};
+  std::function<bool(ScalarNode const&)> const is_volatile =
+      [](ScalarNode const& n) -> bool {
+    return n.leaf() && n->expr()->is<sequant::Variable>() &&
+           n->expr()->as<sequant::Variable>().label() == L"b";
+  };
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  std::vector<sched::RootRecord> roots(1);
+  roots[0].label = "R";
+  roots[0].terms.resize(1);
+  roots[0].terms[0].key = "a b";
+  auto const dag =
+      sched::record_dag(rich, legality, ordered, forest, roots, is_volatile);
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+  std::function<std::string(std::size_t)> const id_of = [&dag](std::size_t v) {
+    return dag.values.at(v).id;
+  };
+  auto const evaluate = [&](sched::RunRecord& run) {
+    return sequant::eval::evaluate_ordered_multiroot(
+        forest, ordered, rich,
+        sequant::container::svector<std::string>(forest.size()), yield, cache,
+        block_of, sequant::make_no_scope_guard{}, is_volatile, &run, id_of);
+  };
+  sched::RunRecord first, second;
+  (void)evaluate(first);
+  (void)evaluate(second);
+  std::string a_id, b_id;
+  for (auto const& v : dag.values)
+    if (v.leaf) (v.persistent ? a_id : b_id) = v.id;
+  REQUIRE(!a_id.empty());
+  REQUIRE(!b_id.empty());
+  CHECK(first.leaf_bytes.at(a_id) == sizeof(double));
+  CHECK(second.leaf_bytes.at(a_id) == sizeof(double));
+  CHECK(second.leaf_bytes.at(b_id) == sizeof(double));
+  CHECK(second.footprint.count(a_id) == 0);
+  CHECK(second.size.count(a_id) == 0);
+  // the product is volatile: built again, not seeded
+  CHECK(second.builds.size() == 1);
 }

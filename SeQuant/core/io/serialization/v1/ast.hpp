@@ -114,12 +114,12 @@ struct Product;
 struct Sum;
 
 struct Power : boost::spirit::x3::position_tagged {
-  boost::variant<Number, Variable> base;
+  boost::variant<Number, Variable, Tensor> base;
   Number exponent;
   bool conjugated;
 
   Power() noexcept = default;
-  Power(boost::variant<Number, Variable> base, Number exponent,
+  Power(boost::variant<Number, Variable, Tensor> base, Number exponent,
         bool conjugated = false)
       : base(std::move(base)),
         exponent(std::move(exponent)),

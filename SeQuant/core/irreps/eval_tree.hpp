@@ -28,6 +28,15 @@ struct IrrepNodeTraits<FullBinaryNode<T>> {
         return IrrepNodeKind::Product;
       case EvalOp::Adjoint:
         return IrrepNodeKind::Adjoint;
+      case EvalOp::Power:
+        // an element-wise power spans its operand's irreps: a Sum over the
+        // single child (the operand) yields exactly those. That holds only
+        // for a positive exponent; otherwise every symmetry-forbidden zero
+        // block becomes inf or 1 and the result spans all irreps, which is
+        // harmless for the totally symmetric denominators this is meant for
+        return IrrepNodeKind::Sum;
+      case EvalOp::Broadcast:
+        return IrrepNodeKind::Broadcast;
     }
 
     SEQUANT_UNREACHABLE;
@@ -36,8 +45,8 @@ struct IrrepNodeTraits<FullBinaryNode<T>> {
   template <typename F>
   static void for_each_child(const FullBinaryNode<T> &node, F &&f) {
     f(node.left());
-    if (node->op_type() != EvalOp::Adjoint) {
-      // The right child of an adjoint node is only a placeholder
+    if (!is_unary(*node->op_type())) {
+      // The right child of a unary node is only a sentinel
       f(node.right());
     }
   }

@@ -6,8 +6,11 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/rational.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -107,5 +110,13 @@ TEST_CASE("latex", "[util]") {
     std::wstring hat__alpha = L"α̂";
     REQUIRE(hat__alpha.size() == 2);
     REQUIRE(io::latex::utf_to_string(hat__alpha) == L"\\hat{\\alpha}");
+  }
+
+  SECTION("TensorPower") {
+    auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    auto p = pow(D, rational{-1});
+    CHECK(p->to_latex() ==
+          L"{" + D->to_latex() + L"}^" + io::latex::to_string(rational{-1}));
+    CHECK(p->to_latex() == io::latex::to_string(*p));
   }
 }

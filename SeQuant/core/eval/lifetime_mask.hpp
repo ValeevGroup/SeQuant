@@ -25,7 +25,8 @@ namespace detail {
 /// keep only elements of \p acc that also appear in \p other, preserving
 /// \p acc's order. Used to accumulate the cross-occurrence meet.
 inline void lifetime_mask_intersect_in_place(
-    container::svector<Index>& acc, container::svector<Index> const& other) {
+    container::svector<Index>& acc,
+    container::svector_base<Index> const& other) {
   container::svector<Index> keep;
   for (auto const& ix : acc)
     if (std::find(other.begin(), other.end(), ix) != other.end())

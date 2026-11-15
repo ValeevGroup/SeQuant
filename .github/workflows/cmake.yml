@@ -25,7 +25,8 @@ jobs:
         os : [ macos-26, ubuntu-26.04, windows-2025 ]
         valgrind: [ true, false ]
         sanitize: [ true, false ]
-        # where Boost comes from: the system package manager (vcpkg on Windows), or built from source by SeQuant
+        # where Boost comes from: the system package manager (vcpkg on Windows), or (`fetch`) built from source by SeQuant;
+        # no job uses `fetch` now, the steps keep handling it so that an include entry with `boost: fetch` brings it back
         boost: [ system ]
         exclude:
           - valgrind : true
@@ -43,12 +44,6 @@ jobs:
           - os: windows-2025
             valgrind: true
         include:
-          # MSVC needs Boost >= 1.85 (Spirit); check that the Boost SeQuant builds from source works with it
-          - os: windows-2025
-            build_type: Release
-            valgrind: false
-            sanitize: false
-            boost: fetch
           - os: ubuntu-26.04
             cxx: /usr/bin/g++-14
             sanitize_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking

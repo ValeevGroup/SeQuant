@@ -25,7 +25,12 @@ namespace sequant::mbpt {
 ///                  overlap of an orthonormal basis expands into `C·C` instead
 ///                  of `C·s·C`
 /// \param coeff_tensor_label The label of the CSV-transformation tensors that
-///                           will be introduced.
+///                           will be introduced. They are declared Hermitian
+///                           (`C{μ;a} = C{a;μ}^*`) and particle (column)
+///                           symmetric, so the bra- and ket-leg coefficients
+///                           of a CSV are one object: the numerical backend
+///                           must serve `C{μ;a}` as the conjugate transpose of
+///                           `C{a;μ}`.
 /// \param tensor_labels The labels of the tensors that will be
 ///                    transformed
 /// \return The CSV-transformed expression if CSV-tensors with labels present

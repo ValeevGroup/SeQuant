@@ -20,8 +20,7 @@ namespace sequant::eval {
 
 /// Inputs to \c build_cell_table: the finished ordered schedule plus the
 /// per-value callbacks the table derivation needs but does not itself own
-/// the source of (sliced-mode set, volatility, batch count of a loop
-/// instance).
+/// the source of (sliced-mode set, volatility).
 struct CellTableInputs {
   OrderedSchedule const* ordered = nullptr;
   RichSchedule const* rich = nullptr;
@@ -29,7 +28,6 @@ struct CellTableInputs {
   SlicedModeAssignment const* sliced = nullptr;
   std::function<container::svector<Index>(std::size_t)> sliced_modes_of;
   std::function<bool(std::size_t)> volatile_of;
-  std::function<std::size_t(LoopKey const&)> n_batches_of;
   /// Optional: the value's direct operand value ids with repetition -- one
   /// entry per leg of its production tree, so a value contracted with itself
   /// appears twice. Both \c ordered_schedule_dep_graph's \c depends_on and
@@ -354,10 +352,8 @@ inline void apply_persistence_frontier(
 /// block -- an escape chain may skip a level the value is invariant to), and
 /// one \c Leaf cell for every leaf value that is an operand of
 /// some computed value; then one \c Read per leg of every Build cell's
-/// production tree, and every cell's \c life from those reads (weighted by
-/// batch multiplicity) plus the Assembles that consume it. Sliced-mode
-/// positions that match no enclosing loop instance are reported in \c
-/// CellTable::unresolved.
+/// production tree. Sliced-mode positions that match no enclosing loop
+/// instance are reported in \c CellTable::unresolved.
 [[nodiscard]] inline CellTable build_cell_table(CellTableInputs const& in) {
   if (!in.ordered || !in.rich || !in.sliced || !in.sliced_modes_of ||
       !in.volatile_of)
@@ -516,19 +512,6 @@ inline void apply_persistence_frontier(
     detail::dump_cells_of(st.table, *in.rich, want);
     detail::dump_occs_of(st.table, *in.rich, want);
   }
-  // Lives: reads weighted by the consumer's extra enclosing batches
-  // (detail::read_multiplicity), plus one per Assemble that consumes the
-  // cell.
-  for (TableCell& c : st.table.cells) c.life = 0;
-  for (Read const& r : st.table.reads) {
-    TableCell const& s = st.table.cells[r.source];
-    TableCell const& c = st.table.cells[r.consumer];
-    st.table.cells[r.source].life +=
-        detail::read_multiplicity(s, c.scope, in.n_batches_of);
-  }
-  for (TableCell const& c : st.table.cells)
-    if (c.production.kind == ProductionKind::Assemble)
-      st.table.cells[c.production.source].life += 1;
   return std::move(st.table);
 }
 

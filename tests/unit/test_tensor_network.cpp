@@ -1180,4 +1180,14 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                              L"2)(i_3,i_4)\n"));
     }
   }
+
+  SECTION("edges after canonicalize_slots") {
+    // canonicalize_slots discards the edges; the accessors rebuild them
+    TN tn(deserialize(L"t{a_1;i_1} f{i_1;a_2}"));
+    auto const before = tn.ext_indices();
+    REQUIRE(before.size() == 2);
+    tn.canonicalize_slots(get_default_context().cardinal_tensor_labels());
+    CHECK(tn.ext_indices() == before);
+    CHECK(tn.edges().size() == 3);
+  }
 }

@@ -281,9 +281,9 @@ enclosing_instances_of(RichSchedule const& rich) {
 /// record and throws.
 ///
 [[nodiscard]] inline LoopRole classify_axis(
-    container::svector<Index> const& carried,
-    container::svector<Index> const& contracted_below, Index const& axis,
-    container::svector<OccurrenceRec> const& occurrences,
+    container::svector_base<Index> const& carried,
+    container::svector_base<Index> const& contracted_below, Index const& axis,
+    container::svector_base<OccurrenceRec> const& occurrences,
     std::function<container::svector<LoopInstance>(OccurrenceRec const&)> const&
         enclosing_instances,
     container::svector<OccurrenceAxisRole>* per_occurrence = nullptr) {

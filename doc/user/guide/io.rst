@@ -142,6 +142,9 @@ permutational :class:`Symmetry <sequant::Symmetry>` (``A`` = Antisymm, ``S`` = S
 :class:`ColumnSymmetry <sequant::ColumnSymmetry>` (``S`` = Symm, ``N`` = Nonsymm — this field has no Conjugate case). A tensor's trailing
 ``:A-C-S`` in the example below therefore reads "antisymmetric, conjugate bra-ket symmetric, symmetric column".
 
+A power is written ``base^(exponent)``, e.g. ``D{i_1,i_2;a_1,a_2}^(-1)``; besides a number or a variable, the base may also be a tensor, which yields a
+:class:`sequant::TensorPower`.
+
 :func:`sequant::io::serialization::from_string<ExprPtr>` will start at rule :code:`Expression`, whereas
 :func:`sequant::io::serialization::from_string<ResultExpr>` will start at :code:`Result`.
 

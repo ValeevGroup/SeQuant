@@ -14,6 +14,7 @@
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/eval/release_plan.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/schedule_document.hpp>
 #include <SeQuant/core/eval/value_node_map.hpp>
@@ -43,13 +44,7 @@ namespace detail {
 
 ///
 /// \brief Per-loop-instance (not per-type) batch count over the
-/// whole \c ScopeBlock tree -- the \c CellTableInputs::n_batches_of the cell
-/// table's life computation needs (\c detail::read_multiplicity,
-/// cell_table.hpp): a source cell read by a consumer nested inside a loop it
-/// is not resident on is re-read once per real batch of that loop (not once
-/// per loop: a value read from outside two nested batch loops of \c n \& \c m
-/// real batches is read \c n*m times, not once, and \c CellRegistry::read
-/// enforces exactly that count at runtime). Keyed
+/// whole \c ScopeBlock tree, for the run record. Keyed
 /// by the \c LoopKey itself (the loop's stable depth+loop_slot identity, not
 /// its canonical axis label, which a type-keyed count would collapse across
 /// distinct same-key instances) so it is exact per realized loop.
@@ -141,11 +136,12 @@ ordered_n_batches_by_loop(
 ///     Assemble that closes it is dead as soon as that Assemble is -- even
 ///     though the assembled form of the same value is still read elsewhere.
 ///
-/// A cell with no consumer at all is never skipped by rule 2 -- the closure
-/// below only ever adds a cell all of whose consumers are skipped, and a cell
-/// with no consumer has none to skip. Those cells are the schedule's own
-/// results (validator rule 4 admits a zero-read cell only at the root scope),
-/// and rule 1 does reach them: a non-volatile forest root -- a constant term,
+/// The schedule's own results (\p kept: the cells the caller reads once the
+/// walk is over) are never skipped by rule 2, whether nothing in the table
+/// reads them or another result does: the caller is a reader no skip can
+/// remove. Neither is any other cell with no consumer at all -- the closure
+/// below only ever adds a cell all of whose consumers are skipped. Rule 1
+/// does reach the results: a non-volatile forest root -- a constant term,
 /// held by the persistent store from the previous evaluation -- is skipped
 /// exactly as any other held persistent cell is, which is the whole point of
 /// cache-halt. What the caller then receives for such a root is a private
@@ -157,9 +153,11 @@ ordered_n_batches_by_loop(
 /// down. This is the table-side statement of what forest descent does by
 /// halting its descent at a cache hit.
 [[nodiscard]] inline container::vector<char> ordered_skip_closure(
-    CellTable const& table, container::vector<char> seed) {
+    CellTable const& table, container::vector<char> seed,
+    container::vector<char> const& kept) {
   std::size_t const n = table.cells.size();
   SEQUANT_ASSERT(seed.size() == n);
+  SEQUANT_ASSERT(kept.size() == n);
   container::vector<container::svector<CellId>> consumers(n);
   for (Read const& r : table.reads)
     if (r.source < n) consumers[r.source].push_back(r.consumer);
@@ -171,7 +169,7 @@ ordered_n_batches_by_loop(
   for (bool changed = true; changed;) {
     changed = false;
     for (CellId c = 0; c < n; ++c) {
-      if (seed[c] || consumers[c].empty()) continue;
+      if (seed[c] || kept[c] || consumers[c].empty()) continue;
       bool all = true;
       for (CellId x : consumers[c])
         if (!seed[x]) {
@@ -190,101 +188,33 @@ ordered_n_batches_by_loop(
 /// \overload The call-wide skip set: seeded by rule 1 (persistent and already
 /// held after \c CellRegistry::seed_persistent) and closed under rule 2.
 [[nodiscard]] inline container::vector<char> ordered_cache_halt_skip(
-    CellTable const& table, CellRegistry const& registry) {
+    CellTable const& table, CellRegistry const& registry,
+    container::vector<char> const& kept) {
   container::vector<char> seed(table.cells.size(), 0);
   for (CellId c = 0; c < table.cells.size(); ++c)
     if (table.cells[c].persistent && registry.peek(c)) seed[c] = 1;
-  return ordered_skip_closure(table, std::move(seed));
+  return ordered_skip_closure(table, std::move(seed), kept);
 }
 
-/// The sources one production of \c consumer reads, one entry per table \c
-/// Read of it plus -- for an \c Assemble cell -- the one read it declares of
-/// its \c production.source, together with what the count of elided reads
-/// needs: the table and the per-loop batch counts. Built once per evaluation
-/// next to the skip set; consumed only when a production is skipped (see \c
-/// ordered_forgo_reads).
-struct ForgoPlan {
-  CellTable const* table = nullptr;
-  container::vector<container::svector<CellId>> sources;
-  std::function<std::size_t(LoopKey const&)> n_batches_of;
+/// Releases, when it goes out of scope, the cells the release plan lets go
+/// once position \p pos of \p block's timeline is done: whatever became of
+/// the step or output at that position -- run, skipped, or left by an
+/// exception.
+struct ReleaseAfter {
+  ReleaseAfter(CellRegistry& registry, ReleasePlan const& plan,
+               ScopeBlock const& block, std::size_t pos)
+      : registry_(registry), cells_(plan.released_after(block, pos)) {}
+  ReleaseAfter(ReleaseAfter const&) = delete;
+  ReleaseAfter& operator=(ReleaseAfter const&) = delete;
+  ~ReleaseAfter() {
+    if (cells_)
+      for (CellId c : *cells_) registry_.release(c);
+  }
+
+ private:
+  CellRegistry& registry_;
+  container::svector<CellId> const* cells_;
 };
-
-/// Builds the \c ForgoPlan of \p table: per cell, the sources whose lives a
-/// skipped production of that cell still owes, with \p n_batches_of supplying
-/// each loop instance's batch count.
-[[nodiscard]] inline ForgoPlan ordered_forgo_plan(
-    CellTable const& table,
-    std::function<std::size_t(LoopKey const&)> n_batches_of) {
-  ForgoPlan plan;
-  plan.table = &table;
-  plan.n_batches_of = std::move(n_batches_of);
-  plan.sources.resize(table.cells.size());
-  for (Read const& r : table.reads)
-    if (r.consumer < plan.sources.size() && r.source < table.cells.size())
-      plan.sources[r.consumer].push_back(r.source);
-  for (CellId c = 0; c < table.cells.size(); ++c)
-    if (table.cells[c].production.kind == ProductionKind::Assemble)
-      plan.sources[c].push_back(table.cells[c].production.source);
-  return plan;
-}
-
-/// How many reads of \p source one skip of \p consumer's production elides,
-/// when the skip is taken at scope depth \p base_depth (the depth of the
-/// scope the skip decision was made at): the product of the batch counts of
-/// the loop instances on \p consumer's scope path from \p base_depth inward
-/// that \p source is not resident on.
-///
-/// This is exactly \c detail::read_multiplicity restricted to a suffix of the
-/// consumer's path -- with \p base_depth 0 the two agree literally -- and the
-/// suffix is what makes it the count of elided reads rather than of all
-/// reads: a skip taken at \p base_depth recurs once per batch of every loop
-/// outside it, and each such recurrence is a fresh production epoch of a
-/// source homed out there, whose life the table charged once per epoch. A
-/// per-visit skip passes \p base_depth = the consumer's own scope depth and
-/// so elides exactly one read per leg, which is what one visit performs.
-[[nodiscard]] inline std::size_t ordered_elided_reads(ForgoPlan const& plan,
-                                                      CellId consumer,
-                                                      CellId source,
-                                                      std::size_t base_depth) {
-  CellScope const src_residency =
-      detail::residency_scope(plan.table->cells[source]);
-  auto const& path = plan.table->cells[consumer].scope.path;
-  std::size_t m = 1;
-  for (std::size_t i = base_depth; i < path.size(); ++i) {
-    bool resident = false;
-    for (auto const& [sk, slat] : src_residency.path) {
-      (void)slat;
-      if (detail::same_key(sk, path[i].first)) resident = true;
-    }
-    if (!resident)
-      m *= std::max<std::size_t>(
-          1, plan.n_batches_of ? plan.n_batches_of(path[i].first) : 1);
-  }
-  return m;
-}
-
-/// Spends the reads a skipped production of \p c will not perform, so its
-/// sources still reach the end of their declared lives and are released
-/// there (a source nobody ever finishes reading stays resident to the end of
-/// the evaluation and keeps looking shared, which disables in-place
-/// accumulation for it). \p base_depth says how much the skip collapses: the
-/// consumer's own scope depth for a skipped visit, the skipped block's parent
-/// scope depth for a whole-block skip (see \c ordered_elided_reads).
-///
-/// The count is clamped to the source's remaining life. A source that is
-/// itself skipped is never produced, so its life is never restored, while its
-/// skipped consumers keep being visited: their visits legitimately outnumber
-/// the one production's budget the table charged. Clamping there is exact
-/// (the budget is fully forgone, nothing is left to release); the registry's
-/// own throw stays as the tripwire for a genuine over-forgo.
-inline void ordered_forgo_reads(CellRegistry& registry, ForgoPlan const& plan,
-                                CellId c, std::size_t base_depth) {
-  if (c >= plan.sources.size()) return;
-  for (CellId src : plan.sources[c]) {
-    std::size_t const want = ordered_elided_reads(plan, c, src, base_depth);
-    registry.forgo(src, std::min(want, registry.remaining_life(src)));
-  }
-}
 
 /// The per-thread slot behind \c ordered_last_block_skips.
 inline std::size_t& ordered_last_block_skips_slot() {
@@ -344,13 +274,6 @@ inline std::size_t& ordered_last_block_skips_slot() {
   return true;
 }
 
-/// \overload A skipped visit of \p c: one read per leg.
-inline void ordered_forgo_visit(CellRegistry& registry, ForgoPlan const& plan,
-                                CellId c) {
-  ordered_forgo_reads(registry, plan, c,
-                      plan.table->cells[c].scope.path.size());
-}
-
 /// Whether the skip set \p skip covers every production \p block realizes --
 /// its own \c BuildStep cells at \p parent_scope + \p block, every nested
 /// block's productions (recursively), and the \c Assemble cell of each of its
@@ -390,48 +313,6 @@ inline void ordered_forgo_visit(CellRegistry& registry, ForgoPlan const& plan,
   return true;
 }
 
-/// The accounting half of a whole-block skip (\c ordered_block_fully_skipped):
-/// every production the block will not perform forgoes the reads it will not
-/// make, with the collapsed per-epoch count (see \c ordered_forgo_reads).
-/// Walks exactly the cells that walk enumerates.
-inline void ordered_forgo_block(CellRegistry& registry, ForgoPlan const& plan,
-                                ScopeBlock const& block,
-                                CellScope const& parent_scope,
-                                std::size_t base_depth) {
-  CellScope inner = parent_scope;
-  inner.path.push_back({block.level.key(), block.latitude_ordinal});
-  for (Step const& step : block.steps) {
-    if (auto const* b = std::get_if<BuildStep>(&step.value)) {
-      if (auto const c = registry.build_cell_at(b->value_id, inner))
-        ordered_forgo_reads(registry, plan, *c, base_depth);
-    } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
-      ordered_forgo_block(registry, plan, *child, inner, base_depth);
-    }
-  }
-  bool built_here = false;
-  for (auto const& [ovid, okind] : block.outputs) {
-    (void)okind;
-    auto const a = registry.assemble_cell_at(ovid, parent_scope);
-    if (!a) continue;
-    ordered_forgo_reads(registry, plan, *a, base_depth);
-    // An Assemble whose per-batch source is an implicit build (a Build cell
-    // at this block's own scope that no step of the block builds -- the
-    // schedule fuses the reduction/scatter with an operand contraction, so it
-    // emits no BuildStep) elides that production too when it is skipped: the
-    // Assemble step is the only site that would have run it, so its own reads
-    // are owed here and nowhere else.
-    CellId const src = plan.table->cells[*a].production.source;
-    TableCell const& sc = plan.table->cells[src];
-    built_here = false;
-    for (Step const& st : block.steps)
-      if (auto const* b = std::get_if<BuildStep>(&st.value))
-        if (b->value_id == ovid) built_here = true;
-    if (!built_here && sc.production.kind == ProductionKind::Build &&
-        sc.scope == inner)
-      ordered_forgo_reads(registry, plan, src, base_depth);
-  }
-}
-
 /// The current batch range of loop instance \p key, read off \p ctx (the
 /// enclosing realized loops plus, inside a block's batch loop, that block's
 /// own entry). Nullopt when the loop is not open here -- which every caller
@@ -453,8 +334,9 @@ ordered_range_of(eval::BatchContext const& ctx, LoopKey const& key) {
 /// consumer the table resolves those operands against.
 ///
 /// Each operand leg is a table \c Read of \p cell: \c
-/// CellReadResolver::fetch names the source cell, spends one of its declared
-/// lives and applies the Read's declared slices, and the value comes back in
+/// CellReadResolver::fetch names the source cell, reads it (taking the value
+/// over when the read is the source's last) and applies the Read's declared
+/// slices, and the value comes back in
 /// the registry's canonical orientation, which this converts to the operand
 /// node's own orientation (\c apply_canon_phase). Two cases do not resolve
 /// to a held cell:
@@ -499,11 +381,25 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   ++ordered_op_counts_slot().builds;
   EvalImplTimeline::Scope const _tl_compute_cell;
 
+  // The batch context a Broadcast node of this production slices the modes it
+  // adds by: the cell's own sliced positions, spelled by the production
+  // node's indices. ctx's axes are canonical block axes, which need not be
+  // the labels this production carries a mode under.
+  eval::BatchContext broadcast_ctx;
+  for (auto const& [pos, key] : resolver.registry().table().cells[cell].sliced)
+    for (auto const& e : ctx)
+      if (detail::same_key(e.level.key(), key)) {
+        SEQUANT_ASSERT(pos < node->canon_indices().size());
+        broadcast_ctx.push_back(
+            {node->canon_indices()[pos], e.level, e.range, std::nullopt});
+        break;
+      }
+
   // The op, with the in-place accumulation gate: a marked \c Sum whose left
   // operand is an internal node (a leaf's buffer comes from the caller's own
-  // evaluator, which may be memoizing) that the table says is drained -- its
-  // last declared life was spent by the read that produced \p l, so nothing
-  // this evaluation will read it again. \c operand_drained answers "yes" for
+  // evaluator, which may be memoizing) that the table says is drained -- the
+  // read that produced \p l was the last use of its source and took the value
+  // over, so nothing will read it again. \c operand_drained answers "yes" for
   // a value the table holds no cell for (nothing could be sharing it), which
   // is what keeps a transient Sum inside a production tree accumulating in
   // place, as it does in evaluate_impl. Shared by
@@ -517,7 +413,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
     ResultPtr res =
         inplace_eligible
             ? sum_in_place_traced<EvalTrace>(nd, std::move(l), r, cache)
-            : apply_one_op_traced<EvalTrace>(nd, l, r, cache);
+            : apply_one_op_traced<EvalTrace>(nd, l, r, cache, &broadcast_ctx);
     note_fresh_build(nd, cache);
     return res;
   };
@@ -558,9 +454,8 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
       return intercepted;
     }
     ResultPtr tl = self(self, child.left());
-    ResultPtr const tr = child->op_type() == EvalOp::Adjoint
-                             ? ResultPtr{}
-                             : self(self, child.right());
+    ResultPtr const tr =
+        is_unary(*child->op_type()) ? ResultPtr{} : self(self, child.right());
     return apply_op(child, std::move(tl), tr);
   };
 
@@ -572,17 +467,17 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   // The custom-evaluator seam, consulted exactly where the tree walk
   // consulted it for a production's own node: before any operand of it is
   // read. A non-null return replaces the production (its operands are never
-  // read -- and so their declared lives are not spent, exactly as a skipped
-  // production's are not).
+  // read; they are released where the schedule places this step all the
+  // same).
   if (ResultPtr intercepted = try_custom_eval<EvalTrace>(node, cache)) {
     note_fresh_build(node, cache);
     return intercepted;
   }
 
   ResultPtr left = read_operand(read_operand, node.left());
-  // Unary (Adjoint): the right child is the Constant(1) sentinel, never
+  // Unary (Adjoint, Power): the right child is a Constant sentinel, never
   // evaluated -- and so never read, exactly as the tree walk never read it.
-  ResultPtr const right = node->op_type() == EvalOp::Adjoint
+  ResultPtr const right = is_unary(*node->op_type())
                               ? ResultPtr{}
                               : read_operand(read_operand, node.right());
 
@@ -623,8 +518,8 @@ template <typename ValueMap, typename Rich>
 ///
 /// \details Constructed only when the caller asks for a record, so a run
 /// without one pays a null check per production and nothing else. Fills
-/// - \c n_batches: per non-root \c ScopeBlock, its loop's batch count (the
-///   same \c n_batches_of the cell table's lives are computed from), keyed by
+/// - \c n_batches: per non-root \c ScopeBlock, its loop's batch count (\c
+///   ordered_n_batches_by_loop), keyed by
 ///   the block's preorder index over \c ordered.root -- \c record_dag's block
 ///   ids;
 /// - \c builds: per value, the productions executed (\c compute_cell calls:
@@ -645,6 +540,14 @@ template <typename ValueMap, typename Rich>
 ///   is the largest per-batch partial, not the assembled size;
 /// - \c size: per value, the complete value's bytes: the assembled result
 ///   once an Assemble step closes, else what the production left.
+/// A leaf's fetch is measured like a production but recorded apart, in
+/// \c leaf_bytes (CellReadResolver::on_leaf_recorded): it is not a build.
+/// A persistent value seeded from the previous run is measured at seeding,
+/// into \c footprint and \c size (\c seeded) or, for a leaf, \c leaf_bytes,
+/// and not counted as a build.
+/// The record carries no peak of its own: the realized peak is the same
+/// liveness sweep the modeled one is (schedule::size_audit_table), priced
+/// with these measured sizes.
 /// \c extents, \c batch_targets and \c planner are the caller's.
 ///
 /// \p value_id_of maps an engine value id (an index into \c rich.cells) to
@@ -684,6 +587,28 @@ struct OrderedRunRecorder {
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
     run.size[id] = r->measured_size_in_bytes();
   }
+
+  /// A leaf's result as the resolver fetched it: measured like a production
+  /// but kept apart (RunRecord::leaf_bytes), since a fetch is not a build.
+  void leaf(std::size_t vid, ResultPtr const& r) {
+    if (!r) return;
+    std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
+    auto& f = run.leaf_bytes[id];
+    f = std::max(f, r->measured_size_in_bytes());
+  }
+
+  /// A persistent non-leaf value \p r seeded into its cell from the previous
+  /// run: measured into footprint and size like a production of it, but not
+  /// a build (a production of it later in this run re-measures it). For a
+  /// value assembled per batch this is the whole value, not a partial.
+  void seeded(std::size_t vid, ResultPtr const& r) {
+    if (!r) return;
+    std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
+    std::size_t const bytes = r->measured_size_in_bytes();
+    auto& f = run.footprint[id];
+    f = std::max(f, bytes);
+    if (!run.size.count(id)) run.size[id] = bytes;
+  }
 };
 
 ///
@@ -698,14 +623,16 @@ struct OrderedRunRecorder {
 /// this block's batches assemble, either by summing the per-batch partials
 /// (\c AccumulateSum: a reduced axis) or by scattering them into disjoint
 /// slices of one destination (\c AccumulateScatter: a carried axis). Both
-/// read the per-batch form from the table (\c Production::source), so a
-/// block-close handoff spends the same declared life any other read does.
+/// read the per-batch form from the table (\c Production::source), like any
+/// other read.
 ///
 /// Per batch: every cell bound to this loop instance is dropped from the
 /// registry (\c CellRegistry::clear_bound_to -- the per-batch reset,
 /// expressed on cells), the batch context is extended by this block's axis
 /// over the batch's element range, the steps run in schedule order, and each
-/// output folds its per-batch partial into its running result. At close each
+/// output folds its per-batch partial into its running result; after each
+/// step and each output, the cells the release plan lets go there are
+/// released. At close each
 /// output's running result becomes its Assemble cell's value. There is no
 /// home walk, no home slot, no reuse table and no store into a scope cache:
 /// the registry owns every result, and the table says where each lives and
@@ -736,10 +663,8 @@ struct OrderedRunRecorder {
 ///        ordered_cache_halt_skip), computed once per call; this block adds
 ///        the \c produce_if_absent cells currently held (its own visit's
 ///        seeds) and re-closes it.
-/// \param forgo_plan The sources each consumer cell reads (\c
-///        ordered_forgo_plan), so a skipped production can still spend the
-///        reads it will not perform and its sources reach the end of their
-///        declared lives.
+/// \param release_plan Where the schedule lets each cell go, and which read
+///        of a cell is its last (\c build_release_plan).
 /// \param built The run-completeness ledger, marked at the exact site each
 ///        scheduled value is produced (or deliberately skipped).
 /// \param recorder The run record being filled, or null (see \c
@@ -756,13 +681,13 @@ void run_ordered_contracted_block(
     container::vector<char>& built,
     std::function<bool(node_t const&)> const& is_volatile,
     CellTable const* table, CellRegistry& registry, CellReadResolver& resolver,
-    container::vector<char> const& skip, ForgoPlan const& forgo_plan,
+    container::vector<char> const& skip, ReleasePlan const& release_plan,
     ScopeGuardFactory const& make_scope_guard, OrderedRunRecorder* recorder) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   // Threaded for symmetry with the entry point and for the recursion below;
   // this block consults neither (the table already carries every
-  // volatility-derived decision: persistence and lives are its own).
+  // volatility-derived decision: persistence is its own).
   (void)is_volatile;
   // Refusal: an ill-formed call -- every cell id below indexes `table` but is
   // resolved through `registry`, so two different tables silently address
@@ -845,8 +770,8 @@ void run_ordered_contracted_block(
       local_skip_storage[c] = 1;
     }
     if (seeded) {
-      local_skip_storage =
-          ordered_skip_closure(*table, std::move(local_skip_storage));
+      local_skip_storage = ordered_skip_closure(
+          *table, std::move(local_skip_storage), release_plan.kept);
       skip_p = &local_skip_storage;
     }
   }
@@ -854,13 +779,10 @@ void run_ordered_contracted_block(
 
   // Cache-halt at block granularity: every production of this block (its own
   // steps', its descendants' and its outputs') is already resident, so the
-  // whole batch loop is dead work this visit. Forgo the reads those
-  // productions will not perform, and mark them accounted for so the
-  // run-completeness ledger does not mistake the skip for a gap.
+  // whole batch loop is dead work this visit. Mark the productions accounted
+  // for so the run-completeness ledger does not mistake the skip for a gap.
   if (ordered_block_fully_skipped(registry, vskip, block, parent_scope)) {
     ++ordered_last_block_skips_slot();
-    ordered_forgo_block(registry, forgo_plan, block, parent_scope,
-                        parent_scope.path.size());
     container::vector<std::size_t> ids;
     collect_production_ids(block, ids);
     for (std::size_t vid : ids)
@@ -963,7 +885,11 @@ void run_ordered_contracted_block(
     ctx.push_back({block.axis, block.level, {e_lo, e_hi}, std::nullopt});
     bs_cache.set_batch_context(ctx);
 
-    for (Step const& step : block.steps) {
+    for (std::size_t at = 0; at != block.steps.size(); ++at) {
+      Step const& step = block.steps[at];
+      // Whatever becomes of this step -- run, skipped, or a whole nested loop
+      // -- the cells whose last reader it holds are let go once it is done.
+      ReleaseAfter const release_after{registry, release_plan, block, at};
       if (auto const* build = std::get_if<BuildStep>(&step.value)) {
         // This BuildStep's own Build cell -- at this exact scope (this block,
         // entered from ectx) -- is the consumer every operand fetch inside the
@@ -997,12 +923,8 @@ void run_ordered_contracted_block(
         // enclosing scope's per-visit seed does not elide a production the
         // clear above made necessary, because such a cell is never seeded:
         // see the per-visit set at this block's entry.)
-        if (pia_resident || vskip[*build_cell]) {
-          // Resident and reused, or cache-halted. Either way the reads this
-          // production will not perform are still owed to their sources.
-          ordered_forgo_visit(registry, forgo_plan, *build_cell);
-          continue;
-        }
+        // Resident and reused, or cache-halted.
+        if (pia_resident || vskip[*build_cell]) continue;
         // Read the env once per translation unit, not once per step of every
         // batch of every block.
         static bool const block_diag_build =
@@ -1032,7 +954,7 @@ void run_ordered_contracted_block(
       } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, ordered, leaf_evaluator, bs_cache, target, ctx,
-            built, is_volatile, table, registry, resolver, vskip, forgo_plan,
+            built, is_volatile, table, registry, resolver, vskip, release_plan,
             make_scope_guard, recorder);
       } else {
         // The Step variant has exactly BuildStep/ScopeBlock alternatives;
@@ -1049,23 +971,11 @@ void run_ordered_contracted_block(
 
     // ---- Assemble steps: fold this batch's partial into each output. ----
     for (std::size_t k = 0; k != block.outputs.size(); ++k) {
-      if (out_skip[k]) {
-        // The Assemble is not performed this batch, but the read it declares
-        // of its per-batch source is still owed (the source may be produced
-        // by a step of this very block, once per batch).
-        ordered_forgo_visit(registry, forgo_plan, out_cells[k]);
-        // ... and when that source is an implicit per-batch build -- a Build
-        // cell at this block's scope that no step builds, whose only
-        // production site is this Assemble step -- the skip elides that
-        // production too, so its reads are owed here and nowhere else.
-        CellId const skipped_src = table->cells[out_cells[k]].production.source;
-        TableCell const& skipped_src_cell = table->cells[skipped_src];
-        if (skipped_src_cell.production.kind == ProductionKind::Build &&
-            skipped_src_cell.scope == block_scope &&
-            !built_here.count(block.outputs[k].first))
-          ordered_forgo_visit(registry, forgo_plan, skipped_src);
-        continue;
-      }
+      ReleaseAfter const release_after{registry, release_plan, block,
+                                       block.steps.size() + k};
+      // The Assemble is not performed this batch (nor, then, the implicit
+      // per-batch build it would have run).
+      if (out_skip[k]) continue;
       auto const vid = block.outputs[k].first;
       TableCell const& a = table->cells[out_cells[k]];
       CellId const src = a.production.source;
@@ -1100,19 +1010,20 @@ void run_ordered_contracted_block(
                                               leaf_evaluator, bs_cache, ctx)));
         if (recorder) recorder->built(vid, registry.peek(src));
       }
-      // The read the Assemble declares of its source (the table charged the
-      // source +1 life for it): spending it here is what lets the source's
-      // storage be released at its true last use.
+      // The read the Assemble declares of its source. When the schedule has
+      // no later use of the source in this batch, the Assemble takes the
+      // partial over.
       ++ordered_op_counts_slot().assembles;  // B-full accounting
-      bool exhausted = false;
-      ResultPtr part = registry.read(src, &exhausted);
+      bool const takes = release_plan.last_assemble[out_cells[k]] &&
+                         !table->cells[src].persistent;
+      ResultPtr part = takes ? registry.take(src) : registry.read(src);
       if (a.production.assemble == AssembleKind::Sum) {
         if (!acc[k]) {
           // The first batch's partial seeds the accumulator, which every later
           // batch then mutates in place. That is only safe when this read took
-          // ownership: a source with life left, or a persistent one, is still
-          // going to be read again from the very same buffer.
-          acc[k] = exhausted ? std::move(part) : part->clone();
+          // the partial over: a source with a later reader, or a persistent
+          // one, is still going to be read again from the very same buffer.
+          acc[k] = takes ? std::move(part) : part->clone();
         } else {
           acc[k]->add_inplace(*part);
         }
@@ -1217,9 +1128,8 @@ inline std::size_t& ordered_last_cell_table_size_slot() {
 /// pre_results are private copies of them, and nobody in the table reads
 /// them, so those cells keep holding their own until the registry dies with
 /// the call). \c live beyond
-/// those two is a non-persistent intermediate that never reached the end of its
-/// declared life -- exactly what a missing \c CellRegistry::forgo at a
-/// skipped production leaves behind.
+/// those two is a non-persistent intermediate the release plan never let go:
+/// a cell the table has a reader for but no release position.
 struct OrderedRegistryResidency {
   std::size_t live = 0, persistent = 0, roots = 0;
 };
@@ -1283,7 +1193,6 @@ CellTableInputs make_cell_table_inputs(OrderedSchedule const& ordered,
         out.push_back(it->second);
     return out;
   };
-  in.n_batches_of = [](LoopKey const&) { return std::size_t{1}; };
   return in;
 }
 
@@ -1365,24 +1274,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // describe is refused up front rather than mis-executed. A fixture whose
   // table fails validation is a real finding on that fixture: the assertion
   // is not bypassed.
-  //
-  // n_batches_of must be the exact per-realized-loop-instance batch count,
-  // which CellRegistry::read enforces as life at runtime: a value read from
-  // outside n*m nested real batches is read n*m times, not once, and any
-  // undercount makes read() throw "read past its life" on a well-formed
-  // schedule.
-  // Sourced from ordered_n_batches_by_loop (exact per realized loop instance),
-  // passed to
-  // both the builder and the validator so their life computations (which
-  // must use the identical n_batches_of, per read_multiplicity's own doc)
-  // never diverge.
-  CellTableInputs cell_table_inputs = make_cell_table_inputs(
+  CellTableInputs const cell_table_inputs = make_cell_table_inputs(
       ordered, rich, sliced_mode_assignment, resolve, is_volatile);
-  cell_table_inputs.n_batches_of =
-      ordered_n_batches_by_loop(ordered, target, cache.array_ops());
   CellTable const cell_table = build_cell_table(cell_table_inputs);
-  assert_valid_cell_table(cell_table, ordered.root,
-                          cell_table_inputs.n_batches_of);
+  assert_valid_cell_table(cell_table, ordered.root);
   if (!cell_table.unresolved.empty())
     throw Exception("evaluate_ordered_schedule: the cell table has " +
                     std::to_string(cell_table.unresolved.size()) +
@@ -1395,11 +1290,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   std::optional<OrderedRunRecorder> recorder;
   if (run_record) {
     recorder.emplace(*run_record, value_id_of);
-    recorder->record_blocks(ordered.root, cell_table_inputs.n_batches_of);
+    recorder->record_blocks(
+        ordered.root,
+        ordered_n_batches_by_loop(ordered, target, cache.array_ops()));
   }
 
-  // The runtime side of the table -- CellRegistry (the owner of every result,
-  // with its remaining life) and CellReadResolver (the operand reads
+  // The runtime side of the table -- CellRegistry (the owner of every
+  // result) and CellReadResolver (the operand reads
   // compute_cell performs), the resolver also published on the top-level
   // cache for the duration of this call so a custom-evaluator hook can
   // observe it. vid_of_hash resolves a fetched node's hash to its rich.cells
@@ -1459,6 +1356,20 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           offenders);
   }
   registry.seed_persistent();
+  // A persistent value seeded from the previous run is live in this one
+  // without a production of its own; measure it like one (see
+  // OrderedRunRecorder::seeded; a seeded leaf is a leaf, see leaf) so the
+  // record prices every value the run holds, not only those it builds. Cell
+  // order on every rank: the measurement is collective on the TiledArray
+  // backend.
+  if (recorder)
+    registry.for_each_live([&](CellId c, ResultPtr const& r) {
+      TableCell const& cell = cell_table.cells[c];
+      if (cell.production.kind == ProductionKind::Leaf)
+        recorder->leaf(cell.value_id, r);
+      else
+        recorder->seeded(cell.value_id, r);
+    });
   // value id -> value_id: the resolver's operand lookup (the evaluator hands
   // it value_key_of(operand node), see eval.hpp's fetch/record_leaf/
   // operand_drained sites).
@@ -1475,6 +1386,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         if (it == cell_vid_of_key.end()) return std::nullopt;
         return it->second;
       });
+  // Leaves are stored by the resolver on first touch; measure them like any
+  // other production (see OrderedRunRecorder::leaf).
+  if (recorder)
+    resolver.on_leaf_recorded = [&registry, &recorder](std::size_t vid,
+                                                       CellId leaf) {
+      recorder->leaf(vid, registry.peek(leaf));
+    };
   struct CellReadResolverGuard {
     CacheManager<N, FHC>& c;
     CellReadResolver* prev;
@@ -1482,15 +1400,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   } const cell_read_resolver_guard{cache, cache.cell_read_resolver()};
   cache.set_cell_read_resolver(&resolver);
 
-  // Explicit value cells: the registry's bytes feed the peak
-  // metering the same way the scope caches' own cache_map_ entries
-  // do -- CacheManager::chain_residency() folds in whatever
-  // set_external_residency installs, and note_working_set()'s diagnostic
-  // liveset capture folds in whatever set_external_liveset installs. Both
-  // are looked up by resolve()'s own value_id -> hash convention (cell.
-  // value_id indexes rich.cells, exactly as every other value_id in this
-  // function does), so a live cell's reported hash matches the hash every
-  // other liveset/coloring probe in this file already keys by.
+  // Explicit value cells: the registry is the hierarchy's external store
+  // (eval::ExternalStore), so its bytes feed the peak metering the same way
+  // the scope caches' own cache_map_ entries do -- chain_residency() and
+  // outer_residency() count them, note_working_set()'s liveset capture lists
+  // them, and resident() recognizes an operand read whole from the registry
+  // as already counted (a sliced / permuted / drained read is a distinct, or
+  // no longer held, buffer and is still added as an operand). Values are
+  // reported under resolve()'s own value_id -> hash convention (cell.value_id
+  // indexes rich.cells, exactly as every other value_id in this function
+  // does), so a live cell's hash matches the hash every other
+  // liveset/coloring probe in this file already keys by.
   //
   // Double-counting guard: the table-driven path stores nothing in a scope
   // cache, but a caller's own cache handle may hold a buffer this registry
@@ -1501,39 +1421,51 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // scope-cache entry anywhere on the chain holds that same buffer by pointer
   // identity (cache.chain_holds, read-only -- unlike chain_holds_shared it
   // decays no lifetime and does not care whether that entry is shared).
+  // Under the cell-read resolver the executor never stores into a scope
+  // cache itself, so on a run this executor drives alone that test never
+  // fires and every live cell is counted.
   auto const cell_hash = [&](CellId c) -> std::size_t {
     return rich.cells[cell_table.cells[c].value_id].hash;
   };
-  struct ExternalMeteringGuard {
-    CacheManager<N, FHC>& c;
-    std::function<std::size_t()> prev_residency;
-    std::function<void(std::function<void(std::size_t, std::size_t)>)>
-        prev_liveset;
-    ~ExternalMeteringGuard() {
-      c.set_external_residency(std::move(prev_residency));
-      c.set_external_liveset(std::move(prev_liveset));
-    }
-  } const external_metering_guard{cache, cache.external_residency_hook(),
-                                  cache.external_liveset()};
-  cache.set_external_residency([&registry, &cache]() -> std::size_t {
-    std::size_t bytes = 0;
-    registry.for_each_live([&](CellId, ResultPtr const& v) {
-      // chain_holds protects only buffers a caller put in its own scope cache
-      // before this run: under the cell-read resolver the executor never
-      // stores into a scope cache itself, so on a run this executor drives
-      // alone this test never fires and every live cell is counted here.
-      if (!cache.chain_holds(v)) bytes += v->size_in_bytes();
-    });
-    return bytes;
-  });
-  cache.set_external_liveset(
-      [&registry, &cache,
-       cell_hash](std::function<void(std::size_t, std::size_t)> emit) {
-        registry.for_each_live([&](CellId c, ResultPtr const& v) {
-          if (!cache.chain_holds(v)) emit(cell_hash(c), v->size_in_bytes());
+  ExternalStore const registry_store{
+      .bytes = [&registry, &cache]() -> std::size_t {
+        std::size_t bytes = 0;
+        registry.for_each_live([&](CellId, ResultPtr const& v) {
+          if (!cache.chain_holds(v)) bytes += v->size_in_bytes();
         });
-      });
+        return bytes;
+      },
+      .for_each =
+          [&registry, &cache, cell_hash](
+              std::function<void(std::size_t, std::size_t)> const& emit) {
+            registry.for_each_live([&](CellId c, ResultPtr const& v) {
+              if (!cache.chain_holds(v)) emit(cell_hash(c), v->size_in_bytes());
+            });
+          },
+      .holds = [&registry](ResultPtr const& value) -> bool {
+        return registry.holds(value);
+      }};
+  struct ExternalStoreGuard {
+    CacheManager<N, FHC>& c;
+    ExternalStore const* prev;
+    ~ExternalStoreGuard() { c.set_external_store(prev); }
+  } const external_store_guard{cache, cache.external_store()};
+  cache.set_external_store(&registry_store);
 
+  // Where the schedule lets each cell go, and which read of a cell is its
+  // last (see ReleasePlan). The schedule's results are kept: the caller reads
+  // them once the walk is over (the combine read below).
+  ReleasePlan const release_plan = [&]() {
+    PhaseTimer::Scope _pt("B.sched_setup");
+    container::svector<CellId> results;
+    for (auto const& root : forest)
+      if (auto const it = cell_vid_of_key.find(value_key_of(root));
+          it != cell_vid_of_key.end())
+        if (auto const c = registry.cell_of(it->second, CellScope{}))
+          results.push_back(*c);
+    return build_release_plan(cell_table, ordered.root, results);
+  }();
+  resolver.set_last_reads(&release_plan.last_read);
   // Cache-halt: the skip set over cells, computed once here from the
   // table's own dependency edges against what the registry already holds
   // after the persistent seeding above (see ordered_cache_halt_skip): a
@@ -1541,14 +1473,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // and neither is any cell whose every consumer is itself skipped.
   container::vector<char> const skip = [&]() {
     PhaseTimer::Scope _pt("B.sched_setup");
-    return ordered_cache_halt_skip(cell_table, registry);
-  }();
-  // The reads a skipped production will not perform, so their sources still
-  // reach the end of their declared lives (see ordered_forgo_reads). Uses the
-  // same per-loop batch counts the table's own life computation used.
-  ForgoPlan const forgo_plan = [&]() {
-    PhaseTimer::Scope _pt("B.sched_setup");
-    return ordered_forgo_plan(cell_table, cell_table_inputs.n_batches_of);
+    return ordered_cache_halt_skip(cell_table, registry, release_plan.kept);
   }();
   if (detail::dump_enabled("SEQUANT_UT_BLOCK_DIAG")) {
     std::size_t n_skip = 0;
@@ -1571,7 +1496,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // the registry; nothing is homed in, or read back from, a scope cache.
   typename CacheManager<N, FHC>::BatchContext const root_ectx;
 
-  for (Step const& step : ordered.root.steps) {
+  for (std::size_t at = 0; at != ordered.root.steps.size(); ++at) {
+    Step const& step = ordered.root.steps[at];
+    ReleaseAfter const release_after{registry, release_plan, ordered.root, at};
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
       std::size_t const vid = build->value_id;
       // Invariant: the schedule's own value ids index rich.cells by
@@ -1594,13 +1521,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
             std::to_string(vid) + " (cell table/schedule disagreement)");
       built[vid] = 1;  // produced, or deliberately skipped, either way
                        // accounted for.
+      // Cache-halt: nothing reads it this call.
       if (skip[*root_cell] || (cell_table.cells[*root_cell].produce_if_absent &&
-                               registry.peek(*root_cell))) {
-        // Cache-halt: nothing reads it this call. Its own reads are still
-        // owed to their sources (see ordered_forgo_reads).
-        ordered_forgo_visit(registry, forgo_plan, *root_cell);
+                               registry.peek(*root_cell)))
         continue;
-      }
       // The registry holds the canonical orientation (see CellRegistry's own
       // doc); compute_cell returns the oriented result and the phase is an
       // involution, so a production converts by multiplying it back in.
@@ -1626,8 +1550,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, ordered, leaf_evaluator, cache, target, root_ectx,
-          built, is_volatile, &cell_table, registry, resolver, skip, forgo_plan,
-          make_scope_guard, recorder ? &*recorder : nullptr);
+          built, is_volatile, &cell_table, registry, resolver, skip,
+          release_plan, make_scope_guard, recorder ? &*recorder : nullptr);
     } else {
       // The Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret. Refusal,
@@ -1692,9 +1616,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
                       std::to_string(i) +
                       " not found in the schedule's value map");
     std::size_t const vid = vid_it->second;
-    // A forest root's only reader is the combine below -- it has zero DAG
-    // consumers (else it would not be a root), so its cell is read by nobody
-    // in the table and its life is zero. Peek it (non-decrementing): the cell
+    // The combine below reads the forest root's cell, which the release plan
+    // keeps for it whatever else in the table reads that cell, and which the
+    // cache-halt set never counts as dead work. The cell
     // is the root's Build cell at the root scope, or, for a root produced
     // inside a batch loop and escaped out of it, the Assemble cell the
     // block's close produced at the same root scope.

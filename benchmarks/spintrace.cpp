@@ -1,8 +1,11 @@
+#include "inputs.hpp"
+
 #include <benchmark/benchmark.h>
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 using namespace sequant;
@@ -48,3 +51,16 @@ BENCHMARK_CAPTURE(spintrace<false>, spintrace_keep_spin, false)
 
 BENCHMARK_CAPTURE(spintrace<true>, closed_shell_spintrace, true)
     ->DenseRange(1, nInputs);
+
+static void closed_shell_spintrace_cc_residual(benchmark::State &state) {
+  const ExprPtr &input = bench::cc_residual(state.range(0), state.range(1));
+  const auto external = external_indices(input->at(0));
+
+  for (auto _ : state) {
+    ExprPtr result = mbpt::closed_shell_spintrace(input->clone(), external);
+
+    benchmark::DoNotOptimize(result);
+  }
+}
+
+BENCHMARK(closed_shell_spintrace_cc_residual)->Apply(bench::cc_residual_args);

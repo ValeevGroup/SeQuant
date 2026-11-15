@@ -1,0 +1,81 @@
+#ifndef SEQUANT_CORE_EXPORT_FORWARDINGGENERATOR_HPP
+#define SEQUANT_CORE_EXPORT_FORWARDINGGENERATOR_HPP
+
+#include <SeQuant/core/export/generator.hpp>
+
+#include <string>
+#include <string_view>
+#include <utility>
+
+namespace sequant {
+
+/// Base class for Generators that wrap another Generator. All callbacks are
+/// forwarded to the wrapped Generator unchanged. Derived classes override
+/// the callbacks they want to intercept.
+template <typename MainGenerator, typename MainContext = MainGenerator::Context>
+class ForwardingGenerator : public Generator<MainContext> {
+ public:
+  ForwardingGenerator(MainGenerator generator)
+      : m_generator(std::move(generator)) {}
+
+  // clang-format off
+  std::string get_format_name() const override { return wrapped().get_format_name(); }
+  bool supports_named_sections() const override { return wrapped().supports_named_sections(); }
+  bool requires_named_sections() const override { return wrapped().requires_named_sections(); }
+  bool supports_index_batching() const override { return wrapped().supports_index_batching(); }
+  DeclarationScope index_declaration_scope() const override { return wrapped().index_declaration_scope(); }
+  DeclarationScope variable_declaration_scope() const override { return wrapped().variable_declaration_scope(); }
+  DeclarationScope tensor_declaration_scope() const override { return wrapped().tensor_declaration_scope(); }
+  PrunableScalars prunable_scalars() const override { return wrapped().prunable_scalars(); }
+  std::string represent(const Index &idx, const MainContext &ctx) const override { return wrapped().represent(idx, ctx); }
+  std::string represent(const Tensor &tensor, const MainContext &ctx) const override { return wrapped().represent(tensor, ctx); }
+  std::string represent(const Variable &variable, const MainContext &ctx) const override { return wrapped().represent(variable, ctx); }
+  std::string represent(const Constant &constant, const MainContext &ctx) const override { return wrapped().represent(constant, ctx); }
+  std::string represent(const Power &power, const MainContext &ctx) const override { return wrapped().represent(power, ctx); }
+  std::string represent(const TensorPower &power, const MainContext &ctx) const override { return wrapped().represent(power, ctx); }
+  void create(const Tensor &tensor, bool zero_init, const MainContext &ctx) override { wrapped().create(tensor, zero_init, ctx); }
+  void load(const Tensor &tensor, bool set_to_zero, const MainContext &ctx) override { wrapped().load(tensor, set_to_zero, ctx); }
+  void set_to_zero(const Tensor &tensor, const MainContext &ctx) override { wrapped().set_to_zero(tensor, ctx); }
+  void unload(const Tensor &tensor, const MainContext &ctx) override { wrapped().unload(tensor, ctx); }
+  void destroy(const Tensor &tensor, const MainContext &ctx) override { wrapped().destroy(tensor, ctx); }
+  void persist(const Tensor &tensor, const MainContext &ctx) override { wrapped().persist(tensor, ctx); }
+  void create(const Variable &variable, bool zero_init, const MainContext &ctx) override { wrapped().create(variable, zero_init, ctx); }
+  void load(const Variable &variable, bool set_to_zero, const MainContext &ctx) override { wrapped().load(variable, set_to_zero, ctx); }
+  void set_to_zero(const Variable &variable, const MainContext &ctx) override { wrapped().set_to_zero(variable, ctx); }
+  void unload(const Variable &variable, const MainContext &ctx) override { wrapped().unload(variable, ctx); }
+  void destroy(const Variable &variable, const MainContext &ctx) override { wrapped().destroy(variable, ctx); }
+  void persist(const Variable &variable, const MainContext &ctx) override { wrapped().persist(variable, ctx); }
+  void compute(const Expr &expression, const Tensor &result, const MainContext &ctx) override { wrapped().compute(expression, result, ctx); }
+  void compute(const Expr &expression, const Variable &result, const MainContext &ctx) override { wrapped().compute(expression, result, ctx); }
+  void broadcast_add(const Expr &operand, const Tensor &result, const MainContext &ctx) override { wrapped().broadcast_add(operand, result, ctx); }
+  void declare(const Index &idx, const MainContext &ctx) override { wrapped().declare(idx, ctx); }
+  void declare(const Variable &variable, UsageSet usage, const MainContext &ctx) override { wrapped().declare(variable, usage, ctx); }
+  void declare(const Tensor &tensor, UsageSet usage, const MainContext &ctx) override { wrapped().declare(tensor, usage, ctx); }
+  void all_indices_declared(std::size_t amount, const MainContext &ctx) override { wrapped().all_indices_declared(amount, ctx); }
+  void all_variables_declared(std::size_t amount, const MainContext &ctx) override { wrapped().all_variables_declared(amount, ctx); }
+  void all_tensors_declared(std::size_t amount, const MainContext &ctx) override { wrapped().all_tensors_declared(amount, ctx); }
+  void begin_declarations(DeclarationScope scope, const MainContext &ctx) override { wrapped().begin_declarations(scope, ctx); }
+  void end_declarations(DeclarationScope scope, const MainContext &ctx) override { wrapped().end_declarations(scope, ctx); }
+  void insert_comment(const std::string &comment, const MainContext &ctx) override { wrapped().insert_comment(comment, ctx); }
+  void begin_named_section(std::string_view name, const MainContext &ctx) override { wrapped().begin_named_section(name, ctx); }
+  void end_named_section(std::string_view name, const MainContext &ctx) override { wrapped().end_named_section(name, ctx); }
+  void begin_expression(const MainContext &ctx) override { wrapped().begin_expression(ctx); }
+  void end_expression(const MainContext &ctx) override { wrapped().end_expression(ctx); }
+  void begin_export(const MainContext &ctx) override { wrapped().begin_export(ctx); }
+  void end_export(const MainContext &ctx) override { wrapped().end_export(ctx); }
+  std::string get_generated_code() const override { return wrapped().get_generated_code(); }
+  // clang-format on
+
+ protected:
+  MainGenerator m_generator;
+
+  /// Access to the wrapped generator via the Generator interface. This avoids
+  /// overloads of the callbacks being hidden by the wrapped generator's own
+  /// declarations.
+  Generator<MainContext> &wrapped() { return m_generator; }
+  const Generator<MainContext> &wrapped() const { return m_generator; }
+};
+
+}  // namespace sequant
+
+#endif  // SEQUANT_CORE_EXPORT_FORWARDINGGENERATOR_HPP

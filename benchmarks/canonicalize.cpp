@@ -1,3 +1,5 @@
+#include "inputs.hpp"
+
 #include <benchmark/benchmark.h>
 
 #include <SeQuant/core/expr.hpp>
@@ -46,3 +48,29 @@ static void bench_canonicalize(benchmark::State &state) {
 }
 
 BENCHMARK(bench_canonicalize)->Name("canonicalize")->DenseRange(1, nInputs);
+
+// Full residuals, as opposed to the single terms above
+static void canonicalize_cc_residual(benchmark::State &state) {
+  const ExprPtr &input =
+      bench::unsimplified_cc_residual(state.range(0), state.range(1));
+
+  for (auto _ : state) {
+    ExprPtr canonicalized = canonicalize(input->clone());
+
+    benchmark::DoNotOptimize(canonicalized);
+  }
+}
+
+static void canonicalize_spinfree_cc_residual(benchmark::State &state) {
+  const ExprPtr &input =
+      bench::spinfree_cc_residual(state.range(0), state.range(1));
+
+  for (auto _ : state) {
+    ExprPtr canonicalized = canonicalize(input->clone());
+
+    benchmark::DoNotOptimize(canonicalized);
+  }
+}
+
+BENCHMARK(canonicalize_cc_residual)->Apply(bench::cc_residual_args);
+BENCHMARK(canonicalize_spinfree_cc_residual)->Apply(bench::cc_residual_args);

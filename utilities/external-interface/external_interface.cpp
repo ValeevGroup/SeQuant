@@ -11,6 +11,7 @@
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
+#include <SeQuant/core/export/stack_checker.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -295,7 +296,9 @@ void generateITF(const json &blocks, std::string_view out_file,
   context.set_index_id_offset(1);
 
   ItfGenerator<ItfExportContext> itfgen;
-  GenerationOptimizer<ItfGenerator<ItfExportContext>> generator(itfgen);
+  // ITF only supports stack-like memory allocations
+  StackCheckingGenerator<ItfGenerator<ItfExportContext>> checked(itfgen);
+  GenerationOptimizer<decltype(checked)> generator(checked);
 
   container::svector<ExpressionGroup<>> groups;
   groups.reserve(blocks.size());
@@ -577,7 +580,7 @@ void generateITF(const json &blocks, std::string_view out_file,
                         current_block.at("name").get<std::string>());
   }
 
-  export_groups(groups, generator, context);
+  export_groups(std::move(groups), generator, context);
   std::string itfCode = generator.get_generated_code();
 
   std::ofstream output(out_file.data());

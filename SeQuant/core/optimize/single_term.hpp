@@ -68,7 +68,9 @@ EvalSequence single_term_opt(
     CostParams const& cost = {},
     container::vector<NodeBatchAnnotation>* out_axes = nullptr) {
   if (out_axes) out_axes->clear();
-  decltype(OptRes::indices) tidxs{};
+  // the slot counts recover an external slot index on their own, but not an
+  // index carried only as a protoindex of the externals, so declare them all
+  auto const& tidxs = network.ext_indices();
   // Unpack the cost knobs into the names the recurrence arms below use, so the
   // arms are unchanged. (void)-cast all, since each if-constexpr arm uses only
   // a subset.
@@ -248,14 +250,15 @@ ExprPtr single_term_opt(
     if (out_axes) {
       auto const nt = static_cast<std::size_t>(ranges::count_if(
           prod.factors(),
-          [](ExprPtr const& e) { return e->template is<Tensor>(); }));
+          [](ExprPtr const& e) { return is_tensor_factor(*e); }));
       if (nt >= 2) out_axes->assign(nt - 1, NodeBatchAnnotation{});
     }
     return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
                                prod.factors().end(), Product::Flatten::No});
   }
   auto const tensors =
-      prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
+      prod | filter([](ExprPtr const& e) { return is_tensor_factor(*e); }) |
+      ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(TensorNetwork{tensors},
                                              std::forward<IdxToSz>(idxsz),
                                              subnet_cse, cost, out_axes);

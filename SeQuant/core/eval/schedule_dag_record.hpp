@@ -108,9 +108,14 @@ inline std::string output_kind_name(OutputKind k) {
 ///    the scalar), id "<key>#scale"; its right operand, the Constant leaf
 ///    holding the scalar, is (term key, number of tree positions), id
 ///    "<key>#scalar" (spec 6.1 names no id for it; it is a DAG value too);
-///  - an Adjoint node (a conjugated factor) takes one tree ordinal as a leaf
-///    would; its bare-label operand is id "<key>#<ordinal>/0" and its
-///    Constant{1} sentinel "<key>#<ordinal>/1", both at the same (term, node);
+///  - a unary node (an Adjoint, a conjugated factor, or a Power, a
+///    TensorPower factor) takes one tree ordinal as a leaf would; its operand
+///    is id "<key>#<ordinal>/0" and its Constant sentinel (Adjoint's
+///    Constant{1}, Power's exponent) "<key>#<ordinal>/1", both at the same
+///    (term, node); when the operand is a subtree (an inlined equation), its
+///    other nodes are "<operand id>.<j>" in left-first post-order, a unary
+///    node among them taking one j with its own "/0" and "/1" below, all at
+///    the same (term, node);
 ///  - the k-th partial sum of a root's left-fold Sum: (root label, k), id
 ///    "<label>+<k>".
 ///
@@ -183,17 +188,24 @@ inline std::string form_label(std::string const& label,
 /// \param is_volatile the node-level volatility predicate the evaluation
 ///        runs with (see \c evaluate_ordered_schedule), which decides
 ///        persistence; empty means no leaf is volatile
+/// \param cm when non-null, every value record is priced by this cost model:
+///        \c modeled_footprint = \c detail::cell_footprint at \p block_of
+///        (the per-batch slab) and \c modeled_size = \c memsize over the
+///        carried modes; null leaves both 0
+/// \param block_of the block (sliced) extent of a batched mode, as the
+///        schedule was built with; empty means 1
 /// \throws sequant::Exception when the forest and \p roots disagree (tree or
-///         summand count, a Sum spine node that is not an in-place Sum), on
-///         an Adjoint node (not addressable by a pinned tree), or when a
-///         value, block step or legality record cannot be resolved
+///         summand count, a Sum spine node that is not an in-place Sum), or
+///         when a value, block step or legality record cannot be resolved
 template <meta::eval_node_range R>
 DagRecord record_dag(
     RichSchedule const& rich, LegalitySchedule const& legality,
     OrderedSchedule const& ordered, R const& forest,
     std::vector<RootRecord> const& roots,
     std::function<bool(std::ranges::range_value_t<R> const&)> const&
-        is_volatile = {}) {
+        is_volatile = {},
+    dryrun::CostModel const* cm = nullptr,
+    std::function<std::size_t(Index const&)> const& block_of = {}) {
   // nodes are keyed by address across two passes over the forest
   static_assert(
       std::is_lvalue_reference_v<std::ranges::range_reference_t<R const>>,
@@ -213,14 +225,43 @@ DagRecord record_dag(
                         top.right().leaf() && top.right()->is_constant();
     if (scaled) tree = &top.left();
     std::size_t ordinal = 0;
+    auto const is_unary_node = [](Node const& n) {
+      return !n.leaf() && n->op_type() && is_unary(*n->op_type());
+    };
+    // a sub-position `id` at the ordinal and what hangs below it: a unary
+    // node's operand and sentinel at id/0 and id/1, the other nodes of a
+    // subtree (an inlined operand) at id.<j> in left-first post-order, a
+    // unary node among them counting as one
+    auto const place_sub = [&](auto const& self, Node const& n,
+                               std::string const& id) -> void {
+      place[&n] = {key, ordinal, id};
+      if (n.leaf()) return;
+      if (is_unary_node(n)) {
+        self(self, n.left(), id + "/0");
+        self(self, n.right(), id + "/1");
+        return;
+      }
+      std::size_t j = 0;
+      auto const below = [&](auto const& below_self, Node const& m) -> void {
+        if (!m.leaf() && !is_unary_node(m)) {
+          below_self(below_self, m.left());
+          below_self(below_self, m.right());
+          place[&m] = {key, ordinal, id + "." + std::to_string(j++)};
+        } else {
+          self(self, m, id + "." + std::to_string(j++));
+        }
+      };
+      below(below, n.left());
+      below(below, n.right());
+    };
     auto const walk = [&](auto const& self, Node const& n) -> void {
       if (!n.leaf()) {
-        if (n->op_type() && *n->op_type() == EvalOp::Adjoint) {
-          // the pinned (conjugated) factor: one ordinal, as a leaf; its
-          // bare-label operand and Constant{1} sentinel are sub-positions
+        if (is_unary_node(n)) {
+          // the pinned factor (conjugated or raised): one ordinal, as a leaf;
+          // its operand and Constant sentinel are sub-positions
           std::string const id = key + "#" + std::to_string(ordinal);
-          place[&n.left()] = {key, ordinal, id + "/0"};
-          place[&n.right()] = {key, ordinal, id + "/1"};
+          place_sub(place_sub, n.left(), id + "/0");
+          place_sub(place_sub, n.right(), id + "/1");
         } else {
           self(self, n.left());
           self(self, n.right());
@@ -409,16 +450,15 @@ DagRecord record_dag(
   // ---- 5. persistence: the engine's flag, read off the cell table the
   // ordered executor builds from this schedule, on the value's outermost
   // cell (the fewest enclosing loop instances; an Assemble before a Build at
-  // the same depth): the complete form the rest of the DAG consumes. The flag
-  // needs no lives, so the batch count is a constant.
+  // the same depth): the complete form the rest of the DAG consumes.
   auto const resolve = [&](std::size_t vid) -> Node const& {
     return *at_point[rich.cells.at(vid).occurrences.front().point];
   };
   SlicedModeAssignment const sliced_modes =
       compute_sliced_mode_assignment(ordered, rich);
-  CellTableInputs table_inputs = sequant::eval::detail::make_cell_table_inputs(
-      ordered, rich, sliced_modes, resolve, is_volatile);
-  table_inputs.n_batches_of = [](LoopKey const&) { return std::size_t{1}; };
+  CellTableInputs const table_inputs =
+      sequant::eval::detail::make_cell_table_inputs(ordered, rich, sliced_modes,
+                                                    resolve, is_volatile);
   CellTable const table = build_cell_table(table_inputs);
   struct Outermost {
     std::size_t depth = 0;
@@ -540,9 +580,18 @@ DagRecord record_dag(
         rec.expr += detail::bare_label(node);
       } else {
         auto const op = node->op_type();
-        rec.expr += operand_of(v, node.left()) +
-                    (op && *op == EvalOp::Sum ? " + " : " * ") +
-                    operand_of(v, node.right());
+        if (op == EvalOp::Broadcast)
+          rec.expr += "broadcast(" + operand_of(v, node.left()) + ")";
+        else {
+          rec.expr += operand_of(v, node.left());
+          if (op == EvalOp::Adjoint)
+            rec.expr += "⁺";
+          else
+            rec.expr += (op == EvalOp::Sum     ? " + "
+                         : op == EvalOp::Power ? " ^ "
+                                               : " * ") +
+                        operand_of(v, node.right());
+        }
       }
     }
     rec.hash = detail::hex_string(c.hash);
@@ -557,6 +606,17 @@ DagRecord record_dag(
     rec.persistent = outermost[v].persistent;
     rec.first_use = c.first_use;
     rec.last_use = c.last_use;
+    if (cm) {
+      // the same two numbers the dry-run meter and the static peak sweep use:
+      // the home-relative slab (sliced modes at block extent) and the full
+      // value (every mode at the regime's extent)
+      std::function<std::size_t(Index const&)> const one =
+          [](Index const&) -> std::size_t { return 1; };
+      rec.modeled_footprint = ::sequant::eval::detail::cell_footprint(
+          c.carried, c.home_modes, *cm, block_of ? block_of : one);
+      rec.modeled_size = cm->memsize(
+          container::svector<Index>(c.carried.begin(), c.carried.end()));
+    }
     auto const lit = legality_of.find(value_key_of(c));
     if (lit == legality_of.end())
       throw Exception("record_dag: value " + rec.id +

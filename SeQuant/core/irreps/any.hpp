@@ -199,6 +199,8 @@ class AnyIrrepContext {
   /// @throws Exception if the set is not of this context's IRREP type
   [[nodiscard]] bool is_totally_symmetric(const AnyIrrepSet &set) const;
   [[nodiscard]] AnyIrrepSet empty_set() const;
+  /// @sa IrrepContext::any_set
+  [[nodiscard]] AnyIrrepSet any_set() const;
   /// @sa IrrepContext::canonical_irrep
   [[nodiscard]] AnyIrrep canonical_irrep(std::string_view name) const;
   /// @throws Exception if the sets are not of this context's IRREP type
@@ -224,6 +226,7 @@ class AnyIrrepContext {
     virtual AnyIrrepSet totally_symmetric() const = 0;
     virtual bool is_totally_symmetric(const AnyIrrepSet &set) const = 0;
     virtual AnyIrrepSet empty_set() const = 0;
+    virtual AnyIrrepSet any_set() const = 0;
     virtual AnyIrrep canonical_irrep(std::string_view name) const = 0;
     virtual AnyIrrepSet product(const AnyIrrepSet &lhs,
                                 const AnyIrrepSet &rhs) const = 0;
@@ -253,6 +256,7 @@ class AnyIrrepContext {
       return ctx.is_totally_symmetric(typed(set));
     }
     AnyIrrepSet empty_set() const override { return ctx.empty_set(); }
+    AnyIrrepSet any_set() const override { return ctx.any_set(); }
     AnyIrrep canonical_irrep(std::string_view name) const override {
       return AnyIrrep(ctx.canonical_irrep(name));
     }

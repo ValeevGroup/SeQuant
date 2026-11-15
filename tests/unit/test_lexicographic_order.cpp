@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -128,6 +129,29 @@ TEST_CASE("lexicographic_order", "[elements]") {
     CHECK(compare(seq1, seq2) == std::weak_ordering::less);
   }
 
+  SECTION("tensor powers") {
+    const auto D = parse(L"D{i1;a1}");
+    const auto Dm1 = pow(D, rational{-1});
+    const auto Dhalf = pow(D, rational{1, 2});
+    const auto D2 = pow(D, rational{2});
+    const auto Em1 = pow(parse(L"E{i1;a1}"), rational{-1});
+    const auto tm1 = pow(parse(L"t{i1;a1}"), rational{-1});
+    REQUIRE(Dm1->is<TensorPower>());
+    // by base (cardinal labels first), then by exponent
+    CHECK(compare(Dm1, Dhalf) == std::weak_ordering::less);
+    CHECK(compare(Dhalf, D2) == std::weak_ordering::less);
+    CHECK(compare(Dm1, D2) == std::weak_ordering::less);
+    CHECK(compare(Dm1, Em1) == std::weak_ordering::less);
+    CHECK(compare(tm1, Dm1) == std::weak_ordering::less);
+    CHECK(compare(Dm1, pow(parse(L"D{i2;a1}"), rational{-1})) ==
+          std::weak_ordering::less);
+    CHECK(compare(Dm1, Dm1->clone()) == std::weak_ordering::equivalent);
+    // a TensorPower and a Tensor are ordered by type, consistently
+    CHECK(compare(Dm1, D) != std::weak_ordering::equivalent);
+    CHECK(compare(Dm1, D) == reversed(compare(D, Dm1)));
+    CHECK(compare(Dm1, D) == compare(Em1, parse(L"t{i1;a1}")));
+  }
+
   SECTION("consistency") {
     const std::vector<ExprPtr> exprs = {
         parse(L"t{i1;a1}"),
@@ -145,6 +169,9 @@ TEST_CASE("lexicographic_order", "[elements]") {
         ex<Power>(ex<Variable>(L"a"), 2),
         ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})),
         ex<FNOperator>(cre({L"i_1"}), ann({L"a_2"})),
+        pow(parse(L"D{i1;a1}"), rational{-1}),
+        pow(parse(L"D{i1;a1}"), rational{2}),
+        pow(parse(L"E{i1;a1}"), rational{-1}),
     };
     for (const auto& a : exprs) {
       for (const auto& b : exprs) {
@@ -230,6 +257,37 @@ TEST_CASE("sort_expr", "[algorithms]") {
                 ExprPtrList{parse(L"t{p3;p4}"), parse(L"g{p1;p2}"), op1, op2})
                 ->to_latex());
     REQUIRE(prod->hash_value() != orig->hash_value());
+  }
+
+  SECTION("tensor powers") {
+    const auto factors = std::vector<ExprPtr>{
+        pow(parse(L"E{i1;a1}"), rational{-1}),
+        pow(parse(L"D{i1;a1}"), rational{2}),
+        pow(parse(L"D{i1;a1}"), rational{-1}), parse(L"t{i1;a1}")};
+    std::optional<std::wstring> expected;
+    std::vector<std::size_t> perm(factors.size());
+    std::iota(perm.begin(), perm.end(), 0);
+    do {
+      ExprPtr prod = ex<Product>(Product{});
+      for (auto i : perm)
+        prod.as<Product>().append(1, factors[i]->clone(), Product::Flatten::No);
+      sort_expr(*prod, cmp);
+      if (!expected) {
+        expected = prod->to_latex();
+        // the powers of D, the lower exponent first, then that of E (where
+        // t, a Tensor, goes depends on the order of the types)
+        const auto& sorted = prod.as<Product>().factors();
+        REQUIRE(sorted.size() == 4);
+        const auto position = [&sorted](const ExprPtr& f) {
+          return std::ranges::find_if(
+                     sorted, [&f](const ExprPtr& g) { return *g == *f; }) -
+                 sorted.begin();
+        };
+        CHECK(position(factors[2]) + 1 == position(factors[1]));
+        CHECK(position(factors[1]) + 1 == position(factors[0]));
+      }
+      REQUIRE(prod->to_latex() == *expected);
+    } while (std::next_permutation(perm.begin(), perm.end()));
   }
 
   SECTION("custom comparator") {

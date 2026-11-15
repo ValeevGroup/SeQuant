@@ -263,6 +263,22 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(linearize_eval_node(eval_node(p2))->to_latex() == p2->to_latex());
   }
 
+  SECTION("power") {
+    auto const D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    auto const p = pow(D, rational{-1});
+    auto const n = eval_node(p);
+    REQUIRE(n->is_elementwise_power());
+
+    // one element-wise pass over the result; the operand and the result are
+    // both live, like an adjoint
+    REQUIRE(Flops{}(n) == occ_virt_cost(2, 2));
+    REQUIRE(FlopsWithSymm{}(n) == occ_virt_cost(2, 2));
+    REQUIRE(Memory{}(n) == 2 * occ_virt_cost(2, 2));
+
+    REQUIRE(*to_expr(n) == *p);
+    REQUIRE(*linearize_eval_node(n) == *p);
+  }
+
   SECTION("single node") {
     auto asy_cost_single_node = FlopsWithSymm{};
     auto const p1 =

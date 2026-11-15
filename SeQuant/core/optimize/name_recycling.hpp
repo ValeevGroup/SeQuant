@@ -269,6 +269,26 @@ struct ResultObjectLess {
   }
 };
 
+/// Invokes @p visitor on the Tensor @p tensor. An adjoint-marked tensor is
+/// visited in its bare (non-adjoint) form and the replacement is adjointed
+/// again.
+/// @returns the replacement, or null if @p visitor returned null
+template <typename Visitor>
+ExprPtr visit_tensor(const ExprPtr &tensor, Visitor &&visitor) {
+  if (!is_adjoint_label(tensor->as<Tensor>().label())) {
+    return visitor(tensor);
+  }
+
+  Tensor bare = tensor->as<Tensor>();
+  bare.adjoint();
+
+  ExprPtr replacement = visitor(ex<Tensor>(std::move(bare)));
+  if (replacement) {
+    replacement->as<Tensor>().adjoint();
+  }
+  return replacement;
+}
+
 /// Invokes @p visitor on every Tensor and Variable that is (or is the base of)
 /// the terminal expression @p leaf. If @p visitor returns a non-null ExprPtr,
 /// it replaces the visited object.
@@ -278,20 +298,12 @@ struct ResultObjectLess {
 /// replacement is adjointed again.
 template <typename Visitor>
 ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
-  if (leaf->is<Tensor>() && is_adjoint_label(leaf->as<Tensor>().label())) {
-    Tensor bare = leaf->as<Tensor>();
-    bare.adjoint();
-
-    ExprPtr replacement = visitor(ex<Tensor>(std::move(bare)));
-    if (!replacement) {
-      return leaf;
-    }
-
-    replacement->as<Tensor>().adjoint();
-    return replacement;
+  if (leaf->is<Tensor>()) {
+    ExprPtr replacement = visit_tensor(leaf, visitor);
+    return replacement ? replacement : leaf;
   }
 
-  if (leaf->is<Tensor>() || leaf->is<Variable>()) {
+  if (leaf->is<Variable>()) {
     ExprPtr replacement = visitor(leaf);
     return replacement ? replacement : leaf;
   }
@@ -307,6 +319,16 @@ ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
         }
         return result;
       }
+    }
+  }
+
+  if (leaf->is<TensorPower>()) {
+    const TensorPower &power = leaf->as<TensorPower>();
+    // the base of a TensorPower is a c-number Tensor leaf
+    SEQUANT_ASSERT(power.base()->is<Tensor>());
+    ExprPtr replacement = visit_tensor(power.base(), visitor);
+    if (replacement) {
+      return pow(std::move(replacement), power.exponent());
     }
   }
 
@@ -403,10 +425,15 @@ class IntermediateNamePool {
   /// @param basename The basename to derive the label from via the pool's
   /// LabelGenerator
   /// @param candidate The Tensor or Variable the label is meant for
-  /// @returns A label that has not been reserved and that, together with the
-  /// block of @p candidate, has not been known to this pool before. The
-  /// respective object is marked as being in use.
-  std::wstring fresh_label(std::wstring_view basename, const Expr &candidate) {
+  /// @param acceptable Predicate invoked with @p candidate relabeled to the
+  /// label under consideration
+  /// @returns A label that has not been reserved, that, together with the
+  /// block of @p candidate, has not been known to this pool before and for
+  /// which @p acceptable (if provided) returns true. The respective object is
+  /// marked as being in use.
+  std::wstring fresh_label(
+      std::wstring_view basename, const Expr &candidate,
+      const std::function<bool(const Expr &)> &acceptable = {}) {
     ExprPtr object = candidate.clone();
 
     for (std::size_t counter = 1;; ++counter) {
@@ -416,7 +443,7 @@ class IntermediateNamePool {
       }
 
       set_label(*object, label);
-      if (objects_.contains(*object)) {
+      if (objects_.contains(*object) || (acceptable && !acceptable(*object))) {
         continue;
       }
 
@@ -585,6 +612,11 @@ struct NameRecyclingOptions {
   /// IRREPs or batching)
   std::function<bool(const TreeNode &previous, const TreeNode &current)>
       extra_compatible = {};
+  /// Additional requirement for a name (given as the tensor or variable it
+  /// would be assigned to) to be used for the value defined by the given tree
+  /// (e.g. to keep names unique across IRREPs of values in other groups)
+  std::function<bool(const TreeNode &definition, const Expr &named)>
+      name_acceptable = {};
   /// Ranges [begin, end) of tree positions that are executed repeatedly (e.g.
   /// inside a loop). A value that is used inside such a range but is defined
   /// outside of it, stays alive until the end of the range.
@@ -751,7 +783,15 @@ NameRecyclingResult recycle_intermediate_names(
   // Value currently (or most recently) holding a given name
   detail::ObjectMap holder(identity);
 
+  auto name_acceptable = [&](const Expr &named, const Value &value) {
+    return !opts.name_acceptable ||
+           opts.name_acceptable(tree_at(value.first_def), named);
+  };
+
   auto previous_def_compatible = [&](const Expr &freed, const Value &value) {
+    if (!name_acceptable(freed, value)) {
+      return false;
+    }
     if (!opts.extra_compatible) {
       return true;
     }
@@ -791,7 +831,12 @@ NameRecyclingResult recycle_intermediate_names(
         value.slot_map = std::move(recycled->slot_map);
       } else {
         value.renamed = ex<Tensor>(detail::relabeled(
-            original, pool.fresh_label(basename, original), SlotMap{}));
+            original,
+            pool.fresh_label(basename, original,
+                             [&](const Expr &named) {
+                               return name_acceptable(named, value);
+                             }),
+            SlotMap{}));
       }
     } else {
       const Variable &original = value.original->as<Variable>();
@@ -802,8 +847,11 @@ NameRecyclingResult recycle_intermediate_names(
       value.renamed = ex<Variable>(
           recycled.has_value()
               ? std::move(recycled.value())
-              : detail::relabeled(original,
-                                  pool.fresh_label(basename, original)));
+              : detail::relabeled(
+                    original, pool.fresh_label(
+                                  basename, original, [&](const Expr &named) {
+                                    return name_acceptable(named, value);
+                                  })));
     }
 
     holder.insert_or_assign(value.renamed, v);

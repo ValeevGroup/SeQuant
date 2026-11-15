@@ -9,6 +9,7 @@
 #include "SeQuant/core/expr.hpp"
 #include "SeQuant/core/op.hpp"
 
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <array>
@@ -121,5 +122,44 @@ TEST_CASE("abstract_tensor", "[elements]") {
         REQUIRE(original_idxptrs == idxptrs);
       }
     }  // SECTION("2-index")
+  }
+
+  SECTION("tensor_power") {
+    auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Symm,
+                                         .braket = BraKetSymmetry::Symm,
+                                         .column = ColumnSymmetry::Symm});
+    auto p = ex<TensorPower>(D, rational{-1});
+    AbstractTensor& at = p->as<AbstractTensor>();
+    CHECK(ranges::equal(at._bra(), D->as<Tensor>().bra()));
+    CHECK(ranges::equal(at._ket(), D->as<Tensor>().ket()));
+    CHECK(at._bra_rank() == 2);
+    CHECK(at._ket_rank() == 2);
+    CHECK(at._aux_rank() == 0);
+    CHECK(at._label() == L"D");
+    CHECK(at._color() == D->as<AbstractTensor>()._color());
+    CHECK(at._hash_value() == p->hash_value());
+    const auto h0 = p->hash_value();
+    // index replacement reaches the base and invalidates the power's hash
+    container::map<Index, Index> repl{{Index{L"i_1"}, Index{L"i_3"}}};
+    CHECK(transform_indices(at, repl));
+    CHECK(p->hash_value() != h0);
+    auto D3 = ex<Tensor>(L"D", bra{L"i_3", L"i_2"}, ket{L"a_1", L"a_2"},
+                         TensorSymmetries{.perm = Symmetry::Symm,
+                                          .braket = BraKetSymmetry::Symm,
+                                          .column = ColumnSymmetry::Symm});
+    CHECK(*p == TensorPower(D3, rational{-1}));
+    // slot permutation through the mutable view, hash tracks it
+    const auto h1 = p->hash_value();
+    at._permute_bra(std::array<std::size_t, 2>{1, 0});
+    CHECK(p->hash_value() != h1);
+    CHECK(ranges::equal(at._bra(), std::vector{Index{L"i_2"}, Index{L"i_3"}}));
+    // clone_shared is deep and round-trips to Expr (what
+    // Product::canonicalize_impl does)
+    auto cs = at._clone_shared();
+    CHECK(std::dynamic_pointer_cast<Expr>(cs));
+    CHECK(*std::dynamic_pointer_cast<Expr>(cs) == *p);
+    CHECK(std::dynamic_pointer_cast<TensorPower>(cs)->base().get() !=
+          p->as<TensorPower>().base().get());
   }
 }

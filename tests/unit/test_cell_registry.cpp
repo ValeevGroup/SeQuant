@@ -17,30 +17,27 @@ using sequant::eval::Read;
 using sequant::eval::TableCell;
 
 namespace {
-// cell 0: Leaf value 0 (life 2); cell 1: Build value 1 at scope [(1,0)] sliced
-// pos 0 on (1,0) (life 1); cell 2: Build value 2 at the same scope reading
-// cell 0 whole and cell 1 with a declared slice {0 -> (1,0)}.
+// cell 0: a persistent Leaf, value 0; cell 1: Build value 1 at scope [(1,0)]
+// sliced pos 0 on (1,0); cell 2: Build value 2 at the same scope reading
+// cell 0 with a declared slice {0 -> (1,0)} and cell 1 whole.
 CellTable make_table() {
   CellTable t;
   TableCell leaf;
   leaf.value_id = 0;
   leaf.production.kind = ProductionKind::Leaf;
   leaf.persistent = true;
-  leaf.life = 2;
   t.cells.push_back(leaf);
   TableCell b1;
   b1.value_id = 1;
   b1.production.kind = ProductionKind::Build;
   b1.scope.path = {{LoopKey{1, 0}, 0}};
   b1.sliced = {{0, LoopKey{1, 0}}};
-  b1.life = 1;
   t.cells.push_back(b1);
   TableCell b2;
   b2.value_id = 2;
   b2.production.kind = ProductionKind::Build;
   b2.scope.path = {{LoopKey{1, 0}, 0}};
   b2.sliced = {{0, LoopKey{1, 0}}};
-  b2.life = 0;
   t.cells.push_back(b2);
   t.reads.push_back(Read{2, 0, 0, {{0, LoopKey{1, 0}}}, {}});
   t.reads.push_back(Read{2, 1, 1, {}, {}});
@@ -56,7 +53,7 @@ sequant::eval::dryrun::SizeRegime cell_registry_test_regime() {
 }
 }  // namespace
 
-TEST_CASE("cell registry: set, read, life and batch clearing",
+TEST_CASE("cell registry: set, read, release and batch clearing",
           "[cell_registry]") {
   auto const t = make_table();
   CellRegistry reg(t);
@@ -67,19 +64,27 @@ TEST_CASE("cell registry: set, read, life and batch clearing",
   reg.set(1, r);
   CHECK(reg.peek(1) == r);
   CHECK(reg.read(1) == r);
-  CHECK_THROWS(reg.read(1));  // life exhausted
-  reg.set(1, r);              // a new batch's production restores life
+  CHECK(reg.read(1) == r);  // a read does not use the value up
+  CHECK(reg.live_bytes() == r->size_in_bytes());
+  reg.release(1);  // the schedule says nothing reads it again
+  CHECK_FALSE(reg.peek(1));
+  CHECK(reg.drained(1));
+  CHECK(reg.live_bytes() == 0);
+  CHECK_THROWS(reg.read(1));  // nothing to read
+  reg.release(1);             // releasing an empty cell changes nothing
+  reg.set(1, r);              // a new batch's production
   reg.clear_bound_to(LoopKey{1, 0});
   CHECK_FALSE(reg.peek(1));  // bound to (1,0): cleared
   reg.set(0, r);
   reg.clear_bound_to(LoopKey{1, 0});
   CHECK(reg.peek(0) == r);  // whole leaf: untouched
+  reg.release(0);
+  CHECK(reg.peek(0) == r);  // persistent: never released
 }
 
 TEST_CASE("last-read-hands-over-ownership", "[cell_registry]") {
-  // A cell with no reader left this evaluation must not keep its value alive:
-  // the reader that took it is its only holder, driven by the flag this
-  // read reports.
+  // The reader the schedule names as a cell's last takes the value: the
+  // registry lets go, so the reader is its only holder.
   auto const t = make_table();
   CellRegistry reg(t);
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
@@ -87,19 +92,18 @@ TEST_CASE("last-read-hands-over-ownership", "[cell_registry]") {
   sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
       sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
 
-  reg.set(1, r);  // cell 1: Build, non-persistent, life 1
-  bool exhausted = false;
-  CHECK(reg.read(1, &exhausted) == r);
-  CHECK(exhausted);
+  reg.set(1, r);  // cell 1: Build, non-persistent
+  CHECK(reg.take(1) == r);
   CHECK_FALSE(reg.peek(1));  // the registry has let go
-  reg.set(1, r);             // a later production restores value AND life
+  CHECK(reg.drained(1));
+  CHECK_THROWS(reg.take(1));
+  reg.set(1, r);  // a later production is a fresh one
   CHECK(reg.peek(1) == r);
 
-  reg.set(0, r);  // cell 0: Leaf, PERSISTENT, life 2
-  bool persistent_exhausted = true;
-  CHECK(reg.read(0, &persistent_exhausted) == r);
-  CHECK_FALSE(persistent_exhausted);  // a persistent cell never exhausts
-  CHECK(reg.peek(0) == r);
+  reg.set(0, r);  // cell 0: Leaf, PERSISTENT
+  CHECK(reg.take(0) == r);
+  CHECK(reg.peek(0) == r);  // a persistent cell is never given away
+  CHECK_FALSE(reg.drained(0));
 }
 
 TEST_CASE("cell read resolver: declared slice against the batch context",
@@ -120,6 +124,10 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
     if (h == 0 || h == 1) return h;
     return std::nullopt;
   });
+  // The release plan's answer for this table: cell 2's read of cell 1 (the
+  // second Read) is cell 1's last.
+  sequant::container::vector<char> const last_reads{0, 1};
+  res.set_last_reads(&last_reads);
   res.begin_consumer(2);
   sequant::eval::BatchContext ctx;
   ctx.push_back({sequant::Index{L"i_1"},
@@ -130,11 +138,13 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
   REQUIRE(got0.has_value());
   // sliced pos 0 to [2,4): extent 2 with lobound 2
   CHECK(sequant::eval::dryrun::detail::lobounds_of(**got0).at(0) == 2);
+  CHECK_FALSE(res.operand_drained(0));  // not the last read: still held
   auto got1 = res.fetch(1, ctx);
   REQUIRE(got1.has_value());
   CHECK(*got1 == b1);  // whole read: same object
-  // cell 1's life was 1: that read was its last, so the registry no longer
-  // holds it -- operand_drained() reports the source cell itself as drained.
+  // That read was cell 1's last, so the reader took the value and the
+  // registry no longer holds it -- operand_drained() reports the source cell
+  // itself as drained.
   CHECK(res.operand_drained(1));
   CHECK_THROWS(res.fetch(1, ctx));  // no remaining Read of value 1 for cell 2
   CHECK_FALSE(res.fetch(77, ctx).has_value());  // not a value: transient
@@ -235,47 +245,6 @@ TEST_CASE("cell registry: cell_of finds a value's form by residency",
   CHECK_FALSE(reg.cell_of(6, root).has_value());
 }
 
-TEST_CASE("table-read-exhaustion", "[cell_registry]") {
-  // The shared ownership helper: EVERY site that spends a table-declared
-  // life routes through it -- CellReadResolver::fetch for a consumer's
-  // operand reads, and the ordered executor's block-close handoffs for the
-  // read an Assemble declares of its production.source (a close that takes
-  // the per-batch value from a step's own result, a child's closed result or
-  // a resident home still owes the table that read). The two must not drift:
-  // TableRead::exhausted is set on the read that spends the LAST life and on
-  // no other, and never for a persistent cell -- the caller (not table_read
-  // itself) decides what to do with that flag.
-  auto const t = make_table();
-  CellRegistry reg(t);
-  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
-      cell_registry_test_regime());
-  sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
-
-  std::size_t released = 0;
-  reg.set(1, r);  // cell 1: Build, non-persistent, life 1
-  {
-    auto const tr = sequant::eval::table_read(reg, 1);
-    CHECK(tr.value == r);
-    CHECK(tr.exhausted);
-    if (tr.exhausted) ++released;
-  }
-  CHECK(released == 1);
-  CHECK_FALSE(reg.peek(1));  // sole ownership handed to the reader
-
-  reg.set(0, r);  // cell 0: Leaf, PERSISTENT, life 2
-  {
-    auto const tr1 = sequant::eval::table_read(reg, 0);
-    auto const tr2 = sequant::eval::table_read(reg, 0);
-    CHECK(tr1.value == r);
-    CHECK(tr2.value == r);
-    if (tr1.exhausted) ++released;
-    if (tr2.exhausted) ++released;
-  }
-  CHECK(released == 1);  // a persistent cell never exhausts
-  CHECK(reg.peek(0) == r);
-}
-
 TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
           "[cell_registry]") {
   // Strictness is asked for HERE, on this registry's own hooks (see
@@ -285,14 +254,13 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   // order the cases ran in.
   //
   // A separate small table (not make_table()'s): cell 0 Leaf persistent;
-  // cell 1 Build non-persistent bound to (1,0), life 1; cell 2 Build
-  // persistent (whole -- unbound), life 2.
+  // cell 1 Build non-persistent bound to (1,0); cell 2 Build persistent
+  // (whole -- unbound).
   CellTable t;
   TableCell leaf;
   leaf.value_id = 0;
   leaf.production.kind = ProductionKind::Leaf;
   leaf.persistent = true;
-  leaf.life = 2;
   t.cells.push_back(leaf);
   TableCell b1;
   b1.value_id = 1;
@@ -301,13 +269,11 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   b1.sliced = {{0, LoopKey{1, 0}}};  // bound_instances reads `sliced`, not
                                      // `scope.path` -- this is what makes
                                      // clear_bound_to(LoopKey{1, 0}) reach it
-  b1.life = 1;
   t.cells.push_back(b1);
   TableCell b2;
   b2.value_id = 2;
   b2.production.kind = ProductionKind::Build;
   b2.persistent = true;
-  b2.life = 2;
   t.cells.push_back(b2);
 
   sequant::eval::PersistentValueStore store;
@@ -329,16 +295,14 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   reg.set(1, r1);
   CHECK(reg.live_bytes() == r1->size_in_bytes());
   CHECK(bytes_seen == reg.live_bytes());
-  CHECK_THROWS(reg.set(1, r1));  // fill-once: cell 1 not read/cleared since
+  CHECK_THROWS(reg.set(1, r1));  // fill-once: cell 1 not taken/cleared since
   reg.clear_bound_to(sequant::eval::LoopKey{1, 0});
   CHECK(reg.live_bytes() == 0);
   reg.set(1, r1);  // allowed again after the clearing boundary
   reg.set(2, r2);
   CHECK(store.holds(1002));  // persistent cell published
   CHECK(store.get(1002) == r2);
-  bool ex = false;
-  auto got = reg.read(1, &ex);
-  CHECK(ex);
+  auto got = reg.take(1);
   CHECK(got == r1);
   CHECK_FALSE(reg.peek(1));
   CHECK(reg.drained(1));
@@ -368,7 +332,6 @@ TEST_CASE("registry-clear-bound-to", "[cell_registry]") {
     c.scope.path = {{LoopKey{1, 0}, 0}};
     if (sliced) c.sliced = {{0, LoopKey{1, 0}}};
     c.produce_if_absent = pia;
-    c.life = 1;
     t.cells.push_back(c);
   };
   add(/*sliced=*/true, /*pia=*/false);
@@ -404,7 +367,6 @@ TEST_CASE("registry-clear-bound-to", "[cell_registry]") {
   c.scope.path = {{LoopKey{1, 0}, 0}, {LoopKey{2, 0}, 0}};
   c.sliced = {{0, LoopKey{1, 0}}};  // bound to the OUTER loop
   c.produce_if_absent = true;       // invariant to its own innermost loop
-  c.life = 1;
   t2.cells.push_back(c);
   CellRegistry reg2(t2);
   reg2.set(0, r);
@@ -428,40 +390,4 @@ TEST_CASE("resolver-unfetched-not-drained", "[cell_registry]") {
   });
   CHECK_FALSE(rr.operand_drained(100));  // table value, never fetched here
   CHECK(rr.operand_drained(999));        // not a table value: private
-}
-
-TEST_CASE("registry-forgo", "[cell_registry]") {
-  // make_table(): cell 0 is a PERSISTENT Leaf (life 2), cell 1 a
-  // non-persistent Build with life 1, cell 2 a Build with life 0.
-  auto const t = make_table();
-  CellRegistry reg(t);
-  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
-      cell_registry_test_regime());
-  sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
-
-  // Forgoing a non-persistent cell's LAST life releases the value, exactly as
-  // the draining read does: bytes accounted, slot emptied, drained.
-  reg.set(1, r);
-  CHECK(reg.remaining_life(1) == 1);
-  CHECK(reg.live_bytes() == r->size_in_bytes());
-  reg.forgo(1, 0);  // no-op
-  CHECK(reg.remaining_life(1) == 1);
-  reg.forgo(1, 1);
-  CHECK(reg.remaining_life(1) == 0);
-  CHECK_FALSE(reg.peek(1));
-  CHECK(reg.drained(1));
-  CHECK(reg.live_bytes() == 0);
-  // ... and the fill-once mark went with it, so the next batch's production
-  // is a fresh one rather than a duplicate.
-  CHECK_NOTHROW(reg.set(1, r));
-
-  // A persistent cell never drains, so forgoing it is a no-op.
-  reg.set(0, r);
-  reg.forgo(0, 5);
-  CHECK(reg.peek(0) == r);
-
-  // Forgoing more reads than the table declared is an accounting bug in the
-  // caller: it would release a value another consumer is still owed.
-  CHECK_THROWS(reg.forgo(1, 2));
 }

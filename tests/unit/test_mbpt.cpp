@@ -2326,9 +2326,8 @@ SECTION("manuscript-examples") {
   };
 
   SECTION("CCD Term") {
-    auto expr = ref_av(P(2) * H() * t(2) * t(2),
-                       {.connect = {{L"f", L"t"}, {L"g", L"t"}}});
-    REQUIRE(expr.size() == 4);
+    auto expr = ref_av(P(2) * H() * t(2) * t(2));
+    REQUIRE(expr.size() == 5);
   }
 
   SECTION("Ground State Amplitudes") {
@@ -2413,10 +2412,10 @@ SECTION("manuscript-examples") {
                                            {L"g", antisymm_label()},
                                            {L"h¹", antisymm_label()}});
 
-    // perturbed t amplitudes (Eq 18 in SQ Manuscript #2)
+    // perturbed t amplitudes (Eq 25 in SQ Manuscript #2)
     auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * tʼ(2)),
                     {.connect = t_connect});
-    // perturbed λ amplitudes (Eq 19 in SQ Manuscript #2)
+    // perturbed λ amplitudes (Eq 26 in SQ Manuscript #2)
     auto λ = ref_av(
         ((1 + Λ(2)) * (H̅(1) + H̅() * Tʼ(2)) + Λʼ(2) * H̅() + "ω" * λʼ(2)) * P(-2),
         {.connect = l_connect});
