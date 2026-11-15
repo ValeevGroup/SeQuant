@@ -239,6 +239,7 @@ json to_j(BlockRecord const& b) {
   for (auto const& [id, kind] : b.outputs)
     outs.push_back(json::array({id, kind}));
   j["outputs"] = std::move(outs);
+  if (!b.output_after.empty()) j["output_after"] = b.output_after;
   return j;
 }
 
@@ -711,6 +712,15 @@ BlockRecord block_r(json const& j) {
         !o[1].is_string())
       fail(bw, "outputs entries must be [value id, kind]");
     b.outputs.emplace_back(o[0].get<std::string>(), o[1].get<std::string>());
+  }
+  if (j.contains("output_after")) {
+    for (auto const& a : get_arr(j, "output_after", bw)) {
+      if (!a.is_number_unsigned())
+        fail(bw, "output_after entries must be step counts");
+      b.output_after.push_back(a.get<std::size_t>());
+    }
+    if (b.output_after.size() != b.outputs.size())
+      fail(bw, "output_after must have one entry per output");
   }
   return b;
 }

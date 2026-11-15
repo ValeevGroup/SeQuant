@@ -459,6 +459,7 @@ DagRecord record_dag(
       rec.outputs.emplace_back(vid_name(v), detail::output_kind_name(kind));
       if (!escape_block[v]) escape_block[v] = id;
     }
+    rec.output_after.assign(b.output_after.begin(), b.output_after.end());
     return id;
   };
   visit(visit, ordered.root, std::nullopt);

@@ -66,6 +66,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -458,6 +459,7 @@ TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -891,8 +893,11 @@ namespace {
                    << (b.kind == sequant::BatchModeType::External
                            ? L"external"
                            : L"contracted")
-                   << L" builds=" << builds << L" children=" << children
-                   << L" outs=";
+                   << L" builds=" << builds << L"[";
+        for (auto const& st : b.steps)
+          if (auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value))
+            std::wcerr << bs->value_id << L" ";
+        std::wcerr << L"] children=" << children << L" outs=";
         for (auto const& [ovid, okind] : b.outputs)
           std::wcerr << ovid << L":"
                      << (okind == sequant::eval::OutputKind::AccumulateSum
@@ -1063,10 +1068,12 @@ TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
   // Mirror a specific MPQC input (z820 w20 csv-cck-diag.json: batch
   // peak_threshold 25e9, optimize objective dense_time_space) via env.
   if (char const* pt = std::getenv("SEQUANT_UT_PEAK_THRESHOLD"))
     policy.peak_threshold = std::atof(pt);
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -1543,6 +1550,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   policy.persistent_only = false;
   policy.peak_threshold =
       orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
+  policy.infeasible_is_error = false;  // may be over budget
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -1605,6 +1613,67 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   };
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
+
+  // Disk eligibility (eval::disk_eligible_cells) on a batched table: only a
+  // whole, complete cell at the root scope that others read qualifies, never
+  // one assembled by summation and never an amplitude.
+  {
+    auto const eligible =
+        sequant::eval::disk_eligible_cells(table, [&](std::size_t vid) {
+          auto it = vmap.find(rich.cells[vid].hash);
+          return it != vmap.end() && it->second->leaf() &&
+                 (*it->second)->is_tensor() &&
+                 (*it->second)->as_tensor().label() == L"t";
+        });
+    REQUIRE(eligible.size() == table.cells.size());
+    std::vector<char> read(table.cells.size(), 0);
+    for (auto const& r : table.reads)
+      if (r.source != r.consumer) read[r.source] = 1;
+    std::size_t n_eligible = 0, n_leaf = 0, n_scatter = 0, n_build = 0;
+    std::size_t n_sum_at_root = 0, n_in_loops = 0;
+    bool all_whole_at_root = true, none_summed = true, all_read = true,
+         no_amplitude = true;
+    for (std::size_t c = 0; c < table.cells.size(); ++c) {
+      auto const& cell = table.cells[c];
+      using PK = sequant::eval::ProductionKind;
+      bool const summed =
+          cell.production.kind == PK::Assemble &&
+          cell.production.assemble == sequant::eval::AssembleKind::Sum;
+      if (!cell.scope.path.empty()) ++n_in_loops;
+      if (summed && cell.scope.path.empty()) ++n_sum_at_root;
+      if (!eligible[c]) continue;
+      ++n_eligible;
+      all_whole_at_root = all_whole_at_root && cell.scope.path.empty() &&
+                          cell.sliced.empty() && cell.partial_over.empty();
+      none_summed = none_summed && !summed;
+      all_read = all_read && read[c];
+      if (cell.production.kind == PK::Leaf) {
+        ++n_leaf;
+        auto it = vmap.find(rich.cells[cell.value_id].hash);
+        no_amplitude =
+            no_amplitude && !(it != vmap.end() && (*it->second)->is_tensor() &&
+                              (*it->second)->as_tensor().label() == L"t");
+      } else if (cell.production.kind == PK::Assemble)
+        ++n_scatter;
+      else
+        ++n_build;
+    }
+    CHECK(all_whole_at_root);
+    CHECK(none_summed);
+    CHECK(all_read);
+    CHECK(no_amplitude);
+    CHECK(n_eligible > 0);
+    CHECK(n_leaf > 0);
+    // the table does have cells the rule must turn away
+    CHECK(n_in_loops > 0);
+    CHECK(n_eligible < table.cells.size());
+    INFO("eligible " << n_eligible << " of " << table.cells.size()
+                     << " cells: leaf " << n_leaf << ", built " << n_build
+                     << ", scatter-assembled " << n_scatter
+                     << "; sum-assembled at root (not eligible) "
+                     << n_sum_at_root);
+    CHECK(true);
+  }
 
   // one Build cell per BuildStep, plus one implicit Build cell per output
   // entry (b, ovid) whose value has no BuildStep of its own in b and no
@@ -1894,6 +1963,7 @@ TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
   // THE mirrored setting (the walk fixture reads it from
   // SEQUANT_UT_PEAK_THRESHOLD; here it is set directly).
   policy.peak_threshold = 25e9;
+  policy.infeasible_is_error = false;  // may be over budget
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -2133,10 +2203,12 @@ TEST_CASE("mirrored-w20-mixed-pass-dump",
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
   // Mirror a specific MPQC input (z820 w20 csv-cck-diag.json: batch
   // peak_threshold 25e9, optimize objective dense_time_space) via env.
   if (char const* pt = std::getenv("SEQUANT_UT_PEAK_THRESHOLD"))
     policy.peak_threshold = std::atof(pt);
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -2317,6 +2389,7 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -2562,9 +2635,18 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
 
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
-  auto const body =
-      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                                "/data/csv_ccsd_doubles_residual_df.txt");
+  // SEQUANT_UT_DRYRUN_PROJECTION=K: the residual with the exchange (ov|ov)
+  // integrals projected onto their own pair's integral basis (instance 1),
+  // as MPQC's `projection: {terms: K}` produces it (project_integral_domains
+  // runs before density fitting, so the projected residual is a fixture of
+  // its own rather than a rewrite of the density-fitted one).
+  bool const proj_K =
+      std::getenv("SEQUANT_UT_DRYRUN_PROJECTION") &&
+      std::string(std::getenv("SEQUANT_UT_DRYRUN_PROJECTION")) == "K";
+  auto const body = orderedexec_witness_slurp(
+      std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+      (proj_K ? "/data/csv_ccsd_doubles_residual_df_projK.txt"
+              : "/data/csv_ccsd_doubles_residual_df.txt"));
   REQUIRE(!body.empty());
   std::string firstline = body;
   if (auto nl = firstline.find('\n'); nl != std::string::npos)
@@ -2583,8 +2665,36 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   // SYSTEM selection (SEQUANT_UT_DRYRUN_SYSTEM = water20 [default] | c60).
   std::string system = "water20";
   if (char const* s = std::getenv("SEQUANT_UT_DRYRUN_SYSTEM")) system = s;
-  auto const regime = orderedexec_witness_df_regime(
+  auto regime = orderedexec_witness_df_regime(
       system == "c60" ? kOrderedExecC60_pVDZF12 : kOrderedExecWater20_pVDZF12);
+  if (proj_K) {
+    // exchange-integral basis of C60/cc-pVDZ-F12 at tpno 1e-5 (the amplitude
+    // basis is at 1e-7): measured stored-cell power means M_1..M_4 and
+    // occupancies; higher moments are not measured and repeat M_4.
+    REQUIRE(system == "c60");
+    using sequant::tests::csv_sizes::occupancy_adjusted_moments;
+    sequant::eval::dryrun::MomentTable osv{1.0,
+                                           44.741666666666667,
+                                           45.142828887875424,
+                                           45.54206015634395,
+                                           45.933500413264127,
+                                           45.933500413264127,
+                                           45.933500413264127,
+                                           45.933500413264127,
+                                           45.933500413264127};
+    sequant::eval::dryrun::MomentTable pno{1.0,
+                                           15.654885057471265,
+                                           22.016236171798617,
+                                           26.916523552841184,
+                                           30.643083300960047,
+                                           30.643083300960047,
+                                           30.643083300960047,
+                                           30.643083300960047,
+                                           30.643083300960047};
+    auto& t = regime.csv_moment_by_instance[{L"a", 1}];
+    t.osv = occupancy_adjusted_moments(osv, 1.0);
+    t.pno = occupancy_adjusted_moments(pno, 0.725);
+  }
   // The dry-run cost model carries the SAME roofline parameters the optimizer
   // ran with (opts.roofline above), so the sink's `exec` is the realized
   // roofline cost of the schedule (max(flops, beta*Q) per executed op at its
@@ -2651,6 +2761,31 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
            ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
            : 100.0) *
       1e9;
+  // SEQUANT_UT_DRYRUN_INFEASIBLE_ERROR=1: a term with no schedule within the
+  // budget is named with its smallest peak (PeakBudgetInfeasible) and left
+  // out of the report, instead of being scheduled over budget
+  policy.infeasible_is_error =
+      std::getenv("SEQUANT_UT_DRYRUN_INFEASIBLE_ERROR") != nullptr;
+
+  // SEQUANT_UT_DRYRUN_HOLD=1: the search may hold an amplitude-independent
+  // operand outside the loop that slices its consumer; one of at least
+  // SEQUANT_UT_DRYRUN_DISK_MIN_GB (default 1) lives on disk, free to hold,
+  // with SEQUANT_UT_DRYRUN_DISK_READ / _WRITE the cost of moving one element
+  // (FLOP-equivalents, default 0).
+  // SEQUANT_UT_DRYRUN_INFEASIBLE_SLACK=<x>: BatchPolicy::infeasible_peak_slack
+  if (char const* sl = std::getenv("SEQUANT_UT_DRYRUN_INFEASIBLE_SLACK"))
+    policy.infeasible_peak_slack = std::atof(sl);
+  if (std::getenv("SEQUANT_UT_DRYRUN_HOLD")) {
+    auto const env_d = [](char const* k, double dflt) {
+      return std::getenv(k) ? std::atof(std::getenv(k)) : dflt;
+    };
+    policy.hold.enabled = true;
+    policy.hold.slow_min_bytes =
+        env_d("SEQUANT_UT_DRYRUN_DISK_MIN_GB", 1.0) * 1e9;
+    policy.hold.slow.residency_weight = 0.0;
+    policy.hold.slow.read_cost = env_d("SEQUANT_UT_DRYRUN_DISK_READ", 0.0);
+    policy.hold.slow.write_cost = env_d("SEQUANT_UT_DRYRUN_DISK_WRITE", 0.0);
+  }
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -2660,15 +2795,35 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
   opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
+  // SEQUANT_UT_DRYRUN_VW overrides the volatile weight (default 20); a huge
+  // value makes the optimizer keep amplitude-independent work out of the
+  // per-iteration part at any cost.
+  opts.volatile_weight = std::getenv("SEQUANT_UT_DRYRUN_VW")
+                             ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_VW"))
+                             : 20.0;
   opts.roofline.machine_balance = 200.0;
   opts.roofline.fast_mem_elems = 1000000.0;
   opts.term_batch_axes = axes_map;
 
+  // wall time of each stage, reported with the table below
+  auto const tick = [] { return std::chrono::steady_clock::now(); };
+  auto const secs = [](auto a, auto b) {
+    return std::chrono::duration<double>(b - a).count();
+  };
+  auto const t_plan0 = tick();
   std::vector<Node> forest;
   // one root per tree: summand s is root "R<s>" with a single term
   std::vector<sequant::eval::schedule::RootRecord> roots;
+  // SEQUANT_UT_DRYRUN_TERM=<k>[,<k>...]: only those summands
+  char const* const only_term = std::getenv("SEQUANT_UT_DRYRUN_TERM");
   for (std::size_t s = 0; s < nterms; ++s) {
+    if (only_term) {  // one summand, or a comma-separated list of them
+      bool listed = false;
+      std::stringstream list{std::string(only_term)};
+      for (std::string k; std::getline(list, k, ',');)
+        if (s == static_cast<std::size_t>(std::atoll(k.c_str()))) listed = true;
+      if (!listed) continue;
+    }
     sequant::ExprPtr const term =
         orderedexec_witness_flatten_product(summands[s]);
     if (!term) continue;
@@ -2676,7 +2831,8 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     try {
       recorded = sequant::opt::schedule::record_root("R" + std::to_string(s),
                                                      term, opts);
-    } catch (std::exception const&) {
+    } catch (std::exception const& e) {
+      WARN("term " << s << " dropped: " << e.what());
       continue;
     }
     auto const& optimized = recorded.optimized;
@@ -2694,9 +2850,38 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   auto const block_of = [](sequant::Index const&) -> std::size_t {
     return 256;
   };
+  auto const t_sched0 = tick();
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   REQUIRE(!rich.cells.empty());
   auto const vmap = sequant::eval::build_value_node_map(forest);
+  // SEQUANT_UT_NODE_ANNOT: every node of every tree with the loops it opens,
+  // whether it is produced at the root scope, and its home
+  if (std::getenv("SEQUANT_UT_NODE_ANNOT")) {
+    std::function<void(Node const&, int)> dump = [&](Node const& n, int d) {
+      std::wcerr << L"[node] " << std::wstring(2 * d, L' ')
+                 << (n.leaf() ? L"leaf " : L"I ")
+                 << sequant::toUtf16(n->label()) << L"(";
+      for (auto const& x : n->canon_indices())
+        std::wcerr << x.full_label() << L" ";
+      std::wcerr << L")";
+      if (!n.leaf()) {
+        std::wcerr << L" opens[";
+        for (auto const& [ix, k] : n->batch_loops_opened_here())
+          std::wcerr << ix.full_label()
+                     << (k == sequant::BatchModeType::External ? L":e "
+                                                               : L":c ");
+        std::wcerr << L"] home[";
+        for (auto const& ix : n->occurrence_home())
+          std::wcerr << ix.full_label() << L" ";
+        std::wcerr << L"]" << (n->root_scope() ? L" ROOT-SCOPE" : L"");
+        std::wcerr << L"\n";
+        dump(n.left(), d + 1);
+        dump(n.right(), d + 1);
+      } else
+        std::wcerr << L"\n";
+    };
+    for (auto const& t : forest) dump(t, 0);
+  }
 
   using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
   annot_t const layout{};
@@ -2750,6 +2935,8 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     ut_dump_sched_tree(*ordered_opt);
   if (char const* rd = std::getenv("SEQUANT_UT_ROLE_DIAG"))
     ut_dump_role_diag(rich, legality, rd);
+  auto const t_sched1 = tick();
+  double t_cold = 0, t_warm = 0;
 
   std::function<bool(Node const&)> const is_volatile_node =
       [p = policy.is_volatile_leaf](Node const& n) -> bool {
@@ -2825,8 +3012,12 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     double exec = 0;        // realized roofline cost (sink.exec)
     std::size_t n_ops = 0;  // executed product ops (per-batch, sink.n_ops)
     std::size_t peak = 0;
+    sequant::eval::DiskSpill disk{};  // this run's disk accounting
   };
   Row f1, f2, o1, o2;
+  // SEQUANT_UT_DRYRUN_DISK_MIN_GB=<x>: charge disk-eligible values of at
+  // least x GB as kept on disk (eval::DiskSpill), ordered runs only.
+  char const* const disk_min_gb = std::getenv("SEQUANT_UT_DRYRUN_DISK_MIN_GB");
 
   // Optional peak-liveset dump (SEQUANT_UT_PEAK_LIVESET) of the ordered COLD
   // run: what set of co-resident values realizes the peak, labeled by node-kind
@@ -2883,6 +3074,12 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
         };
     cache.set_peak_monitor(&mon);
     auto run = [&](Row& r, sequant::eval::schedule::RunRecord* record) {
+      if (disk_min_gb) {
+        r.disk.min_bytes =
+            static_cast<std::size_t>(std::atof(disk_min_gb) * 1e9);
+        r.disk.record_peak_on_disk = dump_liveset;
+        cache.set_disk_spill(&r.disk);
+      }
       double const f0 = sink.flops.load();
       double const e0 = sink.exec.load();
       std::size_t const n0 = sink.n_ops.load();
@@ -2901,7 +3098,19 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
       r.builds = total_builds(cache.recompute_tally()) - b0;
       r.peak = mon.hwmark_bytes;
     };
+    // SEQUANT_UT_PEAK_LIVESET=warm: one more evaluation first, so that the
+    // live set dumped below is that of a steady iteration (and the "cold"
+    // row a warm one)
+    if (dump_liveset &&
+        std::string(std::getenv("SEQUANT_UT_PEAK_LIVESET")) == "warm") {
+      Row discard;
+      run(discard, nullptr);
+      peak_total = 0;
+      peak_live.clear();
+    }
+    auto const t_run0 = tick();
     run(o1, doc ? &*doc->run : nullptr);  // COLD
+    t_cold = secs(t_run0, tick());
     if (doc) {
       std::ofstream out(doc_path, std::ios::binary);
       REQUIRE(out.good());
@@ -2955,7 +3164,9 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     }
 
     cache.reset();
+    auto const t_run1 = tick();
     run(o2, nullptr);  // WARM
+    t_warm = secs(t_run1, tick());
     // SEQUANT_UT_TOP_BUILDS=<N>: the N values built most often over the two
     // iterations (the recompute tally), with their labels and occurrence
     // counts -- where a fused chain's interposed loops rebuild a value.
@@ -3126,11 +3337,42 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
              << L"/" << kOccBlock << L"/" << kPaoBlock
              << (occ_contracted ? L", occ also CONTRACTED-batchable" : L"")
              << L" ===\n";
+  std::wcerr << std::defaultfloat << L"  wall time, s: per-term optimization "
+             << secs(t_plan0, t_sched0) << L", ordered schedule "
+             << secs(t_sched0, t_sched1) << L", ordered dry run cold " << t_cold
+             << L" warm " << t_warm << L"\n"
+             << std::scientific;
   pr(L"forest  iter1 (cold)", f1);
   pr(L"forest  iter2 (warm)", f2);
   if (ordered_ok) {
     pr(L"ordered iter1 (cold)", o1);
     pr(L"ordered iter2 (warm)", o2);
+    if (disk_min_gb) {
+      auto const prd = [&](wchar_t const* tag, Row const& r) {
+        std::wcerr << L"  " << tag << L"  [disk >= "
+                   << double(r.disk.min_bytes) / 1e9 << L" GB]  resident_peak="
+                   << double(r.peak) / 1e9 << L" GB  disk_peak="
+                   << double(r.disk.peak_bytes_on_disk) / 1e9
+                   << L" GB  written=" << double(r.disk.bytes_written) / 1e9
+                   << L" GB in " << r.disk.n_writes << L"  read<="
+                   << double(r.disk.bytes_read) / 1e9 << L" GB in "
+                   << r.disk.n_reads << L"\n";
+        auto on_disk = r.disk.peak_on_disk;
+        std::sort(
+            on_disk.begin(), on_disk.end(),
+            [](auto const& a, auto const& b) { return a.second > b.second; });
+        for (auto const& [h, bytes] : on_disk) {
+          std::wstring sig;
+          if (auto hc = hash_to_cell.find(h); hc != hash_to_cell.end())
+            sig = space_sig(rich.cells[hc->second].carried);
+          std::wcerr << L"    on disk at its peak: " << double(bytes) / 1e9
+                     << L" GB  h=" << (h % 100000) << L"  " << node_kind(h)
+                     << L"{" << sig << L"}\n";
+        }
+      };
+      prd(L"ordered iter1 (cold)", o1);
+      prd(L"ordered iter2 (warm)", o2);
+    }
   } else {
     std::wcerr << L"  ordered: SCHEDULE BUILD FAILED for this batch mode "
                   L"(pre-existing build_ordered_schedule assert) -- forest "
@@ -3213,6 +3455,7 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
   policy.scheduler = sequant::BatchScheduler::ordered;
 
   auto axes_map = std::make_shared<std::unordered_map<
@@ -3293,6 +3536,18 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   direct_cache.set_recompute_tally_enabled(true);
   sequant::eval::PeakMonitor direct_mon;
   direct_cache.set_peak_monitor(&direct_mon);
+  // This schedule is batched, so most samples are taken inside a batch loop
+  // and the rest at the outermost scope: neither kind may leave out a value
+  // that is alive when it is taken.
+  std::size_t n_samples = 0, n_below_live = 0;
+  direct_mon.on_sample =
+      [&](std::size_t total, std::size_t,
+          std::vector<sequant::eval::PeakLiveEntry> const& live) {
+        std::size_t live_bytes = 0;
+        for (auto const& e : live) live_bytes += e.bytes;
+        ++n_samples;
+        if (total < live_bytes) ++n_below_live;
+      };
   ResultPtr direct_result;
   try {
     direct_result =
@@ -3336,6 +3591,8 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   CAPTURE(direct_mon.hwmark_bytes, meter_report.peak_bytes);
 
   CHECK(direct_mon.hwmark_bytes > 0);
+  CHECK(n_samples > 0);
+  CHECK(n_below_live == 0);
   CHECK(meter_report.peak_bytes > 0.0);
   CHECK(meter_report.scheduler == sequant::BatchScheduler::ordered);
 
@@ -3398,6 +3655,7 @@ TEST_CASE("w20-peak-composition", "[w20-peak-composition]") {
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4249,6 +4507,7 @@ TEST_CASE("ordered-assemble-dest-size", "[ordered][assemble-dest]") {
   policy.persistent_only = false;
   policy.peak_threshold =
       orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4558,6 +4817,7 @@ TEST_CASE("ordered-invariant-escape-once", "[ordered][block-skip]") {
   policy.persistent_only = false;
   policy.peak_threshold =
       orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4735,6 +4995,7 @@ TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
   policy.persistent_only = false;
   policy.peak_threshold = orderedexec_structure_budget(
       25e9, kOrderedExecWater20_pVDZF12, 1);  // THE mirrored setting
+  policy.infeasible_is_error = false;         // may be over budget
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -5061,6 +5322,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     policy.accumulation_factor = 1.0;
     policy.persistent_only = false;
     policy.peak_threshold = 1e11;
+    policy.infeasible_is_error = false;  // may be over budget
 
     auto axes_map = std::make_shared<std::unordered_map<
         sequant::Expr const*,
@@ -5928,6 +6190,7 @@ TEST_CASE("ordered-lockstep-vs-whole-escape",
     return t.label() == L"t";
   };
   policy.peak_threshold = 8000;
+  policy.infeasible_is_error = false;  // may be over budget
   policy.scheduler = sequant::BatchScheduler::ordered;
 
   auto axes = std::make_shared<std::unordered_map<

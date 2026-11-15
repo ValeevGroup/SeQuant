@@ -1,9 +1,17 @@
 include(FindOrFetchGoogleBenchmark)
 
 add_executable(sequant_benchmarks
+        "biorthogonalization.cpp"
         "canonicalize.cpp"
         "coupled_cluster.cpp"
+        "density_fitting.cpp"
+        "export.cpp"
+        "hash.cpp"
+        "inputs.cpp"
         "main.cpp"
+        "nevpt2.cpp"
+        "optimize.cpp"
+        "rdm.cpp"
         "simplify.cpp"
         "spintrace.cpp"
         "tensor_block_compare.cpp"
@@ -24,6 +32,7 @@ set_target_properties(sequant_benchmarks PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_compile_definitions(sequant_benchmarks
     PRIVATE
         $<$<OR:$<CONFIG:Debug>,$<BOOL:${SEQUANT_QUICK_BENCHMARKS}>>:SEQUANT_BENCH_MAX_CC_RANK=3>
+        $<$<OR:$<CONFIG:Debug>,$<BOOL:${SEQUANT_QUICK_BENCHMARKS}>>:SEQUANT_BENCH_MAX_DOWNSTREAM_CC_RANK=2>
         $<$<OR:$<CONFIG:Debug>,$<BOOL:${SEQUANT_QUICK_BENCHMARKS}>>:SEQUANT_BENCH_MAX_WICK_INPUTS=2>
 )
 
@@ -31,6 +40,12 @@ target_compile_definitions(sequant_benchmarks
 # ought to be local to the individual translation unit. Hence, we must not combine
 # all of them into a single translation unit.
 set_target_properties(sequant_benchmarks PROPERTIES UNITY_BUILD OFF)
+
+# MR benchmark inputs are read from the examples of the external interface
+target_compile_definitions(sequant_benchmarks
+    PRIVATE
+        SEQUANT_BENCH_NEVPT2_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../utilities/external-interface/examples/nevpt2"
+)
 
 target_link_libraries(sequant_benchmarks
         PRIVATE

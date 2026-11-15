@@ -45,6 +45,23 @@ TEST_CASE("canonicalize step", "[extint]") {
     REQUIRE(ctx.has_data("canon.energy"));
   }
 
+  SECTION("unchanged input is aliased if it is needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    CanonicalizeStep step;
+    REQUIRE(step.run("canon", ctx, {"in.0"}) == 1);
+    REQUIRE(ctx.ids_are_equivalent("canon.0", "in.0"));
+    REQUIRE_NOTHROW(ctx.get_data("in.0"));
+  }
+
+  SECTION("input is consumed if it is not needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    CanonicalizeStep step;
+    REQUIRE(step.run("canon", ctx, {"in.0"}) == 1);
+    REQUIRE_FALSE(ctx.ids_are_equivalent("canon.0", "in.0"));
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+    REQUIRE_NOTHROW(ctx.get_data("canon.0"));
+  }
+
   SECTION("rejects options") {
     CanonicalizeStep step;
     REQUIRE_THROWS_AS(step.set_options(json::object()), Exception);
@@ -94,6 +111,56 @@ TEST_CASE("to_export_tree step", "[extint]") {
   const ExportTreeData &data =
       convert_data<ExportTreeData>(out.front().data.get());
   REQUIRE(data.entries.size() == 2);
+}
+
+TEST_CASE("to_export_tree step input handling", "[extint]") {
+  // The second expression carries a symmetrizer, which the step pops
+  const std::initializer_list<std::wstring_view> definitions = {
+      L"R1{a1;i1} = + f{a1;i1}:A-H-S",
+      L"R2{a1;i1} = + Ŝ{i1;a1}:N-N-S f{a1;i1}:A-H-S"};
+
+  ExecutionContext ctx;
+  ctx.set_data("in", 0, ProcessingData{test_support::expr_data(definitions)});
+  const ExpressionData expected = test_support::expr_data(definitions);
+
+  ToExportTreeStep step;
+
+  SECTION("input is left intact if it is needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    REQUIRE(step.run("tree", ctx, {"in.0"}) == 1);
+    REQUIRE(
+        convert_data<ExpressionData>(ctx.get_data("in.0").front().data.get())
+            .expressions == expected.expressions);
+  }
+
+  SECTION("input is consumed if it is not needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    REQUIRE(step.run("tree", ctx, {"in.0"}) == 1);
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+  }
+
+  SECTION("both variants yield the same trees") {
+    ExecutionContext other;
+    other.set_data("in", 0,
+                   ProcessingData{test_support::expr_data(definitions)});
+    other.set_needed_later_predicate([](std::string_view) { return false; });
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+
+    REQUIRE(step.run("tree", ctx, {"in.0"}) == 1);
+    ToExportTreeStep other_step;
+    REQUIRE(other_step.run("tree", other, {"in.0"}) == 1);
+
+    const auto &lhs =
+        convert_data<ExportTreeData>(ctx.get_data("tree.0").front().data.get());
+    const auto &rhs = convert_data<ExportTreeData>(
+        other.get_data("tree.0").front().data.get());
+    REQUIRE(lhs.entries.size() == rhs.entries.size());
+    for (std::size_t i = 0; i < lhs.entries.size(); ++i) {
+      REQUIRE(lhs.entries[i].tree->expr() == rhs.entries[i].tree->expr());
+      REQUIRE(lhs.entries[i].symm_contribution_target ==
+              rhs.entries[i].symm_contribution_target);
+    }
+  }
 }
 
 TEST_CASE("dependencies step", "[extint]") {

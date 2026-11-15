@@ -1,10 +1,12 @@
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <algorithm>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -753,7 +755,9 @@ TEST_CASE("cache_manager residency", "[cache_manager]") {
   REQUIRE(man.chain_residency() == 0);
 }
 
-// chain_holds(): the peak trace's de-alias check. It reports, by POINTER
+// chain_holds(): the scope-cache half of the peak trace's de-alias check
+// (CacheManager::resident() adds the externally held values; see the
+// working-set test below). It reports, by POINTER
 // IDENTITY across the whole scope chain, whether a buffer is already held by
 // some cache -- so the per-op hwmark counts that buffer once (via the cache
 // residency) instead of also adding it as an operand. A DISTINCT buffer, which
@@ -804,6 +808,132 @@ TEST_CASE("cache_manager chain_holds pointer identity", "[cache_manager]") {
   REQUIRE(parent.access(X) != nullptr);  // life 1 -> 0, released
   REQUIRE_FALSE(parent.alive(X));
   REQUIRE_FALSE(child.chain_holds(vX));
+}
+
+// The per-op working-set sample (log::working_set) against a hierarchy with an
+// external store -- what the ordered executor's cell registry is to its
+// caches. The store's values must be counted at the outermost scope as well
+// as in a nested one, and an operand the store holds must not be added a
+// second time as an operand, at either scope.
+TEST_CASE("cache_manager working set with an external store",
+          "[cache_manager][meter]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");  // held by the root cache
+  auto const Y = make_node(L"R{a1;i1} = g{a1;i1}");  // held by the child cache
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> root_counts;
+  root_counts.emplace(X, 2);
+  auto root = manager_type(std::move(root_counts));
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> child_counts;
+  child_counts.emplace(Y, 2);
+  auto child = manager_type(std::move(child_counts));
+  child.set_parent(&root);
+
+  auto vX = eval_result(1);
+  auto vY = eval_result(2);
+  (void)root.store_and_access(X, vX);
+  (void)child.store_and_access(Y, vY);
+
+  // the external store: two values held outside both caches
+  auto const s1 = eval_result(3);
+  auto const s2 = eval_result(4);
+  std::vector<sequant::ResultPtr> const held{s1, s2};
+  sequant::eval::ExternalStore const store{
+      .bytes =
+          [&held] {
+            std::size_t b = 0;
+            for (auto const& v : held) b += v->size_in_bytes();
+            return b;
+          },
+      .for_each =
+          [&held](std::function<void(std::size_t, std::size_t)> const& emit) {
+            for (auto const& v : held) emit(0, v->size_in_bytes());
+          },
+      .holds =
+          [&held](sequant::ResultPtr const& v) {
+            return std::find(held.begin(), held.end(), v) != held.end();
+          }};
+
+  std::size_t const one = vX->size_in_bytes();
+  REQUIRE(one > 0);
+
+  SECTION("no store wired") {
+    CHECK(root.external_store() == nullptr);
+    CHECK(root.external_residency() == 0);
+    CHECK(root.outer_residency() == 0);
+    CHECK(child.outer_residency() == one);  // the root's entry
+    CHECK(child.resident(vX));
+    CHECK_FALSE(child.resident(s1));
+  }
+
+  root.set_external_store(&store);
+
+  SECTION("residency") {
+    // the store is found from any scope on the chain
+    CHECK(child.external_store() == &store);
+    CHECK(root.external_residency() == 2 * one);
+    // everything resident other than a cache's own entries
+    CHECK(root.outer_residency() == 2 * one);   // the store alone
+    CHECK(child.outer_residency() == 3 * one);  // the root's entry + the store
+    // and the whole chain, the store folded in once
+    CHECK(root.chain_residency() == 3 * one);
+    CHECK(child.chain_residency() == 4 * one);
+  }
+
+  SECTION("resident") {
+    CHECK(root.resident(s1));
+    CHECK(child.resident(s2));
+    CHECK(child.resident(vX));
+    CHECK(child.resident(vY));
+    // chain_holds() stays scope-caches-only: the store's own residency
+    // relies on that to skip buffers a cache already counts
+    CHECK_FALSE(root.chain_holds(s1));
+    CHECK_FALSE(root.resident(eval_result(3)));  // same value, other buffer
+    CHECK_FALSE(root.resident(nullptr));
+  }
+
+  SECTION("working set") {
+    namespace log = sequant::log;
+    auto& logger = sequant::Logger::instance();
+    auto const prev_level = logger.eval.level;
+    auto const fresh = eval_result(5);  // a new result, held by nobody
+    auto const loose = eval_result(6);  // an operand held by nobody
+
+    logger.eval.level = 0;
+    // nothing is measured when no trace line will be printed
+    CHECK(log::working_set(root, fresh, loose) == 0);
+
+    logger.eval.level = 1;
+    // outermost scope: own entry + store + the new result
+    CHECK(log::working_set(root, fresh) == 4 * one);
+    // an operand the store holds is already counted ...
+    CHECK(log::working_set(root, fresh, s1, s2) == 4 * one);
+    // ... as is one a scope cache holds; a loose one is added
+    CHECK(log::working_set(root, fresh, vX, loose) == 5 * one);
+    // nested scope: own entry + the root's entry + store + the new result,
+    // and the same de-aliasing of operands
+    CHECK(log::working_set(child, fresh) == 5 * one);
+    CHECK(log::working_set(child, fresh, s1, vX) == 5 * one);
+    CHECK(log::working_set(child, fresh, s1, loose) == 6 * one);
+    // one buffer is counted once however often it appears: an in-place
+    // result, or a value used as both operands
+    CHECK(log::working_set(child, loose, loose) == 5 * one);
+    CHECK(log::working_set(child, fresh, loose, loose) == 6 * one);
+    // a null operand (a unary op) adds nothing
+    CHECK(log::working_set(child, fresh, sequant::ResultPtr{}) == 5 * one);
+    // own bytes supplied by the caller
+    CHECK(log::working_set_given(child, 0, fresh, s1) == 4 * one);
+
+    logger.eval.level = prev_level;
+  }
+
+  root.set_external_store(nullptr);
+  CHECK(root.outer_residency() == 0);
 }
 
 TEST_CASE("persistent-store-reset", "[cache_manager][persistent_store]") {

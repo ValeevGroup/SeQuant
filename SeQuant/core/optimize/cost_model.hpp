@@ -759,6 +759,35 @@ struct PeakBatchedModel {
   /// reconstruct_batched_modes stamps \c External exactly where the DP opened
   /// or inherited them. There is no post-DP placement pass.
   bool batch_spectator_indices = false;
+  /// Holding an amplitude-independent operand outside the loop that slices its
+  /// consumer (\ref HoldPolicy), and the memory space of the large values. With
+  /// it on, \ref relax may read a non-volatile, non-leaf child from the child's
+  /// own root cell (\ref BFrontPoint::lp_held): the child is built once before
+  /// the consumer's loops, costs its root-cell flops once -- neither the
+  /// per-block recompute nor the \ref charge_bound_persistence weight -- and
+  /// while the consumer runs it counts its idle residency (its whole size times
+  /// the weight of its space) plus the slice being read. A scatter destination
+  /// assembled at the root scope is weighted by its space in the same way.
+  /// Off (default) leaves the search exactly as it was.
+  HoldPolicy hold = {};
+
+  /// Perf-first selection for a term none of whose schedules fits \ref
+  /// peak_threshold: the schedule taken is the cheapest among those whose
+  /// peak exceeds the smallest achievable one by at most this fraction.
+  /// See BatchPolicy::infeasible_peak_slack; +infinity takes the cheapest.
+  double infeasible_peak_slack = std::numeric_limits<double>::infinity();
+
+  /// When true, \ref select_root throws \c PeakBudgetInfeasible for a term
+  /// none of whose schedules fits \ref peak_threshold instead of choosing an
+  /// over-budget one. See BatchPolicy::infeasible_is_error, which sets it;
+  /// off here, for a model built directly.
+  bool infeasible_is_error = false;
+
+  /// \return true iff a whole value of \p elems elements lives in the slow
+  ///         space of \ref hold
+  bool in_slow_space(double elems) const {
+    return hold.enabled && elems * numeric_size >= hold.slow_min_bytes;
+  }
 
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
@@ -790,6 +819,11 @@ struct PeakBatchedModel {
     /// \ref charge_bound_persistence. Children are read at
     /// descend(descend(B, eopen), aprime).
     std::size_t eopen = 0;
+    /// The left / right child is held outside this node's loops (\ref hold):
+    /// it is read at the root cell (0), at frontier index \c lp_idx / \c
+    /// rp_idx of that cell, not at the children's cell.
+    bool lp_held = false;
+    bool rp_held = false;
   };
 
   /// Per-subset DP cell: a \c [B]-vector (size \c nB = 2^m) of Pareto
@@ -1383,7 +1417,17 @@ struct PeakBatchedModel {
               (E != 0) ? ((Ap != 0) ? accumulation_factor : 1.0) *
                              ctx.sz_u(ctx.cell_union(B) | E, n)
                        : ((Ap != 0) ? accumulation_factor * szn : 0.0);
-          double const both = szlp + szrp + szn + contrib;
+          // Memory space of a scatter destination at the root scope: a whole
+          // value assembled there from per-batch blocks is written to the slow
+          // space if it is large enough for it, so the destination counts by
+          // that space's weight while the loop runs (the block being scattered
+          // is `contrib`, in memory) and costs one write.
+          bool const dest_slow = B == 0 && E != 0 && in_slow_space(szn);
+          double const szn_res =
+              dest_slow ? hold.slow.residency_weight * szn : szn;
+          double const dest_write =
+              dest_slow ? w * hold.slow.write_cost * szn : 0.0;
+          double const both = szlp + szrp + szn_res + contrib;
           double const Lrp = ctx.Lof(rp, C), Llp = ctx.Lof(lp, C);
           // Resident-scan: a node that batches (Ap !=
           // 0) allocates its accumulator (szn) up front and holds it across the
@@ -1393,7 +1437,7 @@ struct PeakBatchedModel {
           // batching node's szn stacks onto every descendant's peak: the
           // Sum-of-enclosing-residents scan. S == 0 (unbatched, built once)
           // keeps szn out.
-          double const res = (S != 0) ? szn : 0.0;
+          double const res = (S != 0) ? szn_res : 0.0;
           // Cross every (peak,flops) trade-off of the two children at context
           // C.
           // Bound-persistence charge (charge_bound_persistence): this node
@@ -1403,38 +1447,104 @@ struct PeakBatchedModel {
           // child's cost by volatile_weight (a volatile child already is).
           // (An external loop opened here is closed here too: the full result
           // is assembled outside it, per production of this node.)
-          double const lp_scale =
-              (charge_bound_persistence && S != 0 && is_volatile &&
-               !(ctx.volatile_mask & lp) && (ctx.open_modes[lp] & S) != 0)
-                  ? volatile_weight
-                  : 1.0;
-          double const rp_scale =
-              (charge_bound_persistence && S != 0 && is_volatile &&
-               !(ctx.volatile_mask & rp) && (ctx.open_modes[rp] & S) != 0)
-                  ? volatile_weight
-                  : 1.0;
-          for (int li = 0; li < static_cast<int>(lp_st[C].size()); ++li)
-            for (int ri = 0; ri < static_cast<int>(rp_st[C].size()); ++ri) {
-              double const pl = lp_st[C][li].peak, prr = rp_st[C][ri].peak;
-              double const lpf =
-                  std::max({Lrp + pl + res, szlp + prr + res, both});
-              double const rpf =
-                  std::max({Llp + prr + res, szrp + pl + res, both});
-              // Cumulative sliced-mode count of this realization: the modes
-              // sliced at this node (popcount Ap) plus both children's. Fed to
-              // the perf-first ceiling's threshold-aware domination so the
-              // unsliced realization survives when it fits the budget.
-              std::size_t const nsl =
-                  lp_st[C][li].nsl + rp_st[C][ri].nsl +
-                  static_cast<std::size_t>(std::popcount(S));
-              pareto_insert_ceiling(
-                  acc[B],
-                  BFrontPoint{std::min(lpf, rpf),
-                              lp_scale * lp_st[C][li].flops +
-                                  rp_scale * rp_st[C][ri].flops + cflops_B,
-                              lp, rp, lpf <= rpf, Ap, li, ri, nsl, E},
-                  ceiling_nsl);
+          //
+          // With hold on, the charge covers every loop around the child, not
+          // only the ones this node closes: a non-volatile child of a
+          // volatile node that carries a mode of any enclosing loop is bound
+          // to that loop, and every loop around a volatile node is closed by
+          // a volatile node (this one or an ancestor, which contains it), so
+          // the child is rebuilt each replay wherever the loop was opened.
+          // Without this a non-volatile subtree below a volatile child of the
+          // closing node is priced as built once, and slicing looks as cheap
+          // as holding.
+          std::size_t const bound_modes = hold.enabled ? ctx.cell_union(C) : S;
+          bool const bound_gate = charge_bound_persistence && is_volatile &&
+                                  (hold.enabled ? C != 0 : S != 0);
+          double const lp_scale = (bound_gate && !(ctx.volatile_mask & lp) &&
+                                   (ctx.open_modes[lp] & bound_modes) != 0)
+                                      ? volatile_weight
+                                      : 1.0;
+          double const rp_scale = (bound_gate && !(ctx.volatile_mask & rp) &&
+                                   (ctx.open_modes[rp] & bound_modes) != 0)
+                                      ? volatile_weight
+                                      : 1.0;
+          // Holding a child outside the loops (hold): a non-volatile non-leaf
+          // child that carries a mode sliced around this node may be taken
+          // from its own root cell instead of from cell C. A value too small
+          // for the slow space is held in memory, and then only by a node at
+          // the root cell: a value held in memory across loops enclosing this
+          // node would co-reside with subtrees this node cannot see.
+          struct Held {
+            bool ok = false;
+            double idle = 0.0;     // residency while this node runs
+            double traffic = 0.0;  // one write, and the reads of every pass
+          };
+          auto const held_of = [&](std::size_t x) {
+            Held h;
+            if (!hold.enabled || C == 0 || std::popcount(x) == 1 ||
+                (ctx.volatile_mask & x) ||
+                (ctx.open_modes[x] & ctx.cell_union(C)) == 0)
+              return h;
+            double const whole = ctx.sz(x, 0);
+            bool const slow = in_slow_space(whole);
+            if (!slow && B != 0) return h;
+            h.ok = true;
+            h.idle = (slow ? hold.slow.residency_weight : 1.0) * whole;
+            // each element is read once per pass of the loops the value does
+            // not carry, on every replay of this node
+            if (slow)
+              h.traffic =
+                  (hold.slow.write_cost +
+                   w * ctx.recompute_factor(C, x) * hold.slow.read_cost) *
+                  whole;
+            return h;
+          };
+          Held const lh = held_of(lp), rh = held_of(rp);
+          for (int hl = 0; hl < 2; ++hl) {
+            if (hl && !lh.ok) continue;
+            for (int hr = 0; hr < 2; ++hr) {
+              if (hr && !rh.ok) continue;
+              auto const& lfr = hl ? lp_st[0] : lp_st[C];
+              auto const& rfr = hr ? rp_st[0] : rp_st[C];
+              double const idle = (hl ? lh.idle : 0.0) + (hr ? rh.idle : 0.0);
+              // a held child has no leaves of its own resident in the loop
+              double const Lr = hr ? 0.0 : Lrp, Ll = hl ? 0.0 : Llp;
+              for (int li = 0; li < static_cast<int>(lfr.size()); ++li)
+                for (int ri = 0; ri < static_cast<int>(rfr.size()); ++ri) {
+                  // inside the loops a held child is only its slice
+                  double const pl = hl ? szlp : lfr[li].peak,
+                               prr = hr ? szrp : rfr[ri].peak;
+                  double const lpf =
+                      std::max({Lr + pl + res, szlp + prr + res, both}) + idle;
+                  double const rpf =
+                      std::max({Ll + prr + res, szrp + pl + res, both}) + idle;
+                  double peak = std::min(lpf, rpf);
+                  // the held children are built before the loops, left first
+                  if (hl) peak = std::max(peak, lfr[li].peak + Lr);
+                  if (hr)
+                    peak = std::max(peak,
+                                    (hl ? lh.idle : 0.0) + rfr[ri].peak + Ll);
+                  // Cumulative sliced-mode count of this realization: the
+                  // modes sliced at this node (popcount Ap) plus both
+                  // children's. Fed to the perf-first ceiling's
+                  // threshold-aware domination so the unsliced realization
+                  // survives when it fits the budget.
+                  std::size_t const nsl =
+                      lfr[li].nsl + rfr[ri].nsl +
+                      static_cast<std::size_t>(std::popcount(S));
+                  double const lflops = hl ? lfr[li].flops + lh.traffic
+                                           : lp_scale * lfr[li].flops;
+                  double const rflops = hr ? rfr[ri].flops + rh.traffic
+                                           : rp_scale * rfr[ri].flops;
+                  pareto_insert_ceiling(
+                      acc[B],
+                      BFrontPoint{peak, lflops + rflops + cflops_B + dest_write,
+                                  lp, rp, lpf <= rpf, Ap, li, ri, nsl, E,
+                                  hl != 0, hr != 0},
+                      ceiling_nsl);
+                }
             }
+          }
         }  // C != SIZE_MAX
         if (S == 0) break;
         S = (S - 1) & choices;
@@ -1526,22 +1636,28 @@ struct PeakBatchedModel {
           pbest = i;
       bool const fit = pbest >= 0;  // a schedule met the ceiling
       if (!fit) {
-        // Nothing fits the budget: best-effort min flops, ties by min peak (the
-        // most-sliced realization). Not min nsl -- the nsl "don't slice below
-        // the ceiling" tiebreak in `better` applies only among feasible points;
-        // for an over-budget term it must be inverted, or the least-sliced
-        // (max-peak) schedule is chosen and blows the budget by the most (a
-        // giant unbatched integral -> OOM, e.g. the water-20 2.6 TB composite).
-        // For an over-budget term the fallback is min flops, then min peak:
-        // a min-peak fallback would take the most-sliced, flops-catastrophic
-        // factorizations.
+        throw_if_infeasible_is_error(rootf);
+        // Nothing fits the budget. The overage is then kept close to the
+        // unavoidable one: among the points whose peak is within
+        // infeasible_peak_slack of the smallest peak on the frontier, min
+        // flops, ties by min peak. Not min peak alone: that is the
+        // most-sliced, flops-catastrophic factorization. And not min flops
+        // alone: the frontier's cheapest point is the unbatched schedule,
+        // whose peak can exceed the smallest one by orders of magnitude for a
+        // marginal saving (a giant unbatched integral -> OOM, e.g. the
+        // water-20 2.6 TB composite), so a budget set just below a term's
+        // smallest peak would switch its batching off altogether.
+        double min_peak = std::numeric_limits<double>::max();
+        for (auto const& pt : rootf) min_peak = std::min(min_peak, pt.peak);
+        double const limit = min_peak * (1.0 + infeasible_peak_slack);
         auto const better_peak = [&](int i, int j) {
           return rootf[i].flops < rootf[j].flops ||
                  (rootf[i].flops == rootf[j].flops &&
                   rootf[i].peak < rootf[j].peak);
         };
         for (int i = 0; i < static_cast<int>(rootf.size()); ++i)
-          if (pbest < 0 || better_peak(i, pbest)) pbest = i;
+          if (rootf[i].peak <= limit && (pbest < 0 || better_peak(i, pbest)))
+            pbest = i;
       }
       return pbest;
     }
@@ -1556,6 +1672,7 @@ struct PeakBatchedModel {
           best = i;
       }
     if (!any_feasible) {
+      throw_if_infeasible_is_error(rootf);
       // Infeasible: no schedule fits the budget. Fall back to min peak.
       double minpeak = std::numeric_limits<double>::max();
       for (int i = 0; i < static_cast<int>(rootf.size()); ++i)
@@ -1567,6 +1684,23 @@ struct PeakBatchedModel {
     return best;
   }
 
+  /// Throws \c PeakBudgetInfeasible, carrying the smallest peak on the root
+  /// frontier \p rootf, when \ref infeasible_is_error is set; called by \ref
+  /// select_root once it has found that no point fits \ref peak_threshold.
+  template <typename Frontier>
+  void throw_if_infeasible_is_error(Frontier const& rootf) const {
+    if (!infeasible_is_error) return;
+    double min_peak = std::numeric_limits<double>::max();
+    for (auto const& pt : rootf) min_peak = std::min(min_peak, pt.peak);
+    double const min_bytes = min_peak * numeric_size;
+    throw PeakBudgetInfeasible(
+        "no schedule of this term fits the peak memory budget of " +
+            std::to_string(peak_threshold) +
+            " bytes: its smallest modeled peak is " +
+            std::to_string(min_bytes) + " bytes",
+        peak_threshold, min_bytes);
+  }
+
   /// The children of a chosen frontier point, in the canonical `lp_first`
   /// order, and the children's enclosing cell.
   struct ChildFrontier {
@@ -1575,6 +1709,10 @@ struct PeakBatchedModel {
     std::size_t s;
     int si;
     std::size_t C;
+    /// the cell each child is read at: \c C, or the root cell (0) for a child
+    /// held outside the node's loops
+    std::size_t Cf;
+    std::size_t Cs;
   };
 
   /// Back-pointer walk step: for node subset \p n in enclosing cell \p B with
@@ -1585,9 +1723,15 @@ struct PeakBatchedModel {
                                       std::size_t n, std::size_t B, int idx) {
     auto const& r = st[n][B][idx];
     std::size_t const C = ctx.descend_pt(B, r.eopen, r.aprime);
-    return ChildFrontier{
-        r.lp_first ? r.lp : r.rp, r.lp_first ? r.lp_idx : r.rp_idx,
-        r.lp_first ? r.rp : r.lp, r.lp_first ? r.rp_idx : r.lp_idx, C};
+    bool const fh = r.lp_first ? r.lp_held : r.rp_held,
+               sh = r.lp_first ? r.rp_held : r.lp_held;
+    return ChildFrontier{r.lp_first ? r.lp : r.rp,
+                         r.lp_first ? r.lp_idx : r.rp_idx,
+                         r.lp_first ? r.rp : r.lp,
+                         r.lp_first ? r.rp_idx : r.lp_idx,
+                         C,
+                         fh ? std::size_t{0} : C,
+                         sh ? std::size_t{0} : C};
   }
 
   EvalSequence reconstruct(Context const& ctx,
@@ -1600,9 +1744,9 @@ struct PeakBatchedModel {
         [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
       if (std::popcount(n) == 1)
         return EvalSequence{static_cast<int>(std::countr_zero(n))};
-      auto const [fs, fi, ss, si, C] = child_frontier(ctx, st, n, B, idx);
-      EvalSequence s = build(fs, C, fi);
-      EvalSequence b = build(ss, C, si);
+      auto const cf = child_frontier(ctx, st, n, B, idx);
+      EvalSequence s = build(cf.f, cf.Cf, cf.fi);
+      EvalSequence b = build(cf.s, cf.Cs, cf.si);
       s.insert(s.end(), b.begin(), b.end());
       s.push_back(-1);
       return s;
@@ -1625,7 +1769,14 @@ struct PeakBatchedModel {
                       int idx) const {
     if (std::popcount(n) == 1) return ctx.sz_u(Usize, n);
     auto const& r = st[n][Bsched][idx];
-    auto const [f, fi, s, si, C] = child_frontier(ctx, st, n, Bsched, idx);
+    if (r.lp_held || r.rp_held)
+      throw Exception(
+          "PeakBatchedModel::subtree_peak: the staged-peak re-price does not "
+          "cover operands held outside their consumer's loops");
+    auto const [f, fi, s, si, C, Cf, Cs] =
+        child_frontier(ctx, st, n, Bsched, idx);
+    (void)Cf;
+    (void)Cs;
     std::size_t const Uc = Usize | r.aprime;
     double const peak_f = subtree_peak(ctx, st, f, C, Uc, fi);
     double const peak_s = subtree_peak(ctx, st, s, C, Uc, si);
@@ -1665,14 +1816,17 @@ struct PeakBatchedModel {
       *out_root_peak_bytes =
           st[root][0][best].peak * numeric_size * ctx.field.elem_mult;
     container::vector<NodeBatchAnnotation> node_axes;
-    std::function<EvalSequence(std::size_t, std::size_t, int)> build =
-        [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
+    // `held`: the node's consumer reads it from the root cell (hold)
+    std::function<EvalSequence(std::size_t, std::size_t, int, bool)> build =
+        [&](std::size_t n, std::size_t B, int idx, bool held) -> EvalSequence {
       if (std::popcount(n) == 1)
         return EvalSequence{static_cast<int>(std::countr_zero(n))};
       BFrontPoint const& r = st[n][B][idx];
-      auto const [fs, fi, ss, si, C] = child_frontier(ctx, st, n, B, idx);
-      EvalSequence s = build(fs, C, fi);
-      EvalSequence b = build(ss, C, si);
+      auto const cf = child_frontier(ctx, st, n, B, idx);
+      bool const fheld = r.lp_first ? r.lp_held : r.rp_held,
+                 sheld = r.lp_first ? r.rp_held : r.lp_held;
+      EvalSequence s = build(cf.f, cf.Cf, cf.fi, fheld);
+      EvalSequence b = build(cf.s, cf.Cs, cf.si, sheld);
       s.insert(s.end(), b.begin(), b.end());
       container::svector<std::pair<Index, BatchModeType>> modes;
       // External modes first (outer), then Contracted: `modes` becomes
@@ -1739,11 +1893,12 @@ struct PeakBatchedModel {
         double const rf = ctx.recompute_factor(B, n);
         ann.effective_count = static_cast<std::size_t>(std::llround(rf));
       }
+      ann.root_scope = held;
       node_axes.push_back(std::move(ann));  // one entry per -1, in RPN order
       s.push_back(-1);
       return s;
     };
-    auto seq = build(root, 0, best);
+    auto seq = build(root, 0, best, false);
     return {std::move(seq), std::move(node_axes)};
   }
 };

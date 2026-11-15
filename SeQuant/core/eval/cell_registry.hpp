@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
 #include <functional>
 #include <optional>
 #include <set>
@@ -51,6 +52,21 @@ struct CellRegistryHooks {
   /// Must not throw: it is also called while cells are released, which
   /// happens during stack unwinding too.
   std::function<void(std::size_t live_bytes)> on_bytes_changed;
+  /// Invoked with a value about to be stored in a cell (\c set ); what it
+  /// returns is stored in its place. Lets the owner store a value in another
+  /// form (on disk, see \c Result::on_disk ). May be empty.
+  std::function<ResultPtr(CellId, ResultPtr)> stored_form;
+  /// Whether the value of a cell that is assembled from the batches of a
+  /// loop should be assembled in its on-disk form from the start (see
+  /// \c BackendArrayOps::make_zeros_on_disk ). Empty means never.
+  std::function<bool(CellId)> assemble_on_disk;
+  /// Accounting: invoked after a value is stored in a cell (\c set ), with
+  /// the cell and the value. May be empty.
+  std::function<void(CellId, ResultPtr const&)> on_set;
+  /// Accounting: invoked when a consumer's operand read is served from a
+  /// cell (\c CellReadResolver::fetch ), with the cell and the whole value
+  /// it holds, before any slicing. May be empty.
+  std::function<void(CellId, ResultPtr const&)> on_read;
   /// Whether a fill-once violation throws (see \c CellRegistry::set). The
   /// default is the process-wide env gate \c eval::strict_fill_once(), which
   /// is latched on its first call anywhere in the process -- so a test that
@@ -149,11 +165,26 @@ class CellRegistry {
                      "CellRegistry::set: fill-once violated");
     }
     discharge(s);
-    s.value = std::move(v);
+    s.value =
+        hooks_.stored_form ? hooks_.stored_form(c, std::move(v)) : std::move(v);
     s.filled_since_clear = true;
     charge(s);
     if (cell.persistent && hooks_.persistent && hooks_.hash_of)
       hooks_.persistent->put(hooks_.hash_of(cell.value_id), s.value);
+    if (hooks_.on_set) hooks_.on_set(c, s.value);
+  }
+
+  /// \return whether the value of cell \p c , about to be assembled from the
+  ///         batches of a loop, should be assembled on disk (see
+  ///         \c CellRegistryHooks::assemble_on_disk )
+  [[nodiscard]] bool assemble_on_disk(CellId c) const {
+    return hooks_.assemble_on_disk && hooks_.assemble_on_disk(c);
+  }
+
+  /// Reports an operand read served from cell \p c to the accounting hook
+  /// (\c CellRegistryHooks::on_read ); \p whole is the value the cell held.
+  void note_read(CellId c, ResultPtr const& whole) const {
+    if (hooks_.on_read) hooks_.on_read(c, whole);
   }
 
   /// The cell's current result, or null if unset; never throws.
@@ -282,6 +313,14 @@ class CellRegistry {
   void for_each_live(F&& f) const {
     for (CellId c = 0; c < slots_.size(); ++c)
       if (slots_[c].value) f(c, slots_[c].value);
+  }
+
+  /// \return whether some slot currently holds \p value (pointer identity).
+  /// Read-only: spends no life.
+  [[nodiscard]] bool holds(ResultPtr const& value) const {
+    if (!value) return false;
+    return std::any_of(slots_.begin(), slots_.end(),
+                       [&](Slot const& s) { return s.value == value; });
   }
 
   /// \return whether cell \p c is a non-persistent cell holding no value:
@@ -523,6 +562,7 @@ class CellReadResolver {
     bool const last =
         last_reads_ && read_at < last_reads_->size() && (*last_reads_)[read_at];
     ResultPtr v = last ? reg_->take(r.source) : reg_->read(r.source);
+    reg_->note_read(r.source, v);
     for (auto const& [pos, key] : r.slice) {
       std::optional<std::pair<std::size_t, std::size_t>> range;
       for (auto const& e : ctx)
@@ -535,6 +575,9 @@ class CellReadResolver {
                         " to a loop instance not in the batch context");
       v = v->slice_mode(pos, range->first, range->second);
     }
+    // a value kept on disk is used from memory: a read that slices it has
+    // loaded just the slice, any other loads it whole
+    if (v->is_on_disk()) v = v->in_memory();
     ++served_;
     return v;
   }

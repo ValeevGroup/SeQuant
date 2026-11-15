@@ -4,6 +4,8 @@
 
 #include <SeQuant/core/export/utils.hpp>
 
+#include <SeQuant/core/export/marked_name.hpp>
+
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -18,6 +20,18 @@
 #include <utility>
 
 namespace sequant::detail {
+
+std::string describe(const Tensor &tensor) {
+  // the exported name: a mark (adjoint, conjugation) folds into it
+  std::string str = export_name(tensor);
+  str += ":";
+  for (const Index &idx : tensor.indices()) {
+    str += toUtf8(idx.space().reduce_key(idx.label()));
+  }
+  return str;
+}
+
+std::string describe(const Variable &variable) { return export_name(variable); }
 
 std::string basis_instance_tag(const Index &idx) {
   if (!idx.basis().has_basis_instance()) return {};

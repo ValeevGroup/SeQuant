@@ -31,10 +31,10 @@ void ToExportTreeStep::set_options(const nlohmann::json &) {
 std::size_t ToExportTreeStep::process(std::string_view id_prefix,
                                       std::size_t id_start,
                                       ExecutionContext &ctx,
-                                      const ExpressionData &data) {
+                                      WorkingCopy<ExpressionData> &input) {
   ExportTreeData output;
 
-  for (const ResultExpr &current : data.expressions) {
+  for (ResultExpr &current : input.data.expressions) {
     std::optional<Tensor> symmetrized_result;
 
     ExportNode<> tree = [&]() {
@@ -42,23 +42,22 @@ std::size_t ToExportTreeStep::process(std::string_view id_prefix,
         return to_export_tree(current);
       }
 
-      ResultExpr copy = current.clone();
       [[maybe_unused]] std::optional<ExprPtr> symmetrizer =
-          pop_symmetrizer(copy);
+          pop_symmetrizer(current);
 
-      SEQUANT_ASSERT(copy.produces_tensor());
-      SEQUANT_ASSERT(copy.has_label());
+      SEQUANT_ASSERT(current.produces_tensor());
+      SEQUANT_ASSERT(current.has_label());
 
       SEQUANT_ASSERT(symmetrizer.has_value());
       SEQUANT_ASSERT(symmetrizer->is<Tensor>());
-      SEQUANT_ASSERT(symmetrizer->as<Tensor>().bra() == copy.ket());
-      SEQUANT_ASSERT(symmetrizer->as<Tensor>().ket() == copy.bra());
+      SEQUANT_ASSERT(symmetrizer->as<Tensor>().bra() == current.ket());
+      SEQUANT_ASSERT(symmetrizer->as<Tensor>().ket() == current.bra());
 
-      symmetrized_result = copy.result_as_tensor();
+      symmetrized_result = current.result_as_tensor();
 
-      copy.set_label(std::wstring(copy.label()) + L"u");
+      current.set_label(std::wstring(current.label()) + L"u");
 
-      return to_export_tree(copy);
+      return to_export_tree(current);
     }();
 
     output.entries.push_back(

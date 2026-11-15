@@ -330,8 +330,10 @@ step rather than after it (see the note under :code:`dependencies`).
      - Whether multiple inputs shall be merged together in order to undergo combined rather than individual CSE.
        Instead of a boolean, an array of input IDs/aliases can be given, in which case merging happens only within the
        inputs matching each listed ID (matched like the groups of the :code:`grouping` option of the export step). Each
-       listed ID yields one output, aliased to :code:`<step>.<ID>`. Inputs matching none of the IDs undergo individual
-       CSE; inputs matching more than one ID are an error.
+       listed ID yields one output, aliased to :code:`<step>.<ID>`. An entry of the array may itself be an array of IDs, in
+       which case all inputs matching any of them are merged into one output, aliased to :code:`<step>.<ID>` for each of
+       these IDs. Inputs matching none of the entries undergo individual CSE; inputs matching more than one entry are an
+       error.
      - false
      - No
 
@@ -458,9 +460,15 @@ given, they are merged and jointly ordered before being exported together.
      - Whether to run a further optimization pass (eliminating redundant operations) over the intermediate representation before generating code.
      - true
      - No
+   * - :code:`check_stack_order`
+     - Whether to verify that the generated memory operations (create, load, unload, destroy, persist) obey a stack-like order, as required by the
+       target language (and throw an error if they do not). The check is applied to the final operations, after :code:`optimize`.
+     - false
+     - No
    * - :code:`grouping`
-     - Object mapping a group name to an input id/alias. All entries belonging to that id/alias are exported as part of the named group. Any entry not
-       matched by any of these rules is put into an implicit group named :code:`Default`.
+     - Object mapping a group name to an input id/alias, or to an array of them. All entries belonging to any of these ids/aliases are exported as part
+       of the named group. An id/alias must not be associated with more than one group. Any entry not matched by any of these rules is put into an
+       implicit group named :code:`Default`.
      - :code:`{}`
      - No
    * - :code:`relative_order`
@@ -484,7 +492,8 @@ given, they are merged and jointly ordered before being exported together.
        A later intermediate takes over the name of an earlier one if the earlier one's last use precedes its definition, both are batched over the
        same indices, both span the same IRREPs (if :code:`irreps` is given) and their shapes are compatible. Either a boolean or an object with the
        property :code:`shape`, which is :code:`multiset` (default; same index spaces up to permutation, the indices of the later intermediate are
-       rearranged accordingly) or :code:`block` (same index spaces in the same order).
+       rearranged accordingly) or :code:`block` (same index spaces in the same order). Independent of this option, if :code:`irreps` is given,
+       an intermediate whose name is used for different IRREPs in different groups is renamed such that every name spans a single set of IRREPs.
      - false
      - No
    * - :code:`meta`
@@ -639,8 +648,9 @@ Each entry of :code:`rules` is an object with the following properties:
      - Default
      - Required
    * - :code:`type`
-     - Kind of rule. Currently, the only supported value is :code:`contains`, which matches if the term (or any of its subexpressions) contains a
-       match for :code:`expr` or :code:`label`.
+     - Kind of rule. :code:`contains` matches if the term (or any of its subexpressions) contains a match for :code:`expr` or :code:`label`.
+       :code:`index_spaces` matches if the term contains a tensor whose number of indices in each of the spaces listed in
+       :code:`spaces` meets the given count/bounds. :code:`index_count` matches if the term contains a tensor with exactly :code:`count` indices in total.
      - -
      - Yes
    * - :code:`negate`
@@ -661,8 +671,20 @@ Each entry of :code:`rules` is an object with the following properties:
      - One (String) or several (Array of Strings) full-match regular expressions that are matched (recursively) against the labels of subexpressions
        within the term being tested. A match against any of the given patterns counts as a match for this rule. Mutually exclusive with :code:`expr`.
        Be aware that in order to enter a backslash into the regular expression, you have to escape it in a JSON string as :code:`\\`.
+       Together with :code:`index_spaces`, the patterns instead restrict which tensors are considered, i.e. the same tensor has to satisfy both the label
+       and the index counts.
      - -
-     - One of :code:`expr`/:code:`label`
+     - One of :code:`expr`/:code:`label` for :code:`contains`
+   * - :code:`spaces`
+     - Only used by :code:`index_spaces`. Object mapping index space labels to the number of indices a tensor must have in that space, e.g.
+       :code:`{"u": 2, "a": 1}` (exact counts) or :code:`{"u": {"min": 3}}` (:code:`min` and/or :code:`max` bounds). Spaces are matched exactly (indices in other spaces, including related ones, are not counted), and indices in spaces that are not
+       listed are not constrained.
+     - -
+     - For :code:`index_spaces`
+   * - :code:`count`
+     - Only used by :code:`index_count`. Total number of (non-null) indices (bra, ket and auxiliary) a tensor must have.
+     - -
+     - For :code:`index_count`
 
 
 optimize
@@ -688,8 +710,11 @@ tensor contractions, chosen so as to minimize the configured :code:`objective`.
      - Default
      - Required
    * - :code:`objective`
-     - Cost metric to minimize when factorizing contractions: :code:`DenseFLOPs` (the floating-point operation count).
-     - :code:`DenseFLOPs`
+     - Cost metric to minimize when factorizing contractions. :code:`DenseFLOPs` minimizes the floating-point operation count.
+       :code:`DenseTimeSpace` also minimizes the operation count, but breaks ties in favor of the lower peak memory (the combined size of all
+       simultaneously live tensors). :code:`DenseTimeSpaceBatched` additionally allows slicing indices into batches to stay below a peak-memory
+       budget; it requires the :code:`batch` option (see below).
+     - :code:`DenseTimeSpace`
      - No
    * - :code:`reorder_sums`
      - Whether summands of a sum may be reordered so that terms sharing common intermediates end up next to each other.
@@ -697,23 +722,71 @@ tensor contractions, chosen so as to minimize the configured :code:`objective`.
      - No
    * - :code:`cse`
      - Whether to perform common-subexpression elimination while searching for a single term's evaluation order. :code:`subnet` recognizes equivalent
-       subnetworks (more search effort, potentially fewer operations); :code:`none` disables this. Not to be confused with the standalone :code:`cse`
-       step, which operates across a whole processing tree rather than within a single term.
+       subnetworks (more search effort, potentially fewer operations) and requires the :code:`DenseFLOPs` objective; :code:`none` disables this.
+       Not to be confused with the standalone :code:`cse` step, which operates across a whole processing tree rather than within a single term.
      - :code:`none`
      - No
    * - :code:`intermediate_size_penalty`
-     - Per-intermediate memory-footprint penalty added to the cost of a contraction (only consulted when :code:`objective` is :code:`DenseFLOPs`).
+     - Per-intermediate memory-footprint penalty added to the cost of a contraction (requires the :code:`DenseFLOPs` objective if non-zero).
      - 0.0
      - No
    * - :code:`prune_outer_products`
      - Whether to prune disconnected (outer-product) subsets from the search space while looking for the best evaluation order.
      - true
      - No
+   * - :code:`batch`
+     - Batching policy for the :code:`DenseTimeSpaceBatched` objective (and only valid together with it). See below.
+     - -
+     - Only for :code:`DenseTimeSpaceBatched`
    * - :code:`replay`
      - Configures the treatment of expressions that are evaluated repeatedly (e.g. once per iteration of an iterative solver), in which only some
        tensors (the *volatile* ones, e.g. amplitudes) change between evaluations. See below.
      - -
      - No
+
+:code:`batch` is an object with the following properties. Indices are identified by the label of their index space, which has to be one of the
+labels given in :code:`index_spaces`:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`peak_threshold`
+     - Peak-memory budget in bytes (assuming 8 bytes per tensor element). Among the evaluation orders that fit into it, the one with the fewest operations is chosen.
+     - -
+     - Yes
+   * - :code:`contracted`
+     - Array of index space labels whose indices may be batched where they are summed over.
+     - :code:`[]`
+     - At least one of :code:`contracted` and :code:`external`
+   * - :code:`external`
+     - Array of index space labels whose indices may be batched where they are open on the result. Requires :code:`spectator_indices`.
+     - :code:`[]`
+     - At least one of :code:`contracted` and :code:`external`
+   * - :code:`target_size`
+     - Upper bound for the number of elements of a batchable index in a single batch. Either an integer (for all batchable spaces) or an object
+       mapping every batchable space label to its bound.
+     - -
+     - Yes
+   * - :code:`spectator_indices`
+     - Whether indices that are open on the result but contracted nowhere may be batched. Required for :code:`external` to have an effect (and only valid together with a non-empty :code:`external`).
+     - false
+     - No
+   * - :code:`persistent_only`
+     - Whether to restrict batching to subexpressions that do not contain volatile tensors. Requires :code:`replay`.
+     - false
+     - No
+   * - :code:`accumulation_factor`
+     - Footprint multiplier for the in-flight contribution that co-resides with a batch-accumulated intermediate.
+     - 0.0
+     - No
+
+.. note::
+   The batching only influences the choice of the evaluation order. The exported code is not sliced accordingly; use the :code:`batch_indices` step
+   for batching the results of the generated code.
 
 :code:`replay` is an object with the following properties:
 
@@ -989,12 +1062,16 @@ on the result of the previous one.
        this map, it is renamed to the associated value.
      - :code:`{}`
      - No
+   * - :code:`keep_unchanged`
+     - Whether an input that none of the substitutions changed is still emitted (as is), so that there is exactly one output per input, in input order.
+     - false
+     - No
 
 .. note::
    Unlike most other steps, :code:`substitute` does not propagate the named aliases of its inputs onto its outputs - downstream steps need to reference
    its outputs via the auto-generated :code:`<step_id>.<index>` scheme (or via this step's own :code:`outputs` property). Additionally, if none of the
    expressions belonging to a given input end up changed by any substitution, that input is dropped from the output entirely rather than being passed
-   through unchanged.
+   through unchanged (unless :code:`keep_unchanged` is set).
 
 
 to_export_tree

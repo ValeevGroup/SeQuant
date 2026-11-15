@@ -15,7 +15,9 @@
 #include <functional>
 #include <map>
 #include <ranges>
+#include <set>
 #include <span>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -161,12 +163,13 @@ std::unordered_map<std::size_t, AnyIrrepSet> result_irreps(
 /// each group, i.e. intermediates must be defined and used within the same
 /// group. Two intermediates may only share a name if they are batched over the
 /// same indices and, if @p ctx has an IRREP context, span the same IRREPs
-/// (where IRREPs are propagated across all groups). Loops over batch indices
-/// are taken into account when determining the lifetime of intermediates (see
-/// batch_loop_regions). Tensors are identified the way the export does, i.e.
-/// after being rewritten by @p ctx. Trees that need rebuilding are rebuilt via
-/// to_export_tree, retaining their IDs such that information associated with
-/// them (e.g. batch indices) stays valid.
+/// (where IRREPs are propagated across all groups) and a name already used for
+/// different IRREPs in a previous group is never assigned. Loops over batch
+/// indices are taken into account when determining the lifetime of
+/// intermediates (see batch_loop_regions). Tensors are identified the way the
+/// export does, i.e. after being rewritten by @p ctx. Trees that need
+/// rebuilding are rebuilt via to_export_tree, retaining their IDs such that
+/// information associated with them (e.g. batch indices) stays valid.
 ///
 /// @param groups Range of groups of expressions in the order of export, where
 /// every group is a random-access range of expression trees in the order of
@@ -177,6 +180,10 @@ std::unordered_map<std::size_t, AnyIrrepSet> result_irreps(
 /// results of such trees are considered for name recycling.
 /// @param compatibility Shape compatibility required for recycling a name
 /// @param label_gen Generator for new names of intermediates
+/// @param conflicts_only If true, no names are recycled and only the
+/// intermediates whose name is used for different IRREPs in different groups
+/// are renamed (to names not used anywhere else). This requires an IRREP
+/// context in @p ctx, otherwise nothing is renamed.
 /// @returns Statistics about the renaming (accumulated over all groups)
 template <std::ranges::range Groups, typename Predicate>
   requires std::ranges::random_access_range<std::ranges::range_value_t<Groups>>
@@ -184,7 +191,8 @@ opt::NameRecyclingResult recycle_intermediate_names(
     Groups &groups, const ExportContext &ctx, const Predicate &overwrites,
     opt::ShapeCompatibility compatibility,
     opt::IntermediateNamePool::LabelGenerator label_gen =
-        opt::IntermediateNamePool::default_label_generator()) {
+        opt::IntermediateNamePool::default_label_generator(),
+    bool conflicts_only = false) {
   using TreeNode =
       std::ranges::range_value_t<std::ranges::range_value_t<Groups>>;
 
@@ -192,7 +200,28 @@ opt::NameRecyclingResult recycle_intermediate_names(
     return overwrites(tree);
   };
 
+  // Labels of all objects in the export; new names must not coincide with them
+  std::set<std::wstring, std::less<>> used_labels;
+  if (conflicts_only) {
+    for (auto &expressions : groups) {
+      for (const auto &tree : expressions) {
+        (void)to_expr(tree, [&](const ExprPtr &leaf) {
+          return opt::detail::map_leaf_objects(
+              leaf, [&](const ExprPtr &object) {
+                used_labels.emplace(opt::detail::result_label(*object));
+                return ExprPtr{};
+              });
+        });
+        if (tree->is_tensor() || tree->is_variable()) {
+          used_labels.emplace(opt::detail::result_label(*tree->expr()));
+        }
+      }
+    }
+  }
+
   detail::ScannedIrrepContext::Registry scanned_irreps;
+  // IRREPs of the names (after recycling) used in previous groups
+  detail::ScannedIrrepContext::Registry assigned_irreps;
   opt::NameRecyclingResult stats;
 
   for (auto &expressions : groups) {
@@ -202,6 +231,41 @@ opt::NameRecyclingResult recycle_intermediate_names(
           detail::result_irreps(expressions, ctx, overwrites, scanned_irreps);
     }
 
+    // Results named like a result with different IRREPs in a previous group.
+    // All overwriting definitions of such a name are renamed together, as a
+    // single non-renamed one would keep the name for the others as well.
+    std::set<Tensor, TensorBlockLessThanComparator> conflicting;
+    if (conflicts_only) {
+      for (const auto &tree : expressions) {
+        if (irreps.empty() || !tree->is_tensor() || !overwrites(tree)) {
+          continue;
+        }
+
+        Tensor rewritten = tree->as_tensor();
+        ctx.rewrite(rewritten);
+        auto it = assigned_irreps.find(rewritten);
+        if (it != assigned_irreps.end() &&
+            it->second != irreps.at(tree->id())) {
+          conflicting.insert(std::move(rewritten));
+        }
+      }
+    }
+    auto recyclable = [&](std::size_t i, const TreeNode &tree) {
+      if (!overwriting(i, tree)) {
+        return false;
+      }
+      if (!conflicts_only) {
+        return true;
+      }
+      if (!tree->is_tensor()) {
+        return false;
+      }
+
+      Tensor rewritten = tree->as_tensor();
+      ctx.rewrite(rewritten);
+      return conflicting.contains(rewritten);
+    };
+
     const opt::NameRecyclingResult group_stats =
         opt::recycle_intermediate_names(
             expressions,
@@ -209,11 +273,15 @@ opt::NameRecyclingResult recycle_intermediate_names(
               return to_export_tree<typename TreeNode::value_type>(res);
             },
             opt::NameRecyclingOptions<TreeNode>{
-                .is_recyclable = overwriting,
+                .is_recyclable = recyclable,
                 .starts_new_value = overwriting,
                 .shape_compatibility = compatibility,
                 .extra_compatible =
                     [&](const TreeNode &previous, const TreeNode &current) {
+                      if (conflicts_only) {
+                        return false;
+                      }
+
                       if (!std::ranges::equal(
                               ctx.batch_indices(previous->id()),
                               ctx.batch_indices(current->id()))) {
@@ -223,6 +291,24 @@ opt::NameRecyclingResult recycle_intermediate_names(
                       return irreps.empty() || irreps.at(previous->id()) ==
                                                    irreps.at(current->id());
                     },
+                .name_acceptable =
+                    [&](const TreeNode &definition, const Expr &named) {
+                      if (conflicts_only &&
+                          used_labels.contains(
+                              opt::detail::result_label(named))) {
+                        return false;
+                      }
+
+                      if (irreps.empty() || !named.is<Tensor>()) {
+                        return true;
+                      }
+
+                      Tensor rewritten = named.as<Tensor>();
+                      ctx.rewrite(rewritten);
+                      auto it = assigned_irreps.find(rewritten);
+                      return it == assigned_irreps.end() ||
+                             it->second == irreps.at(definition->id());
+                    },
                 .repeated_regions = batch_loop_regions(expressions, ctx),
                 .label_gen = label_gen,
                 // Tensors are identified by their rewritten form during export
@@ -231,6 +317,20 @@ opt::NameRecyclingResult recycle_intermediate_names(
                     [](const TreeNode &original, TreeNode &rebuilt) {
                       rebuilt->set_id(original->id());
                     }});
+
+    for (const auto &tree : expressions) {
+      if (irreps.empty() || !tree->is_tensor()) {
+        continue;
+      }
+
+      Tensor rewritten = tree->as_tensor();
+      ctx.rewrite(rewritten);
+      auto [it, inserted] =
+          assigned_irreps.emplace(std::move(rewritten), irreps.at(tree->id()));
+      if (!inserted) {
+        it->second.unite(irreps.at(tree->id()));
+      }
+    }
 
     stats.num_values += group_stats.num_values;
     stats.num_names += group_stats.num_names;

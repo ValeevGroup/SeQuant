@@ -437,6 +437,31 @@ class Result {
   ///
   /// \brief Add other Result object into this object.
   ///
+  /// \name keeping a value on disk
+  /// A backend that can keep a value on disk gives it a second, *on-disk*
+  /// form: a result that holds the same value without holding it in memory.
+  /// The on-disk form is for storage, not arithmetic: of the operations
+  /// above it need only support \c slice_mode, which reads a slice into
+  /// memory, and \c write_into_slice, which writes a block; the rest may
+  /// throw. \c size_in_bytes of an on-disk form is the size of the value,
+  /// wherever it is.
+  /// @{
+
+  /// \return this value in its on-disk form, or null if this kind of result
+  ///         cannot be kept on disk (the default). This result is unchanged;
+  ///         its memory is released when it is.
+  [[nodiscard]] virtual ResultPtr on_disk() const { return nullptr; }
+
+  /// \return whether this result is the on-disk form of a value.
+  [[nodiscard]] virtual bool is_on_disk() const noexcept { return false; }
+
+  /// \return the value of this on-disk result, whole, in memory. Only an
+  ///         on-disk form implements it; the default throws.
+  [[nodiscard]] virtual ResultPtr in_memory() const {
+    throw detail::unimplemented_method("in_memory");
+  }
+  /// @}
+
   virtual void add_inplace(Result const&) = 0;
 
   /// Diagnostic: the Frobenius norm of the held value (0 for scalars and

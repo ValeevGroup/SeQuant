@@ -22,7 +22,8 @@ namespace sequant::eval {
 /// A cell lives for one epoch: from its production until the loop instance
 /// that re-produces it advances (\c detail::epoch_depth). Within an epoch the
 /// block of that loop -- the root block for a cell bound to no loop -- runs
-/// its timeline once: its steps in order, then its outputs in order. Every
+/// its timeline once: its steps in order, each output where the schedule
+/// places it among them (\c ScopeBlock::output_position). Every
 /// read of the cell happens at one position of that timeline, either directly
 /// (a build of that block, or one of its outputs) or inside the nested block
 /// that is the step at that position. The cell is released when the last
@@ -210,11 +211,21 @@ namespace detail {
       std::optional<std::size_t> operand_read = {};
       std::optional<CellId> assemble = {};
     } last;
+    // When a position of the block's timeline comes: an output sits among
+    // the steps where the schedule placed it (ScopeBlock::output_position),
+    // outputs of one place in their own order.
+    auto const when = [&](std::size_t pos) {
+      std::size_t const ns = block->steps.size();
+      return pos < ns ? std::tuple<std::size_t, int, std::size_t>{pos, 1, 0}
+                      : std::tuple<std::size_t, int, std::size_t>{
+                            block->output_position(pos - ns), 0, pos - ns};
+    };
     auto const note = [&](std::pair<std::size_t, bool> where, bool assemble,
                           std::size_t id) {
       auto const [pos, once] = where;
-      if (last.any && pos < last.pos) return;
-      if (!last.any || pos > last.pos) last = {.any = true, .pos = pos};
+      if (last.any && when(pos) < when(last.pos)) return;
+      if (!last.any || when(pos) > when(last.pos))
+        last = {.any = true, .pos = pos};
       if (!once)
         last.replayed = true;
       else if (assemble)

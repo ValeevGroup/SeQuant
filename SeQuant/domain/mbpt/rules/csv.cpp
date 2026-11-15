@@ -83,13 +83,14 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
                       toUtf8(csv_basis.space().base_key()));
   };
 
-  // the CSV coefficient enters the product unconjugated with the default
-  // (non-Hermitian) traits; a conjugated C is spelled through the core
-  // states (see set_states below) rather than a pinned braket symmetry,
-  // which the core model refuses over a real basis
-  auto csv_coeff = [&](Index a, Index b) {
-    return ex<Tensor>(coeff_tensor_label, bra({std::move(a)}),
-                      ket({std::move(b)}), aux({}));
+  // a CSV coefficient tensor: the bra-leg coefficients of an expansion are the
+  // adjoint of its ket-leg ones, so C is Hermitian (C{μ;a} = C{a;μ}^*); like
+  // the overlap (make_overlap) it is particle (column) symmetric
+  auto make_C = [&coeff_tensor_label](const Index& bra_idx,
+                                      const Index& ket_idx) {
+    return ex<Tensor>(coeff_tensor_label, bra({bra_idx}), ket({ket_idx}),
+                      aux({}), Symmetry::Nonsymm, Hermiticity::Hermitian,
+                      ColumnSymmetry::Symm);
   };
 
   // The expansion dummy of one CSV-projected leg in the default
@@ -140,8 +141,8 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
       // union) are summed over, see candidates()
       const Index& end = ordinal_compare(bra_idx, ket_idx) ? bra_idx : ket_idx;
       auto cc = [&](const Index& dummy) {
-        return ex<Product>(1, ExprPtrList{csv_coeff(bra_idx, dummy),
-                                          csv_coeff(dummy, ket_idx)});
+        return ex<Product>(
+            1, ExprPtrList{make_C(bra_idx, dummy), make_C(dummy, ket_idx)});
       };
       if (kramers && spin_labeled(end)) {
         Sum out;
@@ -157,10 +158,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
     } else if ((bra_has_proto_indices ? ket_idx : bra_idx).basis() ==
                csv_basis) {
       // the other leg is in the target basis
-      return ex<Product>(
-          1,
-          ExprPtrList{ex<Tensor>(coeff_tensor_label,  //
-                                 bra({bra_idx}), ket({ket_idx}))});
+      return ex<Product>(1, ExprPtrList{make_C(bra_idx, ket_idx)});
     }
   }
 
@@ -200,10 +198,10 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
       const auto& orig =
           slots[sl].in_bra ? bras[slots[sl].pos] : kets[slots[sl].pos];
       if (slots[sl].in_bra) {
-        result.append(1, csv_coeff(orig, x));
+        result.append(1, make_C(orig, x));
         rbra[slots[sl].pos] = x;
       } else {
-        result.append(1, csv_coeff(x, orig));
+        result.append(1, make_C(x, orig));
         rket[slots[sl].pos] = x;
       }
     }

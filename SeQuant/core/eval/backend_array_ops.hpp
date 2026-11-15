@@ -43,6 +43,13 @@ struct BackendArrayOps {
       Index const& axis, std::size_t target_batch_size)>
       axis_batches;
 
+  /// Optional: like \c make_zeros , but the result is the on-disk form of
+  /// the zero value (\c Result::is_on_disk ), to be assembled by
+  /// \c write_into_slice without ever being whole in memory. Empty if the
+  /// backend cannot.
+  std::function<ResultPtr(container::vector<Index> const& descriptor)>
+      make_zeros_on_disk;
+
   /// The realization of an \c EvalOp::KramersFlip node: \p phase times the
   /// time-reversal flip of \p operand over its OUTER modes \p modes, each a
   /// Kramers-union axis blocked [⇑ half | ⇓ half]: per mode out[⇑] = +conj
@@ -59,7 +66,7 @@ struct BackendArrayOps {
       kramers_flip;
 
   /// True iff the two batching closures are installed (a batched run requires
-  /// them); \c kramers_flip is independent of them.
+  /// them); \c make_zeros_on_disk and \c kramers_flip are optional.
   explicit operator bool() const noexcept {
     return static_cast<bool>(make_zeros) && static_cast<bool>(axis_batches);
   }

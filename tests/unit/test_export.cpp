@@ -12,8 +12,10 @@
 #include <SeQuant/core/export/julia_itensor.hpp>
 #include <SeQuant/core/export/julia_tensor_kit.hpp>
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
+#include <SeQuant/core/export/name_recycling.hpp>
 #include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
+#include <SeQuant/core/export/stack_checker.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -397,7 +399,7 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
         current.filename().string() + " - " + CurrentGen{}.get_format_name();
 
     SECTION(section_name) {
-      CurrentGen generator;
+      StackCheckingGenerator<CurrentGen> generator{CurrentGen{}};
       CurrentCtx context;
 
       configure_context_defaults(context);
@@ -627,8 +629,9 @@ TEST_CASE("export", "[export]") {
   }
 
   SECTION("generation_optimizer") {
-    TextGenerator<TextGeneratorContext> textgen;
-    GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator(textgen);
+    StackCheckingGenerator<TextGenerator<TextGeneratorContext>> textgen{
+        TextGenerator<TextGeneratorContext>{}};
+    GenerationOptimizer<decltype(textgen)> generator(textgen);
     TextGeneratorContext ctx;
 
     Variable v1{L"v1"};
@@ -987,7 +990,8 @@ TEST_CASE("export-broadcast-sum", "[export]") {
   }
 
   SECTION("GenerationOptimizer forwards the broadcast") {
-    GenerationOptimizer<TextGenerator<>> generator{TextGenerator<>{}};
+    GenerationOptimizer<StackCheckingGenerator<TextGenerator<>>> generator{
+        StackCheckingGenerator<TextGenerator<>>{TextGenerator<>{}}};
     TextGeneratorContext ctx;
 
     export_expression(to_export_tree(deserialize<ResultExpr>(expr)), generator,
@@ -995,6 +999,77 @@ TEST_CASE("export-broadcast-sum", "[export]") {
     CHECK_THAT(generator.get_generated_code(),
                ContainsSubstring("+= ε[a_1] (broadcast over i_1)") &&
                    ContainsSubstring("+= -1 ε[i_1] (broadcast over a_1)"));
+  }
+}
+
+TEST_CASE("generation_optimizer with crossing unload/load pairs", "[export]") {
+  // The second term loads its operands in the opposite order of the first one,
+  // so that the pairs (Unload v2, Load v2) and (Unload v3, Load v3) cross.
+  GenerationOptimizer<
+      StackCheckingGenerator<TextGenerator<TextGeneratorContext>>>
+      generator{StackCheckingGenerator<TextGenerator<TextGeneratorContext>>{
+          TextGenerator<TextGeneratorContext>{}}};
+  TextGeneratorContext ctx;
+
+  export_expression(
+      to_export_tree(deserialize<ResultExpr>(L"v1 = v3 v2 + v2 v3")), generator,
+      ctx);
+
+  REQUIRE_THAT(generator.get_generated_code(),
+               DiffedStringEquals("Declare variable v1\n"
+                                  "Declare variable v2\n"
+                                  "Declare variable v3\n"
+                                  "\n"
+                                  "Create v1 and initialize to zero\n"
+                                  "Load v2\n"
+                                  "Load v3\n"
+                                  "Compute v1 += v3 v2\n"
+                                  "Unload v3\n"
+                                  "Load v3\n"
+                                  "Compute v1 += v2 v3\n"
+                                  "Unload v3\n"
+                                  "Unload v2\n"
+                                  "Persist v1\n"));
+}
+
+TEST_CASE("StackCheckingGenerator", "[export]") {
+  const Variable a{L"a"};
+  const Variable b{L"b"};
+  const Tensor t{L"t", bra{L"i_1"}, ket{L"a_1"}};
+
+  SECTION("stack-like order") {
+    MemoryStack stack;
+    stack.allocate(a);
+    stack.allocate(t);
+    stack.allocate(b);
+    REQUIRE_NOTHROW(stack.release(b, "unload"));
+    REQUIRE_NOTHROW(stack.release(t, "unload"));
+    // Allocating again changes the order
+    stack.allocate(b);
+    REQUIRE_NOTHROW(stack.release(b, "unload"));
+    REQUIRE_NOTHROW(stack.release(a, "persist"));
+    REQUIRE_NOTHROW(stack.require_empty());
+  }
+
+  SECTION("violations") {
+    MemoryStack stack;
+    REQUIRE_THROWS_AS(stack.release(a, "unload"), Exception);
+
+    stack.allocate(a);
+    stack.allocate(b);
+    REQUIRE_THROWS_AS(stack.release(a, "unload"), Exception);
+    REQUIRE_THROWS_AS(stack.release(t, "unload"), Exception);
+    REQUIRE_THROWS_AS(stack.require_empty(), Exception);
+  }
+
+  SECTION("generator") {
+    StackCheckingGenerator<TextGenerator<TextGeneratorContext>> generator{
+        TextGenerator<TextGeneratorContext>{}};
+    TextGeneratorContext ctx;
+
+    generator.load(a, false, ctx);
+    generator.load(b, false, ctx);
+    REQUIRE_THROWS_AS(generator.unload(a, ctx), Exception);
   }
 }
 
@@ -2010,6 +2085,79 @@ TEST_CASE("export-irrep-name", "[export][irreps]") {
   // f is totally symmetric and therefore not annotated
   CHECK_THAT(code, ContainsSubstring("f:cc[kl], f:cc\n"));
   CHECK_THAT(code, !ContainsSubstring("f:cc //"));
+}
+
+TEST_CASE("export-name-recycling-irreps", "[export][irreps]") {
+  using point_groups::D2;
+  using Irrep = Z2Irrep<D2>;
+  auto resetter = to_export_context();
+
+  // X1 is defined in both groups, with the IRREP of its first factor
+  auto setup = [](std::wstring first, std::wstring second) {
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_irrep_context(IrrepContext<Z2Algebra<D2>>(
+        resolve_by_label<Irrep>({{L"t", {make_irrep<D2>("B1")}},
+                                 {L"v", {make_irrep<D2>("B2")}},
+                                 {L"f", {make_irrep<D2>("A")}},
+                                 {L"g", {make_irrep<D2>("A")}}})));
+    auto groups = parse_expression_spec(
+        "section G1:\nX1{a1;i1} = " + toUtf8(first) +
+            "{a1;i2} f{i2;i1}\nR1{a1;i1} = X1{a1;i2} g{i2;i1}\n"
+            "section G2:\nX1{a1;i1} = " +
+            toUtf8(second) +
+            "{a1;i2} f{i2;i1}\nR2{a1;i1} = X1{a1;i2} g{i2;i1}\n",
+        false);
+    return std::make_pair(std::move(ctx), std::move(groups));
+  };
+  auto overwrites = [](const ExportNode<> &tree) {
+    return tree->is_tensor() && tree->as_tensor().label().starts_with(L"X");
+  };
+  auto label_of = [](const ExpressionGroup<> &group, std::size_t pos) {
+    return std::wstring((*std::next(group.begin(), pos))->as_tensor().label());
+  };
+  auto uses_label = [](const ExpressionGroup<> &group, std::size_t pos,
+                       const std::wstring &label) {
+    return to_expr(*std::next(group.begin(), pos))->to_latex().find(label) !=
+           std::wstring::npos;
+  };
+
+  const bool conflicts_only = GENERATE(false, true);
+  CAPTURE(conflicts_only);
+  const auto compat = opt::ShapeCompatibility::ExactBlock;
+  const auto labels = opt::IntermediateNamePool::default_label_generator();
+
+  SECTION("different IRREPs") {
+    auto [ctx, groups] = setup(L"t", L"v");
+    recycle_intermediate_names(groups, ctx, overwrites, compat, labels,
+                               conflicts_only);
+    CHECK(label_of(groups[0], 0) != label_of(groups[1], 0));
+    // Uses follow the definition
+    CHECK(uses_label(groups[0], 1, label_of(groups[0], 0)));
+    CHECK(uses_label(groups[1], 1, label_of(groups[1], 0)));
+  }
+
+  SECTION("redefinition with conflicting and matching IRREPs") {
+    auto [ctx, groups] = setup(L"t", L"v");
+    // Redefine X1 in the second group with the IRREPs it has in the first
+    groups[1].add(to_export_tree(
+        deserialize<ResultExpr>("X1{a1;i1} = t{a1;i2} f{i2;i1}")));
+    groups[1].add(to_export_tree(
+        deserialize<ResultExpr>("R3{a1;i1} = X1{a1;i2} g{i2;i1}")));
+    recycle_intermediate_names(groups, ctx, overwrites, compat, labels,
+                               conflicts_only);
+    // Only the definition with the other IRREPs must not share the name
+    CHECK(label_of(groups[1], 0) != label_of(groups[0], 0));
+    CHECK(uses_label(groups[1], 1, label_of(groups[1], 0)));
+    CHECK(uses_label(groups[1], 3, label_of(groups[1], 2)));
+  }
+
+  SECTION("same IRREPs") {
+    auto [ctx, groups] = setup(L"t", L"t");
+    recycle_intermediate_names(groups, ctx, overwrites, compat, labels,
+                               conflicts_only);
+    CHECK(label_of(groups[0], 0) == label_of(groups[1], 0));
+  }
 }
 
 TEST_CASE("export-irreps", "[export][irreps]") {

@@ -3480,6 +3480,133 @@ TEST_CASE("eval_write_into_slice_lazy_view", "[eval]") {
   }
 }
 
+// The on-disk form of a TiledArray result (Result::on_disk): the value lives
+// in a TA::DiskArray, comes back whole (in_memory) or by tile block
+// (slice_mode), and can be assembled by blocks (write_into_slice).
+TEST_CASE("eval_on_disk_ta", "[eval][disk]") {
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultTensorTA;
+  using sequant::slice_array_over_mode;
+  auto& world = TA::get_default_world();
+  auto const disk_reads = [&world] {
+    world.gop.fence();
+    std::size_t n = TA::disk_io_stats().tiles_read;
+    world.gop.sum(n);
+    return n;
+  };
+
+  SECTION("flat") {
+    using Res = ResultTensorTA<TA::TSpArrayD>;
+    TA::TSpArrayD R(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5}});
+    R.fill_random();
+    world.gop.fence();
+    auto const r = eval_result<Res>(R);
+
+    ResultPtr const d = r->on_disk();
+    REQUIRE(d);
+    CHECK(d->is_on_disk());
+    CHECK(!r->is_on_disk());
+    CHECK(d->size_in_bytes() >= 9 * 5 * sizeof(double));
+
+    // whole
+    ResultPtr const m = d->in_memory();
+    CHECK(!m->is_on_disk());
+    CHECK(equal_tarrays<Tight>(m->get<TA::TSpArrayD>(), R));
+
+    // by block: equal to the slice of the in-memory value, and only the
+    // block's tiles are read
+    TA::reset_disk_io_stats();
+    world.gop.fence();
+    ResultPtr const sl = d->slice_mode(0, 3, 9);
+    CHECK(!sl->is_on_disk());
+    CHECK(equal_tarrays<Tight>(sl->get<TA::TSpArrayD>(),
+                               slice_array_over_mode(R, 0, 1, 3)));
+    CHECK(disk_reads() == 2);
+
+    // a pending view goes to disk as the value it stands for
+    ResultPtr const dv = r->slice_mode(0, 0, 3)->on_disk();
+    REQUIRE(dv);
+    CHECK(equal_tarrays<Tight>(dv->in_memory()->get<TA::TSpArrayD>(),
+                               slice_array_over_mode(R, 0, 0, 1)));
+
+    // the on-disk form is for storage, not arithmetic
+    CHECK_THROWS(d->mult_by_phase(-1));
+    CHECK_THROWS(d->add_inplace(*r));
+
+    // assembled on disk block by block
+    TA::TSpArrayD zero(world, R.trange());
+    zero.fill_local(0.0);
+    world.gop.fence();
+    ResultPtr const dest = eval_result<Res>(zero)->on_disk();
+    REQUIRE(dest);
+    dest->write_into_slice(*eval_result<Res>(slice_array_over_mode(R, 0, 0, 1)),
+                           0, 0, 3);
+    dest->write_into_slice(*eval_result<Res>(slice_array_over_mode(R, 0, 1, 3)),
+                           0, 3, 9);
+    world.gop.fence();
+    CHECK(dest->is_on_disk());
+    CHECK(equal_tarrays<Tight>(dest->in_memory()->get<TA::TSpArrayD>(), R));
+  }
+
+  SECTION("nested") {
+    using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+    using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
+    TA::TiledRange const outer_tr{{0, 3, 6}, {0, 2}};
+    TA::Range const inner_r(std::array<std::size_t, 2>{2, 2});
+    auto build = [&world, inner_r](TA::TiledRange const& otr,
+                                   bool zero) -> ToTArray {
+      auto tile_fn = [inner_r, zero](TA::Range const& orng) {
+        return make_tot_tile<double>(
+            orng, [&](std::size_t) { return inner_r; },
+            [&](std::size_t o, std::size_t k) {
+              if (zero) return 0.0;
+              double base = 0.0;
+              for (auto c : orng.idx(o))
+                base = base * 37.0 + static_cast<double>(c + 1);
+              return base * 100.0 + static_cast<double>(k + 1);
+            });
+      };
+      ToTArray arr{world, otr};
+      for (auto it = arr.begin(); it != arr.end(); ++it)
+        if (arr.is_local(it.index()))
+          *it = world.taskq.add(tile_fn, it.make_range());
+      world.gop.fence();
+      return arr;
+    };
+    auto const same = [](ToTArray const& a, ToTArray const& b) {
+      ToTArray diff;
+      diff("i,j;a,b") = a("i,j;a,b") - b("i,j;a,b");
+      return diff("i,j;a,b").dot(diff("i,j;a,b")).get() == 0.0 &&
+             a("i,j;a,b").dot(a("i,j;a,b")).get() > 0.0;
+    };
+    ToTArray const R = build(outer_tr, /*zero=*/false);
+    auto const r = eval_result<ResultToT>(R);
+
+    ResultPtr const d = r->on_disk();
+    REQUIRE(d);
+    CHECK(d->is_on_disk());
+    CHECK(same(d->in_memory()->get<ToTArray>(), R));
+
+    TA::reset_disk_io_stats();
+    world.gop.fence();
+    ResultPtr const sl = d->slice_mode(0, 3, 6);
+    CHECK(!sl->is_on_disk());
+    CHECK(same(sl->get<ToTArray>(), slice_array_over_mode(R, 0, 1, 2)));
+    CHECK(disk_reads() == 1);
+
+    ResultPtr const dest =
+        eval_result<ResultToT>(build(outer_tr, /*zero=*/true))->on_disk();
+    REQUIRE(dest);
+    dest->write_into_slice(
+        *eval_result<ResultToT>(slice_array_over_mode(R, 0, 0, 1)), 0, 0, 3);
+    dest->write_into_slice(
+        *eval_result<ResultToT>(slice_array_over_mode(R, 0, 1, 2)), 0, 3, 6);
+    world.gop.fence();
+    CHECK(same(dest->in_memory()->get<ToTArray>(), R));
+  }
+}
+
 TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
@@ -4724,6 +4851,200 @@ TEST_CASE("ordered-vs-forest-reset", "[eval][ordered-executor]") {
 // and the persistent store, not from that map, so its result must not depend
 // on the threshold -- which is what lets MPQC hand it the same
 // eval:cache:min_repeats (default 2) as forest descent.
+// The ordered executor with values kept on disk (eval::DiskSpill) on the
+// TiledArray backend: same numbers as forest descent, with the qualifying
+// values really written to and read back from scratch files.
+TEST_CASE("ordered-disk-spill-ta", "[eval][ordered-executor][disk]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TArrayD = TA::TSpArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(4);
+  auto const aux =
+      sequant::get_default_context().index_basis_registry()->retrieve_space(
+          L"x");
+
+  // two roots sharing the aux-carrying intermediate g*h; x_1 is batched
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (t{a_3;i_2;x_1} * q{i_4;a_3})");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+  auto accept_aux = [aux](sequant::Index const& ix) {
+    return ix.space() == aux;
+  };
+  for (auto& nd : forest) {
+    auto const ax = sequant::batch_axis(nd, accept_aux);
+    REQUIRE(ax.has_value());
+    nd->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
+    nd->set_batch_loops_opened_here(
+        {{*ax, sequant::BatchModeType::Contracted}});
+  }
+  std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = accept_aux;
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"x"});
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+  auto const rel_error = [&ref](TArrayD const& got) {
+    TArrayD d;
+    d(std::string("0,1,2,3")) =
+        got(std::string("0,1,2,3")) - ref(std::string("0,1,2,3"));
+    return TA::norm2(d) / TA::norm2(ref);
+  };
+  auto const disk_stats = [&world] {
+    world.gop.fence();
+    auto const s = TA::disk_io_stats();
+    std::array<std::size_t, 2> n{s.tiles_written, s.tiles_read};
+    world.gop.sum(n.data(), 2);
+    return n;
+  };
+
+  auto cache = sequant::cache_manager(forest, is_vol, std::size_t{2});
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
+  sequant::eval::DiskSpill spill;
+  spill.min_bytes = 1;  // everything that qualifies
+  cache.set_disk_spill(&spill);
+
+  TA::reset_disk_io_stats();
+  world.gop.fence();
+  for (int iteration = 0; iteration < 2; ++iteration) {
+    INFO("iteration " << iteration);
+    auto const got =
+        evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                  target_batch, {}, is_vol)
+            ->get<TArrayD>();
+    CHECK(rel_error(got) < 1e-12);
+    cache.reset();
+  }
+  // values went to disk and came back
+  CHECK(spill.n_writes > 0);
+  CHECK(spill.n_reads > 0);
+  auto const io = disk_stats();
+  CHECK(io[0] > 0);  // tiles written
+  CHECK(io[1] > 0);  // tiles read
+}
+
+// A value assembled by scattering the batches of a loop into disjoint blocks,
+// and read after the loop, is assembled on disk block by block once its size
+// is known from an earlier evaluation (DiskSpill::measured_bytes): it is
+// never whole in memory.
+TEST_CASE("ordered-disk-scatter-ta", "[eval][ordered-executor][disk]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::OutputKind;
+  using sequant::eval::RichSchedule;
+  using sequant::eval::ScopeBlock;
+  using TArrayD = TA::TSpArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 8, 6, 12};
+  yield_.set_max_tile(4);
+  auto const occ =
+      sequant::get_default_context().index_basis_registry()->retrieve_space(
+          L"i");
+
+  // S = g*h carries i_1 and is built inside a loop over i_1 (opened at S);
+  // the root reads S whole, after the loop. g is volatile, so S is rebuilt
+  // by every evaluation rather than carried over from the previous one.
+  auto const t = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1} * h{a_3;a_2}) * q{i_1;a_5}");
+  std::string const target = "a_3,a_5";
+  std::vector<node_t> forest{eval_node(t)};
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  sequant::Index const i1{L"i_1"};
+  auto& S = const_cast<node_t&>(forest.front().left());
+  REQUIRE(!S.leaf());
+  S->set_node_slice_mask({{i1, sequant::BatchModeType::External}});
+  S->set_batch_loops_opened_here({{i1, sequant::BatchModeType::External}});
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i"});
+  ScopeBlock const* i_block = nullptr;
+  for (auto const& step : ordered.root.steps)
+    if (auto const* b = std::get_if<ScopeBlock>(&step.value)) i_block = b;
+  REQUIRE(i_block != nullptr);
+  REQUIRE(i_block->outputs.size() == 1);
+  REQUIRE(i_block->outputs.front().second == OutputKind::AccumulateScatter);
+
+  std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"g";
+  };
+  auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  REQUIRE(static_cast<bool>(aops.make_zeros_on_disk));
+  cache.set_array_ops(&aops);
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  sequant::eval::DiskSpill spill;
+  spill.min_bytes = 1;
+  cache.set_disk_spill(&spill);
+
+  auto const rel_error = [&](TArrayD const& got) {
+    TArrayD d;
+    d(target) = got(target) - ref(target);
+    return TA::norm2(d) / TA::norm2(ref);
+  };
+  for (int iteration = 0; iteration < 3; ++iteration) {
+    INFO("iteration " << iteration);
+    auto const got =
+        evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                  target_batch, {}, is_vol)
+            ->get<TArrayD>();
+    CHECK(rel_error(got) < 1e-12);
+    // the first evaluation learns the value's size while assembling it in
+    // memory; later ones assemble it on disk
+    if (iteration == 0)
+      CHECK(spill.n_assembled_on_disk == 0);
+    else
+      CHECK(spill.n_assembled_on_disk == static_cast<std::size_t>(iteration));
+    cache.reset();
+  }
+  CHECK(spill.n_writes > 0);
+  CHECK(spill.n_reads > 0);
+}
+
 TEST_CASE("ordered-vs-forest-reset-batched",
           "[eval][ordered-executor][ordered-crossiter-bug][cache_manager]") {
   using sequant::evaluate;
@@ -5853,25 +6174,19 @@ TEST_CASE("ta_array_ops_sparse_tot_zeros_hold_no_tiles",
   CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<ToTArray>())));
 }
 
-TEST_CASE("ta_array_ops_zeros_under_zero_threshold",
-          "[eval][batched-external]") {
-  // Under a zero SparseShape threshold even a zero norm marks a tile nonzero,
-  // so an all-zero shape cannot express an empty destination: make_zeros
-  // must allocate every tile, zero-filled (flat) or with empty inner tensors
-  // (nested) -- the same path a dense array takes.
-  using TArrayD = TA::TSpArrayD;
-  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+TEST_CASE("ta_array_ops_zeros_dense", "[eval][batched-external]") {
+  // A dense array has no shape to express an empty destination with, so
+  // make_zeros must allocate every tile, zero-filled (flat) or with empty
+  // inner tensors (nested). (A sparse array never takes this path: TiledArray
+  // keeps the SparseShape threshold positive, so its zero shape holds no
+  // tiles.)
+  using TArrayD = TA::TArrayD;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::DensePolicy>;
   using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
-  using shape_t = TA::SparseShape<float>;
-  struct ThresholdResetter {
-    float const saved = shape_t::threshold();
-    ~ThresholdResetter() { shape_t::threshold(saved); }
-  } const threshold_resetter;
-  shape_t::threshold(0);
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
-                                                     /*nvirt=*/4, /*naux=*/12};
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
+                                                    /*nvirt=*/4, /*naux=*/12};
   yield_.set_max_tile(4);
   auto const aops = yield_.array_ops<ToTArray>();
 
@@ -7942,6 +8257,7 @@ TEST_CASE("dp_external_placement_correctness",
     opts.batch_policy.batch_target_size = bts;
     opts.batch_policy.batch_spectator_indices = true;
     opts.batch_policy.peak_threshold = 1.0e3;  // tiny budget => force external
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
     opts.term_batch_axes = axes_map;
 
     auto optimized = optimize(expr, opts);

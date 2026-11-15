@@ -933,8 +933,8 @@ int main(int argc, char** argv) {
       };
 
     std::stringstream trace;
-    const auto rep =
-        dr::meter(forest, policy, regime, cache_cfg, &trace, cfg.roofline);
+    const auto rep = dr::meter(forest, policy, regime, cache_cfg, &trace,
+                               dr::MeterOptions{.roofline = cfg.roofline});
     std::cout << "dry-run meter ["
               << (rep.scheduler == BatchScheduler::ordered ? "ordered"
                                                            : "forest")

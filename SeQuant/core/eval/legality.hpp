@@ -323,8 +323,18 @@ enclosing_instances_of(RichSchedule const& rich) {
                       " has no loop identity (loop_slot unstamped)");
     LoopInstance const own{bk, own_slot};
     auto const encl = enclosing_instances(occ);
+    // An occurrence that opens the loop over this axis itself is read
+    // assembled whatever encloses it: its loop closes at its own node. The
+    // instance test alone misses that when a fold across trees gives this
+    // loop the identity of a term loop enclosing the reader (the value is
+    // sliced by that term loop in another tree).
+    bool const opens_it =
+        std::any_of(occ.opens.begin(), occ.opens.end(), [&](auto const& o) {
+          return o.second == BatchModeType::External &&
+                 o.first == occ.carried[axis_slot];
+        });
     bool const lockstep =
-        std::find(encl.begin(), encl.end(), own) != encl.end();
+        !opens_it && std::find(encl.begin(), encl.end(), own) != encl.end();
     any_lockstep = any_lockstep || lockstep;
     if (per_occurrence)
       per_occurrence->push_back({occ.point, lockstep

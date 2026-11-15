@@ -1,3 +1,5 @@
+#include "inputs.hpp"
+
 #include <benchmark/benchmark.h>
 
 #include <SeQuant/core/expr.hpp>
@@ -46,3 +48,29 @@ static void simplify(benchmark::State &state) {
 BENCHMARK(simplify<false>)->Name("simplify")->DenseRange(1, nInputs);
 
 BENCHMARK(simplify<true>)->Name("rapid_simplify")->DenseRange(1, nInputs);
+
+// Unsimplified spin-orbital CC residuals as they occur in spintracing
+template <bool rapid_only>
+static void simplify_cc_residual(benchmark::State &state) {
+  const ExprPtr &input =
+      bench::unsimplified_cc_residual(state.range(0), state.range(1));
+
+  for (auto _ : state) {
+    ExprPtr expression = input->clone();
+    if constexpr (rapid_only) {
+      rapid_simplify(expression);
+    } else {
+      simplify(expression);
+    }
+
+    benchmark::DoNotOptimize(expression);
+  }
+}
+
+BENCHMARK(simplify_cc_residual<false>)
+    ->Name("simplify_cc_residual")
+    ->Apply(bench::cc_residual_args);
+
+BENCHMARK(simplify_cc_residual<true>)
+    ->Name("rapid_simplify_cc_residual")
+    ->Apply(bench::cc_residual_args);

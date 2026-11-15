@@ -12,6 +12,7 @@
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/name_recycling.hpp>
+#include <SeQuant/core/export/stack_checker.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/irreps/any.hpp>
@@ -41,6 +42,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 namespace sequant::util::extint {
@@ -231,6 +233,13 @@ void ExportStep::set_options(const nlohmann::json &options) {
       }
 
       optimize_ = value.get<bool>();
+    } else if (key == "check_stack_order") {
+      if (!value.is_boolean()) {
+        throw Exception("Value for " + kind() + " option '" + key +
+                        "' must be a boolean");
+      }
+
+      check_stack_order_ = value.get<bool>();
     } else if (key == "output") {
       if (!value.is_string()) {
         throw Exception("Value for " + kind() + " option '" + key +
@@ -245,12 +254,33 @@ void ExportStep::set_options(const nlohmann::json &options) {
       }
 
       for (const auto &[name, ids] : value.items()) {
-        if (!ids.is_string()) {
-          throw Exception("Expected IDs for group '" + name +
-                          "' to be given as a string");
-        }
+        auto add_id = [&, &name = name](const nlohmann::json &id) {
+          if (!id.is_string()) {
+            throw Exception("Expected IDs for group '" + name +
+                            "' to be given as a string or an array of "
+                            "strings");
+          }
 
-        group_assoc_.emplace(ids.get<std::string>(), name);
+          auto [it, inserted] =
+              group_assoc_.emplace(id.get<std::string>(), name);
+          if (!inserted && it->second != name) {
+            throw Exception("ID '" + it->first +
+                            "' is associated with multiple groups: '" +
+                            it->second + "' and '" + name + "'");
+          }
+        };
+
+        if (ids.is_array()) {
+          if (ids.empty()) {
+            throw Exception("Expected at least one ID for group '" + name +
+                            "'");
+          }
+          for (const nlohmann::json &id : ids) {
+            add_id(id);
+          }
+        } else {
+          add_id(ids);
+        }
       }
     } else if (key == "irreps") {
       irrep_context_ = parse_irreps(value);
@@ -403,15 +433,20 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
     std::vector<ExpressionGroup<>> groups =
         prepare_expressions(exctx, inputs, genctx, always_create_ids);
 
-    if (recycle_intermediates_.has_value()) {
+    if (recycle_intermediates_.has_value() || irrep_context_.has_value()) {
       // Entries flagged to overwrite their previous result (CSE
       // intermediates) are the ones whose names may be recycled
       auto overwrites = [&always_create_ids](const ExportNode<> &tree) {
         return always_create_ids.contains(tree->id());
       };
 
-      recycle_intermediate_names(groups, genctx, overwrites,
-                                 recycle_intermediates_.value());
+      // Without recycling, names are only changed such that no name is used
+      // for different IRREPs in different groups
+      recycle_intermediate_names(
+          groups, genctx, overwrites,
+          recycle_intermediates_.value_or(opt::ShapeCompatibility::ExactBlock),
+          opt::IntermediateNamePool::default_label_generator(),
+          !recycle_intermediates_.has_value());
 
       for (const ExpressionGroup<> &group : groups) {
         // Renamed results need the same zero strategy as the one set for
@@ -469,7 +504,7 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
 
     // TODO: handle index batching
 
-    export_groups(groups, generator, genctx);
+    export_groups(std::move(groups), generator, genctx);
 
     return generator.get_generated_code();
   };
@@ -495,12 +530,20 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
       genctx.set_irrep_context(irrep_context_.value());
     }
 
-    if (optimize_) {
-      generated = perform_export(
-          GenerationOptimizer<decltype(generator)>(std::move(generator)),
-          genctx);
+    auto export_with = [&](auto &&gen) {
+      if (optimize_) {
+        return perform_export(
+            GenerationOptimizer<std::decay_t<decltype(gen)>>(std::move(gen)),
+            genctx);
+      }
+      return perform_export(gen, genctx);
+    };
+
+    if (check_stack_order_) {
+      generated = export_with(
+          StackCheckingGenerator<decltype(generator)>(std::move(generator)));
     } else {
-      generated = perform_export(generator, genctx);
+      generated = export_with(std::move(generator));
     }
   } else {
     throw Exception("Unsupported export language '" + language_ + "'");
@@ -508,8 +551,24 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
 
   SEQUANT_ASSERT(!generated.empty());
 
-  std::ofstream stream(filepath_);
+  const std::filesystem::path path(filepath_);
+  if (path.has_parent_path()) {
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec) {
+      throw Exception("Failed to create output directory '" +
+                      path.parent_path().string() + "' for " + kind() + ": " +
+                      ec.message());
+    }
+  }
+
+  std::ofstream stream(path);
   stream << generated;
+  stream.flush();
+  if (!stream) {
+    throw Exception("Failed to write output file '" + path.string() + "' for " +
+                    kind());
+  }
 
   return 0;
 }
@@ -700,10 +759,6 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
     }
   }
 
-  auto tree_data = data | std::views::transform([](const CtxData &dat) {
-                     return convert_data<ExportTreeData>(dat.data.get());
-                   });
-
   std::map<std::size_t, const CtxData *> producers;
   for (const CtxData &current : data) {
     for (const auto &entry :
@@ -760,8 +815,6 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
   std::vector<ExpressionGroup<>> groups;
   std::vector<std::vector<std::pair<Tensor, Tensor>>> required_symmetrizations;
   for (std::size_t idx : access_order) {
-    const ExportTreeData &current_data = tree_data[idx];
-
     std::string name = [&]() -> std::string {
       for (std::string_view current :
            ranges::views::concat(data.at(idx).associated_ids,
@@ -790,9 +843,11 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
     std::vector<std::pair<Tensor, Tensor>> &symms =
         required_symmetrizations.at(std::ranges::distance(groups.begin(), it));
 
-    for (const ExportTreeData::Entry &current : current_data.entries) {
-      group.add(current.tree);
+    // All inputs have been inspected by now, so they can be consumed
+    WorkingCopy<ExportTreeData> working =
+        exctx.working_copy<ExportTreeData>(data.at(idx));
 
+    for (ExportTreeData::Entry &current : working.data.entries) {
       if (current.overwrite_previous.has_value()) {
         // Never ZeroOnReuse: the summands of a sum all accumulate into the same
         // result, so zeroing on every reappearance would discard what the
@@ -836,6 +891,8 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
                              current.symm_contribution_target.value());
         }
       }
+
+      group.add(std::move(current.tree));
     }
   }
 

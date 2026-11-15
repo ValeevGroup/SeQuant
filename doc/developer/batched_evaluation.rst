@@ -126,10 +126,23 @@ completes while a reader of that build sits inside the block, or two nests whose
 the other. The pass levels are refined until no such cycle is left: each round finds the cycles among the steps of one
 pass and moves the consumers on them to a later pass than the operands they read there.
 
-A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a later pass reads the earlier
-pass's assembled value. The nest's inner levels are ordered once, with all passes present, and then forked per pass,
-so only dependencies between two steps of one pass order them. Values needed across a split are materialized, not
-recomputed. Unsupported cases raise ``sequant::Exception``.
+These requirements bound a reader's pass only from below. Among the assignments they allow, the readers of one value
+are gathered into one pass where that is possible: a reader that nothing holds in an earlier pass joins the latest
+reader of a value they share, its consumers move as their own requirements then dictate, and operands follow their
+readers. A move is kept only if it lowers the number of passes in which values are read and adds no pass. Neither
+costs nor sizes enter the choice, so it does not see the values it makes resident together.
+
+A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a later pass reads an earlier
+pass's completed values (loop-carried, reduction) in their assembled form. The nest's inner levels are ordered once,
+with all passes present, and then forked per pass, so only dependencies between two steps of one pass order them.
+
+A value built per batch is visible only to the pass that builds it. Where its readers still fall in several passes
+(one of them feeds a value that another must read complete) it is built again in each later pass that reads it, per
+batch, along with the per-batch operands it needs there. It is not assembled over the loops that slice it: no
+occurrence of it asked for that residence, and the assembled value can be far larger than any batch of it. A copy
+cannot serve a reader that needs the value complete, a reader separated from it to keep a pass's steps orderable, or
+a pass whose steps the copy itself would leave unorderable. A value with such a reader is assembled by the pass that
+builds it, and every later reader takes that form. Unsupported cases raise ``sequant::Exception``.
 
 .. _batched-evaluation-cell-table:
 
@@ -188,7 +201,11 @@ Dry runs and diagnostics
 The sizing backend in ``SeQuant/core/eval/backends/dryrun/`` stores descriptors instead of tensors and checks
 shared-label ranges on every operation. :func:`sequant::eval::dryrun::meter` drives the same ``evaluate`` entry point
 as a real run and reports the realized peak and work, checking the runtime's scheduling and accounting rather than
-the optimizer's per-product estimate. It assumes real double-precision data.
+the optimizer's per-product estimate. It assumes real double-precision data. Every slice, permutation and phase change
+it makes is priced as a copy, also where a backend (TiledArray, for one) keeps a lazy view that holds no memory of its
+own, so for batched schedules the metered peak is a conservative estimate of what such a backend keeps resident. It is
+not a bound on process memory either way: transients inside a production and the backend's own temporaries are not
+modeled.
 
 ``SeQuant/core/eval/ordered_dump.hpp`` provides environment-gated dumps of each pipeline stage;
 :doc:`/user/guide/evaluation` explains how to read evaluation traces.
@@ -222,8 +239,9 @@ Current scope
 
 The ``ordered`` pipeline does not: choose the fusion of loop instances optimally where producer/consumer
 connectivity allows more than one valid choice (a valid, but not necessarily optimal, choice is recorded); reorder loop nesting across
-index spaces for cost (the realized nesting honors recorded constraints and the caller's ``mode_order`` ranking); make a
-cost-aware choice between materializing and recomputing a value across a forced pass split (a pass split always materializes); or
+index spaces for cost (the realized nesting honors recorded constraints and the caller's ``mode_order`` ranking); weigh
+the cost of building a value again in a later pass against the memory of keeping it assembled (it is built again wherever a
+copy can serve the reader), or the memory that gathering readers into one pass makes resident together; order the steps of a block to shorten the lifetimes of the values they share; or
 share a transient value across multiple reads (an unrecorded intermediate is recomputed inside every production tree that needs it).
 A scatter assembly writes along one position of its output; one needing several positions throws.
 None of this affects correctness — every one of these is a possible future efficiency

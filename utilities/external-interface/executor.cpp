@@ -93,6 +93,19 @@ std::optional<std::size_t> find_owning_step(
   return std::nullopt;
 }
 
+/// Removes the needed-later predicate from the context on scope exit
+class NeededLaterGuard {
+ public:
+  explicit NeededLaterGuard(ExecutionContext &ctx) : ctx_(ctx) {}
+  ~NeededLaterGuard() { ctx_.clear_needed_later_predicate(); }
+
+  NeededLaterGuard(const NeededLaterGuard &) = delete;
+  NeededLaterGuard &operator=(const NeededLaterGuard &) = delete;
+
+ private:
+  ExecutionContext &ctx_;
+};
+
 struct PreparedStep {
   std::string_view kind;
   std::string id;
@@ -216,12 +229,34 @@ void Executor::execute(const nlohmann::json &steps) {
     const nlohmann::json &step = steps.at(i);
     const std::string &step_id = prepared[i].id;
 
+    // Data is still needed if any of its IDs is referenced by a later step.
+    // Note that steps that alias their inputs under their own ID (instead of
+    // creating new data) thereby extend the lifetime of these inputs.
+    auto is_needed_later = [&](std::string_view id) {
+      std::optional<std::size_t> owner = find_owning_step(step_indices, id);
+      if (!owner.has_value()) {
+        // Be conservative and assume that the data is still needed
+        if (unowned_ids.emplace(id).second) {
+          spdlog::debug(
+              "Can't determine the step owning ID '{}' - associated data "
+              "will not be released",
+              id);
+        }
+        return true;
+      }
+      return last_use[*owner] > i;
+    };
+
     std::cout << "Executing '" << step_id << "' (" << prepared[i].kind
               << ")... ";
     std::cout.flush();
 
     std::chrono::steady_clock::time_point start =
         std::chrono::steady_clock::now();
+
+    // Allows the step to find out whether it may consume its inputs
+    context_.set_needed_later_predicate(is_needed_later);
+    const NeededLaterGuard guard(context_);
 
     const std::size_t produced_outputs =
         prepared[i].step->run(step_id, context_, prepared[i].inputs);
@@ -260,24 +295,7 @@ void Executor::execute(const nlohmann::json &steps) {
           std::string(step_id));
     }
 
-    // Data is still needed if any of its IDs is referenced by a later step.
-    // Note that steps that alias their inputs under their own ID (instead of
-    // creating new data) thereby extend the lifetime of these inputs.
-    const std::size_t n_released =
-        context_.release_data([&](std::string_view id) {
-          std::optional<std::size_t> owner = find_owning_step(step_indices, id);
-          if (!owner.has_value()) {
-            // Be conservative and assume that the data is still needed
-            if (unowned_ids.emplace(id).second) {
-              spdlog::debug(
-                  "Can't determine the step owning ID '{}' - associated data "
-                  "will not be released",
-                  id);
-            }
-            return true;
-          }
-          return last_use[*owner] > i;
-        });
+    const std::size_t n_released = context_.release_data(is_needed_later);
 
     if (n_released > 0) {
       spdlog::debug("Released {} data object(s) after step '{}'", n_released,

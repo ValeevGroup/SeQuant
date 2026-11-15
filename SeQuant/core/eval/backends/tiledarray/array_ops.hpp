@@ -82,6 +82,36 @@ template <typename FlatArray, typename ToTArray = FlatArray>
       return r;
     }
   };
+  // The same zero value, on disk: an array without tiles, assembled by
+  // write_into_slice. Offered under a sparse policy only.
+  if constexpr (std::is_same_v<typename FlatArray::policy_type,
+                               TA::SparsePolicy>) {
+    aops.make_zeros_on_disk =
+        [map, &world](container::vector<Index> const& descriptor) -> ResultPtr {
+      std::vector<TA::TiledRange1> outer;
+      bool nested = false;
+      for (auto const& ix : descriptor) {
+        if (ix.has_proto_indices()) {
+          nested = true;
+          continue;
+        }
+        outer.push_back(map->at(std::wstring(ix.basis().base_key())));
+      }
+      TA::TiledRange otr(outer.begin(), outer.end());
+      if constexpr (std::is_same_v<FlatArray, ToTArray>) {
+        SEQUANT_ASSERT(!nested &&
+                       "flat-only TA array-ops asked for a nested zero result");
+        return ResultOnDiskTA<ResultTensorTA<FlatArray>, FlatArray>::zero(world,
+                                                                          otr);
+      } else {
+        if (!nested)
+          return ResultOnDiskTA<ResultTensorTA<FlatArray>, FlatArray>::zero(
+              world, otr);
+        return ResultOnDiskTA<ResultTensorOfTensorTA<ToTArray>, ToTArray>::zero(
+            world, otr);
+      }
+    };
+  }
   return aops;
 }
 
