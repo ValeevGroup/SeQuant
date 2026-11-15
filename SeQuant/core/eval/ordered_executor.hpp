@@ -2032,6 +2032,41 @@ inline std::function<std::string(std::size_t)> make_node_meta(
   };
 }
 
+namespace detail {
+
+/// Builds the ordered schedule of \p forest from its own placement, as \c
+/// evaluate_ordered documents, and hands it to \p run as
+/// `run(ordered, rich, is_volatile_node)`. The one place the summed and the
+/// per-root ordered entries get their schedule from.
+/// \return what \p run returns
+template <meta::can_evaluate_range Nodes>
+decltype(auto) with_ordered_schedule(
+    Nodes const& forest, BatchPolicy const& policy,
+    std::function<std::size_t(Index const&)> const& target,
+    std::initializer_list<std::wstring> mode_order, auto&& run) {
+  dryrun::SizeRegime const regime;
+  dryrun::CostModel const cm{regime};
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, target);
+  LegalitySchedule const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, mode_order);
+
+  // Node-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
+  // own is_volatile_node lift (eval.hpp) computes it. The ordered executor
+  // consults it: it is the cell table's volatility predicate, and so decides
+  // which cells are persistent (TableCell::persistent -- the frontier of the
+  // invariant region) and what cache-halt may skip on a later evaluation.
+  using node_t = std::ranges::range_value_t<Nodes>;
+  auto is_volatile_node =
+      [p = policy.is_volatile_leaf](node_t const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+  return run(ordered, rich, is_volatile_node);
+}
+
+}  // namespace detail
+
 ///
 /// \brief The ordered arm of the \c sequant::evaluate(forest, policy, ...)
 /// dispatch: builds the schedule \p forest's own placement implies and drives
@@ -2076,28 +2111,42 @@ ResultPtr evaluate_ordered(
     std::function<std::size_t(Index const&)> const& target,
     std::initializer_list<std::wstring> mode_order = {},
     ScopeGuardFactory make_scope_guard = {}) {
-  dryrun::SizeRegime const regime;
-  dryrun::CostModel const cm{regime};
-  RichSchedule rich = compute_dag_boulevard(forest, cm, target);
-  LegalitySchedule const legality = analyze_legality(rich, forest, policy);
-  OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, mode_order);
+  return detail::with_ordered_schedule(
+      forest, policy, target, mode_order,
+      [&](OrderedSchedule const& ordered, RichSchedule const& rich,
+          auto const& is_volatile_node) {
+        return evaluate_ordered_schedule<EvalTrace>(
+            forest, ordered, rich, layout, leaf_evaluator, cache, target,
+            make_scope_guard, is_volatile_node);
+      });
+}
 
-  // Node-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
-  // own is_volatile_node lift (eval.hpp) computes it. The ordered executor
-  // consults it: it is the cell table's volatility predicate, and so decides
-  // which cells are persistent (TableCell::persistent -- the frontier of the
-  // invariant region) and what cache-halt may skip on a later evaluation.
-  using node_t = std::ranges::range_value_t<Nodes>;
-  auto is_volatile_node =
-      [p = policy.is_volatile_leaf](node_t const& n) -> bool {
-    if (!n.leaf() || !n->is_tensor()) return false;
-    return p && p(n->as_tensor());
-  };
-
-  return evaluate_ordered_schedule<EvalTrace>(
-      forest, ordered, rich, layout, leaf_evaluator, cache, target,
-      make_scope_guard, is_volatile_node);
+/// \brief As \c evaluate_ordered, but the roots of \p forest are not summed:
+/// one result per root, each in its own canonical layout (\c
+/// evaluate_ordered_multiroot). The roots still make one schedule, so a
+/// value two of them share is built once.
+///
+/// \return One \c ResultPtr per root of \p forest, in its order.
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F, typename N, bool FHC,
+          typename ScopeGuardFactory = ::sequant::make_no_scope_guard>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
+container::svector<ResultPtr> evaluate_ordered_each(
+    Nodes const& forest, BatchPolicy const& policy, F const& leaf_evaluator,
+    CacheManager<N, FHC>& cache,
+    std::function<std::size_t(Index const&)> const& target,
+    std::initializer_list<std::wstring> mode_order = {},
+    ScopeGuardFactory make_scope_guard = {}) {
+  // an empty layout leaves a root as it was built
+  container::svector<std::string> const layouts(std::ranges::distance(forest));
+  return detail::with_ordered_schedule(
+      forest, policy, target, mode_order,
+      [&](OrderedSchedule const& ordered, RichSchedule const& rich,
+          auto const& is_volatile_node) {
+        return evaluate_ordered_multiroot<EvalTrace>(
+            forest, ordered, rich, layouts, leaf_evaluator, cache, target,
+            make_scope_guard, is_volatile_node);
+      });
 }
 
 }  // namespace sequant::eval
@@ -2160,6 +2209,48 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
   return eval::evaluate_ordered<EvalTrace>(forest, policy, layout,
                                            leaf_evaluator, cache, target,
                                            mode_order, make_scope_guard);
+}
+
+///
+/// \brief As \c evaluate(forest, policy, layout, ...), for a forest whose
+/// roots are results in their own right (the residuals of different
+/// equations, an energy) rather than the summands of one: the roots are not
+/// summed, and each is returned as it was built.
+///
+/// \details The roots share \p cache either way. On the ordered arm they
+/// also make one schedule (\c eval::evaluate_ordered_each); on the forest
+/// descent each is evaluated in turn.
+///
+/// \return One \c ResultPtr per root of \p forest, in its order.
+///
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F, typename N, bool FHC,
+          typename ScopeGuardFactory = make_no_scope_guard>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
+container::svector<ResultPtr> evaluate_each(
+    Nodes const& forest, BatchPolicy const& policy, F const& leaf_evaluator,
+    CacheManager<N, FHC>& cache,
+    std::initializer_list<std::wstring> mode_order = {},
+    ScopeGuardFactory make_scope_guard = {}) {
+  if (policy.scheduler != BatchScheduler::ordered) {
+    container::svector<ResultPtr> results;
+    for (auto const& root : forest)
+      results.push_back(
+          evaluate<EvalTrace>(root, std::wstring{}, leaf_evaluator, cache));
+    return results;
+  }
+
+  // one element per batch if the policy sizes none, as evaluate(forest,
+  // policy, ...) has it
+  std::function<std::size_t(Index const&)> const target =
+      policy.batch_target_size
+          ? policy.batch_target_size
+          : std::function<std::size_t(Index const&)>(
+                [](Index const&) -> std::size_t { return 1; });
+
+  return eval::evaluate_ordered_each<EvalTrace>(forest, policy, leaf_evaluator,
+                                                cache, target, mode_order,
+                                                make_scope_guard);
 }
 
 }  // namespace sequant

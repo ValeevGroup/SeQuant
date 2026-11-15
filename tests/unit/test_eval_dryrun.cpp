@@ -4976,3 +4976,90 @@ TEST_CASE("meter-ordered-batched-adjoint-leaf", "[meter][batch]") {
           Catch::Approx(ctl.flops_persistent + ctl.flops_volatile));
   }
 }
+
+// The roots of a metered forest are the results of different equations
+// (a singles and a doubles residual, an energy): they have nothing to be
+// summed into, and are metered each as its own result. The roots here
+// reach the end of the replay assembled from batches of a virtual index.
+TEST_CASE("meter-roots-of-different-shapes", "[meter][batch]") {
+  using namespace sequant;
+  namespace dr = sequant::eval::dryrun;
+
+  auto ctx = get_default_context_snapshot();
+  auto ibr = mbpt::make_sr_spaces();
+  ibr->extent(L"i", 8).extent(L"a", 16);
+  ctx.set(Vacuum::SingleProduct).set(SPBasis::Spinor).set(ibr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const is_a = [](Index const& ix) {
+    return ix.basis().base_key() == L"a";
+  };
+  dr::SizeRegime regime;
+  regime.space_extent = {{L"i", 8}, {L"a", 16}};
+  regime.space_slice_extents[L"a"] =
+      dr::batch_slice_extents_from_tiles({4, 4, 4, 4}, 4);
+
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = is_a;
+  policy.is_batchable_external_index = is_a;
+  policy.batch_target_size = [is_a](Index const& ix) {
+    return is_a(ix) ? std::size_t{4} : std::size_t{0};
+  };
+  policy.peak_threshold = 1;           // every term is batched
+  policy.infeasible_is_error = false;  // and is still over budget
+
+  auto root_of = [&](std::wstring_view equation) {
+    auto const res = deserialize<ResultExpr>(equation);
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) { return ix.basis().extent(); };
+    opts.batch_policy = policy;
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    auto rhs = optimize_result(res.expression(), opts).expr;
+    BinarizationOptions bopts;
+    if (auto it = opts.term_batch_axes->find(rhs.get());
+        it != opts.term_batch_axes->end())
+      bopts.node_batch_axes = it->second;
+    if (res.produces_tensor())
+      return binarize<dr::EvalExprDryRun>(
+          ResultExpr{res.result_as_tensor(), std::move(rhs)}, bopts);
+    return binarize<dr::EvalExprDryRun>(
+        ResultExpr{res.result_as_variable(), std::move(rhs)}, bopts);
+  };
+  auto const singles =
+      root_of(L"S{a_1;i_1}:N-N-N = f{a_1;a_2}:N-N-N * t{a_2;i_1}:N-N-N");
+  auto const doubles = root_of(
+      L"D{a_1,a_2;i_1,i_2}:N-N-N = g{a_1,a_2;a_3,a_4}:N-N-N * "
+      L"t{a_3,a_4;i_1,i_2}:N-N-N");
+  auto const energy = root_of(L"E = f{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N");
+
+  using Forest = std::vector<dr::EvalNodeDryRun>;
+  auto const flops_of = [](dr::MeterReport const& r) {
+    return r.flops_persistent + r.flops_volatile;
+  };
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    double flops_apart = 0;
+    for (auto const& root : {singles, doubles, energy})
+      flops_apart += flops_of(dr::meter(Forest{root}, policy, regime, {}));
+    // the three share no value, so together they cost what they cost apart,
+    // in any order
+    for (auto const& forest :
+         {Forest{singles, doubles, energy}, Forest{energy, doubles, singles},
+          Forest{doubles, singles}}) {
+      dr::MeterReport together;
+      dr::MeterOptions opts;
+      opts.steady_iteration = true;
+      REQUIRE_NOTHROW(together =
+                          dr::meter(forest, policy, regime, {}, nullptr, opts));
+      if (forest.size() == 3)
+        CHECK(flops_of(together) == Catch::Approx(flops_apart));
+      CHECK(together.peak_bytes > 0);
+      // nothing here is volatile: a second evaluation rebuilds nothing
+      CHECK(together.peak_bytes_steady.has_value());
+    }
+  }
+}

@@ -356,13 +356,15 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 /// DryRun sizing backend, metering the replay with a fresh, \c PeakMonitor
 /// -wired, build-tallying cache, and returns the assembled \c MeterReport.
 ///
-/// Mirrors MPQC's wet dispatch: this drives the same driver entry
-/// point (\c sequant::evaluate(Nodes const&, BatchPolicy const&, layout, F,
-/// CacheManager&, mode_order, ScopeGuardFactory), \c ordered_executor.hpp) a
-/// real solve would use under \p policy -- both executors are selected
-/// by the same \c policy.scheduler, not independently maintained code paths --
-/// so the metered replay is exactly the run \p policy describes, not a
-/// hand-rolled proxy of it. Non-throwing wrapper (if desired) is the
+/// Mirrors MPQC's wet dispatch: this drives the per-root driver entry
+/// (\c sequant::evaluate_each(Nodes const&, BatchPolicy const&, F,
+/// CacheManager&, mode_order, ScopeGuardFactory), \c ordered_executor.hpp)
+/// -- both executors are selected by the same \c policy.scheduler, not
+/// independently maintained code paths -- so the metered replay is the run
+/// \p policy describes, not a hand-rolled proxy of it. The roots of
+/// \p forest are not summed: they may be the results of different equations
+/// (residuals of different shapes, a scalar), which a real solve keeps
+/// apart. Non-throwing wrapper (if desired) is the
 /// caller's responsibility; an exception from the replay propagates out of
 /// this call, but the RAII logger-state guard still restores
 /// \c Logger::instance().eval on the way out.
@@ -487,7 +489,7 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
   // every non-leaf node, so installing it unconditionally would fire on the
   // ordered path's own evaluate_impl calls too. Ordered
   // (evaluate_ordered_schedule) drives its own executor via the driver entry
-  // (sequant::evaluate(forest, policy, ...) below, which dispatches on
+  // (sequant::evaluate_each(forest, policy, ...) below, which dispatches on
   // policy.scheduler) -- installing the forest custom evaluator for ordered
   // would silently reroute its builds through the forest evaluator instead
   // of run_ordered_contracted_block, diverging from what the wet ordered run
@@ -506,8 +508,10 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
     cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
         policy, yield, sequant::make_no_scope_guard{}));
 
-  (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
-                                     cache, {}, sequant::make_no_scope_guard{});
+  // The roots are evaluated but not summed: they are the results of
+  // different equations, of different shapes.
+  (void)sequant::evaluate_each<Trace::On>(forest, policy, yield, cache, {},
+                                          sequant::make_no_scope_guard{});
 
   MeterReport report =
       assemble_report(cache, mon, rich, forest, is_volatile, policy.scheduler);
@@ -515,9 +519,8 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
     // persistent values stay; the volatile ones are built again
     cache.reset();
     mon.hwmark_bytes = 0;
-    (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
-                                       cache, {},
-                                       sequant::make_no_scope_guard{});
+    (void)sequant::evaluate_each<Trace::On>(forest, policy, yield, cache, {},
+                                            sequant::make_no_scope_guard{});
     report.peak_bytes_steady = static_cast<double>(mon.hwmark_bytes);
   }
   if (opts.disk)
