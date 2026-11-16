@@ -33,10 +33,10 @@ static void nevpt2_args(benchmark::Benchmark *benchmark) {
 }
 
 BENCHMARK_CAPTURE(nevpt2, canonicalize, [](ExprPtr &expr) {
-  canonicalize(expr);
+  canonicalize(expr, deduce_named_indices);
 })->Apply(nevpt2_args);
 BENCHMARK_CAPTURE(nevpt2, simplify, [](ExprPtr &expr) {
-  simplify(expr);
+  simplify(expr, deduce_named_indices);
 })->Apply(nevpt2_args);
 BENCHMARK_CAPTURE(nevpt2, optimize, [](ExprPtr &expr) {
   expr = optimize(expr);

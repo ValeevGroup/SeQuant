@@ -55,7 +55,7 @@ static void canonicalize_cc_residual(benchmark::State &state) {
       bench::unsimplified_cc_residual(state.range(0), state.range(1));
 
   for (auto _ : state) {
-    ExprPtr canonicalized = canonicalize(input->clone());
+    ExprPtr canonicalized = canonicalize(input->clone(), deduce_named_indices);
 
     benchmark::DoNotOptimize(canonicalized);
   }
@@ -66,7 +66,7 @@ static void canonicalize_spinfree_cc_residual(benchmark::State &state) {
       bench::spinfree_cc_residual(state.range(0), state.range(1));
 
   for (auto _ : state) {
-    ExprPtr canonicalized = canonicalize(input->clone());
+    ExprPtr canonicalized = canonicalize(input->clone(), deduce_named_indices);
 
     benchmark::DoNotOptimize(canonicalized);
   }

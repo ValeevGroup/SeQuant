@@ -153,7 +153,7 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
     auto half_transform = [&real_pao](std::wstring_view g) {
       ExprPtr e = mbpt::csv_transform(deserialize<ExprPtr>(g), real_pao);
       REQUIRE(e->is<Product>());
-      return canonicalize(std::move(e));
+      return canonicalize(std::move(e), deduce_named_indices);
     };
     const ExprPtr bra_leg = half_transform(L"g{a_1<i_1>;i_2;Κ_1}:N-S-S");
     const ExprPtr ket_leg = half_transform(L"g{i_2;a_1<i_1>;Κ_1}:N-S-S");
