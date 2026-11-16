@@ -1,6 +1,8 @@
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <array>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -84,9 +86,44 @@ InternTable& intern_table() {
   return table;
 }
 
-}  // namespace
+/// A per-thread front of the intern table holding the bases the thread
+/// interned last, most recently used first. A computation uses only a handful
+/// of distinct bases, so nearly every lookup hits here and never touches the
+/// table's lock, whose (shared) acquisition writes to a cache line that all
+/// threads contend for. The size is bounded: on a miss the least recently used
+/// entry is dropped. Interned bases are never destroyed, so a cached pointer
+/// cannot dangle.
+struct InternCache {
+  /// The CC, EOM, NEVPT2, spintracing, simplification and optimization
+  /// benchmarks use at most 8 distinct bases, and 6 entries already make every
+  /// miss a first use of a basis; 8 entries fill one cache line
+  static constexpr std::size_t capacity = 8;
 
-const IndexBasis& intern(const IndexBasis& basis) {
+  /// the null entries, if any, trail the others
+  std::array<const IndexBasis*, capacity> entries{};
+
+  const IndexBasis* find(const IndexBasis& basis) noexcept {
+    for (std::size_t i = 0; i != capacity; ++i) {
+      const IndexBasis* entry = entries[i];
+      if (!entry) return nullptr;
+      if (entry == &basis || FullEqual{}(*entry, basis)) {
+        for (; i != 0; --i) entries[i] = entries[i - 1];
+        entries[0] = entry;
+        return entry;
+      }
+    }
+    return nullptr;
+  }
+
+  void insert(const IndexBasis* basis) noexcept {
+    for (std::size_t i = capacity - 1; i != 0; --i) entries[i] = entries[i - 1];
+    entries[0] = basis;
+  }
+};
+
+constinit thread_local InternCache intern_cache;
+
+const IndexBasis& intern_in_table(const IndexBasis& basis) {
   auto& table = intern_table();
   {
     std::shared_lock lock(table.mutex);
@@ -94,6 +131,15 @@ const IndexBasis& intern(const IndexBasis& basis) {
   }
   std::unique_lock lock(table.mutex);
   return *table.bases.insert(basis).first;
+}
+
+}  // namespace
+
+const IndexBasis& intern(const IndexBasis& basis) {
+  if (const IndexBasis* cached = intern_cache.find(basis)) return *cached;
+  const IndexBasis& interned = intern_in_table(basis);
+  intern_cache.insert(&interned);
+  return interned;
 }
 
 const IndexBasis& null_basis() {
