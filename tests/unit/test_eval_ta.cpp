@@ -301,6 +301,9 @@ class rand_tensor_yield {
         }
         return tile;
       });
+      // f may refer to the caller's locals, and nothing else waits for the
+      // tiles of a leaf that no evaluation reads
+      world.gop.fence();
       set_leaf(as, eval_result<ResultTensorTA<array_type>>(arr));
     };
     pin_as(tnsr, false);
