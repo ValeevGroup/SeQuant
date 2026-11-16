@@ -1749,6 +1749,15 @@ EvalExprNode make_kramers_flip_node(EvalExprNode inner,
     }
     wrap.set_batch_effective_count(inner->batch_effective_count());
     wrap.set_batch_order_aware(inner->batch_order_aware());
+    // A held family (NodeBatchAnnotation::root_scope) is held as its root,
+    // the wrapper, like the loops it opens: produced at the root scope in
+    // batches of its own. The operand runs inside those loops, on their
+    // images; left root-scoped, it would drop them and be built whole into
+    // every batch of the wrapper.
+    if (inner->root_scope()) {
+      wrap.set_root_scope(true);
+      inner->set_root_scope(false);
+    }
   }
   EvalExprNode sentinel{EvalExpr{Constant{1}}};
   return EvalExprNode{std::move(wrap), std::move(inner), std::move(sentinel)};

@@ -6132,6 +6132,259 @@ TEST_CASE(
       is_volatile_node));
 }
 
+// ===========================================================================
+// The same family with the bracket g C C held (BatchPolicy::hold): it is
+// produced at the root scope, in batches of its own. A folded bracket is a
+// KramersFlip of the ↑ family's node, whose operand carries the flipped pair
+// labels; each batch of the held value must slice that operand on the
+// images of the loops the KramersFlip opens (DCH 6-31G PNS-CCD with
+// batch:disk:hold, 2026-11-15: the operand was read whole, 22 wide, into an
+// 8-wide slice).
+// ===========================================================================
+TEST_CASE(
+    "ordered executor: a held Kramers-folded bracket is built in batches of "
+    "its own on the flipped operand's slices",
+    "[ordered-executor][kramers-flip][dag-slicing][hold]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
+  using sequant::Index;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context_snapshot();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  // both Kramers flavours of the occupied and of the virtual space (the
+  // default test registry pairs the occupied ones only), plus the DF
+  // auxiliary space
+  auto isr =
+      sequant::mbpt::make_min_sr_spaces(sequant::mbpt::SpinConvention::None);
+  sequant::mbpt::add_fermi_spin(*isr);
+  sequant::mbpt::add_df_spaces(isr);
+  ctx.set(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  // MPQC's projector blindness (expression/sequant.cpp): C's pure-occupied
+  // outer slots and the pair protos of its composite slot are flavour-blind;
+  // ↑ is the representative flavour
+  sequant::eval::KramersBlindness const kb{
+      .blind_slot =
+          [reg = sequant::get_default_context().index_basis_registry()](
+              sequant::Tensor const& t, std::size_t slot) {
+            if (t.label() != L"C") return false;
+            auto const& ix = *(t.const_slots().begin() + slot);
+            if (!ix.has_proto_indices())
+              return reg->is_pure_occupied(ix.space());
+            bool blind = !ix.proto_indices().empty();
+            for (auto const& p : ix.proto_indices())
+              blind = blind && reg->is_pure_occupied(p.space());
+            return blind;
+          },
+      .erase_space =
+          [](sequant::IndexSpace const& s) {
+            if ((s.qns().to_int32() &
+                 sequant::mbpt::mask_v<sequant::mbpt::Spin>) == 0)
+              return s;
+            if (sequant::mbpt::to_spin(s.qns()) == sequant::mbpt::Spin::any)
+              return s;
+            return sequant::mbpt::make_spinalpha(sequant::Index(s, 1)).space();
+          }};
+  // the Kramers-blind loop fusion (MPQC's kramers_blind_loop_fusion): the ↑
+  // and ↓ occupied loops are one loop; process-global, cleared on exit
+  struct ErasureGuard {
+    ~ErasureGuard() { sequant::eval::set_loop_space_erasure(nullptr); }
+  } const erasure_guard;
+  sequant::eval::set_loop_space_erasure(kb.erase_space);
+
+  // every leaf time-reversal symmetric, as MPQC's CSV leaves are
+  auto mk = [](std::wstring_view lbl, std::initializer_list<Index> b,
+               std::initializer_list<Index> k) {
+    return sequant::ex<sequant::Tensor>(
+        lbl, sequant::bra(b), sequant::ket(k), sequant::Symmetry::Nonsymm,
+        sequant::BraKetSymmetry::Nonsymm, sequant::ColumnSymmetry::Nonsymm,
+        sequant::KramersSymmetry::TimeReversal);
+  };
+  Index const a1(L"a_1"), a2(L"a_2"), K(L"Κ_1");
+  // R{i,j;a_4<ij>} = ((g{a_1,a_2;Κ_1} * C{a_1;a_3<ij>}) * C{a_2;a_4<ij>}) *
+  // t{a_3<ij>;i,j,Κ_1} as the DP's nested products (one contraction per
+  // node); the composites carry the block's virtual flavour, the pair labels
+  // are blind on the projectors
+  auto term = [&](Index const& i, Index const& j, wchar_t flavour) {
+    std::wstring const l3 = std::wstring(L"a") + flavour + L"_3";
+    std::wstring const l4 = std::wstring(L"a") + flavour + L"_4";
+    Index const c3(l3, {i, j}), c4(l4, {i, j});
+    // Flatten::No keeps the brackets: a flattened product has no nested
+    // factor left to fold
+    auto const keep = sequant::Product::Flatten::No;
+    auto p1 = sequant::ex<sequant::Product>(
+        sequant::ExprPtrList{mk(L"g", {a1, a2}, {K}), mk(L"C", {a1}, {c3})},
+        keep);
+    auto p2 = sequant::ex<sequant::Product>(
+        sequant::ExprPtrList{p1, mk(L"C", {a2}, {c4})}, keep);
+    auto p3 = sequant::ex<sequant::Product>(
+        sequant::ExprPtrList{p2, mk(L"t", {c3}, {i, j, K})}, keep);
+    return sequant::ResultExpr{
+        sequant::Tensor(L"R", sequant::bra{i, j}, sequant::ket{c4}), p3};
+  };
+
+  // the optimizer's annotations for the DP's nodes, left-first post-order, in
+  // the term's own spelling: every node carrying a pair label is sliced on it
+  // (External), the term root opens both loops
+  auto annotate = [&](Node const& root, Index const& i, Index const& j) {
+    sequant::container::vector<sequant::NodeBatchAnnotation> out;
+    auto walk = [&](auto&& self, Node const& n) -> void {
+      if (n.leaf()) return;
+      self(self, n.left());
+      if (!n->is_unary_op()) self(self, n.right());
+      if (!n->is_product()) return;
+      sequant::NodeBatchAnnotation a;
+      for (auto const& ix : {i, j})
+        if (sequant::index_position(n, ix).has_value())
+          a.axes.push_back({ix, sequant::BatchModeType::External});
+      out.push_back(std::move(a));
+    };
+    walk(walk, root);
+    REQUIRE(out.size() == 3);
+    out.back().opened_here = out.back().axes;
+    // the DP holds the amplitude-independent bracket g C C outside its
+    // consumer's loop (BatchPolicy::hold): produced at the root scope, in
+    // batches of its own over the pair labels, and read in slices
+    out[1].root_scope = true;
+    out[1].opened_here = out[1].axes;
+    return out;
+  };
+
+  // the four pair-flavour blocks, each with the ↑ and the ↓ composite family:
+  // the ↓ family folds onto the ↑ one
+  std::vector<Node> forest;
+  std::wstring const up = L"i↑", dn = L"i↓";
+  for (auto const& [li, lj] :
+       std::vector<std::pair<std::wstring, std::wstring>>{
+           {up + L"_1", up + L"_2"},
+           {up + L"_1", dn + L"_2"},
+           {dn + L"_1", up + L"_2"},
+           {dn + L"_1", dn + L"_2"}})
+    for (wchar_t const flavour : {L'↑', L'↓'}) {
+      Index const i(li), j(lj);
+      auto res = term(i, j, flavour);
+      sequant::BinarizationOptions plain;
+      plain.kramers_blindness = kb;
+      auto const axes =
+          annotate(sequant::binarize<EvalExprDryRun>(res, plain), i, j);
+      sequant::BinarizationOptions bopts;
+      bopts.kramers_blindness = kb;
+      bopts.kramers_fold_intermediates = true;
+      bopts.node_batch_axes = axes;
+      forest.push_back(sequant::binarize<EvalExprDryRun>(res, bopts));
+    }
+  REQUIRE(forest.size() == 8);
+  auto const has_flip = [](Node const& root) {
+    bool found = false;
+    auto walk = [&](auto&& self, Node const& n) -> void {
+      if (n.leaf()) return;
+      found = found || n->op_type() == sequant::EvalOp::KramersFlip;
+      self(self, n.left());
+      if (!n->is_unary_op()) self(self, n.right());
+    };
+    walk(walk, root);
+    return found;
+  };
+  for (std::size_t k = 0; k < forest.size(); ++k) {
+    INFO("root " << k);
+    REQUIRE(has_flip(forest[k]) == (k % 2 == 1));
+  }
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {
+      {L"i\x2191", 8u}, {L"i\x2193", 8u}, {L"a", 30u}, {L"\x39a", 20u}};
+  for (std::size_t k = 0; k <= 4; ++k)
+    regime.csv_pno_moment[k] = std::pow(4.0, double(k));
+  regime.csv_osv_moment = regime.csv_pno_moment;
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  auto const is_occ = [](Index const& ix) {
+    auto const reg = sequant::get_default_context().index_basis_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space()) &&
+           !ix.has_proto_indices();
+  };
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const&) { return false; };
+  policy.is_batchable_external_index = is_occ;
+  policy.batch_spectator_indices = true;
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 2; };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto const block_of = [](Index const&) -> std::size_t { return 2; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+
+  // end to end: the schedule builds, its cell table validates, and the strict
+  // dry-run walk (shared-label range check in every prod) completes
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(Index const&)> const target = block_of;
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+  {
+    auto const sma =
+        sequant::eval::compute_sliced_mode_assignment(ordered, rich);
+    sequant::eval::CellTableInputs in;
+    in.ordered = &ordered;
+    in.rich = &rich;
+    in.sliced = &sma;
+    in.sliced_modes_of = [&](std::size_t vid) {
+      auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
+      REQUIRE(it != vmap.end());
+      return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
+                                                             *it->second);
+    };
+    in.volatile_of = [&](std::size_t vid) {
+      auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
+      return it != vmap.end() &&
+             sequant::subtree_any(*it->second, is_volatile_node);
+    };
+    [[maybe_unused]] auto const n_batches_of =
+        sequant::eval::detail::ordered_n_batches_by_loop(ordered, target,
+                                                         &aops);
+    in.operands_of = orderedexec_per_leg_operands(rich, vmap);
+    auto const table = sequant::eval::build_cell_table(in);
+    auto const violations =
+        sequant::eval::validate_cell_table(table, ordered.root);
+    if (std::getenv("SEQUANT_UT_FOLD_DUMP")) {
+      sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
+      std::set<std::size_t> all;
+      for (std::size_t vid = 0; vid < rich.cells.size(); ++vid) all.insert(vid);
+      sequant::eval::detail::dump_cells_of(table, rich, all);
+      sequant::eval::detail::dump_occs_of(table, rich, all);
+    }
+    for (auto const& v : violations)
+      UNSCOPED_INFO("[" << v.rule << "] " << v.what);
+    REQUIRE(violations.empty());
+    REQUIRE(table.unresolved.empty());
+  }
+  ordered_cache.set_strict_fill_once(true);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
+}
+
 // Issue #720: a shared, batched intermediate read by one term in lockstep
 // inside its loop and by another term whole, at the root. W = g{i;i;K} g{a;a;K}
 // is sliced on a_2 in both terms of a two-term DF doubles residual and the two
