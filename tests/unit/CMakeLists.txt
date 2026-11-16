@@ -138,6 +138,7 @@ if (SEQUANT_HAS_TILEDARRAY)
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
     target_set_compiler_flags(unit_tests-sequant-eval-ta-obj)
     target_set_optimization_flags(unit_tests-sequant-eval-ta-obj)
+    sequant_heavy_compile(unit_tests-sequant-eval-ta-obj)
     set_target_properties(unit_tests-sequant-eval-ta-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-ta-obj
         PUBLIC SeQuant::eval::ta SeQuant::mbpt
@@ -218,6 +219,7 @@ set(eval_dryrun_test_sources
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
 target_set_compiler_flags(unit_tests-sequant-eval-dryrun-obj)
 target_set_optimization_flags(unit_tests-sequant-eval-dryrun-obj)
+sequant_heavy_compile(unit_tests-sequant-eval-dryrun-obj)
 set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-eval-dryrun-obj
     PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt

@@ -25,6 +25,7 @@ if (SEQUANT_HAS_TILEDARRAY)
     set_target_properties(eval_ta PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(eval_ta PRIVATE eval_shared tiledarray)
     target_set_optimization_flags(eval_ta)
+    sequant_heavy_compile(eval_ta)
 
     set(test_name "sequant/integration/eval_ta")
     add_test(
