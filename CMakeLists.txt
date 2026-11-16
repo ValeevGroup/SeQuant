@@ -137,19 +137,21 @@ vgkit_cmake_git_metadata()
 ##########################
 # Standard build variables
 ##########################
-set(SEQUANT_INSTALL_BINDIR "bin"
+# the defaults follow the GNU conventions, as do those of the fetched dependencies
+include(GNUInstallDirs)
+set(SEQUANT_INSTALL_BINDIR "${CMAKE_INSTALL_BINDIR}"
         CACHE PATH "SeQuant BIN install directory")
-set(SEQUANT_INSTALL_INCLUDEDIR "include"
+set(SEQUANT_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}"
         CACHE PATH "SeQuant INCLUDE install directory")
-set(SEQUANT_INSTALL_LIBDIR "lib"
+set(SEQUANT_INSTALL_LIBDIR "${CMAKE_INSTALL_LIBDIR}"
         CACHE PATH "SeQuant LIB install directory")
-set(SEQUANT_INSTALL_SHAREDIR "share/sequant/${SEQUANT_VERSION}"
+set(SEQUANT_INSTALL_SHAREDIR "${CMAKE_INSTALL_DATADIR}/sequant/${SEQUANT_VERSION}"
         CACHE PATH "SeQuant SHARE install directory")
 set(SEQUANT_INSTALL_DATADIR "${SEQUANT_INSTALL_SHAREDIR}/data"
         CACHE PATH "SeQuant DATA install directory")
 set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
         CACHE PATH "SeQuant DOC install directory")
-set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
+set(SEQUANT_INSTALL_CMAKEDIR "${SEQUANT_INSTALL_LIBDIR}/cmake/sequant"
         CACHE PATH "SeQuant CMAKE install directory")
 
 ############################
@@ -932,7 +934,9 @@ add_library(SeQuant::SeQuant ALIAS SeQuant)
 ##########################
 install(TARGETS ${SEQUANT_MODULES}
         EXPORT sequant COMPONENT sequant
-        LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
+        LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${SEQUANT_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${SEQUANT_INSTALL_BINDIR})
 install(DIRECTORY SeQuant
         COMPONENT sequant
         DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}"
