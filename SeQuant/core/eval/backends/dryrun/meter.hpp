@@ -364,7 +364,9 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 /// \p policy describes, not a hand-rolled proxy of it. The roots of
 /// \p forest are not summed: they may be the results of different equations
 /// (residuals of different shapes, a scalar), which a real solve keeps
-/// apart. Non-throwing wrapper (if desired) is the
+/// apart -- and holds all at once, which is how they are metered: a finished
+/// root counts toward the peak of every later one, and all of them at the
+/// end of each evaluation. Non-throwing wrapper (if desired) is the
 /// caller's responsibility; an exception from the replay propagates out of
 /// this call, but the RAII logger-state guard still restores
 /// \c Logger::instance().eval on the way out.
