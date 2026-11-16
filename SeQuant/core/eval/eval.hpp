@@ -718,9 +718,16 @@ template <meta::can_evaluate Node>
 
 template <meta::can_evaluate Node>
 [[nodiscard]] ResultPtr apply_one_op(
-    Node const& node, ResultPtr const& left, ResultPtr const& right,
-    BackendArrayOps const* aops,
+    Node const& node, ResultPtr const& left_operand,
+    ResultPtr const& right_operand, BackendArrayOps const* aops,
     container::svector<BatchContextEntry> const& bctx) {
+  // an operand evaluated lazily (Result::is_lazy) is read whole first: the
+  // operations act on values held in memory
+  auto const load = [](ResultPtr const& r) {
+    return r && r->is_lazy() ? r->in_memory() : r;
+  };
+  ResultPtr const left = load(left_operand);
+  ResultPtr const right = load(right_operand);
   if (node->is_unary_op()) {
     // Unary Re/Im/KramersFlip over the left operand; the right child is the
     // Constant{1} sentinel that keeps FullBinaryNode's two-children invariant

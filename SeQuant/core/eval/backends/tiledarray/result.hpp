@@ -2853,6 +2853,123 @@ class ResultOnDiskTA final : public Result {
   }
 };
 
+/// \brief A lazily evaluated TiledArray value: an array of lazy tiles
+///        (TiledArray's lazy-tile concept: eval_type and an explicit
+///        conversion to it), evaluated into an ordinary in-memory result when
+///        it is read.
+///
+/// \c in_memory() evaluates the whole value and \c slice_mode() only the
+/// tiles of one block; a pending phase and conjugation (\c apply_transform,
+/// \c mult_by_phase) are applied to what is read. It holds nothing of its own
+/// (\c size_in_bytes() is 0), and every arithmetic operation throws: the
+/// evaluator reads it first (Result::is_lazy).
+///
+/// \tparam InMemoryResult the in-memory result class of the value (\c
+///         ResultTensorTA or \c ResultTensorOfTensorTA )
+/// \tparam InMemoryArrayT that class's array type
+/// \tparam LazyArrayT a TA::DistArray of lazy tiles that evaluate to the
+///         tiles of \p InMemoryArrayT
+template <typename InMemoryResult, typename InMemoryArrayT, typename LazyArrayT>
+class ResultLazyTA final : public Result {
+ public:
+  /// \param arr the lazy value
+  /// \param annot an annotation of \p arr 's modes (nested for a tensor of
+  ///        tensors), used for every expression on it
+  /// \param pending a phase and conjugation applied to what is read
+  ResultLazyTA(LazyArrayT arr, std::string annot, CanonTransform pending = {})
+      : Result{std::move(arr)}, annot_(std::move(annot)), pending_(pending) {}
+
+  [[nodiscard]] bool is_lazy() const noexcept override { return true; }
+
+  [[nodiscard]] ResultPtr in_memory() const override {
+    auto const& d = get<LazyArrayT>();
+    InMemoryArrayT out;
+    out(annot_) = d(annot_);
+    ::sequant::detail::wait_for_lazy_cleanup(out);
+    return finish(eval_result<InMemoryResult>(std::move(out)));
+  }
+
+  /// Evaluates the tile block of \p mode covering elements
+  /// [\p elem_lo, \p elem_hi); only the block's tiles are evaluated.
+  [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
+                                     std::size_t elem_hi) const override {
+    auto const& d = get<LazyArrayT>();
+    auto const rank = d.trange().rank();
+    SEQUANT_ASSERT(mode < rank);
+    auto const [tile_lo, tile_hi] =
+        detail::slice_bounds_to_tiles(d.trange().dim(mode), elem_lo, elem_hi);
+    container::svector<std::size_t> lo(rank, 0), hi(rank);
+    for (std::size_t r = 0; r < rank; ++r)
+      hi[r] = d.trange().dim(r).tile_extent();
+    lo[mode] = tile_lo;
+    hi[mode] = tile_hi;
+    InMemoryArrayT out;
+    out(annot_) = d(annot_).block(lo, hi, TA::preserve_lobound);
+    ::sequant::detail::wait_for_lazy_cleanup(out);
+    return finish(eval_result<InMemoryResult>(std::move(out)));
+  }
+
+  /// A phase and a conjugation stay pending; a bra-ket swap or a relabeling
+  /// is applied to the value read whole.
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform t, std::array<std::any, 2> const& ann) const override {
+    if (t.braket_swap || std::any_cast<std::string>(ann[0]) !=
+                             std::any_cast<std::string>(ann[1]))
+      return in_memory()->apply_transform(t, ann);
+    CanonTransform p = pending_;
+    p.phase = static_cast<std::int8_t>(p.phase * t.phase);
+    p.conj = p.conj != t.conj;
+    return eval_result<ResultLazyTA>(get<LazyArrayT>(), annot_, p);
+  }
+  [[nodiscard]] ResultPtr mult_by_phase(std::int8_t f) const override {
+    CanonTransform p = pending_;
+    p.phase = static_cast<std::int8_t>(p.phase * f);
+    return eval_result<ResultLazyTA>(get<LazyArrayT>(), annot_, p);
+  }
+
+  /// nothing of its own: its tiles are computed when read
+  [[nodiscard]] std::size_t size_in_bytes() const override { return 0; }
+  [[nodiscard]] std::size_t measured_size_in_bytes() const override {
+    return 0;
+  }
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<ResultLazyTA>(get<LazyArrayT>(), annot_, pending_);
+  }
+  [[nodiscard]] ResultPtr sum(Result const&,
+                              std::array<std::any, 3> const&) const override {
+    throw detail::unimplemented_method("sum (lazy result)");
+  }
+  [[nodiscard]] ResultPtr prod(Result const&, std::array<std::any, 3> const&,
+                               DeNest) const override {
+    throw detail::unimplemented_method("prod (lazy result)");
+  }
+  [[nodiscard]] ResultPtr permute(
+      std::array<std::any, 2> const&) const override {
+    throw detail::unimplemented_method("permute (lazy result)");
+  }
+  void add_inplace(Result const&) override {
+    throw detail::unimplemented_method("add_inplace (lazy result)");
+  }
+  [[nodiscard]] ResultPtr symmetrize() const override {
+    throw detail::unimplemented_method("symmetrize (lazy result)");
+  }
+  [[nodiscard]] ResultPtr antisymmetrize(std::size_t) const override {
+    throw detail::unimplemented_method("antisymmetrize (lazy result)");
+  }
+
+ private:
+  std::string annot_;
+  CanonTransform pending_;
+  [[nodiscard]] id_t type_id() const noexcept override {
+    return id_for_type<ResultLazyTA>();
+  }
+  /// \p r with the pending phase and conjugation applied (a view of it)
+  [[nodiscard]] ResultPtr finish(ResultPtr r) const {
+    if (pending_.trivial()) return r;
+    return r->apply_transform(pending_, {annot_, annot_});
+  }
+};
+
 // The block-sparse real and complex results are instantiated once, in
 // SeQuant-eval-ta (result_inst_*.cpp, one class per TU): every virtual member
 // expands the TiledArray expressions for each pair of operand forms that

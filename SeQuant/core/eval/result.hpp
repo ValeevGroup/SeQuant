@@ -455,8 +455,15 @@ class Result {
   /// \return whether this result is the on-disk form of a value.
   [[nodiscard]] virtual bool is_on_disk() const noexcept { return false; }
 
-  /// \return the value of this on-disk result, whole, in memory. Only an
-  ///         on-disk form implements it; the default throws.
+  /// \return whether this result is lazily evaluated: its value is computed
+  ///         when it is read (in_memory(), or slice_mode() for a block of it)
+  ///         and is not held. A lazy result takes no part in arithmetic
+  ///         itself: the evaluator reads it first (apply_one_op, the cell
+  ///         registry).
+  [[nodiscard]] virtual bool is_lazy() const noexcept { return false; }
+
+  /// \return the value of this on-disk or lazy result, whole, in memory.
+  ///         Only those forms implement it; the default throws.
   [[nodiscard]] virtual ResultPtr in_memory() const {
     throw detail::unimplemented_method("in_memory");
   }

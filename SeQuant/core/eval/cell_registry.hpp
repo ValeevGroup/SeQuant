@@ -575,9 +575,9 @@ class CellReadResolver {
                         " to a loop instance not in the batch context");
       v = v->slice_mode(pos, range->first, range->second);
     }
-    // a value kept on disk is used from memory: a read that slices it has
-    // loaded just the slice, any other loads it whole
-    if (v->is_on_disk()) v = v->in_memory();
+    // a value kept on disk or evaluated lazily is used from memory: a read
+    // that slices it has loaded just the slice, any other loads it whole
+    if (v->is_on_disk() || v->is_lazy()) v = v->in_memory();
     ++served_;
     return v;
   }
