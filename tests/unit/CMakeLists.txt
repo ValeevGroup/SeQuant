@@ -138,6 +138,7 @@ if (SEQUANT_HAS_TILEDARRAY)
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
     target_set_compiler_flags(unit_tests-sequant-eval-ta-obj)
     target_set_optimization_flags(unit_tests-sequant-eval-ta-obj)
+    sequant_heavy_compile(unit_tests-sequant-eval-ta-obj)
     set_target_properties(unit_tests-sequant-eval-ta-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-ta-obj
         PUBLIC SeQuant::eval::ta SeQuant::mbpt
@@ -218,6 +219,7 @@ set(eval_dryrun_test_sources
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
 target_set_compiler_flags(unit_tests-sequant-eval-dryrun-obj)
 target_set_optimization_flags(unit_tests-sequant-eval-dryrun-obj)
+sequant_heavy_compile(unit_tests-sequant-eval-dryrun-obj)
 set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-eval-dryrun-obj
     PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt
@@ -238,9 +240,12 @@ set_source_files_properties("test_eval_ordered.cpp"
 # they make a single cc1plus invocation whose peak memory exceeds what a
 # 16 GB 2-core CI runner can afford next to a second parallel compile (the
 # GitHub ubuntu-24.04 Debug + CMAKE_UNITY_BUILD job was killed mid-compile of
-# this target's unity_0). Give each its own TU; the remaining seven sources
-# still share one.
+# this target's unity_0). Give each its own TU. test_eval_dryrun.cpp
+# (~5.2 kLOC) is as large and gets its own TU for the same reason: the
+# same job was killed again once it grew. The remaining sources still share
+# a TU.
 set_source_files_properties("test_ordered_executor.cpp" "test_ordered_schedule.cpp"
+    "test_eval_dryrun.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
