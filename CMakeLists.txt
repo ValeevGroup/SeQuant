@@ -115,6 +115,32 @@ function(sequant_set_visibility _target _module)
     endif()
 endfunction()
 
+# Helper: lets the installed shared library ${_target} find the shared libraries installed with it,
+#         e.g. the fetched dependencies such as libPerm, via an RPATH relative to its own location (so
+#         the install stays relocatable). The fetched dependencies are installed into
+#         CMAKE_INSTALL_LIBDIR, which SEQUANT_INSTALL_LIBDIR may be set to differ from.
+function(sequant_set_install_rpath _target)
+    get_target_property(_type ${_target} TYPE)
+    if (NOT _type STREQUAL "SHARED_LIBRARY" OR WIN32)
+        return()
+    endif()
+    if (APPLE)
+        set(_origin "@loader_path")
+    else()
+        set(_origin "$ORIGIN")
+    endif()
+    cmake_path(ABSOLUTE_PATH SEQUANT_INSTALL_LIBDIR BASE_DIRECTORY "${CMAKE_INSTALL_PREFIX}"
+            NORMALIZE OUTPUT_VARIABLE _sequant_libdir)
+    cmake_path(ABSOLUTE_PATH CMAKE_INSTALL_LIBDIR BASE_DIRECTORY "${CMAKE_INSTALL_PREFIX}"
+            NORMALIZE OUTPUT_VARIABLE _dependency_libdir)
+    file(RELATIVE_PATH _relative "${_sequant_libdir}" "${_dependency_libdir}")
+    set(_rpath "${_origin}")
+    if (NOT _relative STREQUAL "")
+        list(APPEND _rpath "${_origin}/${_relative}")
+    endif()
+    set_property(TARGET ${_target} APPEND PROPERTY INSTALL_RPATH ${_rpath})
+endfunction()
+
 # Helper: creates SeQuant-${module} target, sets EXPORT_NAME, creates SeQuant::${module} alias,
 #         and applies warning flags (for non-INTERFACE targets)
 macro(sequant_add_library _module)
@@ -127,6 +153,7 @@ macro(sequant_add_library _module)
         target_set_compiler_flags(SeQuant-${_module})
         target_set_optimization_flags(SeQuant-${_module})
         sequant_set_visibility(SeQuant-${_module} ${_module})
+        sequant_set_install_rpath(SeQuant-${_module})
     endif()
 endmacro()
 
@@ -848,6 +875,7 @@ if (SEQUANT_HAS_TILEDARRAY)
     # TiledArray wrapper header gives them default visibility, but on Darwin clang's -fvisibility-inlines-hidden
     # overrides that (#pragma GCC visibility push) for inline member functions, giving every library its own copy
     set_target_properties(SeQuant-eval-ta PROPERTIES VISIBILITY_INLINES_HIDDEN OFF)
+    sequant_set_install_rpath(SeQuant-eval-ta)
 endif()
 
 ##########################
