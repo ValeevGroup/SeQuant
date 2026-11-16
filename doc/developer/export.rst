@@ -105,6 +105,13 @@ redundant alloc/dealloc pairs by reordering. It changes only *when* objects are 
 deliberately conservative rather than cost-optimal about which reorderings it attempts. It is opt-in: wrap the generator
 (``GenerationOptimizer<ItfGenerator<...>> generator(itf_generator);``) before passing it to ``export_groups()``.
 
+``StackCheckingGenerator<MainGenerator, MainContext>`` is a second wrapper (both derive from ``ForwardingGenerator``, which forwards every callback)
+that simulates the memory stack of a backend with stack-like allocations: ``create``/``load`` push an object, ``unload``/``destroy``/``persist``
+must pop exactly that object, and the stack has to be empty at the end of each expression. A violation throws an ``Exception`` naming the offending
+object. The visitor driving the generators emits operations in this order by construction; wrapping a generator (or the generator inside a
+``GenerationOptimizer``, to check its output) guards that invariant. Note that pairs of an ``unload`` and a later ``load`` of the same object may
+cross without violating it, e.g. ``unload A, unload B, load A, load B``.
+
 Implementing a new backend
 --------------------------------
 

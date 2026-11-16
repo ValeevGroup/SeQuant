@@ -149,6 +149,41 @@ TEST_CASE("cse step", "[extint]") {
     REQUIRE(ctx.dataset_size("cse[0-1]") == 2);
   }
 
+  SECTION("merge_inputs orders members such that producers come first") {
+    // Identical contractions, so that merging triggers CSE
+    const std::wstring expr_consumer =
+        L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
+    const std::wstring expr_producer =
+        L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
+
+    ExportTreeData consumer = test_support::tree_data({expr_consumer});
+    ExportTreeData producer = test_support::tree_data({expr_producer});
+    const std::size_t consumer_id = consumer.entries.at(0).tree->id();
+    const std::size_t producer_id = producer.entries.at(0).tree->id();
+    // The consumer comes first in the input order, but needs the producer
+    consumer.entries.at(0).dependencies = {producer_id};
+
+    ExecutionContext ctx;
+    ctx.set_data("in", 0, ProcessingData{std::move(consumer)});
+    ctx.set_data("in", 1, ProcessingData{std::move(producer)});
+
+    CSEStep step;
+    step.set_options(json{{"merge_inputs", true}});
+    REQUIRE(step.run("cse", ctx, {"in.0", "in.1"}) == 1);
+
+    const ExportTreeData &result =
+        convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get());
+    REQUIRE(result.entries.size() > 2);
+
+    auto position = [&](std::size_t id) {
+      auto it = std::ranges::find(result.entries, id,
+                                  [](const auto &e) { return e.tree->id(); });
+      REQUIRE(it != result.entries.end());
+      return it - result.entries.begin();
+    };
+    REQUIRE(position(producer_id) < position(consumer_id));
+  }
+
   SECTION("dependencies on the original results survive CSE") {
     // Two identical contractions share a common subexpression, so CSE
     // introduces an intermediate (the result grows by one entry).

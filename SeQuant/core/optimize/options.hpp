@@ -212,6 +212,13 @@ struct CostParams {
   /// When true, only persistent (volatile-leaf-free) subnetworks are batched;
   /// threaded from BatchPolicy::persistent_only. Batched objectives only.
   bool batch_persistent_only = false;
+  /// Holding operands outside their consumer's loop, and the memory space of
+  /// the large ones; threaded from BatchPolicy::hold. Batched objectives only.
+  HoldPolicy hold = {};
+  /// Threaded from BatchPolicy::infeasible_peak_slack.
+  double infeasible_peak_slack = std::numeric_limits<double>::infinity();
+  /// Threaded from BatchPolicy::infeasible_is_error.
+  bool infeasible_is_error = true;
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public

@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
+#include <SeQuant/core/eval/disk_spill.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
@@ -1075,6 +1076,13 @@ class CacheManager {
   /// pointee must outlive this cache.
   eval::PeakMonitor* peak_monitor_ = nullptr;
 
+  /// Non-owning: when set, the ordered executor charges large idle values as
+  /// kept on disk and accounts for them here (see \c eval::DiskSpill).
+  /// Looked up along the parent chain like \c peak_monitor_. Null (default)
+  /// => every value is charged as in memory. The pointee must outlive its
+  /// installation.
+  eval::DiskSpill* disk_spill_ = nullptr;
+
   /// Non-owning: the store of values held outside this hierarchy's own \c
   /// cache_map_ entries that the peak metering must still count (see \c
   /// eval::ExternalStore) -- the ordered executor's \c CellRegistry. Looked
@@ -1165,6 +1173,18 @@ class CacheManager {
   /// Sets the local peak monitor (see peak_monitor_). Pass nullptr to detach.
   /// Non-owning; the pointee must outlive this cache.
   void set_peak_monitor(eval::PeakMonitor* m) noexcept { peak_monitor_ = m; }
+
+  /// Sets the disk-spill switch and accounting (see \c disk_spill_). Pass
+  /// nullptr to detach. Non-owning; the pointee must outlive this cache.
+  void set_disk_spill(eval::DiskSpill* s) noexcept { disk_spill_ = s; }
+
+  /// \return the local disk-spill object if set, else the one inherited
+  ///         from \c parent_; nullptr if none is wired along the chain.
+  [[nodiscard]] eval::DiskSpill* disk_spill() const noexcept {
+    return disk_spill_ ? disk_spill_
+           : parent_   ? parent_->disk_spill()
+                       : nullptr;
+  }
 
   /// \return the local peak monitor if set, else the one inherited from
   ///         \c parent_ (only the root cache is wired in practice); nullptr

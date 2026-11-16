@@ -700,6 +700,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         auto const& ann = opts.node_batch_axes[node_counter];
         result.set_node_slice_mask(ann.axes);
         result.set_batch_loops_opened_here(ann.opened_here);
+        result.set_root_scope(ann.root_scope);
         result.set_batch_order_aware(ann.order_aware);
         result.set_batch_effective_count(ann.effective_count);
       }

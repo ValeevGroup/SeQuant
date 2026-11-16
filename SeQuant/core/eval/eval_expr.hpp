@@ -384,6 +384,16 @@ class EvalExpr {
   }
 
   ///
+  /// \return true iff this node is produced at the root scope whatever loops
+  /// are opened above it (\c NodeBatchAnnotation::root_scope): the loops of
+  /// its ancestors do not enclose it or its subtree.
+  ///
+  [[nodiscard]] bool root_scope() const noexcept { return root_scope_; }
+
+  /// \brief Sets \c root_scope.
+  void set_root_scope(bool v) noexcept { root_scope_ = v; }
+
+  ///
   /// \brief Canonical batch modes that slice this node in every occurrence
   /// (the cross-occurrence meet; see \c stamp_lifetime_masks). Empty =>
   /// all-full (block-agnostic, run-scope). Proto-aware: a composite slot
@@ -531,6 +541,9 @@ class EvalExpr {
 
   /// See \c is_equation_boundary.
   bool equation_boundary_ = false;
+
+  /// See \c root_scope.
+  bool root_scope_ = false;
 
   ExprPtr expr_;
 

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -91,15 +92,16 @@ struct TableCell {
   ///       (\c detail::bound_instances empty), so its content is identical
   ///       across every batch and across repeated evaluations of the same
   ///       schedule and may survive a cache reset between them; And
-  ///   (b) some consumer of it holds a volatile value, or it has no consumer
-  ///       at all (a forest root -- validator rule 4 admits a zero-consumer
-  ///       cell only at the root scope).
-  /// (b) is what makes this the frontier: a cell all of whose consumers are
-  /// non-volatile is never read again, because those consumers are themselves
-  /// skipped by cache-halt on every later evaluation -- holding it across
-  /// evaluations would cost its bytes and buy nothing. See \c
-  /// detail::apply_persistence_frontier (cell_table_builder.hpp), which
-  /// decides (b) once the table's reads exist.
+  ///   (b) some consumer of it is produced again on a later evaluation, or
+  ///       it has no consumer at all (a forest root -- validator rule 4
+  ///       admits a zero-consumer cell only at the root scope).
+  /// (b) is what makes this the frontier: a cell none of whose consumers is
+  /// produced again is never read again -- holding it across evaluations
+  /// would cost its bytes and buy nothing. A consumer is produced again if
+  /// it holds a volatile value, or if it is amplitude-independent but bound
+  /// to a loop (so it cannot persist) and something produced again reads it.
+  /// See \c detail::apply_persistence_frontier (cell_table_builder.hpp),
+  /// which decides (b) once the table's reads exist.
   ///
   /// This is distinct from the forest evaluator's per-scratch "survives the
   /// reset of its home scope" flag, which tests only the innermost home loop
@@ -151,6 +153,53 @@ struct CellTable {
   /// on any schedule that is expected to be fully resolved.
   container::svector<std::pair<CellId, std::size_t>> unresolved;
 };
+
+/// \brief The cells of \p table whose value the schedule can keep on disk
+///        between uses (see \c DiskSpill ).
+///
+/// A cell qualifies when its value is held whole, once, for readers:
+///   - it is at the root scope, whole (no sliced position) and complete (not
+///     a partial sum): a form inside a loop is rebuilt per batch, and is not
+///     idle long enough to be worth the I/O;
+///   - it is built, fetched as a leaf, or assembled by scattering its
+///     per-batch partials into disjoint blocks. A value assembled by summing
+///     its partials is updated in place by every batch, which a value on
+///     disk cannot be;
+///   - some other cell reads it: a cell nothing reads at the root scope is a
+///     result of the evaluation, which the caller takes;
+///   - it is not a volatile leaf (\p is_volatile_leaf, by value id): that is
+///     an input the caller owns and changes between evaluations.
+/// Size plays no part here; \c DiskSpill::min_bytes is applied to the value
+/// once it exists.
+///
+/// \param is_volatile_leaf whether the value with a given id is a volatile
+///        leaf; empty means no value is
+/// \return one flag per cell of \p table, nonzero for a qualifying cell
+[[nodiscard]] inline container::vector<char> disk_eligible_cells(
+    CellTable const& table,
+    std::function<bool(std::size_t value_id)> const& is_volatile_leaf = {}) {
+  container::vector<char> read_by_another(table.cells.size(), 0);
+  for (Read const& r : table.reads)
+    if (r.source != r.consumer && r.source < read_by_another.size())
+      read_by_another[r.source] = 1;
+
+  container::vector<char> eligible(table.cells.size(), 0);
+  for (CellId c = 0; c < table.cells.size(); ++c) {
+    TableCell const& cell = table.cells[c];
+    if (!cell.scope.path.empty() || !cell.sliced.empty() ||
+        !cell.partial_over.empty())
+      continue;
+    if (cell.production.kind == ProductionKind::Assemble &&
+        cell.production.assemble == AssembleKind::Sum)
+      continue;
+    if (!read_by_another[c]) continue;
+    if (cell.production.kind == ProductionKind::Leaf && is_volatile_leaf &&
+        is_volatile_leaf(cell.value_id))
+      continue;
+    eligible[c] = 1;
+  }
+  return eligible;
+}
 
 /// One violated table rule, as reported by \c validate_cell_table: the rule's
 /// name and a human-readable description of the offending cells.

@@ -247,6 +247,7 @@ inline BatchPolicy occ_contracted_policy() {
   };
   policy.batch_target_size = [](Index const&) -> std::size_t { return 1; };
   policy.peak_threshold = 1;
+  policy.infeasible_is_error = false;  // may be over budget
   return policy;
 }
 

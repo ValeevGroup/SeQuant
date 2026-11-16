@@ -251,6 +251,9 @@ void stamp_occurrence_homes(R const& forest) {
   std::vector<Frame> stack;
   auto const walk_node = [&](Node const& n, container::svector<Index> acc) {
     if (n.leaf()) return;
+    // a node produced at the root scope starts from an empty nest: the loops
+    // of its ancestors enclose neither it nor its subtree
+    if (n->root_scope()) acc.clear();
     for (auto const& [ix, kind] : n->batch_loops_opened_here())
       acc.push_back(ix);
     auto const slots = eval::detail::slot_modes_of(n);

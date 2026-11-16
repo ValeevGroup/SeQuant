@@ -8,17 +8,21 @@
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <iterator>
 #include <map>
+#include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -38,6 +42,8 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
     throw Exception(kind() + " expects a JSON object for its options!");
   }
 
+  bool batch_given = false;
+
   for (const auto &[key, value] : options.items()) {
     if (key == "objective") {
       if (!value.is_string()) {
@@ -47,12 +53,10 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
 
       if (value == "DenseFLOPs") {
         options_.objective_function = ObjectiveFunction::DenseFLOPs;
-      } else if (value == "DenseSize") {
-        options_.objective_function = ObjectiveFunction::DenseSize;
-      } else if (value == "DensePeakSize") {
-        options_.objective_function = ObjectiveFunction::DensePeakSize;
-      } else if (value == "DensePeakSizeBatched") {
-        options_.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+      } else if (value == "DenseTimeSpace") {
+        options_.objective_function = ObjectiveFunction::DenseTimeSpace;
+      } else if (value == "DenseTimeSpaceBatched") {
+        options_.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
       } else {
         throw Exception("Invalid value for " + kind() + " option '" + key +
                         "': '" + value.get<std::string>() + "'");
@@ -88,6 +92,9 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
       options_.footprint_weight = value.get<double>();
     } else if (key == "replay") {
       set_replay_options(value);
+    } else if (key == "batch") {
+      set_batch_options(value);
+      batch_given = true;
     } else if (key == "prune_outer_products") {
       if (!value.is_boolean()) {
         throw Exception("Value for " + kind() + " option '" + key +
@@ -97,6 +104,205 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
       options_.prune_outer_products = value.get<bool>();
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
+    }
+  }
+
+  const ObjectiveFunction objective = options_.objective_function;
+  const bool batched = objective == ObjectiveFunction::DenseTimeSpaceBatched;
+
+  if (options_.footprint_weight != 0.0 &&
+      objective != ObjectiveFunction::DenseFLOPs) {
+    throw Exception(kind() +
+                    " option 'intermediate_size_penalty' requires the "
+                    "'DenseFLOPs' objective");
+  }
+  if (options_.CSE.subnet && objective != ObjectiveFunction::DenseFLOPs) {
+    throw Exception(kind() +
+                    " option 'cse' = 'subnet' requires the 'DenseFLOPs' "
+                    "objective");
+  }
+  if (options_.batch_policy.persistent_only && !replay_.has_value()) {
+    throw Exception(kind() +
+                    " option 'batch.persistent_only' requires the 'replay' "
+                    "option");
+  }
+  if (batch_given && !batched) {
+    throw Exception(kind() +
+                    " option 'batch' requires the 'DenseTimeSpaceBatched' "
+                    "objective");
+  }
+  if (batched && !batch_given) {
+    throw Exception(kind() +
+                    " objective 'DenseTimeSpaceBatched' requires the 'batch' "
+                    "option");
+  }
+}
+
+OptimizationStep::OptimizationStep() {
+  options_.objective_function = ObjectiveFunction::DenseTimeSpace;
+}
+
+void OptimizationStep::set_batch_options(const nlohmann::json &options) {
+  const std::string name = kind() + ".batch";
+
+  if (!options.is_object()) {
+    throw Exception(name + " expects a JSON object");
+  }
+
+  auto get_labels = [&](const std::string &key, const nlohmann::json &value) {
+    std::set<std::string> labels;
+    const std::string where = "Value for " + name + " option '" + key + "'";
+    if (!value.is_array()) {
+      throw Exception(where + " must be an array of index space labels");
+    }
+    for (const nlohmann::json &entry : value) {
+      if (!entry.is_string() || entry.get<std::string>().empty()) {
+        throw Exception(where + " must only contain non-empty strings");
+      }
+      labels.insert(entry.get<std::string>());
+    }
+    return labels;
+  };
+  auto get_size = [&](const std::string &key, const nlohmann::json &value) {
+    if (!value.is_number_integer() || value.get<long long>() <= 0) {
+      throw Exception("Value for " + name + " option '" + key +
+                      "' must be a positive integer");
+    }
+    return value.get<std::size_t>();
+  };
+  auto get_bool = [&](const std::string &key, const nlohmann::json &value) {
+    if (!value.is_boolean()) {
+      throw Exception("Value for " + name + " option '" + key +
+                      "' must be a boolean");
+    }
+    return value.get<bool>();
+  };
+
+  BatchPolicy &policy = options_.batch_policy;
+  std::set<std::string> contracted;
+  std::set<std::string> external;
+  std::map<std::string, std::size_t> target_sizes;
+  std::optional<std::size_t> uniform_target_size;
+  bool threshold_given = false;
+
+  for (const auto &[key, value] : options.items()) {
+    if (key == "peak_threshold") {
+      if (!value.is_number() || !(value.get<double>() > 0.0)) {
+        throw Exception("Value for " + name + " option '" + key +
+                        "' must be a positive number (bytes)");
+      }
+      policy.peak_threshold = value.get<double>();
+      threshold_given = true;
+    } else if (key == "contracted") {
+      contracted = get_labels(key, value);
+    } else if (key == "external") {
+      external = get_labels(key, value);
+    } else if (key == "target_size") {
+      if (value.is_object()) {
+        for (const auto &[label, size] : value.items()) {
+          target_sizes[label] = get_size(key + "." + label, size);
+        }
+      } else {
+        uniform_target_size = get_size(key, value);
+      }
+    } else if (key == "spectator_indices") {
+      policy.batch_spectator_indices = get_bool(key, value);
+    } else if (key == "persistent_only") {
+      policy.persistent_only = get_bool(key, value);
+    } else if (key == "accumulation_factor") {
+      if (!value.is_number() || value.get<double>() < 0.0) {
+        throw Exception("Value for " + name + " option '" + key +
+                        "' must be a non-negative number");
+      }
+      policy.accumulation_factor = value.get<double>();
+    } else {
+      throw Exception("Unknown option key for " + name + ": '" + key + "'");
+    }
+  }
+
+  if (!threshold_given) {
+    throw Exception("The 'peak_threshold' option for " + name +
+                    " is mandatory");
+  }
+  if (contracted.empty() && external.empty()) {
+    throw Exception(name +
+                    " requires at least one of 'contracted' and 'external'");
+  }
+  if (!uniform_target_size && target_sizes.empty()) {
+    throw Exception("The 'target_size' option for " + name + " is mandatory");
+  }
+  for (const std::set<std::string> *labels : {&contracted, &external}) {
+    for (const std::string &label : *labels) {
+      if (!uniform_target_size && !target_sizes.contains(label)) {
+        throw Exception("No 'target_size' given for batchable space '" + label +
+                        "' in " + name);
+      }
+    }
+  }
+
+  if (!external.empty() && !policy.batch_spectator_indices) {
+    throw Exception(name +
+                    " option 'external' has no effect without "
+                    "'spectator_indices'");
+  }
+  if (policy.batch_spectator_indices && external.empty()) {
+    throw Exception(name +
+                    " option 'spectator_indices' requires batchable "
+                    "'external' spaces");
+  }
+
+  batch_labels_.clear();
+  batch_labels_.insert(contracted.begin(), contracted.end());
+  batch_labels_.insert(external.begin(), external.end());
+  for (const auto &entry : target_sizes) {
+    batch_labels_.insert(entry.first);
+  }
+
+  using WLabelSet = std::set<std::wstring, std::less<>>;
+  auto to_wide = [](const std::set<std::string> &labels) {
+    WLabelSet res;
+    for (const std::string &label : labels) {
+      res.insert(toUtf16(label));
+    }
+    return res;
+  };
+  policy.is_batchable_contracted_index =
+      [labels = to_wide(contracted)](const Index &ix) {
+        return labels.contains(ix.space().base_key());
+      };
+  policy.is_batchable_external_index =
+      [labels = to_wide(external)](const Index &ix) {
+        return labels.contains(ix.space().base_key());
+      };
+  std::map<std::wstring, std::size_t, std::less<>> wide_sizes;
+  for (const auto &[label, size] : target_sizes) {
+    wide_sizes.emplace(toUtf16(label), size);
+  }
+  policy.batch_target_size =
+      [wide_sizes = std::move(wide_sizes),
+       uniform_target_size](const Index &ix) -> std::size_t {
+    if (uniform_target_size) {
+      return *uniform_target_size;
+    }
+    auto it = wide_sizes.find(ix.space().base_key());
+    return it != wide_sizes.end() ? it->second : ix.space().dimension();
+  };
+}
+
+void OptimizationStep::check_batch_spaces() const {
+  if (batch_labels_.empty()) {
+    return;
+  }
+
+  std::set<std::wstring> known;
+  for (const IndexSpace &space :
+       get_default_context().index_basis_registry()->spaces()) {
+    known.insert(std::wstring(space.base_key()));
+  }
+  for (const std::string &label : batch_labels_) {
+    if (!known.contains(toUtf16(label))) {
+      throw Exception("Unknown index space '" + label + "' in " + kind() +
+                      ".batch");
     }
   }
 }
@@ -208,6 +414,8 @@ std::optional<ExprPtr> optimize_unsymmetrized(ResultExpr &expr,
 std::size_t OptimizationStep::run(std::string_view step_id,
                                   ExecutionContext &ctx,
                                   const std::vector<std::string_view> &inputs) {
+  check_batch_spaces();
+
   if (!replay_.has_value()) {
     return OneByOneProcessingStep<ExpressionData, true,
                                   InputAccess::WorkingCopy>::run(step_id, ctx,

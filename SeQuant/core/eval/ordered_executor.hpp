@@ -885,7 +885,134 @@ void run_ordered_contracted_block(
     ctx.push_back({block.axis, block.level, {e_lo, e_hi}, std::nullopt});
     bs_cache.set_batch_context(ctx);
 
+    // ---- Assemble step: fold this batch's partial into output k. Run at
+    // the output's position among the steps (ScopeBlock::output_position).
+    auto const assemble_output = [&](std::size_t k) {
+      ReleaseAfter const release_after{registry, release_plan, block,
+                                       block.steps.size() + k};
+      // The Assemble is not performed this batch (nor, then, the implicit
+      // per-batch build it would have run).
+      if (out_skip[k]) return;
+      auto const vid = block.outputs[k].first;
+      TableCell const& a = table->cells[out_cells[k]];
+      CellId const src = a.production.source;
+      TableCell const& s = table->cells[src];
+      static bool const block_diag_assemble =
+          detail::dump_enabled("SEQUANT_UT_BLOCK_DIAG");
+      if (block_diag_assemble)
+        detail::dump_block_assemble(block.axis, e_lo, e_hi, vid, out_cells[k],
+                                    src,
+                                    a.production.assemble == AssembleKind::Sum);
+      // An implicit per-batch build: the source is this value's own Build cell
+      // at this block's scope, but no step of this block builds it (the
+      // schedule fuses the reduction/scatter with an operand contraction, so
+      // it emits no BuildStep). Produce it here, as its own consumer's step
+      // would have.
+      if (s.production.kind == ProductionKind::Build &&
+          s.scope == block_scope && !built_here.count(vid)) {
+        // Refusal: an ill-formed table -- the implicit per-batch build below
+        // is produced from `resolve(vid)`, so a source naming a different
+        // value would compute the wrong node into this Assemble's source.
+        if (s.value_id != vid)
+          throw Exception(
+              "evaluate_ordered_schedule: an Assemble's per-batch source "
+              "(cell#" +
+              std::to_string(src) + ", value " + std::to_string(s.value_id) +
+              ") names a different value than the Assemble (value " +
+              std::to_string(vid) + ")");
+        node_t const& part_node = resolve(vid);
+        registry.set(src,
+                     canonical(part_node, compute_cell<EvalTrace>(
+                                              part_node, src, resolver,
+                                              leaf_evaluator, bs_cache, ctx)));
+        if (recorder) recorder->built(vid, registry.peek(src));
+      }
+      // The read the Assemble declares of its source. When the schedule has
+      // no later use of the source in this batch, the Assemble takes the
+      // partial over.
+      ++ordered_op_counts_slot().assembles;  // B-full accounting
+      bool const takes = release_plan.last_assemble[out_cells[k]] &&
+                         !table->cells[src].persistent;
+      ResultPtr part = takes ? registry.take(src) : registry.read(src);
+      if (a.production.assemble == AssembleKind::Sum) {
+        if (!acc[k]) {
+          // The first batch's partial seeds the accumulator, which every later
+          // batch then mutates in place. That is only safe when this read took
+          // the partial over: a source with a later reader, or a persistent
+          // one, is still going to be read again from the very same buffer.
+          acc[k] = takes ? std::move(part) : part->clone();
+        } else {
+          acc[k]->add_inplace(*part);
+        }
+      } else {
+        if (!dest[k]) {
+          // The destination is sized from the assemble cell'S own form: the
+          // value's full index list, narrowed to the current batch of every
+          // loop instance the cell itself is sliced by (its enclosing loops --
+          // the instance being assembled is in the scatter map, not here). No
+          // inference from the escaped axis's position on the node.
+          // A value that is to be kept on disk is assembled there, block by
+          // block, where the backend can: it is then never whole in memory.
+          if (aops->make_zeros_on_disk &&
+              registry.assemble_on_disk(out_cells[k]))
+            dest[k] = aops->make_zeros_on_disk(resolve(vid)->canon_indices());
+          if (dest[k]) {
+            if (auto* const spill = parent_cache.disk_spill())
+              ++spill->n_assembled_on_disk;
+          } else
+            dest[k] = aops->make_zeros(resolve(vid)->canon_indices());
+          for (auto const& [pos, key] : a.sliced) {
+            auto const range = ordered_range_of(ctx, key);
+            if (!range)
+              throw Exception("evaluate_ordered_schedule: Assemble cell#" +
+                              std::to_string(out_cells[k]) + " (value " +
+                              std::to_string(vid) + ") slices position " +
+                              std::to_string(pos) +
+                              " on a loop instance not in the batch context");
+            dest[k] = dest[k]->slice_mode(pos, range->first, range->second);
+          }
+        }
+        if (a.production.scatter_map.empty())
+          throw Exception("evaluate_ordered_schedule: Assemble cell#" +
+                          std::to_string(out_cells[k]) + " (value " +
+                          std::to_string(vid) + ") scatters nothing");
+        // Exactly one scattered position per Assemble. The loop below writes
+        // the same per-batch partial at every position of the map, which is
+        // only the right thing when there is one: a source sliced at two
+        // positions by one loop instance is a joint sub-block, and writing it
+        // twice (once per position, each time over the full extent of the
+        // other) would be wrong. The builder emits one entry per instance and
+        // an instance slices one position of a value here, so a second entry
+        // means a schedule shape this executor does not implement.
+        // Refusal, hence a throw: with an elided assert the loop below would
+        // write the same per-batch partial at each mapped position, each write
+        // spanning the full extent of the other -- a silently wrong number.
+        if (a.production.scatter_map.size() != 1)
+          throw Exception(
+              "evaluate_ordered_schedule: Assemble cell#" +
+              std::to_string(out_cells[k]) + " (value " + std::to_string(vid) +
+              ") scatters " + std::to_string(a.production.scatter_map.size()) +
+              " positions; more than one would need a joint sub-block write "
+              "(unsupported)");
+        for (auto const& [pos, key] : a.production.scatter_map) {
+          auto const range = ordered_range_of(ctx, key);
+          if (!range)
+            throw Exception("evaluate_ordered_schedule: Assemble cell#" +
+                            std::to_string(out_cells[k]) + " (value " +
+                            std::to_string(vid) + ") scatters position " +
+                            std::to_string(pos) +
+                            " from a loop instance not in the batch context");
+          dest[k]->write_into_slice(*part, pos, range->first, range->second);
+        }
+      }
+    };
+    auto const assemble_outputs_at = [&](std::size_t n_steps_done) {
+      for (std::size_t k = 0; k != block.outputs.size(); ++k)
+        if (block.output_position(k) == n_steps_done) assemble_output(k);
+    };
+
     for (std::size_t at = 0; at != block.steps.size(); ++at) {
+      assemble_outputs_at(at);
       Step const& step = block.steps[at];
       // Whatever becomes of this step -- run, skipped, or a whole nested loop
       // -- the cells whose last reader it holds are let go once it is done.
@@ -969,117 +1096,7 @@ void run_ordered_contracted_block(
       }
     }
 
-    // ---- Assemble steps: fold this batch's partial into each output. ----
-    for (std::size_t k = 0; k != block.outputs.size(); ++k) {
-      ReleaseAfter const release_after{registry, release_plan, block,
-                                       block.steps.size() + k};
-      // The Assemble is not performed this batch (nor, then, the implicit
-      // per-batch build it would have run).
-      if (out_skip[k]) continue;
-      auto const vid = block.outputs[k].first;
-      TableCell const& a = table->cells[out_cells[k]];
-      CellId const src = a.production.source;
-      TableCell const& s = table->cells[src];
-      static bool const block_diag_assemble =
-          detail::dump_enabled("SEQUANT_UT_BLOCK_DIAG");
-      if (block_diag_assemble)
-        detail::dump_block_assemble(block.axis, e_lo, e_hi, vid, out_cells[k],
-                                    src,
-                                    a.production.assemble == AssembleKind::Sum);
-      // An implicit per-batch build: the source is this value's own Build cell
-      // at this block's scope, but no step of this block builds it (the
-      // schedule fuses the reduction/scatter with an operand contraction, so
-      // it emits no BuildStep). Produce it here, as its own consumer's step
-      // would have.
-      if (s.production.kind == ProductionKind::Build &&
-          s.scope == block_scope && !built_here.count(vid)) {
-        // Refusal: an ill-formed table -- the implicit per-batch build below
-        // is produced from `resolve(vid)`, so a source naming a different
-        // value would compute the wrong node into this Assemble's source.
-        if (s.value_id != vid)
-          throw Exception(
-              "evaluate_ordered_schedule: an Assemble's per-batch source "
-              "(cell#" +
-              std::to_string(src) + ", value " + std::to_string(s.value_id) +
-              ") names a different value than the Assemble (value " +
-              std::to_string(vid) + ")");
-        node_t const& part_node = resolve(vid);
-        registry.set(src,
-                     canonical(part_node, compute_cell<EvalTrace>(
-                                              part_node, src, resolver,
-                                              leaf_evaluator, bs_cache, ctx)));
-        if (recorder) recorder->built(vid, registry.peek(src));
-      }
-      // The read the Assemble declares of its source. When the schedule has
-      // no later use of the source in this batch, the Assemble takes the
-      // partial over.
-      ++ordered_op_counts_slot().assembles;  // B-full accounting
-      bool const takes = release_plan.last_assemble[out_cells[k]] &&
-                         !table->cells[src].persistent;
-      ResultPtr part = takes ? registry.take(src) : registry.read(src);
-      if (a.production.assemble == AssembleKind::Sum) {
-        if (!acc[k]) {
-          // The first batch's partial seeds the accumulator, which every later
-          // batch then mutates in place. That is only safe when this read took
-          // the partial over: a source with a later reader, or a persistent
-          // one, is still going to be read again from the very same buffer.
-          acc[k] = takes ? std::move(part) : part->clone();
-        } else {
-          acc[k]->add_inplace(*part);
-        }
-      } else {
-        if (!dest[k]) {
-          // The destination is sized from the assemble cell'S own form: the
-          // value's full index list, narrowed to the current batch of every
-          // loop instance the cell itself is sliced by (its enclosing loops --
-          // the instance being assembled is in the scatter map, not here). No
-          // inference from the escaped axis's position on the node.
-          dest[k] = aops->make_zeros(resolve(vid)->canon_indices());
-          for (auto const& [pos, key] : a.sliced) {
-            auto const range = ordered_range_of(ctx, key);
-            if (!range)
-              throw Exception("evaluate_ordered_schedule: Assemble cell#" +
-                              std::to_string(out_cells[k]) + " (value " +
-                              std::to_string(vid) + ") slices position " +
-                              std::to_string(pos) +
-                              " on a loop instance not in the batch context");
-            dest[k] = dest[k]->slice_mode(pos, range->first, range->second);
-          }
-        }
-        if (a.production.scatter_map.empty())
-          throw Exception("evaluate_ordered_schedule: Assemble cell#" +
-                          std::to_string(out_cells[k]) + " (value " +
-                          std::to_string(vid) + ") scatters nothing");
-        // Exactly one scattered position per Assemble. The loop below writes
-        // the same per-batch partial at every position of the map, which is
-        // only the right thing when there is one: a source sliced at two
-        // positions by one loop instance is a joint sub-block, and writing it
-        // twice (once per position, each time over the full extent of the
-        // other) would be wrong. The builder emits one entry per instance and
-        // an instance slices one position of a value here, so a second entry
-        // means a schedule shape this executor does not implement.
-        // Refusal, hence a throw: with an elided assert the loop below would
-        // write the same per-batch partial at each mapped position, each write
-        // spanning the full extent of the other -- a silently wrong number.
-        if (a.production.scatter_map.size() != 1)
-          throw Exception(
-              "evaluate_ordered_schedule: Assemble cell#" +
-              std::to_string(out_cells[k]) + " (value " + std::to_string(vid) +
-              ") scatters " + std::to_string(a.production.scatter_map.size()) +
-              " positions; more than one would need a joint sub-block write "
-              "(unsupported)");
-        for (auto const& [pos, key] : a.production.scatter_map) {
-          auto const range = ordered_range_of(ctx, key);
-          if (!range)
-            throw Exception("evaluate_ordered_schedule: Assemble cell#" +
-                            std::to_string(out_cells[k]) + " (value " +
-                            std::to_string(vid) + ") scatters position " +
-                            std::to_string(pos) +
-                            " from a loop instance not in the batch context");
-          dest[k]->write_into_slice(*part, pos, range->first, range->second);
-        }
-      }
-    }
+    assemble_outputs_at(block.steps.size());
   }
 
   // ---- Block close: each Assemble step's running result is its cell. ----
@@ -1323,6 +1340,69 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // fill-once check (\c CellRegistry::set), not just \c CacheManager's --
   // deterministic regardless of when in the process this call happens.
   registry_hooks.strict_fill_once = cache.strict_fill_once();
+
+  // Disk-spill bookkeeping (see eval::DiskSpill): which cells the schedule
+  // can keep on disk, and -- once a cell holds a value -- whether that value
+  // is charged as on disk. Off (no cell qualifies) unless the caller wired a
+  // DiskSpill onto the cache.
+  DiskSpill* const disk_spill = cache.disk_spill();
+  container::vector<char> const disk_eligible =
+      disk_spill ? disk_eligible_cells(cell_table,
+                                       [&](std::size_t vid) {
+                                         auto const& nd = resolve(vid);
+                                         return nd.leaf() && is_volatile &&
+                                                is_volatile(nd);
+                                       })
+                 : container::vector<char>(cell_table.cells.size(), 0);
+  auto const on_disk = [disk_spill, &disk_eligible](CellId c,
+                                                    ResultPtr const& v) {
+    return disk_spill && v && disk_eligible[c] &&
+           (v->is_on_disk() || v->size_in_bytes() >= disk_spill->min_bytes);
+  };
+  if (disk_spill) {
+    // A value assembled by scattering is assembled on disk if it was large
+    // enough the last time it was stored (see DiskSpill::measured_bytes).
+    registry_hooks.assemble_on_disk = [disk_spill, &disk_eligible, &rich,
+                                       &cell_table](CellId c) {
+      if (!disk_eligible[c]) return false;
+      auto const it = disk_spill->measured_bytes.find(
+          rich.cells[cell_table.cells[c].value_id].hash);
+      return it != disk_spill->measured_bytes.end() &&
+             it->second >= disk_spill->min_bytes;
+    };
+    // A value that qualifies is stored in its on-disk form, if its backend
+    // has one (Result::on_disk); otherwise it stays in memory and is only
+    // charged as on disk.
+    // The size that decides is the measured one: size_in_bytes() may be
+    // switched off (0) while no trace is printed, and what goes to disk must
+    // not depend on tracing.
+    registry_hooks.stored_form = [disk_spill, &disk_eligible, &rich,
+                                  &cell_table](CellId c, ResultPtr v) {
+      if (!v || !disk_eligible[c]) return v;
+      // remember the size for the evaluations to come (an on-disk form
+      // measures what it holds on disk)
+      std::size_t const bytes =
+          v->is_on_disk() ? v->size_in_bytes() : v->measured_size_in_bytes();
+      disk_spill
+          ->measured_bytes[rich.cells[cell_table.cells[c].value_id].hash] =
+          bytes;
+      if (v->is_on_disk() || bytes < disk_spill->min_bytes) return v;
+      ResultPtr disk = v->on_disk();
+      return disk ? disk : v;
+    };
+    registry_hooks.on_set = [disk_spill, on_disk](CellId c,
+                                                  ResultPtr const& v) {
+      if (!on_disk(c, v)) return;
+      ++disk_spill->n_writes;
+      disk_spill->bytes_written += v->size_in_bytes();
+    };
+    registry_hooks.on_read = [disk_spill, on_disk](CellId c,
+                                                   ResultPtr const& v) {
+      if (!on_disk(c, v)) return;
+      ++disk_spill->n_reads;
+      disk_spill->bytes_read += v->size_in_bytes();
+    };
+  }
   CellRegistry registry(cell_table, std::move(registry_hooks));
   // Invariant: at most one persistent cell per value. The persistent store is
   // keyed by the value's canonical hash, so two persistent cells of one value
@@ -1427,24 +1507,52 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   auto const cell_hash = [&](CellId c) -> std::size_t {
     return rich.cells[cell_table.cells[c].value_id].hash;
   };
+  // A cell charged as on disk (see on_disk above) is left out of all three:
+  // it is not resident, so a read of it is charged to its consumer as an
+  // operand like any other buffer the registry does not hold.
   ExternalStore const registry_store{
-      .bytes = [&registry, &cache]() -> std::size_t {
-        std::size_t bytes = 0;
-        registry.for_each_live([&](CellId, ResultPtr const& v) {
-          if (!cache.chain_holds(v)) bytes += v->size_in_bytes();
+      .bytes = [&registry, &cache, on_disk, disk_spill,
+                cell_hash]() -> std::size_t {
+        std::size_t bytes = 0, disk_bytes = 0;
+        registry.for_each_live([&](CellId c, ResultPtr const& v) {
+          if (on_disk(c, v))
+            disk_bytes += v->size_in_bytes();
+          else if (!cache.chain_holds(v))
+            bytes += v->size_in_bytes();
         });
+        if (disk_spill) {
+          disk_spill->bytes_on_disk = disk_bytes;
+          if (disk_bytes > disk_spill->peak_bytes_on_disk) {
+            disk_spill->peak_bytes_on_disk = disk_bytes;
+            if (disk_spill->record_peak_on_disk) {
+              disk_spill->peak_on_disk.clear();
+              registry.for_each_live([&](CellId c, ResultPtr const& v) {
+                if (on_disk(c, v))
+                  disk_spill->peak_on_disk.emplace_back(cell_hash(c),
+                                                        v->size_in_bytes());
+              });
+            }
+          }
+        }
         return bytes;
       },
       .for_each =
-          [&registry, &cache, cell_hash](
-              std::function<void(std::size_t, std::size_t)> const& emit) {
+          [&registry, &cache, cell_hash,
+           on_disk](std::function<void(std::size_t, std::size_t)> const& emit) {
             registry.for_each_live([&](CellId c, ResultPtr const& v) {
-              if (!cache.chain_holds(v)) emit(cell_hash(c), v->size_in_bytes());
+              if (!on_disk(c, v) && !cache.chain_holds(v))
+                emit(cell_hash(c), v->size_in_bytes());
             });
           },
-      .holds = [&registry](ResultPtr const& value) -> bool {
-        return registry.holds(value);
-      }};
+      .holds =
+          [&registry, on_disk, disk_spill](ResultPtr const& value) {
+            if (!disk_spill) return registry.holds(value);
+            bool held = false;
+            registry.for_each_live([&](CellId c, ResultPtr const& v) {
+              held = held || (v == value && !on_disk(c, v));
+            });
+            return held;
+          }};
   struct ExternalStoreGuard {
     CacheManager<N, FHC>& c;
     ExternalStore const* prev;

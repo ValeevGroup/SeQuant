@@ -148,6 +148,9 @@ EvalSequence single_term_opt(
     model.perf_first = (Metric == ObjectiveFunction::DenseTimeSpaceBatched);
     model.prune_outer_products = prune_outer_products;
     model.batch_spectator_indices = cost.batch_spectator_indices;
+    model.hold = cost.hold;
+    model.infeasible_peak_slack = cost.infeasible_peak_slack;
+    model.infeasible_is_error = cost.infeasible_is_error;
     // Building blocks: the contracted-role predicate feeds the DP's contracted
     // filter; the external-role predicate feeds the external filter. Each
     // defaults to decline (returns false); there is no cross-role fallback, so

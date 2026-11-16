@@ -20,6 +20,19 @@
 
 namespace sequant::detail {
 
+std::string describe(const Tensor &tensor) {
+  std::string str = toUtf8(tensor.label());
+  str += ":";
+  for (const Index &idx : tensor.indices()) {
+    str += toUtf8(idx.space().reduce_key(idx.label()));
+  }
+  return str;
+}
+
+std::string describe(const Variable &variable) {
+  return toUtf8(variable.label());
+}
+
 std::string basis_instance_tag(const Index &idx) {
   if (!idx.basis().has_basis_instance()) return {};
   // widened so that the magnitude of the most negative instance fits

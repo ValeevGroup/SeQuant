@@ -38,6 +38,7 @@
 					"kind": "optimize",
 					"inputs": "${source}",
 					"options": {
+						"objective": "DenseFLOPs",
 						"replay": "${replay}"
 					}
 				},
