@@ -20,6 +20,8 @@ namespace sequant_boost = boost;
 
 #include <SeQuant/core/meta.hpp>
 
+#include <cstdint>
+
 namespace sequant {
 
 class ExprPtr;
@@ -27,7 +29,7 @@ class ExprPtr;
 namespace hash {
 
 /// the hashing versions known to SeQuant (N.B. hashing changed in Boost 1.81)
-enum class Impl { BoostPre181 = 1, Boost181OrLater = 2 };
+enum class Impl : std::uint8_t { BoostPre181 = 1, Boost181OrLater = 2 };
 
 }  // namespace hash
 

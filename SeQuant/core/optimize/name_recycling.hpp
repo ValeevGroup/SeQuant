@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <cwctype>
 #include <functional>
 #include <map>
@@ -27,7 +28,7 @@ namespace sequant::opt {
 
 /// Determines under which conditions an intermediate may take over the name
 /// (and thereby the storage) of another intermediate
-enum class ShapeCompatibility {
+enum class ShapeCompatibility : std::uint8_t {
   /// The tensors must have the exact same block structure: the same number of
   /// bra, ket and aux slots, the same sequence of index bases (including
   /// proto-index bases) and the same symmetries

@@ -116,8 +116,8 @@ class Power : public Expr {
 
  private:
   ExprPtr base_;
-  exponent_type exponent_;
   bool conjugated_ = false;
+  exponent_type exponent_;
 
   /// @return hash of this Power
   /// @note when exponent is 1 and not conjugated the hash matches the base's

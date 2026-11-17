@@ -29,6 +29,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <deque>
 #include <iostream>
@@ -201,7 +202,7 @@ template <typename N, bool F>
 [[nodiscard]] inline Bytes rss() noexcept { return Bytes{process_rss_bytes()}; }
 
 /// type of data or operation
-enum struct EvalMode {
+enum struct EvalMode : std::uint8_t {
   Constant,
   Variable,
   Power,
@@ -252,7 +253,7 @@ enum struct EvalMode {
                                                 : "??";
 }
 
-enum struct CacheMode { Store, Access, Release };
+enum struct CacheMode : std::uint8_t { Store, Access, Release };
 
 [[nodiscard]] constexpr auto to_string(CacheMode mode) noexcept {
   return (mode == CacheMode::Store)    ? "Store"
@@ -260,7 +261,7 @@ enum struct CacheMode { Store, Access, Release };
                                        : "Release";
 }
 
-enum struct TermMode { Begin, End };
+enum struct TermMode : std::uint8_t { Begin, End };
 
 [[nodiscard]] constexpr auto to_string(TermMode mode) noexcept {
   return (mode == TermMode::Begin) ? "Begin" : "End";
@@ -558,11 +559,11 @@ auto&& node0(std::ranges::range auto&& rng) {
   return ranges::front(std::forward<decltype(rng)>(rng));
 }
 
-enum struct CacheCheck { Checked, Unchecked };
+enum struct CacheCheck : std::uint8_t { Checked, Unchecked };
 
 }  // namespace detail
 
-enum struct Trace {
+enum struct Trace : std::uint8_t {
   On,
   Off,
   Default =
@@ -1165,7 +1166,7 @@ ResultPtr evaluate_impl(Node const& node,         //
   // marks a Checked node that exists in the cache map but has not been stored
   // yet, so its computed result must be cached (this replaces the recursive
   // wrapper's `evaluate<..., Unchecked>` re-entry).
-  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftUnary };
+  enum class Stage : std::uint8_t { Enter, NeedLeft, NeedRight, NeedLeftUnary };
   struct Frame {
     // Non-owning pointer into the tree being evaluated (which outlives this
     // call): a Node member would deep-copy the whole subtree into every frame

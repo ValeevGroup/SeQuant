@@ -10,6 +10,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -203,7 +204,7 @@ int sort_then_replace_by_ordinals(IntegerSequence &iseq) {
 }
 
 /// type of order specifies by a less-than comparison operation
-enum class OrderType { StrictWeak, Weak };
+enum class OrderType : std::uint8_t { StrictWeak, Weak };
 
 // clang-format off
 /// @brief sorts a directly-addressable sequence via ordinals

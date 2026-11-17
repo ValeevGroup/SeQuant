@@ -625,7 +625,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   // ket)
   // Uses a permuted list of int to generate permutations
   // TODO factor out for reuse
-  auto maps_from_list = [](const container::svector<Index>& list) {
+  auto maps_from_list = [](const container::svector_base<Index>& list) {
     container::svector<std::size_t> int_list(list.size());
     std::iota(int_list.begin(), int_list.end(), 0);
     container::svector<container::map<Index, Index>> result;

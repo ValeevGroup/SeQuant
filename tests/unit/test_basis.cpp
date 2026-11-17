@@ -962,3 +962,59 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     CHECK_THROWS_AS(mbpt::csv_transform(f, IndexBasis{uocc, 5}), Exception);
   }
 }
+
+TEST_CASE("index-basis-intern", "[elements][basis]") {
+  // more distinct bases than a thread caches in front of the intern table, so
+  // that cycling through them both hits and misses that cache
+  std::vector<IndexBasis> bases;
+  for (unsigned k = 0; k != 12; ++k) {
+    const IndexSpace space(L"x" + std::to_wstring(k), TypeAttr(1u << k));
+    bases.emplace_back(space);
+    bases.emplace_back(space, 1);
+  }
+  std::vector<const IndexBasis*> interned;
+  for (const auto& basis : bases) interned.push_back(&intern(basis));
+
+  SECTION("one address per basis") {
+    std::set<const IndexBasis*> distinct(interned.begin(), interned.end());
+    CHECK(distinct.size() == bases.size());
+    for (int pass = 0; pass != 3; ++pass)
+      for (std::size_t k = 0; k != bases.size(); ++k) {
+        const IndexBasis copy = bases[k];
+        CHECK(&intern(copy) == interned[k]);
+        CHECK(&intern(*interned[k]) == interned[k]);
+      }
+  }
+
+  SECTION("bases that differ only in metadata are interned apart") {
+    // the same named basis, registered with two extents
+    auto registered = [](std::size_t extent) {
+      auto ibr = mbpt::make_min_sr_spaces();
+      ibr->add(L"Y", ibr->retrieve_space(L"a"), 7, {.extent = extent});
+      return ibr->retrieve(L"Y");
+    };
+    const IndexBasis b10 = registered(10), b20 = registered(20);
+    REQUIRE(b10 == b20);  // the extent is not part of a basis's identity
+    const IndexBasis* p10 = &intern(b10);
+    const IndexBasis* p20 = &intern(b20);
+    CHECK(p10 != p20);
+    CHECK(p10->own_extent() == 10);
+    CHECK(p20->own_extent() == 20);
+    CHECK(&intern(b10) == p10);
+    CHECK(&intern(b20) == p20);
+  }
+
+  SECTION("threads agree") {
+    std::atomic<std::size_t> mismatches = 0;
+    std::vector<std::thread> threads;
+    for (std::size_t t = 0; t != 4; ++t)
+      threads.emplace_back([&, t] {
+        for (std::size_t n = 0; n != 50 * bases.size(); ++n) {
+          const std::size_t k = (n * (t + 1)) % bases.size();
+          if (&intern(bases[k]) != interned[k]) ++mismatches;
+        }
+      });
+    for (auto& thread : threads) thread.join();
+    CHECK(mismatches == 0);
+  }
+}

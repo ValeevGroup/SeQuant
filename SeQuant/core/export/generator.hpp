@@ -10,6 +10,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <cstdint>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -18,13 +19,13 @@
 namespace sequant {
 
 /// The scope at which declarations may happen
-enum class DeclarationScope {
+enum class DeclarationScope : std::uint8_t {
   Global,
   Section,
   Expression,
 };
 
-enum class PrunableScalars {
+enum class PrunableScalars : std::uint8_t {
   None = 0,
   Constants = 0b01,
   Variables = 0b10,

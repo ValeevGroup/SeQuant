@@ -31,6 +31,7 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <cstdint>
 #include <numeric>
 #include <utility>
 #include <vector>
@@ -424,7 +425,7 @@ compute_index_replacement_rules(
 
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
-  enum class Outcome { Done, Deferred, Zero };
+  enum class Outcome : std::uint8_t { Done, Deferred, Zero };
 #define SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT(x) \
   { x; }                                                                  \
   if (zero_result_status) return Outcome::Zero;

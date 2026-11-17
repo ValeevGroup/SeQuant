@@ -5,6 +5,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <string>
@@ -24,7 +25,7 @@ class Tensor;
 ///     (`sequant::eval::evaluate_ordered_schedule`), so a value shared across
 ///     trees is built once per home block and reused, rather than rebuilt
 ///     per tree.
-enum class BatchScheduler { forest_descent, ordered };
+enum class BatchScheduler : std::uint8_t { forest_descent, ordered };
 /// A place a value can live, as the batched cost model prices it. Random
 /// access memory is the reference space (weight 1, no traffic cost beyond the
 /// roofline term); a slower space such as local disk holds values at little
