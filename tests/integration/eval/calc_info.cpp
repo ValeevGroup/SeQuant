@@ -4,7 +4,12 @@
 
 #include "calc_info.hpp"
 
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
+
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/view/concat.hpp>
 
 namespace sequant::eval {
 
@@ -15,6 +20,32 @@ container::vector<ExprPtr> CalcInfo::exprs() const {
     result.emplace_back(eqn_opts.spintrace
                             ? mbpt::closed_shell_CC_spintrace(exprs[r])
                             : exprs[r]);
+  return result;
+}
+
+container::vector<container::svector<Index>> CalcInfo::residual_layouts(
+    const container::vector<ExprPtr>& exprs) {
+  auto is_projector = [](ExprPtr const& x) {
+    if (!x->is<Tensor>()) return false;
+    auto const& label = x->as<Tensor>().label();
+    return label == reserved::antisymm_label() ||
+           label == reserved::symm_label();
+  };
+
+  container::vector<container::svector<Index>> result;
+  for (auto const& expr : exprs) {
+    // every term carries the same projector; look at the first one
+    auto const& term = expr->is<Sum>() ? expr->at(0) : expr;
+    auto it = ranges::find_if(*term, is_projector);
+    SEQUANT_ASSERT(it != ranges::end(*term) && "residual without projector");
+    auto const& projector = (*it)->as<Tensor>();
+    auto kets = projector.ket() | ranges::to<container::svector<Index>>;
+    auto bras = projector.bra() | ranges::to<container::svector<Index>>;
+    ranges::sort(kets, Index::LabelCompare{});
+    ranges::sort(bras, Index::LabelCompare{});
+    result.emplace_back(ranges::views::concat(kets, bras) |
+                        ranges::to<container::svector<Index>>);
+  }
   return result;
 }
 

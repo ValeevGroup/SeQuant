@@ -13,12 +13,13 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <range/v3/view/join.hpp>
+#include <range/v3/view/filter.hpp>
 #include <range/v3/view/single.hpp>
-#include <range/v3/view/tail.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <cstddef>
@@ -62,6 +63,12 @@ struct CalcInfo {
            ranges::to_vector;
   }
 
+  /// The residual layout that the amplitude updates assume: the indices of
+  /// the projector (A or S) of each equation, its ket (virtuals) first, then
+  /// its bra (occupieds), each sorted.
+  [[nodiscard]] static container::vector<container::svector<Index>>
+  residual_layouts(const container::vector<ExprPtr>& exprs);
+
   template <typename ExprT>
   CacheManager<EvalNode<ExprT>> cache_manager_scf(
       container::vector<container::vector<EvalNode<ExprT>>> const& nodes)
@@ -71,20 +78,28 @@ struct CalcInfo {
   }
 
  private:
-  /// Omit the first factor from the top level product from given expression.
+  /// Omit the projector factors of the top level products of given expression.
   /// Intended to drop "A" and "S" tensors from CC amplitudes as a preparatory
-  /// step for evaluation of the amplitudes.
+  /// step for evaluation of the amplitudes. The projectors are identified by
+  /// their label; canonicalization may place them anywhere in a product.
+  static bool is_projector(ExprPtr const& expr) noexcept {
+    if (!expr->is<Tensor>()) return false;
+    auto const& label = expr->as<Tensor>().label();
+    return label == reserved::antisymm_label() ||
+           label == reserved::symm_label();
+  }
+
   static ExprPtr tail_factor(ExprPtr const& expr) noexcept {
     if (expr->is<Tensor>())
       return expr->clone();
     else if (expr->is<Product>()) {
       auto scalar = expr->as<Product>().scalar();
-      if (scalar == 1 && expr->size() == 2) {
-        return expr->at(1);
-      }
-      auto facs = ranges::views::tail(*expr);
-      return ex<Product>(
-          Product{scalar, ranges::begin(facs), ranges::end(facs)});
+      auto facs = *expr | ranges::views::filter([](auto const& f) {
+                    return !is_projector(f);
+                  }) |
+                  ranges::to_vector;
+      if (scalar == 1 && facs.size() == 1) return facs.front();
+      return ex<Product>(Product{scalar, ranges::begin(facs), ranges::end(facs)});
     } else {
       // sum
       auto summands = *expr | ranges::views::transform(

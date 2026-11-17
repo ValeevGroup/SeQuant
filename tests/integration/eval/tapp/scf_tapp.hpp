@@ -40,6 +40,7 @@ class SequantEvalScfTAPP final : public SequantEvalScf {
 
  private:
   container::vector<container::vector<EvalNodeTAPP>> nodes_;
+  container::vector<container::svector<Index>> layouts_;
   CacheManager<EvalNodeTAPP> cman_;
   DataWorldTAPP<Tensor_t> data_world_;
 
@@ -94,7 +95,6 @@ class SequantEvalScfTAPP final : public SequantEvalScf {
   }
 
   double solve() override {
-    using ranges::views::concat;
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using ranges::views::zip;
@@ -109,23 +109,15 @@ class SequantEvalScfTAPP final : public SequantEvalScf {
                    std::array<Evaluator, 2>{evaluate_symm<Trace::Off>,
                                             evaluate_symm<Trace::On>}};
 
-    auto sorted_annot = [](Tensor const& tnsr) {
-      auto b = tnsr.bra() | ranges::to_vector;
-      auto k = tnsr.ket() | ranges::to_vector;
-      ranges::sort(b, Index::LabelCompare{});
-      ranges::sort(k, Index::LabelCompare{});
-      return EvalExprTAPP::index_hash(concat(b, k)) |
-             ranges::to<EvalExprTAPP::annot_t>;
-    };
-
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
     auto st = info_.eqn_opts.spintrace;
     auto log = Logger::instance().eval.level > 0;
 
-    for (auto&& [r, n] : zip(rs, nodes_)) {
+    for (auto&& [r, n, layout] : zip(rs, nodes_, layouts_)) {
       SEQUANT_ASSERT(!n.empty());
       // update_amplitudes assumes that the residuals are in specific layout
-      auto const target_indices = sorted_annot(ranges::front(n)->as_tensor());
+      auto const target_indices =
+          EvalExprTAPP::index_hash(layout) | ranges::to<EvalExprTAPP::annot_t>;
       r = funcs[st][log](n, target_indices, data_world_, cman_)
               ->template get<Tensor_t>();
     }
@@ -147,6 +139,7 @@ class SequantEvalScfTAPP final : public SequantEvalScf {
     auto const exprs = info_.exprs();
 
     nodes_ = info_.nodes<ExprT>(exprs);
+    layouts_ = CalcInfo::residual_layouts(exprs);
 
     cman_ = info_.cache_manager_scf(nodes_);
   }
