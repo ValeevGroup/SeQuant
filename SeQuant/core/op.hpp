@@ -127,16 +127,7 @@ template <Statistics S1, Statistics S2>
 inline bool operator<(const Op<S1> &op1, const Op<S2> &op2) {
   if constexpr (S1 == S2) {
     if (op1.action() == op2.action()) {
-      // Equality ignores tags, while ordering can distinguish two tagged
-      // indices.
-      if (!op1.index().tag().has_value() || !op2.index().tag().has_value()) {
-        return op1.index() < op2.index();
-      }
-      if (op1.index() == op2.index()) {
-        return false;
-      } else {
-        return op1.index() < op2.index();
-      }
+      return op1.index() < op2.index();
     } else {
       return op1.action() < op2.action();
     }
@@ -938,9 +929,6 @@ class NormalOperator : public Operator<S>,
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
   /// @return true if one or more indices changed
-  /// @pre indices are not tagged, or (if want to protect them from replacement)
-  /// tagged with (int)0
-  /// @post indices that were replaced will be tagged with (int)0
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
   bool transform_indices(const Map<Index, Index, Args...> &index_map) {
@@ -1161,9 +1149,6 @@ class NormalOperator : public Operator<S>,
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);
-  }
-  void _reset_tags() override final {
-    ranges::for_each(*this, [](const auto &op) { op.index().reset_tag(); });
   }
   bool operator<(const AbstractTensor &other) const override final {
     auto *other_nop = dynamic_cast<const NormalOperator<S> *>(&other);

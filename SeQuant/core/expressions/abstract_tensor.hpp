@@ -265,7 +265,6 @@ class AbstractTensor {
   virtual bool _transform_indices(const container::map<Index, Index>&) {
     throw missing_instantiation_for("_transform_indices");
   }
-  virtual void _reset_tags() { throw missing_instantiation_for("_reset_tags"); }
 
   /// permutes bra slots according to @p perm
   /// @param perm from-permutation, i.e. Index in slot `permutation[i]` will be
@@ -666,29 +665,16 @@ static_assert(is_tensor<AbstractTensor>,
 /// @param[in] index_map a const reference to an IndexMap object that specifies
 /// the transformation
 /// @return false if no indices were transformed, true otherwise
-/// @pre indices are not tagged, or (if want to protect them from replacement)
-/// tagged with (int)0
-/// @post transformed indices are tagged with (int)0
 template <typename IndexMap = container::map<Index, Index>>
 inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map) {
   if constexpr (std::is_same_v<IndexMap, container::map<Index, Index>>) {
     return t._transform_indices(index_map);
   } else {
     container::map<Index, Index> index_map_copy;
-    ranges::copy(index_map, index_map_copy);
+    for (auto&& [from, to] : index_map) index_map_copy.emplace(from, to);
     return t._transform_indices(index_map_copy);
   }
 }
-
-/// Removes tags from tensor indices
-/// @param[in,out] t an AbstractTensor object whose indices will be untagged
-inline void reset_tags(AbstractTensor& t) { t._reset_tags(); }
-
-/// Removes tags from the indices of every tensor in an expression
-/// @param[in,out] expr an expression whose tensors' indices will be untagged
-/// @note @p expr is taken by const reference since ExprPtr does not propagate
-/// constness to the expression it points to
-void reset_tags(const ExprPtr& expr);
 
 /// permutes bra slots of @p t according to @p perm
 /// @param t reference to an AbstractTensor object

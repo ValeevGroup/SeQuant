@@ -588,40 +588,13 @@ inline void apply_index_replacement_rules(
     std::set<Index, Index::LabelCompare> &all_indices) {
   expr_range exrng(product);
 
-  if constexpr (assert_enabled()) {
-    // assert that tensors_ indices are not tagged since going to tag indices
-    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-      const auto &factor = *it;
-      if (factor->is<AbstractTensor>()) {
-        [[maybe_unused]] auto &tensor = factor->as<AbstractTensor>();
-        SEQUANT_ASSERT(ranges::none_of(tensor._slots(), [](const Index &idx) {
-          return idx.tag().has_value();
-        }));
-      }
-    }
-  }
-  // a transformed index is tagged, so a rule applies to it only once, but
-  // Index::transform replaces an index and its protoindices on separate
-  // applications: apply the rules until nothing changes
-  bool pass_mutated = false;
-  do {
-    pass_mutated = false;
-    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-      const auto &factor = *it;
-      if (factor->is<AbstractTensor>())
-        pass_mutated |=
-            factor->as<AbstractTensor>()._transform_indices(const_replrules);
-    }
-  } while (pass_mutated);
-
-  // reset the tags
-  {
-    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-      const auto &factor = *it;
-      if (factor->is<AbstractTensor>()) {
-        factor->as<AbstractTensor>()._reset_tags();
-      }
-    }
+  // a rule applies to an index only once, but to the protoindices of its
+  // image too
+  const auto rules = replace_proto_indices_of_images(const_replrules);
+  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+    const auto &factor = *it;
+    if (factor->is<AbstractTensor>())
+      factor->as<AbstractTensor>()._transform_indices(rules);
   }
 
   // update all_indices

@@ -16,7 +16,6 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cstddef>
@@ -275,29 +274,17 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(b1 == t.bra()[0]);
     REQUIRE(b0 == t.bra()[1]);
 
-    REQUIRE(t.bra()[0].tag().has_value());
-    const auto t_bra0_tag_value = t.bra()[0].tag().value<int>();
-    REQUIRE(t_bra0_tag_value == 0);
-    REQUIRE(t.bra()[1].tag().has_value());
-    const auto t_bra1_tag_value = t.bra()[1].tag().value<int>();
-    REQUIRE(t_bra1_tag_value == 0);
-    REQUIRE(!t.ket()[0].tag().has_value());
-    REQUIRE(!t.ket()[1].tag().has_value());
     REQUIRE(t == Tensor(L"g", bra{Index{L"i_2"}, Index{L"i_1"}},
                         ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
                         Symmetry::Antisymm));
-    // tagged indices are protected, so no replacements the second goaround
-    REQUIRE(!t.transform_indices(idxmap));
-    t.reset_tags();
+    // the swap is applied simultaneously, so applying it again undoes it
     REQUIRE(t.transform_indices(idxmap));
     REQUIRE(t == Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
                         ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
                         Symmetry::Antisymm));
-    t.reset_tags();
-    REQUIRE(!t.bra()[0].tag().has_value());
-    REQUIRE(!t.bra()[1].tag().has_value());
-    REQUIRE(!t.ket()[0].tag().has_value());
-    REQUIRE(!t.ket()[1].tag().has_value());
+    // nothing to replace
+    REQUIRE(!t.transform_indices(
+        std::map<Index, Index>{{Index{L"i_6"}, Index{L"i_7"}}}));
 
     SECTION("proto indices") {
       Tensor tensor = deserialize(L"g{i2,a1<i1>;a2<i2>,i1}")->as<Tensor>();
@@ -326,6 +313,37 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(slot_b1 == &(tensor.bra()[1]));
       REQUIRE(slot_k0 == &(tensor.ket()[0]));
       REQUIRE(slot_k1 == &(tensor.ket()[1]));
+    }
+
+    SECTION("protoindices of images") {
+      const Tensor input = deserialize(L"g{a1<i1>,a3<i1>;i1,i2}")->as<Tensor>();
+
+      // a_1<i_1> is replaced by its image, whose protoindex is in the map;
+      // a_3<i_1> is not in the map, but a_3<i_3> is once its protoindex is
+      // replaced
+      std::map<Index, Index> idxmap = {
+          {Index{L"i_1"}, Index{L"i_3"}},
+          {Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}},
+          {Index{L"a_3", {L"i_3"}}, Index{L"a_4", {L"i_1"}}},
+      };
+
+      // an image is not replaced further
+      Tensor plain = input;
+      REQUIRE(plain.transform_indices(idxmap));
+      CHECK(plain == deserialize(L"g{a2<i1>,a4<i1>;i3,i2}")->as<Tensor>());
+
+      const auto closed_map = replace_proto_indices_of_images(idxmap);
+      CHECK(closed_map.at(Index{L"a_1", {L"i_1"}}) == Index{L"a_2", {L"i_3"}});
+      CHECK(closed_map.at(Index{L"i_1"}) == Index{L"i_3"});
+
+      Tensor closed = input;
+      REQUIRE(closed.transform_indices(closed_map));
+      CHECK(closed == deserialize(L"g{a2<i3>,a4<i3>;i3,i2}")->as<Tensor>());
+
+      // the type-erased interface accepts maps other than container::map
+      Tensor erased = input;
+      REQUIRE(transform_indices(erased, closed_map));
+      CHECK(erased == closed);
     }
   }  // SECTION("index transformation")
 
