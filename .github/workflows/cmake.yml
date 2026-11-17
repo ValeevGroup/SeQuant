@@ -82,6 +82,7 @@ jobs:
         -DSEQUANT_COMPILE_DOC_EXAMPLES=${{ !matrix.valgrind }}
         -DSEQUANT_PYTHON=${{ matrix.build_type == 'Release' }}
         -DSEQUANT_ASSERT_BEHAVIOR=${{ matrix.valgrind && 'IGNORE' || matrix.build_type == 'Debug' && 'ABORT' || 'THROW' }}
+        ${{ startswith(matrix.os, 'ubuntu') && matrix.build_type == 'Debug' && !matrix.sanitize && '-DSEQUANT_TESTS_HEAVY_COMPILE_JOBS=1' || '' }}
     steps:
     - uses: actions/checkout@v7
 

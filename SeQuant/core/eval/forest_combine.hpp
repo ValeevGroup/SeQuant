@@ -103,6 +103,9 @@ template <Trace EvalTrace, meta::can_evaluate node_t, typename N, bool FHC>
       continue;
     }
 
+    // only results of one shape have a sum
+    sequant::detail::require_summable_roots(*roots.front(), n, i);
+
     // Cross-root accumulation -- mirrors sequant::evaluate(Nodes const&,
     // layout, ...)'s identical timed add_inplace() + SumInplace EvalStat
     // (there, `post` above is that overload's per-node `pre`).

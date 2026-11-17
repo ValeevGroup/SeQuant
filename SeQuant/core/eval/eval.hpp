@@ -1648,6 +1648,29 @@ ResultPtr evaluate(Node const& node,           //
   return result.post;
 }
 
+namespace detail {
+
+/// Throws unless root \p n (the \p i -th of its forest) can be summed with
+/// the forest's \p first root: only results of one shape have a sum. Roots
+/// that are results in their own right (residuals of different ranks, a
+/// scalar next to a tensor) are not the summands of anything, and the
+/// backends would add them without complaint, or crash.
+template <meta::can_evaluate Node>
+void require_summable_roots(Node const& first, Node const& n, std::size_t i) {
+  bool const alike = n->is_scalar() == first->is_scalar() &&
+                     (n->is_scalar() || n->canon_indices().size() ==
+                                            first->canon_indices().size());
+  if (!alike)
+    throw Exception(
+        "evaluate: root " + std::to_string(i) + " (" + n->label() +
+        ") cannot be summed with root 0 (" + first->label() +
+        "): the roots of a summed forest must be results of one shape -- to "
+        "evaluate roots that are results in their own right use "
+        "sequant::evaluate_each");
+}
+
+}  // namespace detail
+
 ///
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
@@ -1655,7 +1678,10 @@ ResultPtr evaluate(Node const& node,           //
 /// \param nodes A range of node that can be evaluated using \p leaf_evaluator
 /// as the
 ///              leaf evaluator. The evaluation result of the elements of
-///              \p nodes will be summed up.
+///              \p nodes will be summed up: they must be results of one
+///              shape (all scalars, or tensors of one rank), else this
+///              throws; for roots that are results in their own right see
+///              \c sequant::evaluate_each (ordered_executor.hpp).
 ///
 /// \param layout The layout of the final result. Only meaningful if the result
 ///               has a layout (or supports permutation) eg. a tensor.
@@ -1675,6 +1701,7 @@ ResultPtr evaluate(Nodes const& nodes,  //
                    F const& leaf_evaluator, CacheManager<N, FHC>& cache) {
   ResultPtr result;
 
+  std::size_t i = 0;
   for (auto&& n : nodes) {
     if (!result) {
       // the add_inplace below mutates the accumulator, so the first summand's
@@ -1684,9 +1711,11 @@ ResultPtr evaluate(Nodes const& nodes,  //
       // value held by nothing else is used as it is
       result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
       if (n.leaf() || cache.chain_holds(result)) result = result->clone();
+      ++i;
       continue;
     }
 
+    detail::require_summable_roots(*std::ranges::begin(nodes), n, i++);
     ResultPtr pre = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
     auto time =
         detail::timed_eval_inplace([&]() { result->add_inplace(*pre); });

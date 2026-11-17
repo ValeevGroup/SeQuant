@@ -2036,6 +2036,102 @@ inline std::function<std::string(std::size_t)> make_node_meta(
   };
 }
 
+namespace detail {
+
+/// Makes results the caller holds outside \p cache -- the roots \c
+/// sequant::evaluate_each has finished and not yet returned -- count toward
+/// the peak metering for as long as this object lives: it is the hierarchy's
+/// external store (\c ExternalStore), ahead of the one it found installed,
+/// which it restores on destruction.
+///
+/// A result is counted once, and only if nothing else counts it already:
+/// not a scope cache (\c CacheManager::chain_holds), not the store found
+/// installed, not an earlier entry of \p held.
+///
+/// \param cache the chain-root cache of the evaluation
+/// \param held the results, in the order they were obtained; may grow while
+///        this object lives
+/// \param hashes the hash of the root each result belongs to, aligned with
+///        \p held
+template <typename N, bool FHC>
+class HeldResults {
+ public:
+  HeldResults(CacheManager<N, FHC>& cache,
+              container::svector<ResultPtr> const& held,
+              container::svector<std::size_t> const& hashes)
+      : cache_{cache}, prev_{cache.external_store()} {
+    auto const each = [&cache, &held, &hashes, prev = prev_](auto const& emit) {
+      for (std::size_t i = 0; i != held.size(); ++i) {
+        ResultPtr const& v = held[i];
+        if (!v || cache.chain_holds(v) ||
+            (prev && prev->holds && prev->holds(v)))
+          continue;
+        if (std::find(held.begin(), held.begin() + i, v) != held.begin() + i)
+          continue;
+        emit(i < hashes.size() ? hashes[i] : std::size_t{0},
+             v->size_in_bytes());
+      }
+    };
+    store_.bytes = [each, prev = prev_]() -> std::size_t {
+      std::size_t bytes = prev && prev->bytes ? prev->bytes() : 0;
+      each([&bytes](std::size_t, std::size_t b) { bytes += b; });
+      return bytes;
+    };
+    store_.for_each =
+        [each, prev = prev_](
+            std::function<void(std::size_t, std::size_t)> const& emit) {
+          if (prev && prev->for_each) prev->for_each(emit);
+          each(emit);
+        };
+    store_.holds = [&held, prev = prev_](ResultPtr const& value) {
+      return (prev && prev->holds && prev->holds(value)) ||
+             std::find(held.begin(), held.end(), value) != held.end();
+    };
+    cache_.set_external_store(&store_);
+  }
+  ~HeldResults() { cache_.set_external_store(prev_); }
+  HeldResults(HeldResults const&) = delete;
+  HeldResults& operator=(HeldResults const&) = delete;
+
+ private:
+  CacheManager<N, FHC>& cache_;
+  ExternalStore const* prev_;
+  ExternalStore store_;
+};
+
+/// Builds the ordered schedule of \p forest from its own placement, as \c
+/// evaluate_ordered documents, and hands it to \p run as
+/// `run(ordered, rich, is_volatile_node)`. The one place the summed and the
+/// per-root ordered entries get their schedule from.
+/// \return what \p run returns
+template <meta::can_evaluate_range Nodes>
+decltype(auto) with_ordered_schedule(
+    Nodes const& forest, BatchPolicy const& policy,
+    std::function<std::size_t(Index const&)> const& target,
+    std::initializer_list<std::wstring> mode_order, auto&& run) {
+  dryrun::SizeRegime const regime;
+  dryrun::CostModel const cm{regime};
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, target);
+  LegalitySchedule const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, mode_order);
+
+  // Node-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
+  // own is_volatile_node lift (eval.hpp) computes it. The ordered executor
+  // consults it: it is the cell table's volatility predicate, and so decides
+  // which cells are persistent (TableCell::persistent -- the frontier of the
+  // invariant region) and what cache-halt may skip on a later evaluation.
+  using node_t = std::ranges::range_value_t<Nodes>;
+  auto is_volatile_node =
+      [p = policy.is_volatile_leaf](node_t const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+  return run(ordered, rich, is_volatile_node);
+}
+
+}  // namespace detail
+
 ///
 /// \brief The ordered arm of the \c sequant::evaluate(forest, policy, ...)
 /// dispatch: builds the schedule \p forest's own placement implies and drives
@@ -2080,28 +2176,44 @@ ResultPtr evaluate_ordered(
     std::function<std::size_t(Index const&)> const& target,
     std::initializer_list<std::wstring> mode_order = {},
     ScopeGuardFactory make_scope_guard = {}) {
-  dryrun::SizeRegime const regime;
-  dryrun::CostModel const cm{regime};
-  RichSchedule rich = compute_dag_boulevard(forest, cm, target);
-  LegalitySchedule const legality = analyze_legality(rich, forest, policy);
-  OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, mode_order);
+  return detail::with_ordered_schedule(
+      forest, policy, target, mode_order,
+      [&](OrderedSchedule const& ordered, RichSchedule const& rich,
+          auto const& is_volatile_node) {
+        return evaluate_ordered_schedule<EvalTrace>(
+            forest, ordered, rich, layout, leaf_evaluator, cache, target,
+            make_scope_guard, is_volatile_node);
+      });
+}
 
-  // Node-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
-  // own is_volatile_node lift (eval.hpp) computes it. The ordered executor
-  // consults it: it is the cell table's volatility predicate, and so decides
-  // which cells are persistent (TableCell::persistent -- the frontier of the
-  // invariant region) and what cache-halt may skip on a later evaluation.
-  using node_t = std::ranges::range_value_t<Nodes>;
-  auto is_volatile_node =
-      [p = policy.is_volatile_leaf](node_t const& n) -> bool {
-    if (!n.leaf() || !n->is_tensor()) return false;
-    return p && p(n->as_tensor());
-  };
-
-  return evaluate_ordered_schedule<EvalTrace>(
-      forest, ordered, rich, layout, leaf_evaluator, cache, target,
-      make_scope_guard, is_volatile_node);
+/// \brief As \c evaluate_ordered, but the roots of \p forest are not summed:
+/// one result per root, each in its own canonical layout (\c
+/// evaluate_ordered_multiroot). The roots still make one schedule, so a
+/// value two of them share is built once.
+///
+/// \tparam Nodes a forward range: it is counted, then walked.
+/// \return One \c ResultPtr per root of \p forest, in its order.
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F, typename N, bool FHC,
+          typename ScopeGuardFactory = ::sequant::make_no_scope_guard>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F> &&
+           std::ranges::forward_range<Nodes const&>
+container::svector<ResultPtr> evaluate_ordered_each(
+    Nodes const& forest, BatchPolicy const& policy, F const& leaf_evaluator,
+    CacheManager<N, FHC>& cache,
+    std::function<std::size_t(Index const&)> const& target,
+    std::initializer_list<std::wstring> mode_order = {},
+    ScopeGuardFactory make_scope_guard = {}) {
+  // an empty layout leaves a root as it was built
+  container::svector<std::string> const layouts(std::ranges::distance(forest));
+  return detail::with_ordered_schedule(
+      forest, policy, target, mode_order,
+      [&](OrderedSchedule const& ordered, RichSchedule const& rich,
+          auto const& is_volatile_node) {
+        return evaluate_ordered_multiroot<EvalTrace>(
+            forest, ordered, rich, layouts, leaf_evaluator, cache, target,
+            make_scope_guard, is_volatile_node);
+      });
 }
 
 }  // namespace sequant::eval
@@ -2164,6 +2276,87 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
   return eval::evaluate_ordered<EvalTrace>(forest, policy, layout,
                                            leaf_evaluator, cache, target,
                                            mode_order, make_scope_guard);
+}
+
+///
+/// \brief As \c evaluate(forest, policy, layout, ...), for a forest whose
+/// roots are results in their own right (the residuals of different
+/// equations, an energy) rather than the summands of one: the roots are not
+/// summed, and each is returned as it was built.
+///
+/// \details The roots share \p cache either way. On the ordered arm they
+/// also make one schedule (\c eval::evaluate_ordered_each); on the forest
+/// descent each is evaluated in turn. Under an eval trace the results are
+/// metered as the caller holds them: a finished root counts toward the
+/// working set of every later one, and all of them at the end (\c
+/// eval::detail::HeldResults), so \p cache must be the root of its chain.
+///
+/// \note Which multi-root entry to call:
+/// - \c evaluate_each (this): the policy picks the scheduler and the
+///   schedule is built here from the forest; results come back as built.
+/// - \c eval::evaluate_ordered_multiroot: the ordered scheduler with a
+///   schedule the caller built (and may reuse across evaluations), and a
+///   layout per root.
+/// - \c evaluate_multiroot (eval.hpp): the same, reached through the driver
+///   a caller installed on the cache.
+/// - \c evaluate(forest, policy, layout, ...): the roots are the summands of
+///   one result, and are summed.
+///
+/// \tparam Nodes a forward range.
+/// \return One \c ResultPtr per root of \p forest, in its order.
+///
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F, typename N, bool FHC,
+          typename ScopeGuardFactory = make_no_scope_guard>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F> &&
+           std::ranges::forward_range<Nodes const&>
+container::svector<ResultPtr> evaluate_each(
+    Nodes const& forest, BatchPolicy const& policy, F const& leaf_evaluator,
+    CacheManager<N, FHC>& cache,
+    std::initializer_list<std::wstring> mode_order = {},
+    ScopeGuardFactory make_scope_guard = {}) {
+  // What is returned is held by the caller, all of it at once: the metering
+  // must see a finished root while the next is evaluated, and every root at
+  // the end. The ordered walk holds its roots itself (in its cell registry)
+  // until it returns; the forest descent hands them back one at a time.
+  container::svector<ResultPtr> results;
+  container::svector<std::size_t> hashes;
+  auto const note_held = [&] {
+    if constexpr (detail::trace(EvalTrace))
+      (void)cache.note_working_set(log::working_set(cache, ResultPtr{}));
+  };
+
+  if (policy.scheduler != BatchScheduler::ordered) {
+    std::optional<eval::detail::HeldResults<N, FHC>> held;
+    if constexpr (detail::trace(EvalTrace))
+      held.emplace(cache, results, hashes);
+    for (auto const& root : forest) {
+      ResultPtr r =
+          evaluate<EvalTrace>(root, std::wstring{}, leaf_evaluator, cache);
+      hashes.push_back(root->hash_value());
+      results.push_back(std::move(r));
+      note_held();
+    }
+    return results;
+  }
+
+  // one element per batch if the policy sizes none, as evaluate(forest,
+  // policy, ...) has it
+  std::function<std::size_t(Index const&)> const target =
+      policy.batch_target_size
+          ? policy.batch_target_size
+          : std::function<std::size_t(Index const&)>(
+                [](Index const&) -> std::size_t { return 1; });
+
+  results = eval::evaluate_ordered_each<EvalTrace>(
+      forest, policy, leaf_evaluator, cache, target, mode_order,
+      make_scope_guard);
+  if constexpr (detail::trace(EvalTrace)) {
+    for (auto const& root : forest) hashes.push_back(root->hash_value());
+    eval::detail::HeldResults<N, FHC> const held{cache, results, hashes};
+    note_held();
+  }
+  return results;
 }
 
 }  // namespace sequant

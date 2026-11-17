@@ -340,6 +340,9 @@ class rand_tensor_yield {
       }
       return tile;
     });
+    // f may refer to the caller's locals, and nothing else waits for the
+    // tiles of a leaf that no evaluation reads
+    world.gop.fence();
     set_leaf(stored, eval_result<ResultTensorTA<array_type>>(arr));
   }
 
@@ -10494,4 +10497,62 @@ TEST_CASE("ta_lazy_view_cell_bytes_balance", "[eval][ta][lazy]") {
   CHECK(reg.take(0) == r);
   CHECK(reg.live_bytes() == 0);
   logger.eval.level = prev_level;
+}
+
+// Roots that are results in their own right -- residuals of different
+// ranks, an energy -- come back one each, in the forest's order, each what
+// evaluating it alone gives; the summed entry refuses them.
+TEST_CASE("evaluate_each_ta", "[eval]") {
+  using namespace sequant;
+  using Catch::Matchers::ContainsSubstring;
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+  auto const aops = yield_.array_ops();
+
+  auto root_of = [](std::wstring_view equation) {
+    return binarize<EvalExprTA>(deserialize<ResultExpr>(equation));
+  };
+  using Node = EvalNode<EvalExprTA>;
+  std::vector<Node> const forest{
+      root_of(L"S{a_1;i_1}:N-N-N = f{a_1;a_2}:N-N-N * t{a_2;i_1}:N-N-N"),
+      root_of(L"D{a_1,a_2;i_1,i_2}:N-N-N = g{a_1,a_2;a_3,a_4}:N-N-N * "
+              L"t{a_3,a_4;i_1,i_2}:N-N-N"),
+      root_of(L"E = f{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N")};
+  std::vector<std::string> const annots{"0,1", "0,1,2,3", ""};
+
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    BatchPolicy policy;
+    policy.scheduler = scheduler;
+
+    auto cache = CacheManager<Node>::empty();
+    cache.set_array_ops(&aops);
+    auto const results = evaluate_each(forest, policy, yield_, cache);
+    REQUIRE(results.size() == forest.size());
+
+    for (std::size_t i = 0; i != forest.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(results[i]);
+      auto const alone = evaluate(forest[i], yield_);
+      if (forest[i]->is_scalar()) {
+        CHECK(results[i]->get<double>() == Catch::Approx(alone->get<double>()));
+        continue;
+      }
+      auto const& got = results[i]->get<TA::TSpArrayD>();
+      auto const& ref = alone->get<TA::TSpArrayD>();
+      REQUIRE(got.trange() == ref.trange());
+      TA::TSpArrayD diff;
+      diff(annots[i]) = got(annots[i]) - ref(annots[i]);
+      CHECK(TA::norm2(diff) == Catch::Approx(0).margin(1e-12));
+      CHECK(TA::norm2(ref) > 0);
+    }
+
+    auto summed_cache = CacheManager<Node>::empty();
+    summed_cache.set_array_ops(&aops);
+    REQUIRE_THROWS_WITH(
+        evaluate(forest, policy, std::string{}, yield_, summed_cache),
+        ContainsSubstring("evaluate_each"));
+  }
 }
