@@ -97,6 +97,22 @@ void wait_for_lazy_cleanup(ArrayT const& arr) {
   ArrayT::wait_for_lazy_cleanup(arr.world());
   wait_counter().fetch_add(1, std::memory_order_relaxed);
 }
+/// Releases what the reads before this one left behind, then waits for the
+/// deferred cleanup of \p arr 's world, whatever the drain policy.
+///
+/// A block read from a lazy or an on-disk value is an array of its own, not a
+/// view of a resident one. The expression that consumed the previous block
+/// keeps that block's array alive, through evaluation objects the runtime
+/// destroys only at a fence, and nothing fences between the operations of a
+/// loop: without this, every block read inside a loop stays in memory until
+/// the loop ends. For the reads of such values (ResultOnDiskTA,
+/// ResultLazyTA).
+template <typename ArrayT>
+void release_earlier_reads(ArrayT const& arr) {
+  arr.world().gop.fence();
+  note_fence();
+  wait_for_lazy_cleanup(arr);
+}
 inline std::atomic<long long>& slice_ns() {
   static std::atomic<long long> c{0};
   return c;
@@ -2740,7 +2756,7 @@ class ResultOnDiskTA final : public Result {
           detail::make_zero_array<ArrayT>(d.world(), d.trange()));
     ArrayT out;
     out(annot_) = d(annot_);
-    ::sequant::detail::wait_for_lazy_cleanup(out);
+    ::sequant::detail::release_earlier_reads(out);
     return eval_result<InMemoryResult>(std::move(out));
   }
 
@@ -2756,7 +2772,7 @@ class ResultOnDiskTA final : public Result {
           ->slice_mode(mode, elem_lo, elem_hi);
     ArrayT out;
     out(annot_) = d(annot_).block(lo, hi, TA::preserve_lobound);
-    ::sequant::detail::wait_for_lazy_cleanup(out);
+    ::sequant::detail::release_earlier_reads(out);
     return eval_result<InMemoryResult>(std::move(out));
   }
 
@@ -2885,7 +2901,7 @@ class ResultLazyTA final : public Result {
     auto const& d = get<LazyArrayT>();
     InMemoryArrayT out;
     out(annot_) = d(annot_);
-    ::sequant::detail::wait_for_lazy_cleanup(out);
+    ::sequant::detail::release_earlier_reads(out);
     return finish(eval_result<InMemoryResult>(std::move(out)));
   }
 
@@ -2905,7 +2921,7 @@ class ResultLazyTA final : public Result {
     hi[mode] = tile_hi;
     InMemoryArrayT out;
     out(annot_) = d(annot_).block(lo, hi, TA::preserve_lobound);
-    ::sequant::detail::wait_for_lazy_cleanup(out);
+    ::sequant::detail::release_earlier_reads(out);
     return finish(eval_result<InMemoryResult>(std::move(out)));
   }
 
