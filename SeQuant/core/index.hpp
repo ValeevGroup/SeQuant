@@ -10,7 +10,6 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -49,6 +48,7 @@
 namespace sequant {
 
 class Index;
+
 using WstrList = std::initializer_list<std::wstring_view>;
 using IndexList = std::initializer_list<Index>;
 
@@ -91,7 +91,7 @@ concept range_of_castables_to_index =
 /// strings. For optimal efficiency and simplicity users are recommended to use
 /// wide strings until further notice.
 // clang-format on
-class Index : public Taggable {
+class Index {
  public:
   /// ordinals are represented by this type
   using ordinal_type = std::uint64_t;
@@ -161,8 +161,7 @@ class Index : public Taggable {
   /// copy constructor
   /// @note memoized data (label, full_label) is not copied
   Index(const Index &idx) noexcept
-      : Taggable(idx),
-        basis_(idx.basis_),
+      : basis_(idx.basis_),
         ordinal_(idx.ordinal_),
         proto_indices_(idx.proto_indices_),
         symmetric_proto_indices_(idx.symmetric_proto_indices_) {}
@@ -171,8 +170,7 @@ class Index : public Taggable {
   /// @param[in,out] idx on output: null Index
   /// @note memoized data (label, full_label) is moved
   Index(Index &&idx) noexcept
-      : Taggable(std::move(idx)),
-        basis_(idx.basis_),
+      : basis_(idx.basis_),
         ordinal_(std::move(idx.ordinal_)),
         proto_indices_(std::move(idx.proto_indices_)),
         symmetric_proto_indices_(idx.symmetric_proto_indices_),
@@ -187,7 +185,6 @@ class Index : public Taggable {
   /// copy assignment
   /// @note memoized data (label, full_label) is not copied
   Index &operator=(const Index &idx) {
-    Taggable::operator=(idx);
     basis_ = idx.basis_;
     ordinal_ = idx.ordinal_;
     proto_indices_ = idx.proto_indices_;
@@ -201,7 +198,6 @@ class Index : public Taggable {
   /// @param[in,out] idx on output: null Index
   /// @note memoized data (label, full_label) is moved
   Index &operator=(Index &&idx) noexcept {
-    static_cast<Taggable &>(*this) = static_cast<Taggable &&>(idx);
     basis_ = idx.basis_;
     ordinal_ = std::move(idx.ordinal_);
     proto_indices_ = std::move(idx.proto_indices_);
@@ -222,7 +218,7 @@ class Index : public Taggable {
   // clang-format on
 
   /// @param basis the IndexBasis
-  explicit Index(const IndexBasis &basis) : Taggable(), basis_(&intern(basis)) {
+  explicit Index(const IndexBasis &basis) : basis_(&intern(basis)) {
     check_nonreserved();
   }
 
@@ -473,19 +469,6 @@ class Index : public Taggable {
   [[nodiscard]] Index replace_qns(QuantumNumbersAttr qns) const {
     return Index(*this, IndexSpace(this->space().base_key(),
                                    this->space().attr(), std::move(qns)));
-  }
-
-  /// @return this cast to Taggable&
-  Taggable &tag() { return static_cast<Taggable &>(*this); }
-  /// @return this cast to const Taggable&
-  const Taggable &tag() const { return static_cast<const Taggable &>(*this); }
-  /// resets tag of this and its protoindices (if any)
-  /// @note do @c this->tag().reset() if you only want to reset tag on this (not
-  /// its protoindices)
-  void reset_tag() const {
-    this->tag().reset();
-    ranges::for_each(proto_indices_,
-                     [](const Index &idx) { idx.tag().reset(); });
   }
 
   /// creates a globally-unique temporary index in basis @c basis . The label of
@@ -834,78 +817,55 @@ class Index : public Taggable {
   /// testing)
   static void reset_tmp_index() noexcept;
 
-  // clang-format off
   /// @brief index replacement
-  /// replaces this object with its image in the Index map.
-  /// If this object was not found in the map, tries replacing its subindices.
+  /// replaces this object with its image in the Index map, as a simultaneous
+  /// substitution: an image is not replaced further. If this object was not
+  /// found in the map, its protoindices are replaced, and then this object is
+  /// replaced if the result is in the map.
   /// @param index_map maps Index to Index
   /// @return false if no replacements were made
-  /// @pre
-  /// \code
-  /// this->tag().has_value() == false ||
-  /// (this->tag().has_value() == true && this->tag().value<int>() == 0)
-  /// \endcode
-  /// @post if return value is true:
-  /// \code
-  /// this->tag().has_value() == true &&
-  /// this->tag().value<int>() == 0
-  /// \endcode
-  // clang-format on
+  /// @sa replace_proto_indices_of_images
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
   bool transform(const Map<Index, Index, Args...> &index_map) noexcept {
-    bool mutated = false;
-
-    // outline:
-    // - try replacing this first
-    //   - if this is replaced by an index with protoindices, the protoindices
-    //   should not be tagged since they are original and may need to be
-    //   replaced also
-    // - if not found, try replacing protoindices
-    // - if protoindices mutated, try replacing this again
-
-    // is this tagged already? if yes, can't skip, the protoindices may need to
-    // be transformed also
-    const auto this_is_tagged = this->tag().has_value();
-    // sanity check that tag = 0
-    if (this_is_tagged) {
-      SEQUANT_ASSERT(this->tag().value<int>() == 0);
-    } else {  // only try replacing this if not already tagged
+    auto replace_this = [&]() {
       auto it = index_map.find(*this);
-      if (it != index_map.end()) {
-        *this = it->second;
-        this->tag().assign(0);
-        mutated = true;
-      }
-    }
+      if (it == index_map.end()) return false;
+      *this = it->second;
+      return true;
+    };
 
-    if (!mutated) {
-      bool proto_indices_transformed = false;
-      for (auto &&subidx : proto_indices_) {
-        SEQUANT_ASSERT(!subidx.has_proto_indices());
-        if (subidx.transform(index_map)) proto_indices_transformed = true;
-      }
-      if (proto_indices_transformed) {
-        mutated = true;
-        canonicalize_proto_indices();
-        if (!this_is_tagged) {  // if protoindices were mutated, try again, but
-          // only if no tag yet
-          auto it = index_map.find(*this);
-          if (it != index_map.end()) {
-            *this = it->second;
-            this->tag().assign(0);
-            mutated = true;
-          }
-        }
-      }
+    bool mutated = replace_this();
+    if (!mutated && transform_proto_indices(index_map)) {
+      // protoindices mutated, try replacing this again
+      mutated = true;
+      replace_this();
     }
     if (mutated) labels_.reset();
     return mutated;
   }
 
+  /// replaces each protoindex by its image in @p index_map (if any)
+  /// @param index_map maps Index to Index
+  /// @return true if any protoindex was replaced
+  template <template <typename, typename, typename... Args> class Map,
+            typename... Args>
+  bool transform_proto_indices(
+      const Map<Index, Index, Args...> &index_map) noexcept {
+    bool mutated = false;
+    for (auto &&subidx : proto_indices_) {
+      SEQUANT_ASSERT(!subidx.has_proto_indices());
+      if (subidx.transform(index_map)) mutated = true;
+    }
+    if (mutated) {
+      canonicalize_proto_indices();
+      labels_.reset();
+    }
+    return mutated;
+  }
+
   /// compares Index objects by space and ordinal (the label up to the basis
-  /// name); protoindices, tags and the basis instance, named or not, are
-  /// ignored
+  /// name); protoindices and the basis instance, named or not, are ignored
   /// @sa Index::label()
   struct LabelCompare {
     bool operator()(const Index &first, const Index &second) const {
@@ -918,8 +878,8 @@ class Index : public Taggable {
 
   /// compares Index objects using full labels only
   /// @note since full label is defined by the space, ordinal,
-  /// protoindices and basis only (i.e. tags are ignored)
-  /// comparison uses them directly for efficiency
+  /// protoindices and basis only, comparison uses them directly for
+  /// efficiency
   /// @sa Index::full_label()
   struct FullLabelCompare {
     bool operator()(const Index &first, const Index &second) const {
@@ -1072,38 +1032,24 @@ class Index : public Taggable {
   /// @brief The ordering operator
 
   /// The canonical order of Index objects is
-  /// lexicographical, first by qns, followed by tags (if defined
-  /// for both), then by space, then by ordinal, then by protoindices (if any),
-  /// then by basis (instance, then name, if any)
+  /// lexicographical, first by qns, then by space, then by ordinal, then by
+  /// protoindices (if any), then by basis (instance, then name, if any)
   friend std::strong_ordering operator<=>(const Index &i1,
                                           const Index &i2) noexcept {
     using SO = std::strong_ordering;
 
-    auto compare_sans_tag = [&i1, &i2]() {
-      const auto cmp_space = i1.space() <=> i2.space();
-      if (cmp_space != SO::equal) return cmp_space;
-      if (i1.ordinal_ != i2.ordinal_) {
-        return i1.ordinal() < i2.ordinal() ? SO::less : SO::greater;
-      } else if (i1.proto_indices() == i2.proto_indices())
-        return i1.basis_ == i2.basis_ ? SO::equal : *i1.basis_ <=> *i2.basis_;
-      else
-        return i1.proto_indices() < i2.proto_indices() ? SO::less : SO::greater;
-    };
-
     const auto i1_Q = i1.space().qns();
     const auto i2_Q = i2.space().qns();
+    if (i1_Q != i2_Q) return i1_Q < i2_Q ? SO::less : SO::greater;
 
-    if (i1_Q == i2_Q) {
-      const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
-
-      if (!have_tags || i1.tag() == i2.tag()) {
-        return compare_sans_tag();
-      }
-
-      return i1.tag() < i2.tag() ? SO::less : SO::greater;
-    }
-
-    return i1_Q < i2_Q ? SO::less : SO::greater;
+    const auto cmp_space = i1.space() <=> i2.space();
+    if (cmp_space != SO::equal) return cmp_space;
+    if (i1.ordinal_ != i2.ordinal_) {
+      return i1.ordinal() < i2.ordinal() ? SO::less : SO::greater;
+    } else if (i1.proto_indices() == i2.proto_indices())
+      return i1.basis_ == i2.basis_ ? SO::equal : *i1.basis_ <=> *i2.basis_;
+    else
+      return i1.proto_indices() < i2.proto_indices() ? SO::less : SO::greater;
   }
 
   static std::shared_ptr<const IndexBasisRegistry>
@@ -1257,6 +1203,18 @@ class IndexFactory {
 
 /// @param[in] idx a const reference to an Index object
 /// @return the hash value of the object referred to by idx
+/// @param index_map maps Index to Index
+/// @return copy of @p index_map in which the protoindices of each image are
+/// replaced by their images in @p index_map ; transforming an Index with the
+/// result also renames the protoindices of its image, e.g. for images made by
+/// IndexFactory, which keep the original protoindices
+template <typename Map>
+Map replace_proto_indices_of_images(const Map &index_map) {
+  Map result(index_map);
+  for (auto &&[from, to] : result) to.transform_proto_indices(index_map);
+  return result;
+}
+
 inline auto hash_value(const Index &idx) {
   const auto &proto_indices = idx.proto_indices();
   using std::begin;

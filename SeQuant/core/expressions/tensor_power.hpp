@@ -109,7 +109,6 @@ class TensorPower : public Expr, public AbstractTensor {
   std::size_t _hash_value() const override;
   bool _transform_indices(
       const container::map<Index, Index>& index_map) override;
-  void _reset_tags() override;
   void _swap_bra_ket() override;
   any_view_randsz _bra_mutable() override;
   any_view_randsz _ket_mutable() override;

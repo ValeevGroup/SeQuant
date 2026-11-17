@@ -194,8 +194,8 @@ throw Exception("message");  // sequant::Exception outside namespace sequant
 `catch (const std::exception&)` handlers still work; it exists so that callers
 can catch SeQuant-originated failures distinctly. Where callers need to
 distinguish further, derive from it rather than reaching for a `std` type.
-`IndexSpace::bad_key`, `SerializationError`, `ConversionException` and
-`bad_any_comparable_cast` already do, and some code catches those by subtype —
+`IndexSpace::bad_key`, `SerializationError` and `ConversionException`
+already do, and some code catches those by subtype —
 do not flatten them back into plain `Exception`.
 
 For internal invariants prefer `SEQUANT_ASSERT` over throwing. What a tripped

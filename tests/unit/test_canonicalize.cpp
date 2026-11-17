@@ -1201,7 +1201,6 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
     auto& t = e->as<Product>().factor(1)->as<Tensor>();
     t.transform_indices(
         container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_5"}}});
-    t.reset_tags();
     REQUIRE(!e->is_canonical());
     canonicalize(e);
     REQUIRE(e->is_canonical());
@@ -1219,7 +1218,6 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
     auto& t = (*product)->as<Product>().factor(0)->as<Tensor>();
     t.transform_indices(
         container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_5"}}});
-    t.reset_tags();
     REQUIRE(!e->is_canonical());
     REQUIRE_NOTHROW(canonicalize(e));
     REQUIRE(e->is_canonical());

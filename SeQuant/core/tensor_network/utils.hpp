@@ -147,31 +147,33 @@ auto permute(const ArrayLike &vector, const Permutation &perm) {
   return pvector;
 }
 
+/// replaces indices of @p tensor
+/// @param self_consistent if true, the protoindices of an image are replaced
+/// too (see replace_proto_indices_of_images)
 template <typename ReplacementMap>
 void apply_index_replacements(AbstractTensor &tensor,
                               const ReplacementMap &replacements,
                               const bool self_consistent) {
-  if constexpr (assert_enabled()) {
-    // assert that tensors' indices are not tagged since going to tag indices
-    SEQUANT_ASSERT(ranges::none_of(
-        slots(tensor), [](const Index &idx) { return idx.tag().has_value(); }));
-  }
-
-  bool pass_mutated;
-  do {
-    pass_mutated = transform_indices(tensor, replacements);
-  } while (self_consistent && pass_mutated);  // transform till stops changing
-
-  reset_tags(tensor);
+  if (self_consistent)
+    transform_indices(tensor, replace_proto_indices_of_images(replacements));
+  else
+    transform_indices(tensor, replacements);
 }
 
+/// replaces indices of each tensor in @p tensors
+/// @param self_consistent if true, the protoindices of an image are replaced
+/// too (see replace_proto_indices_of_images)
 template <typename ArrayLike, typename ReplacementMap>
 void apply_index_replacements(ArrayLike &tensors,
                               const ReplacementMap &replacements,
                               const bool self_consistent) {
-  for (auto &tensor : tensors) {
-    apply_index_replacements(*tensor, replacements, self_consistent);
-  }
+  auto apply = [&tensors](const ReplacementMap &map) {
+    for (auto &tensor : tensors) transform_indices(*tensor, map);
+  };
+  if (self_consistent)
+    apply(replace_proto_indices_of_images(replacements));
+  else
+    apply(replacements);
 }
 
 /// sorts a sequence of integers in the lexicographic order (w.r.t. operator<)

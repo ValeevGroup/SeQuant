@@ -971,7 +971,6 @@ struct InlineContext {
       }
       map_slots(head.aux(), leaf->aux());
       transform_indices(head, renaming);
-      reset_tags(head);
     }
     // every other index of the rhs (a dummy, or every index under a scalar
     // head) gets a fresh one, so the subtree cannot collide with the

@@ -946,10 +946,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   ExprPtr clone() const override { return ex<Tensor>(*this); }
 
-  void reset_tags() const {
-    ranges::for_each(slots(), [](const auto &idx) { idx.reset_tag(); });
-  }
-
   hash_type bra_hash_value() const {
     if (!bra_hash_value_)  // if hash not computed, or reset, recompute
       memoizing_hash();
@@ -1219,7 +1215,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);
   }
-  void _reset_tags() override final { reset_tags(); }
 
   AbstractTensor::any_view_randsz _bra_mutable() override final {
     this->reset_hash_value();

@@ -10,6 +10,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <type_traits>
+#include <typeinfo>
 #include <vector>
 
 #include <range/v3/algorithm/for_each.hpp>
@@ -26,7 +27,16 @@ using get_support = decltype(std::get<0>(std::declval<T>()));
 template <typename T>
 constexpr bool is_tuple_like_v = meta::is_detected_v<get_support, T>;
 
+/// orders indices (or bra/ket pairs of indices) by their spaces, then puts
+/// external indices before internal ones
 struct TensorBlockIndexComparer {
+  TensorBlockIndexComparer() = default;
+
+  /// @param externals the external indices (only those of the tensor being
+  /// canonicalized are needed)
+  explicit TensorBlockIndexComparer(container::set<Index> externals)
+      : externals_(std::move(externals)) {}
+
   template <typename T>
   bool operator()(const T& lhs, const T& rhs) const {
     return compare<T>(lhs, rhs) < 0;
@@ -64,13 +74,13 @@ struct TensorBlockIndexComparer {
         return res;
       }
 
-      // Then consider tags of equivalent pairs
-      res = compare_tags(lhs_first, rhs_first);
+      // Then consider externality of equivalent pairs
+      res = compare_externality(lhs_first, rhs_first);
       if (res != 0) {
         return res;
       }
 
-      res = compare_tags(lhs_second, rhs_second);
+      res = compare_externality(lhs_second, rhs_second);
       return res;
     } else {
       static_assert(std::is_same_v<std::decay_t<T>, Index>,
@@ -81,7 +91,7 @@ struct TensorBlockIndexComparer {
         return res;
       }
 
-      res = compare_tags(lhs, rhs);
+      res = compare_externality(lhs, rhs);
       return res;
     }
   }
@@ -113,38 +123,32 @@ struct TensorBlockIndexComparer {
     return 0;
   }
 
-  int compare_tags(const Index& lhs, const Index& rhs) const {
-    if (!lhs.tag().has_value() || !rhs.tag().has_value()) {
-      // We only compare tags if both indices have a tag
-      return 0;
-    }
+  /// external indices come before internal ones
+  int compare_externality(const Index& lhs, const Index& rhs) const {
+    if (externals_.empty()) return 0;
 
-    const int lhs_tag = lhs.tag().value<int>();
-    const int rhs_tag = rhs.tag().value<int>();
+    const bool lhs_is_ext = externals_.find(lhs) != externals_.end();
+    const bool rhs_is_ext = externals_.find(rhs) != externals_.end();
 
-    if (lhs_tag != rhs_tag) {
-      return lhs_tag < rhs_tag ? -1 : 1;
+    if (lhs_is_ext != rhs_is_ext) {
+      return lhs_is_ext ? -1 : 1;
     }
 
     return 0;
   }
+
+ private:
+  container::set<Index> externals_;
 };
 
-struct TensorIndexComparer {
+/// orders indices by Index::operator<, and bra/ket pairs of indices
+/// lexicographically
+struct IndexTieBreakLess {
   template <typename T>
   bool operator()(const T& lhs, const T& rhs) const {
-    TensorBlockIndexComparer block_comp;
-
-    int res = block_comp.compare<T>(lhs, rhs);
-
-    if (res != 0) {
-      return res < 0;
-    }
-
-    // Fall back to regular index compare to break the tie
     if constexpr (is_tuple_like_v<T>) {
       static_assert(std::tuple_size_v<T> == 2,
-                    "TensorIndexComparer can only deal with tuple-like objects "
+                    "IndexTieBreakLess can only deal with tuple-like objects "
                     "of size 2");
 
       const Index& lhs_first = std::get<0>(lhs);
@@ -162,6 +166,28 @@ struct TensorIndexComparer {
     }
   }
 };
+
+/// orders by TensorBlockIndexComparer (without externality), then breaks ties
+/// by IndexTieBreakLess
+struct TensorIndexComparer {
+  template <typename T>
+  bool operator()(const T& lhs, const T& rhs) const {
+    const int res = TensorBlockIndexComparer{}.compare<T>(lhs, rhs);
+    return res != 0 ? res < 0 : IndexTieBreakLess{}(lhs, rhs);
+  }
+};
+
+/// @return a comparer that orders by @p block_cmp first, and by @p fallback
+/// if @p block_cmp considers its arguments equivalent
+template <typename Fallback>
+auto block_cmp_first(const TensorBlockIndexComparer& block_cmp,
+                     Fallback fallback) {
+  return [&block_cmp, fallback = std::move(fallback)](const auto& lhs,
+                                                      const auto& rhs) {
+    const int res = block_cmp.compare(lhs, rhs);
+    return res != 0 ? res < 0 : fallback(lhs, rhs);
+  };
+}
 
 TensorCanonicalizer::~TensorCanonicalizer() = default;
 
@@ -183,14 +209,15 @@ NullTensorCanonicalizer::instance() {
 
 ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) const { return {}; }
 
-void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
-  // tag all indices as ext->true/ind->false
-  ranges::for_each(slots(t), [this](auto& idx) {
-    auto it = external_indices_.find(idx);
-    auto is_ext = it != external_indices_.end();
-    idx.tag().assign(
-        is_ext ? 0 : 1);  // ext -> 0, int -> 1, so ext will come before
-  });
+container::set<Index> DefaultTensorCanonicalizer::external_indices_of(
+    const AbstractTensor& t) const {
+  container::set<Index> result;
+  if (external_indices_.empty()) return result;
+  for (const Index& idx : slots(t)) {
+    if (external_indices_.find(idx) != external_indices_.end())
+      result.insert(idx);
+  }
+  return result;
 }
 
 void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
@@ -233,29 +260,36 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
 }
 
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
-  tag_indices(t);
-
   canonicalize_braket(t);
 
   const auto ctx = get_default_context_snapshot();
-  auto result = this->apply(t, ctx.index_comparer(), ctx.index_pair_comparer());
+  const auto& idxcmp = ctx.index_comparer();
+  const auto& paircmp = ctx.index_pair_comparer();
 
-  reset_tags(t);
+  // indices are ordered by space, then external indices go first, then the
+  // context's comparers order the rest; the default comparers start with the
+  // space comparison, so only their tie-break is left to do
+  const bool default_idxcmp =
+      idxcmp.target_type() == typeid(TensorIndexComparer);
+  const bool default_paircmp =
+      paircmp.target_type() == typeid(TensorIndexComparer);
+  auto idx_fallback = [&](const auto& lhs, const auto& rhs) {
+    return default_idxcmp ? IndexTieBreakLess{}(lhs, rhs) : idxcmp(lhs, rhs);
+  };
+  auto pair_fallback = [&](const auto& lhs, const auto& rhs) {
+    return default_paircmp ? IndexTieBreakLess{}(lhs, rhs) : paircmp(lhs, rhs);
+  };
 
-  return result;
+  const TensorBlockIndexComparer block_cmp(external_indices_of(t));
+  return this->apply(t, block_cmp_first(block_cmp, idx_fallback),
+                     block_cmp_first(block_cmp, pair_fallback));
 }
 
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
-  tag_indices(t);
-
   canonicalize_braket(t);
 
-  auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
-                                                  TensorBlockIndexComparer{});
-
-  reset_tags(t);
-
-  return result;
+  const TensorBlockIndexComparer block_cmp(external_indices_of(t));
+  return DefaultTensorCanonicalizer::apply(t, block_cmp, block_cmp);
 }
 
 }  // namespace sequant

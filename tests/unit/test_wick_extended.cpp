@@ -448,10 +448,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
           [&](const ExprPtr& e) {
             if (e->is<Tensor>()) {
               e->as<Tensor>().transform_indices(identify);
-              e->as<Tensor>().reset_tags();
             } else if (e->is<FNOperator>()) {
               e->as<FNOperator>().transform_indices(identify);
-              for (const auto& op : e->as<FNOperator>()) op.index().reset_tag();
             }
           },
           /*atoms_only=*/true);
@@ -1057,7 +1055,6 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
           [&](const ExprPtr& x) {
             if (x->is<Tensor>()) {
               x->as<Tensor>().transform_indices(fresh);
-              x->as<Tensor>().reset_tags();
             }
           },
           /*atoms_only=*/true);
