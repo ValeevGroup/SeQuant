@@ -49,9 +49,10 @@ modified does no work.
 One canonical form
 --------------------
 
-The library canonicalizes to one fixed form: the ``Complete`` method (:class:`sequant::CanonicalizationMethod`), with the library's
-default tensor canonicalizers, index comparers and cardinal tensor labels (:func:`sequant::default_cardinal_tensor_labels`). No global
-setting changes it; it depends on the :class:`sequant::Context` only through the index basis registry (the order of the index spaces)
+The library canonicalizes to one fixed form: the networks of tensors are canonicalized by their graphs (which fixes the order of
+the tensors and the names of the dummy indices), and each tensor with the library's default tensor canonicalizer and index
+comparers. The form is meant to identify equivalent expressions, not to be read (see :ref:`canonicalization-presentation`): e.g.
+the order of the tensors of a product is that of the canonical graph, not alphabetical. No global setting changes it; it depends on the :class:`sequant::Context` only through the index basis registry (the order of the index spaces)
 and the single-particle basis (the symmetry of normal operators), see :doc:`context`. Code throughout the library relies on this
 form, so it is the same whoever calls it and whatever else is configured.
 
@@ -80,6 +81,14 @@ The same holds for :class:`sequant::WickTheorem` and ``vac_av``/``ref_av``, and 
    :end-before: end-snippet-3
    :dedent: 2
 
+In a projected expression (one multiplied by an antisymmetrizer ``Â`` or symmetrizer ``Ŝ`` that carries its external indices,
+e.g. a coupled-cluster residual) the library does not name the indices of the projector, so that terms that differ only by a
+relabeling of them merge. Canonicalization then names them as it names the other dummies; library functions that canonicalize
+such expressions (spin tracing, biorthogonalization, ``vac_av``/``ref_av``) give each projector back the indices of the
+projector of their input, or, if the projectors of the input come from operators and have temporary indices, number them from 1
+within each space in the order of the slots (e.g. ``Â{i_1,i_2;a_1,a_2}``). Code that reads the external indices off a projector
+(e.g. ``S_maps``, ``expand_A_op``) relies on this, not on the canonical form.
+
 Nested products
 -----------------
 
@@ -104,8 +113,10 @@ The canonical form is meant to identify equivalent expressions, not to be read. 
   :func:`sequant::mbpt::prettify_options` is a preset that presents mbpt expressions in their conventional order (the cardinal
   tensor labels of mbpt); ``prettify`` itself is part of the core library;
 - the same presentation settings can be passed to ``canonicalize()`` and the ``Expr::canonicalize()`` members
-  (``CanonicalizeOptions::presentation``). The result is not marked as canonical, and ``simplify()``, whose result must be the
-  canonical form, rejects them;
+  (``CanonicalizeOptions::presentation``): the canonical form is then followed by a presentation stage, which orders the tensors
+  of each product by label (cardinal tensor labels first), names the dummy indices in the order of the slots and canonicalizes
+  each tensor with the given canonicalizers and comparers. The result is not marked as canonical, and ``simplify()``, whose
+  result must be the canonical form, rejects them;
 - the LaTeX printers can print summands and factors in a lexicographic order (:class:`sequant::PrintOptions`, see :doc:`context`).
 
 .. literalinclude:: /examples/user/canonicalization.cpp

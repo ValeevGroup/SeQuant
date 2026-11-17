@@ -605,9 +605,14 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
     }
     if (term->is<NormalOperator<S>>()) term = ex<Product>(ExprPtrList{term});
     // canonicalize first, so that the provenance sees the final indices
+    // (the normal operators as normalized, see
+    // WickTheorem::nop_preserving_canonicalize_options())
     if (term->is<Product>()) {
-      [[maybe_unused]] auto bp = term->rapid_canonicalize(external_indices);
-      SEQUANT_ASSERT(bp == nullptr);
+      const auto bp = term->canonicalize(
+          external_indices,
+          WickTheorem<S>::nop_preserving_canonicalize_options());
+      if (bp)
+        term->template as<Product>().scale(bp->template as<Constant>().value());
     }
     // the operators' equivalences are those of the term itself, in which an
     // index shared by two operators is a dummy; renaming it below leaves

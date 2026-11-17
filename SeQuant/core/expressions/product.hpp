@@ -348,11 +348,6 @@ class Product : public Expr {
       const NamedIndexSpec &named_indices,
       CanonicalizeOptions opt = CanonicalizeOptions{}) override;
 
-  virtual ExprPtr rapid_canonicalize(
-      const NamedIndexSpec &named_indices,
-      CanonicalizeOptions opts = CanonicalizeOptions{}.copy_and_set(
-          CanonicalizationMethod::Rapid)) override;
-
  private:
   factors_type factors_{};
   scalar_type scalar_ = {1, 0};

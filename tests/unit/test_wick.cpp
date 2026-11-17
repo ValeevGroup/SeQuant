@@ -504,7 +504,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         wick.stats().reset();
         auto result =
             wick.full_contractions(false).use_topology(true).compute();
-        result->rapid_canonicalize(deduce_named_indices);
+        canonicalize(result, deduce_named_indices);
         REQUIRE(result->is<Sum>());
         REQUIRE(result->size() == 3);
         REQUIRE(wick.stats().num_attempted_contractions == 2);
@@ -517,7 +517,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             wick.full_contractions(false).use_topology(false).compute());
         wick.stats().reset();
         result = wick.full_contractions(false).use_topology(false).compute();
-        result->rapid_canonicalize(deduce_named_indices);
+        canonicalize(result, deduce_named_indices);
         REQUIRE(result->is<Sum>());
         REQUIRE(result->size() == 3);
         REQUIRE(wick.stats().num_attempted_contractions == 6);
@@ -857,9 +857,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
-      const auto canon_opts =
-          CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Rapid);
-      canonicalize(result, named_indices_spec, canon_opts);
+      canonicalize(result, named_indices_spec);
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
@@ -1690,15 +1688,11 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         wick.reduce(wick_result_2);
       }
       rapid_simplify(wick_result_2);
-      {
-        const auto canon_opts = CanonicalizeOptions{}.copy_and_set(
-            CanonicalizationMethod::Complete);
-        canonicalize(wick_result_2, deduce_named_indices, canon_opts);
-      }
+      { canonicalize(wick_result_2, deduce_named_indices); }
       rapid_simplify(wick_result_2);
 
       // std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
-      REQUIRE(to_latex(wick_result_2) ==
+      REQUIRE(to_latex(prettify(wick_result_2, deduce_named_indices)) ==
               L"{{{4}}"
               L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{\\bar{t}^{{i_1}{i_2}}_{{a_"
               L"1}{a_2}}}}");
@@ -1783,16 +1777,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             wick.reduce(wick_result_2);
           }
           rapid_simplify(wick_result_2);
-          {
-            const auto canon_opts = CanonicalizeOptions{}.copy_and_set(
-                CanonicalizationMethod::Complete);
-            canonicalize(wick_result_2, deduce_named_indices, canon_opts);
-          }
+          { canonicalize(wick_result_2, deduce_named_indices); }
           rapid_simplify(wick_result_2);
 
           // std::wcout << wick_result_2.to_latex() << std::endl;
           REQUIRE(wick_result_2->size() == 3 /* factors */);
-          REQUIRE(to_latex(wick_result_2) ==
+          REQUIRE(to_latex(prettify(wick_result_2, deduce_named_indices)) ==
                   L"{{{4}}"
                   L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{"
                   L"t^{{i_"
@@ -2047,22 +2037,24 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);
-        REQUIRE(result2.to_latex() ==
+        // in the form meant for reading
+        REQUIRE(to_latex(prettify(result2, sequant::tests::explicit_named(
+                                               container::set<Index>{}))) ==
                 L"{ \\bigl("
+                L"{{\\bar{v}^{{e_1}{p_2}}_{{e_1}{p_1}}}{w^{}_{}[{e_1}]}"
+                L"{\\tilde{a}^{{p_1}}_{{p_2}}}} - "
+                L"{{{\\frac{1}{2}}}{\\bar{v}^{{p_2}{p_3}}_{{e_1}{p_1}}}{w^{}_{}"
+                L"[{e_1}]}"
+                L"{\\tilde{a}^{{e_1}{p_1}}_{{p_2}{p_3}}}} - "
+                L"{{{\\frac{1}{2}}}{\\bar{v}^{{e_1}{p_3}}_{{p_1}{p_2}}}{w^{}_{}"
+                L"[{e_1}]}"
+                L"{\\tilde{a}^{{p_1}{p_2}}_{{e_1}{p_3}}}} + "
                 L"{{{\\frac{1}{4}}}{\\bar{v}^{{p_3}{p_4}}_{{p_1}{p_2}}}{w^{}_{}"
                 L"[{e_1}]}"
                 L"{\\tilde{a}^{{p_1}{p_2}}_{{p_3}{p_4}}}} - "
                 L"{{{\\frac{1}{4}}}{\\bar{v}^{{p_3}{p_4}}_{{p_1}{p_2}}}{w^{}_{}"
                 L"[{p_5}]}"
-                L"{\\tilde{a}^{{p_1}{p_2}{p_5}}_{{p_3}{p_4}{p_5}}}} - "
-                L"{{{\\frac{1}{2}}}{\\bar{v}^{{e_1}{p_3}}_{{p_1}{p_2}}}{w^{}_{}"
-                L"[{e_1}]}"
-                L"{\\tilde{a}^{{p_1}{p_2}}_{{e_1}{p_3}}}} - "
-                L"{{{\\frac{1}{2}}}{\\bar{v}^{{p_2}{p_3}}_{{e_1}{p_1}}}{w^{}_{}"
-                L"[{e_1}]}"
-                L"{\\tilde{a}^{{e_1}{p_1}}_{{p_2}{p_3}}}} + "
-                L"{{\\bar{v}^{{e_1}{p_2}}_{{e_1}{p_1}}}{w^{}_{}[{e_1}]}"
-                L"{\\tilde{a}^{{p_1}}_{{p_2}}}}\\bigr) }");
+                L"{\\tilde{a}^{{p_1}{p_2}{p_5}}_{{p_3}{p_4}{p_5}}}}\\bigr) }");
       }
 
       // simplified example with "diagonal" operator from the paper, inspired by
@@ -2314,15 +2306,9 @@ TEST_CASE("wick_input_canonicalization", "[algorithms][wick][valgrind_skip]") {
   };
 
   SECTION("a Product input is fully canonicalized") {
-    // N.B. the input is canonicalized in place
-    auto input = make_h2t2();
+    // N.B. the input is canonicalized in place, and not at all if already
+    // canonical, with the same result
     ExprPtr result;
-    const auto nrapid = count_product_canonicalizations(
-        [&] { result = FWickTheorem(input, deduce_named_indices).compute(); },
-        {CanonicalizationMethod::Rapid});
-    REQUIRE(nrapid == 0);
-
-    // and not at all if already canonical, with the same result
     auto canonical_input = make_h2t2();
     canonicalize(canonical_input, deduce_named_indices);
     REQUIRE(canonical_input->is_canonical(deduce_named_indices));
@@ -2346,8 +2332,7 @@ TEST_CASE("wick_input_canonicalization", "[algorithms][wick][valgrind_skip]") {
     // its summands are left in the canonical form that summands of a Sum get
     const auto opts = CanonicalizeOptions{};
     const auto summand_opts =
-        opts.copy_and_set(opts.method | CanonicalizationMethod::Topological)
-            .copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No);
+        opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No);
     REQUIRE(canonical_input->size() == 2);
     for (const auto& summand : *canonical_input)
       REQUIRE(summand->is_canonical(deduce_named_indices, summand_opts));
@@ -2361,8 +2346,8 @@ TEST_CASE("wick_input_canonicalization", "[algorithms][wick][valgrind_skip]") {
     const auto nnoncanonical = count_product_canonicalizations([&] {
       result = FWickTheorem(noncanonical_input, deduce_named_indices).compute();
     });
-    // the rapid and the full pass over each summand are skipped
-    REQUIRE(ncanonical + 4 == nnoncanonical);
+    // the canonicalization of each summand is skipped
+    REQUIRE(ncanonical + 2 == nnoncanonical);
     REQUIRE(to_latex(canonical_result) == to_latex(result));
   }
 

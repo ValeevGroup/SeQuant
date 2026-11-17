@@ -241,30 +241,13 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return {};  // by default do nothing and return nullptr
   }
 
-  /// Performs approximate, but fast, canonicalization of @c this and returns
-  /// the byproduct of canonicalization (e.g. phase) The default is to use
-  /// canonicalize(), unless overridden in the derived class.
-  /// @param named_indices the indices that canonicalization must not rename
-  /// @param opts the canonicalization options; the method is Rapid regardless
-  /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
-  /// generated
-  virtual ExprPtr rapid_canonicalize(
-      const NamedIndexSpec &named_indices,
-      CanonicalizeOptions opts =
-          CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Rapid)) {
-    return this->canonicalize(named_indices,
-                              opts.copy_and_set(CanonicalizationMethod::Rapid));
-  }
-
   /// @param named_indices the named indices of the canonicalization
   /// @param opts the canonicalization options
   /// @return true if this is the full canonical form that canonicalization
   /// with @p named_indices and @p opts produced, and since then neither this
   /// nor any of its subexpressions has been mutated or replaced, nor have the
   /// contexts in effect changed (see current_contexts_version())
-  /// @note always false if @p opts does not request Complete canonicalization,
-  /// the only method whose result is the same for every spelling of an
-  /// expression, or has presentation settings
+  /// @note always false if @p opts has presentation settings
   bool is_canonical(
       const NamedIndexSpec &named_indices,
       const CanonicalizeOptions &opts = CanonicalizeOptions{}) const;

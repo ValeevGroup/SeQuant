@@ -184,19 +184,13 @@ class Sum : public Expr {
   /// identical to the hash of the summand itself.
   hash_type memoizing_hash() const override;
 
-  /// @param multipass if true, will do a multipass canonicalization, with extra
-  /// cleanup pass after the deep canonization pass
-  ExprPtr canonicalize_impl(bool multipass, const NamedIndexSpec &named_indices,
+  /// canonicalizes the summands, then reduces them (see HashingAccumulator)
+  ExprPtr canonicalize_impl(const NamedIndexSpec &named_indices,
                             CanonicalizeOptions opt);
 
   ExprPtr canonicalize(
       const NamedIndexSpec &named_indices,
       CanonicalizeOptions opt = CanonicalizeOptions{}) override;
-
-  ExprPtr rapid_canonicalize(
-      const NamedIndexSpec &named_indices,
-      CanonicalizeOptions opts = CanonicalizeOptions{}.copy_and_set(
-          CanonicalizationMethod::Rapid)) override;
 
   bool static_equal(const Expr &that) const override;
 

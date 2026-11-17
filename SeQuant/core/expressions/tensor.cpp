@@ -97,6 +97,20 @@ bool has_repeated_index(const AbstractTensor &t) {
   return false;
 }
 
+/// @return whether @p t has an index, or a protoindex, that @p named_indices
+/// do not name, i.e. a dummy index that canonicalization names
+bool has_anonymous_index(const AbstractTensor &t,
+                         const NamedIndexSpec &named_indices) {
+  if (named_indices.deduce()) return false;
+  const auto &named = named_indices.indices();
+  for (const auto &idx : t._slots()) {
+    if (idx.nonnull() && !named.contains(idx)) return true;
+    for (const auto &proto : idx.proto_indices())
+      if (!named.contains(proto)) return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 ExprPtr canonicalize_tensor_leaf(
@@ -106,9 +120,12 @@ ExprPtr canonicalize_tensor_leaf(
   auto &tensor = leaf.as<AbstractTensor>();
   const auto contexts_version = current_contexts_version();
   ExprPtr byproduct;
-  if (has_repeated_index(tensor)) {
+  if (has_repeated_index(tensor) ||
+      has_anonymous_index(tensor, named_indices)) {
     // a repeated index is contracted, so this is a tensor network and is
-    // canonicalized as one, like a Product of tensors
+    // canonicalized as one, like a Product of tensors; so is a tensor with a
+    // dummy index, which only the canonicalization of the network names as
+    // it names the dummies of a product of this tensor
     TensorNetwork tn(static_cast<const Expr &>(leaf));
     byproduct = tn.canonicalize(detail::cardinal_tensor_labels(opts),
                                 named_indices, opts);

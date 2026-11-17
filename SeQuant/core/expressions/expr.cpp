@@ -121,14 +121,10 @@ const ExprPtr &Expr::back() const { return at(size() - 1); }
 
 namespace {
 
-/// only the topological stage followed by the lexicographic one produces a
-/// form that is the same for every spelling of an expression; only the
-/// library's form is recorded, so that a form produced with presentation
-/// settings is neither marked nor taken for canonical
+/// only the library's form is recorded, so that a form produced with
+/// presentation settings is neither marked nor taken for canonical
 bool is_full(const CanonicalizeOptions &opts) {
-  return (opts.method & CanonicalizationMethod::Complete) ==
-             CanonicalizationMethod::Complete &&
-         opts.is_internal_form();
+  return opts.is_internal_form();
 }
 
 /// @return the digest of everything other than the expression itself that
@@ -137,7 +133,6 @@ std::size_t canonicalization_key(const NamedIndexSpec &named_indices,
                                  const CanonicalizeOptions &opts,
                                  std::uint64_t contexts_version) {
   auto key = hash::value(contexts_version);
-  hash::combine(key, static_cast<int>(opts.method));
   hash::combine(key, static_cast<bool>(opts.ignore_named_index_labels));
   hash::combine(key, named_indices.deduce());
   if (!named_indices.deduce()) {

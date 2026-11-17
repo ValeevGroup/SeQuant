@@ -147,8 +147,7 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
   }
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
-               << ") input: " << to_latex() << std::endl;
+    std::wcout << "Product canonicalization input: " << to_latex() << std::endl;
   }
 
   // pull out all scalar factors to the front
@@ -210,8 +209,8 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
   // TODO evaluate product of Tensors (turn this into Products of Products)
 
   if (Logger::instance().canonicalize)
-    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
-               << ") result: " << to_latex() << std::endl;
+    std::wcout << "Product canonicalization result: " << to_latex()
+               << std::endl;
 
   return {};  // side effects are absorbed into the scalar_
 }
@@ -319,8 +318,8 @@ void Product::canonicalize_nested(const container::svector<ExprPtr *> &leaves,
                                   const NamedIndexSpec &named_indices,
                                   const CanonicalizeOptions &opts) {
   if (Logger::instance().canonicalize) {
-    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
-               << ") of nested products, input: " << to_latex() << std::endl;
+    std::wcout << "Product canonicalization of nested products, input: "
+               << to_latex() << std::endl;
   }
 
   const auto &cardinal_tensor_labels = detail::cardinal_tensor_labels(opts);
@@ -364,8 +363,8 @@ void Product::canonicalize_nested(const container::svector<ExprPtr *> &leaves,
   sort_factors(cardinal_tensor_labels, /* recursive = */ true);
 
   if (Logger::instance().canonicalize)
-    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
-               << ") of nested products, result: " << to_latex() << std::endl;
+    std::wcout << "Product canonicalization of nested products, result: "
+               << to_latex() << std::endl;
 }
 
 void Product::sort_factors(
@@ -468,12 +467,6 @@ ExprPtr Product::canonicalize(const NamedIndexSpec &named_indices,
   auto byproduct = this->canonicalize_impl(named_indices, opt);
   this->mark_canonical(named_indices, opt, contexts_version);
   return byproduct;
-}
-
-ExprPtr Product::rapid_canonicalize(const NamedIndexSpec &named_indices,
-                                    CanonicalizeOptions opt) {
-  SEQUANT_ASSERT(opt.method == CanonicalizationMethod::Rapid);
-  return this->canonicalize_impl(named_indices, opt);
 }
 
 bool Product::static_commutativity() const { return false; }

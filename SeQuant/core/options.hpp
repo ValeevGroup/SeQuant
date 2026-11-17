@@ -19,36 +19,6 @@
 
 namespace sequant {
 
-/// canonicalization methods
-enum class CanonicalizationMethod : std::uint8_t {
-  /// Enables use of expression topology in the canonicalization, may be
-  /// expensive.
-  /// @note Canonicalization of tensor networks must take into account the
-  ///       topology of the TN; this enables the use of canonical graph
-  ///       sort of all TN elements. By itself it leaves the order of named
-  ///       indices in (anti)symmetric slots to the graph, so its result
-  ///       depends on how an expression is spelled (e.g. a lone tensor vs the
-  ///       same tensor scaled) and may be aesthetically poor; Complete
-  ///       canonicalization does not.
-  Topological = 0b01,
-  /// Enables the use of rapid canonicalization based on lexicographic sort.
-  /// @note for TN this performs lexicographic sort of tensors, slots and
-  /// slot bundles, and indices. Produces aesthetically pleasing result,
-  /// but incomplete if some tensors are identical
-  Lexicographic = 0b10,
-  /// Enables use of Topological, then Lexicographic. Guaranteed to work even
-  /// if some tensors are identical, and the result is aesthetically pleasing.
-  Complete = Topological | Lexicographic,
-  /// Lexicographic = quick-and-dirty
-  Rapid = Lexicographic
-};
-
-CanonicalizationMethod operator&(CanonicalizationMethod m1,
-                                 CanonicalizationMethod m2);
-CanonicalizationMethod operator|(CanonicalizationMethod m1,
-                                 CanonicalizationMethod m2);
-std::wstring to_wstring(CanonicalizationMethod m);
-
 /// tag that requests the named indices of an expression to be deduced as the
 /// indices that occur once in each of its products
 /// @warning deduction is a heuristic that fails for expressions in which an
@@ -160,23 +130,13 @@ struct LexicographicCompareOptions {
 /// default (internal-form) options; it is increased whenever that form
 /// changes, so that records keyed by canonical forms (e.g. schedule documents,
 /// see eval::schedule::ContextRecord) can detect that they are stale
-inline constexpr int canonical_form_version = 1;
+inline constexpr int canonical_form_version = 2;
 
 /// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
 
-  /// TN canonicalization method
-  /// @internal
-  /// TODO revert to CanonicalizationMethod::Topological once issues with
-  /// external index handling exemplified by
-  /// https://github.com/ValeevGroup/SeQuant/pull/406
-  /// https://github.com/ValeevGroup/SeQuant/issues/426
-  /// and https://github.com/ValeevGroup/SeQuant/issues/287
-  /// is fixed
-  /// @endinternal
-  CanonicalizationMethod method = CanonicalizationMethod::Complete;
   /// whether the graph-based canonicalization ignores the labels of named
   /// indices, so that the structure of the result does not depend on them;
   /// named indices that an automorphism of the network can exchange are then
@@ -186,14 +146,18 @@ struct CanonicalizeOptions {
   /// labels distinguished regardless.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
   /// presentation settings; null selects the library's canonical form, which
-  /// is the only one recorded by the canonical mark of an Expr
+  /// is the only one recorded by the canonical mark of an Expr. With
+  /// presentation settings, the canonical form is followed by a presentation
+  /// stage (see prettify()), which orders the tensors of each network by
+  /// label (cardinal tensor labels first), names its dummies in the order of
+  /// the slots and canonicalizes each tensor with the given canonicalizers and
+  /// comparers
   std::shared_ptr<const CanonicalizationPresentation> presentation = nullptr;
 
   /// @return true if these options produce the library's canonical form, i.e.
   /// have no presentation settings
   bool is_internal_form() const { return presentation == nullptr; }
 
-  CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
   CanonicalizeOptions copy_and_set(
       std::shared_ptr<const CanonicalizationPresentation>) const;
@@ -205,15 +169,14 @@ struct CanonicalizeOptions {
     // the bindings name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY
     // tag), so that a member added to CanonicalizeOptions fails to compile here
     // until it is compared
-    const auto& [guard_a, method_a, ignore_labels_a, presentation_a] = a;
-    const auto& [guard_b, method_b, ignore_labels_b, presentation_b] = b;
+    const auto& [guard_a, ignore_labels_a, presentation_a] = a;
+    const auto& [guard_b, ignore_labels_b, presentation_b] = b;
     (void)guard_a;
     (void)guard_b;
     const bool same_presentation = presentation_a == presentation_b ||
                                    (presentation_a && presentation_b &&
                                     *presentation_a == *presentation_b);
-    return method_a == method_b && ignore_labels_a == ignore_labels_b &&
-           same_presentation;
+    return ignore_labels_a == ignore_labels_b && same_presentation;
   }
 };
 

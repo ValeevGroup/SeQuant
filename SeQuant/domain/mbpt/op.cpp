@@ -1486,20 +1486,39 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   }
 }
 
+/// expectation_value_impl() of a projected expression: canonicalization names
+/// the projector indices, which the external indices need not name, as it
+/// names the dummies, so they are given back the labels of the projectors of
+/// @p expr , or named by the convention if it has none (the projectors come
+/// from operators) or they have temporary indices (see
+/// sequant::detail::restore_or_name_projectors())
+ExprPtr projected_expectation_value(ExprPtr expr,
+                                    const NamedIndexSpec& external_indices,
+                                    OpConnections<int> connect,
+                                    OpConnections<int> avoid, bool use_top,
+                                    bool full_contractions) {
+  const auto projectors = sequant::detail::projectors(expr);
+  auto result = expectation_value_impl(std::move(expr), external_indices,
+                                       std::move(connect), std::move(avoid),
+                                       use_top, full_contractions);
+  sequant::detail::restore_or_name_projectors(result, projectors);
+  return result;
+}
+
 ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
                EVOptions<int> opts) {
   const bool full_contractions = detail::ref_av_full_contractions();
   detail::validate_ref_av_connections(opts, full_contractions);
-  return expectation_value_impl(expr, external_indices, opts.connect,
-                                opts.do_not_connect, opts.use_topology,
-                                full_contractions);
+  return projected_expectation_value(expr, external_indices, opts.connect,
+                                     opts.do_not_connect, opts.use_topology,
+                                     full_contractions);
 }
 
 ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
                EVOptions<int> opts) {
-  return expectation_value_impl(expr, external_indices, opts.connect,
-                                opts.do_not_connect, opts.use_topology,
-                                /* full_contractions*/ true);
+  return projected_expectation_value(expr, external_indices, opts.connect,
+                                     opts.do_not_connect, opts.use_topology,
+                                     /* full_contractions*/ true);
 }
 
 ResultExpr ref_av(const ResultExpr& expr, EVOptions<int> opts) {

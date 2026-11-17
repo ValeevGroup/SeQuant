@@ -169,21 +169,37 @@ ExprPtr expectation_value_impl(ExprPtr expr,
       "type");
 }
 
+/// expectation_value_impl() of a projected expression, its projectors named
+/// as by tensor::projected_expectation_value()
+ExprPtr projected_expectation_value(ExprPtr expr,
+                                    const NamedIndexSpec& external_indices,
+                                    const OpConnections<std::wstring>& connect,
+                                    const OpConnections<std::wstring>& avoid,
+                                    bool use_topology, bool screen,
+                                    bool skip_clone, bool full_contractions) {
+  const auto projectors = sequant::detail::projectors(expr);
+  auto result = expectation_value_impl(std::move(expr), external_indices,
+                                       connect, avoid, use_topology, screen,
+                                       skip_clone, full_contractions);
+  sequant::detail::restore_or_name_projectors(result, projectors);
+  return result;
+}
+
 ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
                EVOptions<std::wstring> opts) {
   const bool full_contractions = detail::ref_av_full_contractions();
   detail::validate_ref_av_connections(opts, full_contractions);
-  return expectation_value_impl(
+  return projected_expectation_value(
       expr, external_indices, opts.connect, opts.do_not_connect,
       opts.use_topology, opts.screen, opts.skip_clone, full_contractions);
 }
 
 ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
                EVOptions<std::wstring> opts) {
-  return expectation_value_impl(expr, external_indices, opts.connect,
-                                opts.do_not_connect, opts.use_topology,
-                                opts.screen, opts.skip_clone,
-                                /* full_contractions */ true);
+  return projected_expectation_value(expr, external_indices, opts.connect,
+                                     opts.do_not_connect, opts.use_topology,
+                                     opts.screen, opts.skip_clone,
+                                     /* full_contractions */ true);
 }
 
 ResultExpr ref_av(const ResultExpr& expr, EVOptions<std::wstring> opts) {

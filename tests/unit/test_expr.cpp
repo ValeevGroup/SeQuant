@@ -1029,8 +1029,7 @@ TEST_CASE("expr", "[elements]") {
     {  // Product::deep_copy keeps the canonical mark
       ExprPtr e = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
                   ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
-      const auto opts =
-          CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Complete);
+      const auto opts = CanonicalizeOptions{};
       e->mark_canonical(deduce_named_indices, opts);
       REQUIRE(e->is_canonical(deduce_named_indices, opts));
       REQUIRE(e->as<Product>().deep_copy().is_canonical(deduce_named_indices,
@@ -2164,9 +2163,10 @@ TEST_CASE("expr_type_id", "[elements]") {
 TEST_CASE("canonical_mark", "[elements]") {
   using namespace sequant;
 
-  const auto opts =
-      CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Complete);
-  const auto rapid_opts = opts.copy_and_set(CanonicalizationMethod::Rapid);
+  const auto opts = CanonicalizeOptions{};
+  // options with presentation settings, whose result is not the canonical form
+  const auto presentation_opts =
+      opts.copy_and_set(std::make_shared<const CanonicalizationPresentation>());
 
   auto make_product = [] {
     return ex<Constant>(rational{1, 2}) *
@@ -2194,12 +2194,12 @@ TEST_CASE("canonical_mark", "[elements]") {
     // ... and the named indices it was recorded with
     REQUIRE(!e->is_canonical(sequant::tests::explicit_named({Index{L"i_1"}}),
                              opts));
-    // ... and never for rapid canonicalization
-    REQUIRE(!e->is_canonical(deduce_named_indices, rapid_opts));
-    // only full canonicalization marks
+    // ... and never for canonicalization with presentation settings
+    REQUIRE(!e->is_canonical(deduce_named_indices, presentation_opts));
+    // only canonicalization to the canonical form marks
     auto r = make_sum();
-    r->mark_canonical(deduce_named_indices, rapid_opts);
-    REQUIRE(!r->is_canonical(deduce_named_indices, rapid_opts));
+    r->mark_canonical(deduce_named_indices, presentation_opts);
+    REQUIRE(!r->is_canonical(deduce_named_indices, presentation_opts));
     REQUIRE(!r->is_canonical(deduce_named_indices, opts));
     // the subexpressions are not marked
     REQUIRE(!(*e)[0]->is_canonical(deduce_named_indices, opts));

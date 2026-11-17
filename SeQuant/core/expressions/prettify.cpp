@@ -84,7 +84,6 @@ CanonicalizeOptions canonicalize_options(const PrettifyOptions& opts) {
   // N.B. as when canonicalizing the summands of a sum, the labels of the named
   // indices are taken into account
   return CanonicalizeOptions{
-      .method = CanonicalizationMethod::Complete,
       .ignore_named_index_labels =
           CanonicalizeOptions::IgnoreNamedIndexLabel::No,
       .presentation = std::make_shared<const CanonicalizationPresentation>(

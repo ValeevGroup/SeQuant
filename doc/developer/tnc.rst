@@ -73,17 +73,30 @@ and the vertices an automorphism must fix. When a generator of phase -1 is found
 ``ex<Constant>(0)`` and leaves the tensors as they were. :doc:`Wick's theorem <wick>` applies the same test to the input of its topology
 analysis.
 
-Topological vs. lexicographic canonicalization
-----------------------------------------------------
+Canonical form and presentation stage
+----------------------------------------
 
-``CanonicalizeOptions::method`` (``SeQuant/core/options.hpp``) selects between two independently useful strategies:
+``TensorNetworkV3::canonicalize`` always runs the bliss-based procedure above, which fixes the order of the tensors and the names
+of the dummy indices, and then canonicalizes each tensor individually (``canonicalize_individual_tensors``), which orders the
+indices in the slots that the symmetry of the tensor exchanges, as the canonicalization of a lone tensor does. The second step
+does not change the network, so the result is still determined by the network alone; without it the order of, e.g., the named
+indices in the bra of an antisymmetric tensor would be left to the graph, and a lone tensor and the same tensor in a product would
+be spelled differently. This is the library's canonical form. It is not meant to be read.
 
-- ``Topological`` is the bliss-based procedure above — the only one guaranteed correct once the network contains indistinguishable
-  tensors, at the cost of building and canonicalizing a graph.
-- ``Lexicographic`` is a cheap label-based sort of tensors, slots, and indices. It produces a more human-readable ordering but is
-  incomplete on its own: it can fail to recognize two networks as equal when they contain genuinely identical tensors.
-- ``Complete`` (the default) runs ``Topological`` then ``Lexicographic``, combining correctness with a readable result; ``Rapid`` is
-  ``Lexicographic`` alone, for when speed matters more than completeness.
+With presentation settings (``CanonicalizeOptions::presentation``, set by :func:`sequant::prettify`) a presentation stage follows: the
+tensors are sorted by label (cardinal tensor labels first), the dummy indices are renamed in the order of the slots, and each tensor
+is canonicalized with the presentation's canonicalizers and comparers. Its result is meant to be read and is not recorded as the
+canonical form.
+
+Tensors that do not commute (e.g. normal operators) keep their relative order: of the orders that keep it, the one that is smallest
+by the canonical order of the tensor vertices is chosen (a sort by a comparison that takes non-commuting tensors for equivalent would
+leave an input-dependent order, since that comparison is not transitive). A tensor for which the options give a nondefault
+canonicalizer keeps the order of its slots in the graph stage, so that the canonicalizer decides it (e.g. normal operators in
+:class:`sequant::WickTheorem`, whose canonicalizer keeps them as normalized).
+
+Indices with protoindices are renamed in one pass in which every index whose image differs is given its image explicitly (its
+renamed label with its renamed protoindices): ``Index::transform`` renames the protoindices of an index that is not in the
+replacement map and then looks it up again, which would rename it a second time if the result happens to be in the map.
 
 Subtleties for contributors
 --------------------------------
@@ -117,10 +130,8 @@ A fully canonicalized expression carries a mark that makes canonicalizing it aga
 canonicalization without tracking whether it was already done. The free ``canonicalize()``, as well as ``Product::canonicalize()``,
 ``Sum::canonicalize()``, ``Tensor::canonicalize()`` and ``TensorPower::canonicalize()``, record their result with
 ``Expr::mark_canonical(named_indices, opts)`` and return at once, with no byproduct, for an expression that
-``Expr::is_canonical(named_indices, opts)``. Only ``Complete`` canonicalization to the library's canonical form (options without
-presentation settings) marks; a form with presentation settings is neither marked nor treated as canonical. Of the other
-methods, ``Lexicographic`` alone is incomplete, and ``Topological`` alone leaves the order of named indices in (anti)symmetric
-slots to the graph, so that, e.g., a lone tensor and the same tensor scaled end up spelled differently.
+``Expr::is_canonical(named_indices, opts)``. Only canonicalization to the library's canonical form (options without
+presentation settings) marks; a form with presentation settings is neither marked nor treated as canonical.
 Since the summands of a ``Sum`` are marked by their own canonicalization, re-canonicalizing a ``Sum`` after some of its summands
 changed canonicalizes only those.
 

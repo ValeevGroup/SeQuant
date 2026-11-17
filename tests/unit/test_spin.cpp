@@ -1255,7 +1255,10 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     auto result_2 = closed_shell_spintrace(
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
-    simplify(result_2, deduce_named_indices);
+    // the symmetrizer carries the external indices, which S_maps() reads off
+    // it, so that its indices are not named, but given back their labels
+    sequant::detail::simplify_projected(result_2,
+                                        sequant::tests::explicit_named({}));
     result_2 = S_maps(result_2);
     simplify(result_2, deduce_named_indices);
 
@@ -1519,9 +1522,14 @@ SECTION("Relation in spin P operators") {
   auto A3 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                        ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm);
 
+  // the antisymmetrizer carries external indices, which expand_A_op() reads
+  // off it, so that they are kept
+  const auto externals = sequant::tests::explicit_named(
+      container::set<Index>{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"},
+                            Index{L"a_1"}, Index{L"a_2"}, Index{L"a_3"}});
   p6_result = A_12 * p6_result;
   expand(p6_result);
-  canonicalize(p6_result, deduce_named_indices);
+  canonicalize(p6_result, externals);
   p6_result = expand_A_op(p6_result);
   simplify(p6_result, deduce_named_indices);
 

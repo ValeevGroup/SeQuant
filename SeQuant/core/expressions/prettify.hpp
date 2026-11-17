@@ -13,9 +13,10 @@ namespace sequant {
 struct PrettifyOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
 
-  /// whether to canonicalize (Complete) with the #presentation settings before
-  /// sorting; if false, the summands and the commuting factors of the
-  /// expression are only sorted
+  /// whether to canonicalize with the #presentation settings before sorting,
+  /// i.e. to the canonical form followed by its presentation stage (see
+  /// CanonicalizeOptions::presentation); if false, the summands and the
+  /// commuting factors of the expression are only sorted
   bool recanonicalize = true;
   /// the presentation settings: the canonicalizers and comparers used to
   /// recanonicalize, and the cardinal tensor labels used to recanonicalize

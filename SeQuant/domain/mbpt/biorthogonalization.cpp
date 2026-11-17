@@ -696,15 +696,18 @@ ExprPtr biorthogonal_transform_pre_nnsproject_impl(
     if (ext_idxs.size() > 1) {
       bt = S_tensor * bt;
     }
-    simplify(bt, explicit_named_indices(external_indices(bt)));
+    sequant::detail::simplify_projected(
+        bt, explicit_named_indices(external_indices(bt)));
 
     bt = S_maps(bt);
-    canonicalize(bt, explicit_named_indices(external_indices(bt)));
+    sequant::detail::canonicalize_projected(
+        bt, explicit_named_indices(external_indices(bt)));
     bt = WK_biorthogonalization_filter_impl(bt, ext_idxs);
   }
 
   bt = S_tensor * bt;
-  simplify(bt, explicit_named_indices(external_indices(bt)));
+  sequant::detail::simplify_projected(
+      bt, explicit_named_indices(external_indices(bt)));
 
   return bt;
 }

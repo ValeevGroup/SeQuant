@@ -262,6 +262,79 @@ bool for_each_symmetrized_term(
     const std::function<void(
         ExprPtr& part, const container::svector<Tensor>& symmetrizers)>& f);
 
+/// @return whether @p tensor is a projector, i.e. is labeled
+/// reserved::antisymm_label() or reserved::symm_label()
+bool is_projector(const Tensor& tensor);
+
+/// Renames the indices of a term P' * @p rest , P' being the projector
+/// @p projector , so that P' becomes @p target : the slots of @p projector are
+/// matched to those of @p target as the symmetry of the projector allows
+/// (see symmetrizer_group()), each index of @p projector is renamed to the
+/// index of the matched slot of @p target , and the indices of @p rest that
+/// have the labels of the indices of @p target , but are not renamed so, are
+/// renamed to fresh labels. This is only valid if the indices of
+/// @p projector are dummies of the term, i.e. occur nowhere else than in
+/// P' * @p rest .
+/// @return the renamed @p rest , with the phase of the permutation of the
+/// slots of @p projector , such that P' * @p rest = @p target * result, or
+/// nullopt if @p target does not have the label, the symmetries and the slot
+/// spaces of @p projector (up to its symmetry) or the slots are not of the
+/// supported form (aux, null or protoindexed indices)
+std::optional<ExprPtr> rename_to_projector(const ExprPtr& rest,
+                                           const Tensor& projector,
+                                           const Tensor& target);
+
+/// @return the distinct projectors (see is_projector()) of @p expr
+container::svector<Tensor> projectors(const ExprPtr& expr);
+
+/// Renames the indices of each term of @p expr (each summand, or @p expr
+/// itself) that has a projector as a factor so that the projector is one of
+/// @p targets (see rename_to_projector()). The canonicalization of a
+/// projected expression (whose projector indices are not named, so that terms
+/// that differ only by a relabeling of them merge, see
+/// without_projector_indices()) names the projector indices as it names the
+/// other dummies, so that the projector of each term carries labels of its
+/// own; this gives them back the labels of the projectors of the input.
+/// @param expr an expression whose projector indices are dummies
+/// @param targets the projectors to give the terms, e.g. projectors() of the
+/// expression before canonicalization
+/// @throw Exception if a projector of a term matches no target, or more than
+/// one that differ (and is none of them)
+void restore_projectors(ExprPtr& expr,
+                        const container::svector<Tensor>& targets);
+
+/// @return @p projector with its indices numbered from 1 within each space
+/// in the order of its slots (bra, then ket), the protoindices of an index
+/// renamed as the indices of the projector they are (e.g. Â{i_7,i_3;a_9,a_4}
+/// becomes Â{i_1,i_2;a_1,a_2})
+Tensor conventional_projector(const Tensor& projector);
+
+/// Renames the indices of each term of @p expr that has a projector as a
+/// factor so that its projector is conventional_projector() of itself (see
+/// restore_projectors()); the convention by which the projector of an
+/// expression derived from operators, e.g. a projected expectation value,
+/// whose projectors have temporary indices of their own, is named
+void name_projectors(ExprPtr& expr);
+
+/// restore_projectors() with @p targets if they have only ordinary (not
+/// temporary, see Index::min_tmp_index()) indices, else name_projectors(): the
+/// labels of projectors made with temporary indices (e.g. by operators) are
+/// not meant to be kept
+void restore_or_name_projectors(ExprPtr& expr,
+                                const container::svector<Tensor>& targets);
+
+/// simplify() of a projected expression whose projector indices are not
+/// named, followed by restore_or_name_projectors() with the projectors of
+/// @p expr as they were
+/// @param expr an expression
+/// @param named_indices the named indices; should not include the indices of
+/// the projectors (see without_projector_indices())
+ExprPtr& simplify_projected(ExprPtr& expr, const NamedIndexSpec& named_indices);
+
+/// canonicalize() counterpart of simplify_projected()
+ExprPtr& canonicalize_projected(ExprPtr& expr,
+                                const NamedIndexSpec& named_indices);
+
 }  // namespace detail
 
 /// Recursively canonicalizes the expression of a ResultExpr, with the indices

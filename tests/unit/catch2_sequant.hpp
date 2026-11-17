@@ -131,14 +131,9 @@ class LineAtomicWStreamBuf : public std::wstreambuf {
 
 /// @return the number of Product canonicalizations performed by @p f , as
 /// reported by the canonicalization Logger
-/// @param methods the canonicalization methods to count
 /// @note @p f may canonicalize concurrently
 template <typename F>
-std::size_t count_product_canonicalizations(
-    F &&f, std::initializer_list<CanonicalizationMethod> methods = {
-               CanonicalizationMethod::Topological,
-               CanonicalizationMethod::Lexicographic,
-               CanonicalizationMethod::Complete}) {
+std::size_t count_product_canonicalizations(F &&f) {
   struct Capture {
     bool logged = Logger::instance().canonicalize;
     LineAtomicWStreamBuf buf;
@@ -152,13 +147,10 @@ std::size_t count_product_canonicalizations(
   std::forward<F>(f)();
   const auto log = capture.buf.str();
   std::size_t count = 0;
-  for (const auto method : methods) {
-    const auto key =
-        L"Product canonicalization(" + to_wstring(method) + L") input: ";
-    for (auto pos = log.find(key); pos != std::wstring::npos;
-         pos = log.find(key, pos + key.size()))
-      ++count;
-  }
+  const std::wstring key = L"Product canonicalization input: ";
+  for (auto pos = log.find(key); pos != std::wstring::npos;
+       pos = log.find(key, pos + key.size()))
+    ++count;
   return count;
 }
 /// @return the open indices of the lone tensor @p t , i.e. those that occur
@@ -175,6 +167,13 @@ inline ResultExpr deduced_result(const ExprPtr &expr) {
   return ResultExpr(bra(groups.bra), ket(groups.ket), aux(groups.aux),
                     Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                     ColumnSymmetry::Nonsymm, std::nullopt, expr);
+}
+
+/// @return the options that canonicalize with the default presentation
+/// settings, i.e. to the canonical form followed by its presentation stage
+inline CanonicalizeOptions presentation_options() {
+  return CanonicalizeOptions{
+      .presentation = std::make_shared<const CanonicalizationPresentation>()};
 }
 
 /// @return the explicit named indices @p indices (as the library derives them

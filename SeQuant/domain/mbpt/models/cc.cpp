@@ -562,8 +562,10 @@ std::vector<ExprPtr> CC::eom_r_ucc(
       // block's external ones.
       if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
     }
+    // the projector carries the external indices
+    ExprPtr block = acc;
     result.at(static_cast<size_t>(min(bp, bh))) =
-        simplify(ExprPtr{acc}, explicit_named_indices({}));
+        sequant::detail::simplify_projected(block, explicit_named_indices({}));
   }
   return result;
 }

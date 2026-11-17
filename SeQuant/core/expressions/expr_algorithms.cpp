@@ -17,8 +17,10 @@
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/range/primitives.hpp>
 
@@ -370,9 +372,41 @@ std::optional<ExprPtr> canonicalize_term_in_one_pass(
   }
   if (!canonical) return std::nullopt;
 
-  // reorder the slots of S' so that each holds an index of the space of the
-  // same slot of S: S' = sign * S'' ; Â: bra and ket independently, with
-  // parity; Ŝ: columns
+  // S' under the label of S, so that its slots can be matched to those of S
+  const Tensor relabeled(
+      symmetrizer.label(), bra(indices(canonical->bra())),
+      ket(indices(canonical->ket())),
+      TensorSymmetries{.perm = symmetrizer.symmetry(),
+                       .braket = symmetrizer.braket_symmetry(),
+                       .column = symmetrizer.column_symmetry()});
+  return detail::rename_to_projector(ExprPtr(rest), relabeled, symmetrizer);
+}
+
+}  // namespace
+
+bool detail::is_projector(const Tensor& tensor) {
+  return tensor.label() == reserved::antisymm_label() ||
+         tensor.label() == reserved::symm_label();
+}
+
+std::optional<ExprPtr> detail::rename_to_projector(const ExprPtr& rest,
+                                                   const Tensor& projector,
+                                                   const Tensor& target) {
+  if (projector.label() != target.label() ||
+      projector.symmetry() != target.symmetry() ||
+      projector.braket_symmetry() != target.braket_symmetry() ||
+      projector.column_symmetry() != target.column_symmetry() ||
+      projector.bra_rank() != target.bra_rank() ||
+      projector.ket_rank() != target.ket_rank() || !projector.aux().empty() ||
+      !target.aux().empty())
+    return std::nullopt;
+  for (const auto* t : {&projector, &target})
+    for (const auto& idx : t->const_indices())
+      if (!idx.nonnull()) return std::nullopt;
+
+  // reorder the slots of the projector so that each holds an index of the
+  // space of the same slot of the target: P' = sign * P'' ; Â: bra and ket
+  // independently, with parity; Ŝ: columns
   container::map<Index, Index> rename;
   int sign = 1;
   auto slots = [](const auto& range) {
@@ -380,65 +414,297 @@ std::optional<ExprPtr> canonicalize_term_in_one_pass(
     for (const auto& idx : range) result.emplace_back(idx, idx);
     return result;
   };
-  if (symmetrizer.symmetry() != Symmetry::Nonsymm) {
+  if (target.symmetry() != Symmetry::Nonsymm) {
     for (const bool is_bra : {true, false}) {
-      const auto target =
-          is_bra ? slots(symmetrizer.bra()) : slots(symmetrizer.ket());
+      const auto goal = is_bra ? slots(target.bra()) : slots(target.ket());
       const auto source =
-          is_bra ? slots(canonical->bra()) : slots(canonical->ket());
-      const auto q = match_spaces(target, source);
+          is_bra ? slots(projector.bra()) : slots(projector.ket());
+      const auto q = match_spaces(goal, source);
       if (!q) return std::nullopt;
-      if (symmetrizer.symmetry() == Symmetry::Antisymm) sign *= parity(*q);
+      if (target.symmetry() == Symmetry::Antisymm) sign *= parity(*q);
       for (std::size_t k = 0; k != q->size(); ++k)
-        rename.emplace(source[(*q)[k]].first, target[k].first);
+        rename.emplace(source[(*q)[k]].first, goal[k].first);
     }
   } else {
-    if (symmetrizer.bra_rank() != symmetrizer.ket_rank()) return std::nullopt;
-    container::svector<std::pair<Index, Index>> target, source;
-    for (std::size_t k = 0; k != symmetrizer.bra_rank(); ++k) {
-      target.emplace_back(symmetrizer.bra()[k], symmetrizer.ket()[k]);
-      source.emplace_back(canonical->bra()[k], canonical->ket()[k]);
+    if (target.bra_rank() != target.ket_rank()) return std::nullopt;
+    container::svector<std::pair<Index, Index>> goal, source;
+    for (std::size_t k = 0; k != target.bra_rank(); ++k) {
+      goal.emplace_back(target.bra()[k], target.ket()[k]);
+      source.emplace_back(projector.bra()[k], projector.ket()[k]);
     }
-    const bool columns = symmetrizer.column_symmetry() == ColumnSymmetry::Symm;
-    const auto q = columns ? match_spaces(target, source)
+    const bool columns = target.column_symmetry() == ColumnSymmetry::Symm;
+    const auto q = columns ? match_spaces(goal, source)
                            : std::optional<std::vector<std::size_t>>{};
     if (!q) {
       // no symmetry to reorder by: the slots must match as they are
       if (columns) return std::nullopt;
-      for (std::size_t k = 0; k != target.size(); ++k) {
-        if (source[k].first.space() != target[k].first.space() ||
-            source[k].second.space() != target[k].second.space())
+      for (std::size_t k = 0; k != goal.size(); ++k) {
+        if (source[k].first.space() != goal[k].first.space() ||
+            source[k].second.space() != goal[k].second.space())
           return std::nullopt;
-        rename.emplace(source[k].first, target[k].first);
-        rename.emplace(source[k].second, target[k].second);
+        rename.emplace(source[k].first, goal[k].first);
+        rename.emplace(source[k].second, goal[k].second);
       }
     } else {
       for (std::size_t k = 0; k != q->size(); ++k) {
-        rename.emplace(source[(*q)[k]].first, target[k].first);
-        rename.emplace(source[(*q)[k]].second, target[k].second);
+        rename.emplace(source[(*q)[k]].first, goal[k].first);
+        rename.emplace(source[(*q)[k]].second, goal[k].second);
       }
     }
   }
 
-  // the dummies of the other factors that have the labels the indices of S
-  // are given back are renamed out of the way
-  container::set<std::wstring> taken;
-  for (const auto& idx : get_used_indices(product)) taken.emplace(idx.label());
-  for (const auto& idx : symmetrizer.const_indices())
-    taken.emplace(idx.label());
-  IndexFactory fresh([&taken](const Index& idx) {
-    return !taken.contains(std::wstring(idx.label()));
-  });
-  container::set<std::wstring> target_labels;
-  for (const auto& idx : symmetrizer.const_indices())
-    target_labels.emplace(idx.label());
-  for (const auto& idx : get_used_indices(ExprPtr(rest)))
-    if (!rename.contains(idx) &&
-        target_labels.contains(std::wstring(idx.label())))
-      rename.emplace(idx, fresh.make(idx));
+  // the protoindices of a renamed index must be renamed as the index is, so
+  // that renaming the index and its protoindices (see Index::transform())
+  // agree
+  for (const auto& [from, to] : rename) {
+    if (!from.has_proto_indices() && !to.has_proto_indices()) continue;
+    const auto& protos = from.proto_indices();
+    if (protos.size() != to.proto_indices().size()) return std::nullopt;
+    container::set<Index> images;
+    for (const auto& proto : protos) {
+      const auto it = rename.find(proto);
+      images.insert(it == rename.end() ? proto : it->second);
+    }
+    if (images != (to.proto_indices() | ranges::to<container::set<Index>>()))
+      return std::nullopt;
+  }
 
-  return transform_expr(ExprPtr(rest), rename, sign);
+  // the dummies of the other factors that have the labels the indices of the
+  // projector are given are renamed out of the way
+  // N.B. the indices of the rest include those that occur only as
+  // protoindices
+  container::set<Index> rest_indices;
+  for (const auto& idx : get_used_indices(rest)) {
+    rest_indices.insert(idx);
+    for (const auto& proto : idx.proto_indices()) rest_indices.insert(proto);
+  }
+  container::set<std::wstring> taken;
+  for (const auto& idx : rest_indices) taken.emplace(idx.label());
+  for (const auto& idx : projector.const_indices()) taken.emplace(idx.label());
+  for (const auto& idx : target.const_indices()) taken.emplace(idx.label());
+  // N.B. ordinary (not temporary) labels, the lowest that are not taken
+  IndexFactory fresh(
+      [&taken](const Index& idx) {
+        return !taken.contains(std::wstring(idx.label()));
+      },
+      1);
+  container::set<std::wstring> target_labels;
+  for (const auto& idx : target.const_indices())
+    target_labels.emplace(idx.label());
+  // N.B. the indices without protoindices first; a renamed index with
+  // protoindices is given the images of its protoindices (see
+  // Index::transform(), which does not rename the protoindices of an index
+  // that it renames)
+  for (const bool with_protos : {false, true}) {
+    for (const auto& idx : rest_indices) {
+      if (rename.contains(idx) || idx.has_proto_indices() != with_protos ||
+          !target_labels.contains(std::wstring(idx.label())))
+        continue;
+      const Index base = fresh.make(Index(idx.basis()));
+      taken.emplace(base.label());
+      if (!with_protos) {
+        rename.emplace(idx, base);
+        continue;
+      }
+      container::vector<Index> protos;
+      for (const auto& proto : idx.proto_indices()) {
+        const auto it = rename.find(proto);
+        protos.push_back(it == rename.end() ? proto : it->second);
+      }
+      rename.emplace(
+          idx, Index(base, std::move(protos), idx.symmetric_proto_indices()));
+    }
+  }
+
+  // every other index whose protoindices are renamed is given its image
+  // explicitly: Index::transform() renames the protoindices of an index that
+  // is not in the map and then looks the result up again, which would rename
+  // an index whose image happens to be a key of the map a second time
+  for (const auto& idx : rest_indices) {
+    if (!idx.has_proto_indices() || rename.contains(idx)) continue;
+    bool renamed = false;
+    container::vector<Index> protos;
+    for (const auto& proto : idx.proto_indices()) {
+      const auto it = rename.find(proto);
+      renamed = renamed || it != rename.end();
+      protos.push_back(it == rename.end() ? proto : it->second);
+    }
+    if (renamed)
+      rename.emplace(idx, Index(idx.drop_proto_indices(), std::move(protos),
+                                idx.symmetric_proto_indices()));
+  }
+
+  return transform_expr(rest, rename, sign);
 }
+
+container::svector<Tensor> detail::projectors(const ExprPtr& expr) {
+  container::svector<Tensor> result;
+  if (!expr) return result;
+  auto visit = [&result](const ExprPtr& e) {
+    if (!e->is<Tensor>() || !is_projector(e->as<Tensor>())) return;
+    if (ranges::find(result, e->as<Tensor>()) == result.end())
+      result.push_back(e->as<Tensor>());
+  };
+  expr->visit(visit, /*atoms_only=*/true);
+  if (expr->is<Tensor>()) visit(expr);
+  return result;
+}
+
+namespace {
+
+/// gives the projectors that are factors of @p term the labels of @p targets
+/// (see detail::restore_projectors())
+ExprPtr restore_term_projectors(
+    const ExprPtr& term,
+    const std::function<container::svector<Tensor>(const Tensor&)>&
+        targets_of) {
+  if (!term->is<Product>()) return term;
+  ExprPtr result = term;
+  // each projector of the term in turn: the renaming of one may rename the
+  // indices of another, so the projectors are looked up anew
+  for (std::size_t k = 0;; ++k) {
+    const auto& product = result->as<Product>();
+    std::size_t nprojectors = 0;
+    std::optional<std::size_t> position;
+    for (std::size_t f = 0; f != product.factors().size(); ++f) {
+      const auto& factor = product.factor(f);
+      if (!factor.is<Tensor>() || !detail::is_projector(factor.as<Tensor>()))
+        continue;
+      if (nprojectors++ == k) position = f;
+    }
+    if (!position) break;
+    const auto& projector = product.factor(*position).as<Tensor>();
+    const auto targets = targets_of(projector);
+    if (ranges::find(targets, projector) != targets.end()) continue;
+    auto rest = std::make_shared<Product>();
+    rest->scale(product.scalar());
+    for (std::size_t f = 0; f != product.factors().size(); ++f)
+      if (f != *position)
+        rest->append(1, product.factor(f), Product::Flatten::No);
+    std::optional<ExprPtr> renamed;
+    const Tensor* target = nullptr;
+    for (const auto& candidate : targets) {
+      auto r = detail::rename_to_projector(ExprPtr(rest), projector, candidate);
+      if (!r) continue;
+      if (target && !(*target == candidate))
+        throw Exception("restore_projectors: the projector " +
+                        toUtf8(projector.to_latex()) +
+                        " matches more than one projector of the input");
+      target = &candidate;
+      renamed = std::move(r);
+    }
+    if (!target)
+      throw Exception("restore_projectors: the projector " +
+                      toUtf8(projector.to_latex()) +
+                      " matches no projector of the input");
+    // the projector first, as canonicalization places it
+    auto restored = std::make_shared<Product>();
+    restored->append(1, ex<Tensor>(*target), Product::Flatten::No);
+    if (renamed->is<Product>()) {
+      restored->scale(renamed->as<Product>().scalar());
+      for (const auto& factor : renamed->as<Product>().factors())
+        restored->append(1, factor, Product::Flatten::No);
+    } else {
+      restored->append(1, *renamed, Product::Flatten::No);
+    }
+    result = restored;
+  }
+  return result;
+}
+
+/// restore_term_projectors() of each term of @p expr
+void restore_projectors(
+    ExprPtr& expr,
+    const std::function<container::svector<Tensor>(const Tensor&)>&
+        targets_of) {
+  if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (const auto& summand : expr->as<Sum>().summands())
+      result->append(restore_term_projectors(summand, targets_of));
+    expr = result;
+  } else {
+    expr = restore_term_projectors(expr, targets_of);
+  }
+}
+
+}  // namespace
+
+void detail::restore_projectors(ExprPtr& expr,
+                                const container::svector<Tensor>& targets) {
+  if (targets.empty()) return;
+  ::sequant::restore_projectors(expr,
+                                [&targets](const Tensor&) { return targets; });
+}
+
+Tensor detail::conventional_projector(const Tensor& projector) {
+  container::map<Index, Index> rename;
+  IndexFactory factory([](const Index&) { return true; }, 1);
+  // the indices without protoindices first, so that the protoindices of the
+  // others are renamed with them
+  for (const bool with_protos : {false, true}) {
+    for (const auto& idx : projector.const_braket()) {
+      if (!idx.nonnull() || idx.has_proto_indices() != with_protos ||
+          rename.contains(idx))
+        continue;
+      const Index base = factory.make(Index(idx.basis()));
+      if (!with_protos) {
+        rename.emplace(idx, base);
+        continue;
+      }
+      container::vector<Index> protos;
+      for (const auto& proto : idx.proto_indices()) {
+        const auto it = rename.find(proto);
+        protos.push_back(it == rename.end() ? proto : it->second);
+      }
+      rename.emplace(
+          idx, Index(base, std::move(protos), idx.symmetric_proto_indices()));
+    }
+  }
+  Tensor result = projector;
+  result.transform_indices(rename);
+  return result;
+}
+
+void detail::name_projectors(ExprPtr& expr) {
+  ::sequant::restore_projectors(expr, [](const Tensor& projector) {
+    return container::svector<Tensor>{conventional_projector(projector)};
+  });
+}
+
+void detail::restore_or_name_projectors(
+    ExprPtr& expr, const container::svector<Tensor>& targets) {
+  auto is_temporary = [](const Index& idx) {
+    return idx.ordinal() && *idx.ordinal() >= Index::min_tmp_index();
+  };
+  const bool temporary = ranges::any_of(targets, [&](const Tensor& t) {
+    return ranges::any_of(t.const_braket(), [&](const Index& idx) {
+      return is_temporary(idx) ||
+             ranges::any_of(idx.proto_indices(), is_temporary);
+    });
+  });
+  if (targets.empty() || temporary)
+    name_projectors(expr);
+  else
+    restore_projectors(expr, targets);
+}
+
+ExprPtr& detail::simplify_projected(ExprPtr& expr,
+                                    const NamedIndexSpec& named_indices) {
+  const auto targets = projectors(expr);
+  simplify(expr, named_indices);
+  restore_or_name_projectors(expr, targets);
+  return expr;
+}
+
+ExprPtr& detail::canonicalize_projected(ExprPtr& expr,
+                                        const NamedIndexSpec& named_indices) {
+  const auto targets = projectors(expr);
+  canonicalize(expr, named_indices);
+  restore_or_name_projectors(expr, targets);
+  return expr;
+}
+
+namespace {
 
 /// @return the canonical form of @p term (a part of the expression of a
 /// result that a symmetrizer multiplies, see

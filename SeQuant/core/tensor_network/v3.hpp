@@ -303,14 +303,21 @@ class TensorNetworkV3 {
 
   using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
 
-  /// @param cardinal_tensor_labels move all tensors with these labels to the
-  /// front before canonicalizing indices
+  /// Canonicalizes the network: the graph-based canonicalization fixes the
+  /// order of the tensors and the names of the dummy indices, then each
+  /// tensor is canonicalized individually (which orders the indices in the
+  /// slots that its symmetry exchanges). With presentation settings (see
+  /// CanonicalizeOptions::presentation) a presentation stage follows, which
+  /// orders the tensors by label, names the dummies in the order of the slots
+  /// and canonicalizes each tensor with the presentation settings.
+  /// @param cardinal_tensor_labels the presentation stage moves all tensors
+  /// with these labels to the front before naming the dummies
   /// @param named_indices the indices that cannot be renamed, i.e. whose labels
   /// are meaningful; deduction selects the external indices (ext_indices())
   /// @param options see CanonicalizeOptions for the meaning of this
   /// parameter; the default is given by CanonicalizeOptions{}
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
-  /// nullptr; Constant 0 if topological canonicalization finds the network
+  /// nullptr; Constant 0 if the canonicalization finds the network
   /// to be zero by symmetry (see Graph::automorphism_phase()), in which case
   /// the tensors are left as they were
   ExprPtr canonicalize(
@@ -572,9 +579,14 @@ class TensorNetworkV3 {
   /// named indices that an automorphism of the network can exchange are placed
   /// in the order of @p label_less
   /// @param label_less the order of index labels; null selects the default
+  /// @param keeps_slots if given, the tensors for which it returns true keep
+  /// the order of their slots (the slots that their symmetry exchanges are
+  /// not permuted as the canonical graph would), e.g. those for which a
+  /// nondefault canonicalizer is given, which is to decide that order
   [[nodiscard]] ExprPtr canonicalize_graph(
       const NamedIndexSet &named_indices, bool ignore_named_index_labels = true,
-      std::shared_ptr<const tensor_index_comparer_t> label_less = nullptr);
+      std::shared_ptr<const tensor_index_comparer_t> label_less = nullptr,
+      const std::function<bool(const AbstractTensor &)> &keeps_slots = {});
 
   /// Canonicalizes every individual tensor for itself, taking into account only
   /// tensor blocks

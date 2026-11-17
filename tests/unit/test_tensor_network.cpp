@@ -399,17 +399,20 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
   SECTION("input ordinals") {
     // the ordinals map each tensor of the canonicalized network to its input,
-    // for every method; the labels are distinct, so they identify the inputs
+    // with and without presentation settings; the labels are distinct, so
+    // they identify the inputs
     const auto input = deserialize(
         L"t{a_1,a_2;i_1,i_2}:A * g{i_1,i_2;a_3,a_4}:A * f{a_3;a_1} * "
         L"Z{a_4;a_2} * Y{i_3;i_4}");
-    for (const auto method : {CanonicalizationMethod::Topological,
-                              CanonicalizationMethod::Lexicographic,
-                              CanonicalizationMethod::Complete}) {
-      CAPTURE(toUtf8(to_wstring(method)));
+    for (const auto& opts :
+         {CanonicalizeOptions{},
+          CanonicalizeOptions{
+              .presentation =
+                  std::make_shared<const CanonicalizationPresentation>()}}) {
+      CAPTURE(opts.is_internal_form());
       TN tn(input->as<Product>().factors());
       tn.canonicalize(default_cardinal_tensor_labels(), deduce_named_indices,
-                      CanonicalizeOptions{.method = method});
+                      opts);
       const auto& tensors = tn.tensors();
       const auto& ordinals = tn.tensor_input_ordinals();
       REQUIRE(ordinals.size() == tensors.size());
@@ -588,8 +591,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       constexpr const auto V = Vacuum::SingleProduct;
       auto canonicalize = [](const ExprPtr& product) {
         TN tn(product->as<Product>().factors());
-        tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices,
-                        {.method = CanonicalizationMethod::Complete});
+        tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
       };
 
       // coefficient bra on the operator's annihilator (operator bra)
@@ -645,7 +647,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       auto t1_x_t2 = t1 * t2;
       TN tn(*t1_x_t2);
       tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices,
-                      {.method = CanonicalizationMethod::Complete});
+                      sequant::tests::presentation_options());
 
       REQUIRE(size(tn.tensors()) == 2);
       REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -672,7 +674,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       SECTION("implicit") {
         TN tn(*t1_x_t2);
         tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices,
-                        {.method = CanonicalizationMethod::Complete});
+                        sequant::tests::presentation_options());
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -697,7 +699,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         tn.canonicalize(mbpt::cardinal_tensor_labels(),
                         sequant::tests::explicit_named(container::set<Index>(
                             indices.begin(), indices.end())),
-                        {.method = CanonicalizationMethod::Complete});
+                        sequant::tests::presentation_options());
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -724,8 +726,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         for (bool fast : {true, false}) {
           TN tn(std::vector<ExprPtr>{variant == 1 ? input1 : input2});
           tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices,
-                          {.method = fast ? CanonicalizationMethod::Rapid
-                                          : CanonicalizationMethod::Complete});
+                          fast ? CanonicalizeOptions{}
+                               : sequant::tests::presentation_options());
           REQUIRE(tn.tensors().size() == 1);
           auto result = ex<Product>(to_tensors(tn.tensors()));
           REQUIRE(to_latex(result) == (variant == 1 ? expected1 : expected2));
@@ -745,13 +747,18 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
           L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N-N-N * "
           L"I2{;i_1,i_2;x_1}:N-N-N";
 
-      for (auto method :
-           {CanonicalizationMethod::Rapid, CanonicalizationMethod::Complete}) {
+      for (const auto& opts :
+           {CanonicalizeOptions{}, sequant::tests::presentation_options()}) {
         TN tn(input);
-        tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices,
-                        {.method = method});
-        const auto result = ex<Product>(to_tensors(tn.tensors()));
-        REQUIRE_THAT(result, SimplifiesTo(expected));
+        const auto bp = tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                        deduce_named_indices, opts);
+        ExprPtr result = ex<Product>(to_tensors(tn.tensors()));
+        if (bp) result = bp * result;
+        // the presentation stage gives the form written above
+        if (opts.is_internal_form())
+          REQUIRE_THAT(result, EquivalentTo(expected));
+        else
+          REQUIRE_THAT(result, SimplifiesTo(expected));
       }
     }
 
@@ -830,7 +837,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         TN tn(input_tensors);
         ExprPtr factor = tn.canonicalize(
             mbpt::cardinal_tensor_labels(), deduce_named_indices,
-            {.method = CanonicalizationMethod::Rapid});
+            sequant::tests::presentation_options());
 
         ExprPtr prod = to_product(tn.tensors());
         if (factor) {
@@ -913,9 +920,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
     SECTION("Exhaustive SRCC example") {
-      // Note: the exact canonical form written here is implementation-defined
-      // and doesn't actually matter What does, is that all equivalent ways of
-      // writing it down, canonicalizes to the same exact form
+      // Note: the exact canonical form is implementation-defined and doesn't
+      // actually matter. What does, is that all equivalent ways of writing it
+      // down canonicalize to the same exact form
       const Product expectedExpr =
           deserialize(
               L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
@@ -923,6 +930,16 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
+      // ... which is that of the canonicalized expression
+      std::vector<ExprPtr> canonical_expected;
+      {
+        std::vector<ExprPtr> copy;
+        for (const auto& factor : expected) copy.push_back(factor.clone());
+        TN tn(copy);
+        tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
+        for (const auto& t : tn.tensors())
+          canonical_expected.push_back(std::dynamic_pointer_cast<Expr>(t));
+      }
 
       TensorNetworkV3Accessor accessor;
       const auto [canonical_graph, canonical_graph_labels] =
@@ -1004,8 +1021,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
             REQUIRE(current_graph->cmp(*canonical_graph) == 0);
 
             tn.canonicalize(mbpt::cardinal_tensor_labels(),
-                            deduce_named_indices,
-                            {.method = CanonicalizationMethod::Complete});
+                            deduce_named_indices);
 
             std::vector<ExprPtr> actual;
             std::transform(tn.tensors().begin(), tn.tensors().end(),
@@ -1021,17 +1037,21 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
             REQUIRE(actual.size() == expected.size());
 
-            if (!std::equal(expected.begin(), expected.end(), actual.begin())) {
+            if (!std::equal(canonical_expected.begin(),
+                            canonical_expected.end(), actual.begin(),
+                            [](const ExprPtr& x, const ExprPtr& y) {
+                              return *x == *y;
+                            })) {
               std::wostringstream sstream;
               sstream
                   << "Expected all tensors to be equal (actual == expected), "
                      "but got:\n";
               for (std::size_t i = 0; i < expected.size(); ++i) {
                 std::wstring equality =
-                    actual[i] == expected[i] ? L" == " : L" != ";
+                    *actual[i] == *canonical_expected[i] ? L" == " : L" != ";
 
                 sstream << serialize(actual[i]) << equality
-                        << serialize(expected[i]) << "\n";
+                        << serialize(canonical_expected[i]) << "\n";
               }
               sstream << "\nInput was " << serialize(ex<Product>(factors))
                       << "\n";
@@ -1063,21 +1083,24 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         TN reference_tn(factors1);
         reference_tn.canonicalize(mbpt::cardinal_tensor_labels(),
                                   deduce_named_indices,
-                                  {.method = CanonicalizationMethod::Complete});
+                                  sequant::tests::presentation_options());
 
         TN check_tn(factors2);
         check_tn.canonicalize(mbpt::cardinal_tensor_labels(),
                               deduce_named_indices,
-                              {.method = CanonicalizationMethod::Complete});
+                              sequant::tests::presentation_options());
 
         REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                 to_latex(to_product(check_tn.tensors())));
 
-        for (bool fast : {true, false, true, true, false, false, true}) {
-          reference_tn.canonicalize(
-              mbpt::cardinal_tensor_labels(), deduce_named_indices,
-              {.method = fast ? CanonicalizationMethod::Rapid
-                              : CanonicalizationMethod::Complete});
+        // canonicalizing again, to either form, from either form, agrees
+        for (bool internal : {true, false, true, true, false, false, true}) {
+          const auto opts = internal ? CanonicalizeOptions{}
+                                     : sequant::tests::presentation_options();
+          reference_tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                    deduce_named_indices, opts);
+          check_tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                deduce_named_indices, opts);
 
           REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                   to_latex(to_product(check_tn.tensors())));
@@ -1098,8 +1121,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
             TN tn({Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
             const auto byproduct = tn.canonicalize(
                 mbpt::cardinal_tensor_labels(), deduce_named_indices,
-                {.method = CanonicalizationMethod::Complete,
-                 .presentation = std::move(presentation)});
+                {.presentation = std::move(presentation)});
             const int phase =
                 byproduct ? byproduct->as<Constant>().value<int>() : 1;
             return std::make_pair(
@@ -1113,9 +1135,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         REQUIRE(phase == -1);
       }
 
-      // one given for label Q (in the presentation options) is used instead;
-      // with one that leaves Q as is the graph-based pass alone determines the
-      // slot order, which places the named indices in label order
+      // one given for label Q (in the presentation options) is used instead,
+      // and the graph-based pass leaves the slots of Q to it: one that leaves
+      // Q as is leaves its slots as they are
       {
         // a canonicalizer registered for label Q, which leaves Q as is and
         // counts its uses
@@ -1132,8 +1154,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                 CanonicalizationPresentation{
                     .tensor_canonicalizers = {{L"Q", counting}}}));
         REQUIRE(*counting->calls > 0);
-        REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
-        REQUIRE(phase == -1);
+        REQUIRE(*tensor == *Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"}));
+        REQUIRE(phase == 1);
       }
     }
 
