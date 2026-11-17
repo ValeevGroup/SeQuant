@@ -30,9 +30,10 @@
 
 namespace sequant::opt::schedule {
 
-/// canonicalize(flatten(term->clone())); the object every other function here
-/// works on. \p term itself is not modified.
-ExprPtr canonical_term(ExprPtr const& term);
+/// canonicalize(flatten(term->clone()), external_indices); the object every
+/// other function here works on. \p term itself is not modified.
+ExprPtr canonical_term(ExprPtr const& term,
+                       NamedIndexSpec const& external_indices);
 
 /// toUtf8(v1::to_string(canonical)) -- the identity of a term in the document.
 /// Canonicalization renames the dummy (contracted) indices only: the external
@@ -178,13 +179,13 @@ struct RecordedRoot {
   ExprPtr optimized;
 };
 
-/// Runs \ref sequant::optimize_result on \p root_sum with a RecordSession
+/// Runs \ref sequant::optimize_result on \p root with a RecordSession
 /// labeled \p label set as \p opts.recording, and returns the record (terms in
 /// the order of the optimized Sum's summands) with the optimized expression.
-/// A root that is not a Sum is recorded as a single term. The Sum must be
-/// simplified: no two summands may have the same canonical key.
+/// A root whose expression is not a Sum is recorded as a single term. The Sum
+/// must be simplified: no two summands may have the same canonical key.
 /// \throws sequant::Exception listing the duplicate keys otherwise
-RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
+RecordedRoot record_root(std::string label, ResultExpr const& root,
                          OptimizeOptions opts);
 
 namespace detail {
@@ -206,18 +207,15 @@ eval::schedule::Fingerprint make_fingerprint(
 /// engine's loops and the DAG record's mode spellings carry, which is the
 /// basis name when the basis is named), the volatile leaf labels, the scalar
 /// BatchPolicy and OptimizeOptions settings that steer structure, \p mode_order
-/// and the active Context (vacuum, basis, strict bra-ket symmetry, cardinal
-/// tensor labels, canonicalization method and the named-index flag, the
-/// settings a term key depends on). Size-dependent settings are deliberately
-/// absent (see \ref planner_record).
+/// and the active Context (vacuum, basis and strict bra-ket symmetry, the
+/// settings a term key depends on; the canonical form itself depends on no
+/// setting). Size-dependent settings are deliberately absent (see
+/// \ref planner_record).
 ///
-/// Two limits: a predicate is evaluated on one index per basis, so a policy
+/// One limit: a predicate is evaluated on one index per basis, so a policy
 /// that also reads the index itself (its proto indices, an attribute that
 /// varies within a basis) is fingerprinted by that one index alone and a
-/// difference there surfaces as a different DAG rather than a mismatch; and
-/// the tensor canonicalizers and index comparers the Context registers are
-/// not spelled, so a difference there surfaces as a key miss, which
-/// PinSession::finish names.
+/// difference there surfaces as a different DAG rather than a mismatch.
 template <meta::eval_node_range R>
 eval::schedule::Fingerprint fingerprint_of(
     R const& forest, std::vector<std::string> root_labels,

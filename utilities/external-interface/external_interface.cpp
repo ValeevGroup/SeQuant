@@ -195,9 +195,10 @@ ExportNode<> prepareForExport(ResultExpr &result,
                               const ItfGenerator<ItfExportContext> &generator,
                               ItfExportContext &ctx,
                               const ExportOptions &opts) {
-  // use an order that does not depend on the hashing algorithm, to make the
-  // generated code reproducible
-  sort_expr(result);
+  // the library's canonical form is not meant to be read, and its order
+  // depends on the hashing algorithm: export a prettified form, to make the
+  // generated code readable and reproducible
+  result = prettify(result, mbpt::prettify_options());
 
   ExportNode<> tree = to_export_tree(result);
 
@@ -421,6 +422,11 @@ void generateITF(const json &blocks, std::string_view out_file,
             return false;
           }();
 
+          // prettify while the symmetrizer is present: the terms that it
+          // multiplies may be presented by images under the symmetry of the
+          // result (see prettify())
+          current = prettify(current, mbpt::prettify_options());
+
           if (has_symmetrizer(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
                 pop_tensor(current.expression(), reserved::symm_label());
@@ -432,7 +438,11 @@ void generateITF(const json &blocks, std::string_view out_file,
                                 current.column_symmetry());
             tensorsToSymmetrize.insert(resultTensor);
 
+            // the not yet symmetrized result has none of the symmetries
+            // that the symmetrization brings about
             current.set_label(current.label() + L"u");
+            current.set_symmetry(Symmetry::Nonsymm);
+            current.set_column_symmetry(ColumnSymmetry::Nonsymm);
 
             spdlog::debug("After popping S tensor:\n{}", current);
 
@@ -694,13 +704,6 @@ int main(int argc, char **argv) {
   set_locale();
   Context ctx({.index_basis_registry = IndexBasisRegistry(),
                .vacuum = Vacuum::SingleProduct});
-  // TODO: This only hides a bug/issue in the processing code where SeQuant
-  // assumes that it is okay to freely rename external indices while
-  // canonicalizing an expression. However, this breaks down as soon as those
-  // indices are tracked externally (e.g. ResultExpr) as those won't get updated
-  // to use the new names.
-  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-  ctx.set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels());
   set_default_context(ctx);
 
   CLI::App app(

@@ -24,7 +24,8 @@ static void cumulants_to_densities(benchmark::State &state) {
   const ExprPtr cumulant = density::make_cumulant(make_nop(state.range(0)));
 
   for (auto _ : state) {
-    ExprPtr result = mbpt::decompositions::cumulants_to_densities(cumulant);
+    ExprPtr result = mbpt::decompositions::cumulants_to_densities(
+        cumulant, deduce_named_indices);
 
     benchmark::DoNotOptimize(result);
   }

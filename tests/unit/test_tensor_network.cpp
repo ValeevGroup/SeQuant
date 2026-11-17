@@ -182,8 +182,8 @@ TEST_CASE("tensor_network_shared", "[elements]") {
         auto ex2 = deserialize(input2);
 
         TN tn1(ex1);
-        auto cbp1 = tn1.canonicalize_slots(
-            get_default_context().cardinal_tensor_labels());
+        auto cbp1 = tn1.canonicalize_slots(mbpt::cardinal_tensor_labels(),
+                                           deduce_named_indices);
 
         INFO("tn1 - Canonical order of named indices: "
              << (cbp1.named_indices_canonical |
@@ -193,8 +193,8 @@ TEST_CASE("tensor_network_shared", "[elements]") {
                  ranges::views::join(", "sv) | ranges::to<std::string>()));
 
         TN tn2(ex2);
-        auto cbp2 = tn2.canonicalize_slots(
-            get_default_context().cardinal_tensor_labels());
+        auto cbp2 = tn2.canonicalize_slots(mbpt::cardinal_tensor_labels(),
+                                           deduce_named_indices);
 
         INFO("tn2 - Canonical order of named indices: "
              << (cbp2.named_indices_canonical |
@@ -227,9 +227,9 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       TN tn2(prod2.factors());
 
       const auto& canon1 = tn1.canonicalize_slots(
-          get_default_context().cardinal_tensor_labels());
+          mbpt::cardinal_tensor_labels(), deduce_named_indices);
       const auto& canon2 = tn2.canonicalize_slots(
-          get_default_context().cardinal_tensor_labels());
+          mbpt::cardinal_tensor_labels(), deduce_named_indices);
 
       REQUIRE(canon1.hash_value() == canon2.hash_value());
       REQUIRE(canon1.phase != canon2.phase);
@@ -256,10 +256,10 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       TN tn2(prod2.factors());
 
       const auto& canon1 = tn1.canonicalize_slots(
-          get_default_context().cardinal_tensor_labels());
+          mbpt::cardinal_tensor_labels(), deduce_named_indices);
       [[maybe_unused]] const auto canon1_hash = canon1.hash_value();
       const auto& canon2 = tn2.canonicalize_slots(
-          get_default_context().cardinal_tensor_labels());
+          mbpt::cardinal_tensor_labels(), deduce_named_indices);
       [[maybe_unused]] const auto canon2_hash = canon2.hash_value();
 
       REQUIRE(canon1.hash_value() != canon2.hash_value());
@@ -297,8 +297,8 @@ TEST_CASE("tensor_network_shared", "[elements]") {
         Product prod = deserialize(input)->as<Product>();
         TN tn(prod.factors());
 
-        auto meta = tn.canonicalize_slots(
-            get_default_context().cardinal_tensor_labels());
+        auto meta = tn.canonicalize_slots(mbpt::cardinal_tensor_labels(),
+                                          deduce_named_indices);
 
         REQUIRE(meta.template get_indices<
                     std::decay_t<decltype(expected_indices)>>() ==
@@ -319,9 +319,9 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       CAPTURE(input2);
 
       TN tn1(*input1);
-      tn1.canonicalize(get_default_context().cardinal_tensor_labels());
+      tn1.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
       TN tn2(*input2);
-      tn2.canonicalize(get_default_context().cardinal_tensor_labels());
+      tn2.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
 
       // std::wcout << "tn1[0] = " <<
       // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
@@ -381,8 +381,8 @@ class TensorNetworkV3Accessor {
         tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
     tn.init_edges();
     auto graph = tn.create_graph(
-        {.named_indices = named_indices,
-         .make_labels = Logger::instance().canonicalize_dot,
+        named_indices ? *named_indices : tn.ext_indices_,
+        {.make_labels = Logger::instance().canonicalize_dot,
          .make_texlabels = Logger::instance().canonicalize_dot});
     return std::make_pair(std::move(graph.bliss_graph), graph.vertex_labels);
   }
@@ -396,6 +396,31 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
   using TN = TensorNetworkV3;
+
+  SECTION("input ordinals") {
+    // the ordinals map each tensor of the canonicalized network to its input,
+    // with and without presentation settings; the labels are distinct, so
+    // they identify the inputs
+    const auto input = deserialize(
+        L"t{a_1,a_2;i_1,i_2}:A * g{i_1,i_2;a_3,a_4}:A * f{a_3;a_1} * "
+        L"Z{a_4;a_2} * Y{i_3;i_4}");
+    for (const auto& opts :
+         {CanonicalizeOptions{},
+          CanonicalizeOptions{
+              .presentation =
+                  std::make_shared<const CanonicalizationPresentation>()}}) {
+      CAPTURE(opts.is_internal_form());
+      TN tn(input->as<Product>().factors());
+      tn.canonicalize(default_cardinal_tensor_labels(), deduce_named_indices,
+                      opts);
+      const auto& tensors = tn.tensors();
+      const auto& ordinals = tn.tensor_input_ordinals();
+      REQUIRE(ordinals.size() == tensors.size());
+      for (std::size_t t = 0; t != tensors.size(); ++t)
+        CHECK(tensors[t]->_label() ==
+              input->as<Product>().factor(ordinals[t])->as<Tensor>().label());
+    }
+  }
 
   SECTION("Edges") {
     using Vertex = TN::Vertex;
@@ -489,7 +514,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         t2->adjoint();
         auto t1_x_t2_adjoint = t1 * t2;
-        REQUIRE_THROWS_AS(TN(t1_x_t2_adjoint).create_graph(), Exception);
+        REQUIRE_THROWS_AS(
+            TN(t1_x_t2_adjoint).create_graph(deduce_named_indices), Exception);
       }
 
       // can use hyperedges with aux indices
@@ -512,7 +538,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         REQUIRE_NOTHROW(TN(u1 * u2 * u3));
         TN tn(u1 * u2 * u3);
         REQUIRE_NOTHROW(
-            tn.create_graph({.make_labels = true, .make_texlabels = true}));
+            tn.create_graph(deduce_named_indices,
+                            {.make_labels = true, .make_texlabels = true}));
       }
     }
 
@@ -564,8 +591,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       constexpr const auto V = Vacuum::SingleProduct;
       auto canonicalize = [](const ExprPtr& product) {
         TN tn(product->as<Product>().factors());
-        tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                        {.method = CanonicalizationMethod::Complete});
+        tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
       };
 
       // coefficient bra on the operator's annihilator (operator bra)
@@ -590,7 +616,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // summands are canonicalized in parallel; the exception still reaches
       // the caller
       ExprPtr sum = h_ok * op + h * op;
-      REQUIRE_THROWS_AS(sequant::canonicalize(sum), Exception);
+      REQUIRE_THROWS_AS(sequant::canonicalize(sum, deduce_named_indices),
+                        Exception);
 
       // a named index in two bra (or two ket) slots is not a contraction: a
       // diagonal matrix element times an amplitude is an element-wise product
@@ -598,18 +625,17 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       auto t2 = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
       REQUIRE_THROWS_AS(canonicalize(f_diag * t2), Exception);
       {
-        auto scope = sequant::tests::scoped_canonicalize_options(
-            CanonicalizeOptions::default_options().copy_and_set(
-                container::set<Index>{Index{L"i_1"}, Index{L"i_2"},
-                                      Index{L"a_1"}, Index{L"a_2"}}));
+        const NamedIndexSpec named =
+            sequant::tests::explicit_named(container::set<Index>{
+                Index{L"i_1"}, Index{L"i_2"}, Index{L"a_1"}, Index{L"a_2"}});
         auto product = f_diag * t2;
-        REQUIRE_NOTHROW(sequant::canonicalize(product));
+        REQUIRE_NOTHROW(sequant::canonicalize(product, named));
         auto reordered = t2 * f_diag;
-        sequant::canonicalize(reordered);
+        sequant::canonicalize(reordered, named);
         REQUIRE(product == reordered);
         // the same index in two ket slots
         auto fsq = f_diag * f_diag;
-        REQUIRE_NOTHROW(sequant::canonicalize(fsq));
+        REQUIRE_NOTHROW(sequant::canonicalize(fsq, named));
       }
     }
 
@@ -620,8 +646,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
       auto t1_x_t2 = t1 * t2;
       TN tn(*t1_x_t2);
-      tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                      {.method = CanonicalizationMethod::Complete});
+      tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices,
+                      sequant::tests::presentation_options());
 
       REQUIRE(size(tn.tensors()) == 2);
       REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -647,8 +673,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // with all external named indices
       SECTION("implicit") {
         TN tn(*t1_x_t2);
-        tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                        {.method = CanonicalizationMethod::Complete});
+        tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices,
+                        sequant::tests::presentation_options());
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -670,9 +696,10 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         TN tn(*t1_x_t2);
 
         IndexList indices{L"i_17"};
-        tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                        {.method = CanonicalizationMethod::Complete,
-                         .named_indices = indices});
+        tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                        sequant::tests::explicit_named(container::set<Index>(
+                            indices.begin(), indices.end())),
+                        sequant::tests::presentation_options());
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -698,9 +725,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       for (int variant : {1, 2}) {
         for (bool fast : {true, false}) {
           TN tn(std::vector<ExprPtr>{variant == 1 ? input1 : input2});
-          tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                          {.method = fast ? CanonicalizationMethod::Rapid
-                                          : CanonicalizationMethod::Complete});
+          tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices,
+                          fast ? CanonicalizeOptions{}
+                               : sequant::tests::presentation_options());
           REQUIRE(tn.tensors().size() == 1);
           auto result = ex<Product>(to_tensors(tn.tensors()));
           REQUIRE(to_latex(result) == (variant == 1 ? expected1 : expected2));
@@ -720,13 +747,18 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
           L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N-N-N * "
           L"I2{;i_1,i_2;x_1}:N-N-N";
 
-      for (auto method :
-           {CanonicalizationMethod::Rapid, CanonicalizationMethod::Complete}) {
+      for (const auto& opts :
+           {CanonicalizeOptions{}, sequant::tests::presentation_options()}) {
         TN tn(input);
-        tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                        {.method = method});
-        const auto result = ex<Product>(to_tensors(tn.tensors()));
-        REQUIRE_THAT(result, SimplifiesTo(expected));
+        const auto bp = tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                        deduce_named_indices, opts);
+        ExprPtr result = ex<Product>(to_tensors(tn.tensors()));
+        if (bp) result = bp * result;
+        // the presentation stage gives the form written above
+        if (opts.is_internal_form())
+          REQUIRE_THAT(result, EquivalentTo(expected));
+        else
+          REQUIRE_THAT(result, SimplifiesTo(expected));
       }
     }
 
@@ -758,7 +790,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
           second_graph->write_dot(
               stream, {.labels = second_labels, .display_colors = true});
           stream << "TN graph:\n";
-          auto graph = TensorNetworkV3(first).create_graph();
+          auto graph =
+              TensorNetworkV3(first).create_graph(deduce_named_indices);
           graph.bliss_graph->write_dot(stream,
                                        {.labels = graph.vertex_labels,
                                         .xlabels = graph.vertex_xlabels,
@@ -771,8 +804,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         TN tn1(first);
         TN tn2(second);
 
-        tn1.canonicalize(get_default_context().cardinal_tensor_labels());
-        tn2.canonicalize(get_default_context().cardinal_tensor_labels());
+        tn1.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
+        tn2.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
 
         REQUIRE(tn1.tensors().size() == tn2.tensors().size());
         for (std::size_t i = 0; i < tn1.tensors().size(); ++i) {
@@ -802,9 +835,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         const auto input_tensors = deserialize(input).as<Product>().factors();
 
         TN tn(input_tensors);
-        ExprPtr factor =
-            tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                            {.method = CanonicalizationMethod::Rapid});
+        ExprPtr factor = tn.canonicalize(
+            mbpt::cardinal_tensor_labels(), deduce_named_indices,
+            sequant::tests::presentation_options());
 
         ExprPtr prod = to_product(tn.tensors());
         if (factor) {
@@ -826,7 +859,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       TN tn(factors);
 
       ExprPtr factor =
-          tn.canonicalize(get_default_context().cardinal_tensor_labels());
+          tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
       ExprPtr result = to_product(tn.tensors());
       if (factor) {
         result *= factor;
@@ -850,8 +883,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                              aux{L"p_1", L"p"}, Symmetry::Antisymm);
         TN tn(u1 * u2 * u3);
 
-        ExprPtr factor =
-            tn.canonicalize(get_default_context().cardinal_tensor_labels());
+        ExprPtr factor = tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                         deduce_named_indices);
         result_1 = to_product(tn.tensors());
         if (factor) {
           result_1 *= factor;
@@ -872,8 +905,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                              aux{L"p_1", L"p_2"}, Symmetry::Antisymm);
         TN tn(u2 * u1 * u3);
 
-        ExprPtr factor =
-            tn.canonicalize(get_default_context().cardinal_tensor_labels());
+        ExprPtr factor = tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                         deduce_named_indices);
         result_2 = to_product(tn.tensors());
         if (factor) {
           result_2 *= factor;
@@ -887,9 +920,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
     SECTION("Exhaustive SRCC example") {
-      // Note: the exact canonical form written here is implementation-defined
-      // and doesn't actually matter What does, is that all equivalent ways of
-      // writing it down, canonicalizes to the same exact form
+      // Note: the exact canonical form is implementation-defined and doesn't
+      // actually matter. What does, is that all equivalent ways of writing it
+      // down canonicalize to the same exact form
       const Product expectedExpr =
           deserialize(
               L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
@@ -897,6 +930,16 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
+      // ... which is that of the canonicalized expression
+      std::vector<ExprPtr> canonical_expected;
+      {
+        std::vector<ExprPtr> copy;
+        for (const auto& factor : expected) copy.push_back(factor.clone());
+        TN tn(copy);
+        tn.canonicalize(mbpt::cardinal_tensor_labels(), deduce_named_indices);
+        for (const auto& t : tn.tensors())
+          canonical_expected.push_back(std::dynamic_pointer_cast<Expr>(t));
+      }
 
       TensorNetworkV3Accessor accessor;
       const auto [canonical_graph, canonical_graph_labels] =
@@ -977,8 +1020,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
             }
             REQUIRE(current_graph->cmp(*canonical_graph) == 0);
 
-            tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                            {.method = CanonicalizationMethod::Complete});
+            tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                            deduce_named_indices);
 
             std::vector<ExprPtr> actual;
             std::transform(tn.tensors().begin(), tn.tensors().end(),
@@ -994,17 +1037,21 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
             REQUIRE(actual.size() == expected.size());
 
-            if (!std::equal(expected.begin(), expected.end(), actual.begin())) {
+            if (!std::equal(canonical_expected.begin(),
+                            canonical_expected.end(), actual.begin(),
+                            [](const ExprPtr& x, const ExprPtr& y) {
+                              return *x == *y;
+                            })) {
               std::wostringstream sstream;
               sstream
                   << "Expected all tensors to be equal (actual == expected), "
                      "but got:\n";
               for (std::size_t i = 0; i < expected.size(); ++i) {
                 std::wstring equality =
-                    actual[i] == expected[i] ? L" == " : L" != ";
+                    *actual[i] == *canonical_expected[i] ? L" == " : L" != ";
 
                 sstream << serialize(actual[i]) << equality
-                        << serialize(expected[i]) << "\n";
+                        << serialize(canonical_expected[i]) << "\n";
               }
               sstream << "\nInput was " << serialize(ex<Product>(factors))
                       << "\n";
@@ -1034,22 +1081,26 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         auto factors2 = deserialize(current).as<Product>().factors();
 
         TN reference_tn(factors1);
-        reference_tn.canonicalize(
-            get_default_context().cardinal_tensor_labels(),
-            {.method = CanonicalizationMethod::Complete});
+        reference_tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                  deduce_named_indices,
+                                  sequant::tests::presentation_options());
 
         TN check_tn(factors2);
-        check_tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                              {.method = CanonicalizationMethod::Complete});
+        check_tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                              deduce_named_indices,
+                              sequant::tests::presentation_options());
 
         REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                 to_latex(to_product(check_tn.tensors())));
 
-        for (bool fast : {true, false, true, true, false, false, true}) {
-          reference_tn.canonicalize(
-              get_default_context().cardinal_tensor_labels(),
-              {.method = fast ? CanonicalizationMethod::Rapid
-                              : CanonicalizationMethod::Complete});
+        // canonicalizing again, to either form, from either form, agrees
+        for (bool internal : {true, false, true, true, false, false, true}) {
+          const auto opts = internal ? CanonicalizeOptions{}
+                                     : sequant::tests::presentation_options();
+          reference_tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                    deduce_named_indices, opts);
+          check_tn.canonicalize(mbpt::cardinal_tensor_labels(),
+                                deduce_named_indices, opts);
 
           REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                   to_latex(to_product(check_tn.tensors())));
@@ -1063,16 +1114,19 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
       };
       // canonical form of Q{i_2,i_1;a_1,a_2} and the phase relating the two
-      auto canonicalized = [&Q] {
-        TN tn({Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
-        const auto byproduct =
-            tn.canonicalize(get_default_context().cardinal_tensor_labels(),
-                            {.method = CanonicalizationMethod::Complete});
-        const int phase =
-            byproduct ? byproduct->as<Constant>().value<int>() : 1;
-        return std::make_pair(
-            std::dynamic_pointer_cast<Expr>(tn.tensors().at(0)), phase);
-      };
+      auto canonicalized =
+          [&Q](
+              std::shared_ptr<const CanonicalizationPresentation> presentation =
+                  nullptr) {
+            TN tn({Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
+            const auto byproduct = tn.canonicalize(
+                mbpt::cardinal_tensor_labels(), deduce_named_indices,
+                {.presentation = std::move(presentation)});
+            const int phase =
+                byproduct ? byproduct->as<Constant>().value<int>() : 1;
+            return std::make_pair(
+                std::dynamic_pointer_cast<Expr>(tn.tensors().at(0)), phase);
+          };
 
       // the default canonicalizer sorts the bra and the ket of Q
       {
@@ -1081,9 +1135,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         REQUIRE(phase == -1);
       }
 
-      // one registered for label Q is used instead; with one that leaves Q as
-      // is the graph-based pass alone determines the slot order, which places
-      // the named indices in label order
+      // one given for label Q (in the presentation options) is used instead,
+      // and the graph-based pass leaves the slots of Q to it: one that leaves
+      // Q as is leaves its slots as they are
       {
         // a canonicalizer registered for label Q, which leaves Q as is and
         // counts its uses
@@ -1095,13 +1149,13 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
           }
         };
         const auto counting = std::make_shared<CountingCanonicalizer>();
-        auto scoped = set_scoped_default_context(
-            Context(get_default_context())
-                .set_tensor_canonicalizer(L"Q", counting));
-        const auto [tensor, phase] = canonicalized();
+        const auto [tensor, phase] =
+            canonicalized(std::make_shared<CanonicalizationPresentation>(
+                CanonicalizationPresentation{
+                    .tensor_canonicalizers = {{L"Q", counting}}}));
         REQUIRE(*counting->calls > 0);
-        REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
-        REQUIRE(phase == -1);
+        REQUIRE(*tensor == *Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"}));
+        REQUIRE(phase == 1);
       }
     }
 
@@ -1126,21 +1180,24 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // N.B. treat all indices as dummy so that the automorphism ignores the
       using named_indices_t = TN::NamedIndexSet;
       named_indices_t indices{};
-      REQUIRE_NOTHROW(tn.create_graph({.named_indices = &indices}));
-      TN::Graph graph = tn.create_graph({.named_indices = &indices});
+      REQUIRE_NOTHROW(tn.create_graph(indices));
+      TN::Graph graph = tn.create_graph(indices);
 
       // can disable label production
       {
         // make sure can generate without labels also
         REQUIRE_NOTHROW(
-            tn.create_graph({.make_labels = true, .make_texlabels = false})
+            tn.create_graph(deduce_named_indices,
+                            {.make_labels = true, .make_texlabels = false})
                 .vertex_texlabels.size() == 0);
         REQUIRE_NOTHROW(
-            tn.create_graph({.make_labels = false, .make_texlabels = true})
+            tn.create_graph(deduce_named_indices,
+                            {.make_labels = false, .make_texlabels = true})
                 .vertex_labels.size() == 0);
         {
           auto g =
-              tn.create_graph({.make_labels = false, .make_texlabels = false});
+              tn.create_graph(deduce_named_indices,
+                              {.make_labels = false, .make_texlabels = false});
           REQUIRE_NOTHROW(g.vertex_labels.size() == 0 &&
                           g.vertex_texlabels.size() == 0);
         }
@@ -1185,7 +1242,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     TN tn(deserialize(L"t{a_1;i_1} f{i_1;a_2}"));
     auto const before = tn.ext_indices();
     REQUIRE(before.size() == 2);
-    tn.canonicalize_slots(get_default_context().cardinal_tensor_labels());
+    tn.canonicalize_slots(mbpt::cardinal_tensor_labels(), deduce_named_indices);
     CHECK(tn.ext_indices() == before);
     CHECK(tn.edges().size() == 3);
   }

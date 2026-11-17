@@ -183,68 +183,43 @@ void Sum::adjoint() {
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
-ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
+ExprPtr Sum::canonicalize_impl(const NamedIndexSpec &named_indices,
+                               CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
 
-  // options of the rapid and of the full canonicalization of the summands;
   // canonicalizing TNs in a sum requires treating named indices as
   // meaningful/distinct
-  auto rapid_opts = opts;
-  rapid_opts.ignore_named_index_labels =
+  opts.ignore_named_index_labels =
       CanonicalizeOptions::IgnoreNamedIndexLabel::No;
-  rapid_opts.method = CanonicalizationMethod::Lexicographic;
-  auto full_opts = rapid_opts;
-  full_opts.method = opts.method | CanonicalizationMethod::Topological;
 
-  const auto npasses = multipass ? 2 : 1;
-  for (auto pass = 0; pass != npasses; ++pass) {
-    const auto rapid = (pass % 2 == 0);
-    const auto &opts_copy = rapid ? rapid_opts : full_opts;
-
-    // recursively canonicalize summands ...
-    // using for_each and direct access to summands
-    // N.B. summands already in the canonical form that the full pass of
-    // multipass canonicalization produces are left alone by every pass
-    sequant::for_each(summands_, [&opts_copy, &rapid, &multipass,
-                                  &full_opts](ExprPtr &summand) {
-      ExprPtr bp;
-      if (rapid) {
-        if (multipass && summand->is_canonical(full_opts)) return;
-        bp = summand->rapid_canonicalize(opts_copy);
-      } else {
-        bp = summand->canonicalize(opts_copy);
-      }
-      if (bp) {
-        SEQUANT_ASSERT(bp->template is<Constant>());
-        summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
-                              ExprPtrList{summand});
-      }
-    });
-    if (Logger::instance().canonicalize)
-      std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after canonicalizing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
-
-    HashingAccumulator acc;
-    for (auto &summand : summands_) {
-      acc.append(summand);
+  // recursively canonicalize summands ...
+  // N.B. summands already in canonical form are left alone by canonicalize()
+  sequant::for_each(summands_, [&opts, &named_indices](ExprPtr &summand) {
+    const ExprPtr bp = summand->canonicalize(named_indices, opts);
+    if (bp) {
+      SEQUANT_ASSERT(bp->template is<Constant>());
+      summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
+                            ExprPtrList{summand});
     }
+  });
+  if (Logger::instance().canonicalize)
+    std::wcout << "Sum::canonicalize_impl: after canonicalizing summands = "
+               << to_latex_align(shared_from_this()) << std::endl;
 
-    // last pass? sort by hash then by Expr::operator<
-    // N.B. no point in differentiating between canonicalization methods here
-    // since need to sort in both cases
-    auto new_sum =
-        (pass == npasses - 1) ? acc.make_canonicalized_sum() : acc.make_sum();
-    using std::swap;
-    swap(*this, *new_sum);
-
-    if (Logger::instance().canonicalize)
-      std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after reducing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+  // ... then reduce them and sort by hash, then by Expr::operator<
+  HashingAccumulator acc;
+  for (auto &summand : summands_) {
+    acc.append(summand);
   }
+  auto new_sum = acc.make_canonicalized_sum();
+  using std::swap;
+  swap(*this, *new_sum);
+
+  if (Logger::instance().canonicalize)
+    std::wcout << "Sum::canonicalize_impl: after reducing summands = "
+               << to_latex_align(shared_from_this()) << std::endl;
 
   return {};  // side effects are absorbed into summands
 }
@@ -335,18 +310,14 @@ Expr::hash_type Sum::memoizing_hash() const {
   return *hash_value_;
 }
 
-ExprPtr Sum::canonicalize(CanonicalizeOptions opt) {
-  if (is_canonical(opt)) return {};
+ExprPtr Sum::canonicalize(const NamedIndexSpec &named_indices,
+                          CanonicalizeOptions opt) {
+  if (is_canonical(named_indices, opt)) return {};
   const auto contexts_version = current_contexts_version();
-  auto byproduct = canonicalize_impl(true, opt);
-  mark_canonical(opt, contexts_version);
+  auto byproduct = canonicalize_impl(named_indices, opt);
+  mark_canonical(named_indices, opt, contexts_version);
   return byproduct;
 }
-ExprPtr Sum::rapid_canonicalize(CanonicalizeOptions opts) {
-  SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
-  return canonicalize_impl(false, opts);
-}
-
 bool Sum::static_equal(const Expr &that) const {
   const auto &that_cast = static_cast<const Sum &>(that);
   if (summands().size() == that_cast.summands().size()) {

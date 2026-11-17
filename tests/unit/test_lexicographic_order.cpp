@@ -8,12 +8,14 @@
 #include <SeQuant/core/op.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <compare>
 #include <cstddef>
 #include <memory>
 #include <numeric>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -62,14 +64,19 @@ TEST_CASE("lexicographic_order", "[elements]") {
           std::weak_ordering::less);
     CHECK(compare(parse(L"g{i1;a1}"), parse(L"g{i1;a1}")) ==
           std::weak_ordering::equivalent);
-    // the default options use the cardinal labels of the default context
+    // the default options use the library's default cardinal labels
+    CHECK(LexicographicCompareOptions{}.cardinal_tensor_labels ==
+          default_cardinal_tensor_labels());
+    // which can be overridden explicitly
     {
-      auto ctx = get_default_context();
-      ctx.set_cardinal_tensor_labels({L"g"});
-      auto resetter = set_scoped_default_context(ctx);
-      CHECK(parse(L"g{i1;a1}")->lexicographic_compare(*parse(L"f{i1;a1}")) ==
+      const LexicographicCompareOptions opts{.cardinal_tensor_labels = {L"g"}};
+      CHECK(parse(L"g{i1;a1}")
+                ->lexicographic_compare(*parse(L"f{i1;a1}"), opts) ==
             std::weak_ordering::less);
-      CHECK(LexicographicExprCompare{}(parse(L"g{i1;a1}"), parse(L"f{i1;a1}")));
+      CHECK(LexicographicExprCompare{opts}(parse(L"g{i1;a1}"),
+                                           parse(L"f{i1;a1}")));
+      CHECK(
+          !LexicographicExprCompare{}(parse(L"g{i1;a1}"), parse(L"f{i1;a1}")));
     }
   }
 
@@ -304,5 +311,75 @@ TEST_CASE("sort_expr", "[algorithms]") {
     sort_expr(res, cmp);
     REQUIRE(res.expression()->to_latex() ==
             parse(L"t{i1;a1} + g{i1;a1}")->to_latex());
+  }
+}
+
+TEST_CASE("print_options", "[io]") {
+  using namespace sequant;
+  // not canonicalized: Z precedes Y
+  const auto zy = ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
+                  ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});
+  const auto yz = ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"}) *
+                  ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"});
+  const auto& ctx_opts = get_default_context().print_options();
+  REQUIRE(!ctx_opts.ordering);
+  REQUIRE(io::latex::to_string(zy) != io::latex::to_string(yz));
+
+  SECTION("ordering") {
+    auto ordered = ctx_opts;
+    ordered.ordering = LexicographicCompareOptions{};
+    CHECK(io::latex::to_string(zy, ordered) == io::latex::to_string(yz));
+    // the printed expression is not modified
+    CHECK(zy->as<Product>().factor(0)->as<Tensor>().label() == L"Z");
+    // the order is that of the given labels
+    ordered.ordering =
+        LexicographicCompareOptions{.cardinal_tensor_labels = {L"Z"}};
+    CHECK(io::latex::to_string(zy, ordered) == io::latex::to_string(zy));
+    // ... also of the result of a ResultExpr
+    ordered.ordering = LexicographicCompareOptions{};
+    const ResultExpr r_zy(Variable(L"E"), zy);
+    const ResultExpr r_yz(Variable(L"E"), yz);
+    CHECK(io::latex::to_string(r_zy, ordered) == io::latex::to_string(r_yz));
+    // the ordering of the context applies to the printers by default
+    {
+      auto scoped = set_scoped_modified_default_context(
+          [&ordered](Context& ctx) { ctx.set(ordered); });
+      CHECK(io::latex::to_string(zy) == io::latex::to_string(yz, ctx_opts));
+      CHECK(to_latex_align(zy) == to_latex_align(yz, ctx_opts));
+    }
+    CHECK(io::latex::to_string(zy) != io::latex::to_string(yz));
+  }
+
+  SECTION("typesetting") {
+    const auto t = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
+    auto ketsub = ctx_opts;
+    ketsub.braket_typesetting =
+        ctx_opts.braket_typesetting == BraKetTypesetting::KetSub
+            ? BraKetTypesetting::KetSuper
+            : BraKetTypesetting::KetSub;
+    const auto explicit_latex = io::latex::to_string(t, ketsub);
+    CHECK(explicit_latex != io::latex::to_string(t));
+    // the same as with the typesetting of the context, which is not changed
+    CHECK(get_default_context().print_options() == ctx_opts);
+    CHECK(io::latex::detail::active_print_options() == ctx_opts);
+    // printing with explicit options on one thread does not change how
+    // another thread prints (the default context is not modified meanwhile)
+    {
+      const auto default_latex = io::latex::to_string(t);
+      std::atomic<bool> done = false;
+      std::thread printer([&] {
+        for (int k = 0; k != 2000; ++k) io::latex::to_string(t, ketsub);
+        done = true;
+      });
+      bool all_default = true;
+      while (!done) all_default &= io::latex::to_string(t) == default_latex;
+      printer.join();
+      CHECK(all_default);
+    }
+    auto scoped = set_scoped_modified_default_context(
+        [&ketsub](Context& ctx) { ctx.set(ketsub); });
+    CHECK(io::latex::to_string(t) == explicit_latex);
+    CHECK(get_default_context().braket_typesetting() ==
+          ketsub.braket_typesetting);
   }
 }

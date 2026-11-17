@@ -141,8 +141,6 @@ struct Nevpt2::Impl {
 
     Context ctx({.index_basis_registry = std::move(registry),
                  .vacuum = Vacuum::SingleProduct});
-    ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-    ctx.set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels());
     return ctx;
   }
 

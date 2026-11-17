@@ -29,7 +29,7 @@ int main() {
                        .vacuum = Vacuum::SingleProduct});
   set_default_mbpt_context({.op_registry_ptr = make_legacy_registry()});
 
-  const auto result = ref_av(H() * T(2));
+  const auto result = ref_av(H() * T(2), deduce_named_indices);
   std::wcout << result.to_latex() << '\n';
   return 0;
 }

@@ -25,6 +25,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <cstddef>
 #include <cstdlib>
 #include <set>
@@ -66,7 +68,8 @@ using sequant::eval::dryrun::SizeRegime;
 EvalExpr eval_tensor(std::string_view tensor) {
   auto expr = sequant::deserialize<ExprPtr>(std::string(tensor));
   REQUIRE(static_cast<bool>(expr));
-  return EvalExpr{expr->as<sequant::Tensor>()};
+  return EvalExpr(expr->as<sequant::Tensor>(),
+                  sequant::tests::open_indices(expr->as<sequant::Tensor>()));
 }
 
 // A leaf eval node carrying the given tensor's slots.
@@ -89,7 +92,9 @@ EvalExpr eval_tensor_hashed(std::string_view result, std::size_t hash,
                             sequant::EvalOp op) {
   auto expr = sequant::deserialize<ExprPtr>(std::string(result));
   REQUIRE(static_cast<bool>(expr));
-  EvalExpr const base{expr->as<sequant::Tensor>()};
+  EvalExpr const base{
+      expr->as<sequant::Tensor>(),
+      sequant::tests::open_indices(expr->as<sequant::Tensor>())};
   EvalExpr::index_vector ixs{base.canon_indices().begin(),
                              base.canon_indices().end()};
   return EvalExpr{op,          sequant::ResultType::Tensor,

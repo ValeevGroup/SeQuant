@@ -3,9 +3,11 @@
 //
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/expressions/lexicographic_order.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/tensor_power.hpp>
@@ -21,7 +23,44 @@
 
 namespace sequant::io::latex {
 
-std::wstring to_string(const ExprPtr& expr) { return expr.to_latex(); }
+namespace {
+
+/// the PrintOptions of the to_string() call that is printing on this thread
+thread_local const PrintOptions* active_options = nullptr;
+
+/// @return the result of @p print , called with @p opts in effect on the
+/// calling thread (see detail::active_print_options())
+template <typename Print>
+std::wstring with_typesetting(const PrintOptions& opts, Print&& print) {
+  const PrintOptions* const previous = active_options;
+  active_options = &opts;
+  struct Restore {
+    const PrintOptions* previous;
+    ~Restore() { active_options = previous; }
+  } restore{previous};
+  return print();
+}
+
+}  // namespace
+
+const PrintOptions& detail::active_print_options() {
+  return active_options ? *active_options
+                        : get_default_context().print_options();
+}
+
+std::wstring to_string(const ExprPtr& expr) {
+  return to_string(expr, get_default_context().print_options());
+}
+
+std::wstring to_string(const ExprPtr& expr, const PrintOptions& opts) {
+  if (!expr) return {};
+  ExprPtr printed = expr;
+  if (opts.ordering) {
+    printed = expr->clone();
+    sort_expr(*printed, LexicographicExprCompare(*opts.ordering));
+  }
+  return with_typesetting(opts, [&printed] { return printed.to_latex(); });
+}
 
 std::wstring to_string(const rational& t) {
   // n.b. skip enclosing braces to make Constant::to_latex to produce same
@@ -82,16 +121,22 @@ std::wstring to_string(const TensorPower& power) {
 }
 
 std::wstring to_string(const ResultExpr& expr) {
-  std::wstringstream stream;
-  if (expr.produces_tensor()) {
-    stream << to_string(expr.result_as_tensor());
-  } else {
-    stream << to_string(expr.result_as_variable());
-  }
+  return to_string(expr, get_default_context().print_options());
+}
 
-  stream << " = " << to_string(expr.expression());
+std::wstring to_string(const ResultExpr& expr, const PrintOptions& opts) {
+  return with_typesetting(opts, [&expr, &opts] {
+    std::wstringstream stream;
+    if (expr.produces_tensor()) {
+      stream << to_string(expr.result_as_tensor());
+    } else {
+      stream << to_string(expr.result_as_variable());
+    }
 
-  return stream.str();
+    stream << " = " << to_string(expr.expression(), opts);
+
+    return stream.str();
+  });
 }
 
 namespace detail {

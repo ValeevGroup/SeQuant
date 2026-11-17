@@ -23,11 +23,11 @@ int main() {
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
 
   // its reference expectation value: a γη pair plus a 2-body cumulant κ
-  auto vev = FWickTheorem{expr}.compute();
+  auto vev = FWickTheorem(expr, deduce_named_indices).compute();
   std::wcout << to_latex(vev) << std::endl;
 
   // its generalized-normal-ordered form, cumulants truncated at rank 2
-  auto gno = FWickTheorem{expr}
+  auto gno = FWickTheorem(expr, deduce_named_indices)
                  .full_contractions(false)
                  .max_cumulant_rank(2)
                  .compute();

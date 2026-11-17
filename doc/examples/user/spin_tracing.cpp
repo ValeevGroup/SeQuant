@@ -27,7 +27,7 @@ int main() {
   // spin-free (spatial-orbital) form; the summation over the 2 spin cases
   // that agree with each other produces the factor of 2 below
   auto expr_st = spintrace(expr);
-  simplify(expr_st);
+  simplify(expr_st, deduce_named_indices);
 
   std::wcout << expr_st << std::endl;
   // end-snippet-1

@@ -41,13 +41,11 @@ SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
 namespace {
 
-auto scoped_min_sr_context(CanonicalizeOptions canonicalization_options =
-                               CanonicalizeOptions::default_options()) {
+auto scoped_min_sr_context() {
   return set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
                .vacuum = Vacuum::SingleProduct,
-               .spbasis = SPBasis::Spinor,
-               .canonicalization_options = canonicalization_options}));
+               .spbasis = SPBasis::Spinor}));
 }
 
 // μ̃ = {a, INT32_MAX} registered by name: the PAO basis of ibr-spec.md §3.3
@@ -320,9 +318,7 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
 
 TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
   SECTION("CCSD R1 term with a standing overlap") {
-    auto ctx = scoped_min_sr_context(
-        CanonicalizeOptions::default_options().copy_and_set(
-            CanonicalizationMethod::Complete));
+    auto ctx = scoped_min_sr_context();
     const auto& ibr = get_default_context().index_basis_registry();
     const IndexSpace occ = ibr->retrieve_space(L"i");
     const IndexSpace uocc = ibr->retrieve_space(L"a");
@@ -341,9 +337,11 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
              ex<Tensor>(L"t", bra{ad, bd}, ket{i1, i2}, Symmetry::Antisymm);
     };
 
-    const auto renumbered = simplify(term(2, 3, 1) - term(7, 8, 1));
+    const auto renumbered =
+        simplify(term(2, 3, 1) - term(7, 8, 1), deduce_named_indices);
     CHECK(renumbered == ex<Constant>(0));
-    const auto other_family = simplify(term(2, 3, 1) - term(2, 3, 2));
+    const auto other_family =
+        simplify(term(2, 3, 1) - term(2, 3, 2), deduce_named_indices);
     REQUIRE(other_family->is<Sum>());
     CHECK(other_family->as<Sum>().size() == 2);
   }
@@ -362,7 +360,7 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
     auto term = ex<Tensor>(L"g", bra{i2, a1}, ket{a9, a3}, Symmetry::Antisymm) *
                 ex<Tensor>(L"t", bra{a9}, ket{i1}, Symmetry::Antisymm) *
                 ex<Tensor>(L"t¹", bra{a3}, ket{i2}, Symmetry::Antisymm);
-    canonicalize(term);
+    canonicalize(term, deduce_named_indices);
 
     std::set<Index> indices;
     term->visit(
@@ -752,7 +750,7 @@ TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
                  ex<Tensor>(L"f", bra{m7}, ket{m8}, Symmetry::Nonsymm) *
                  ex<Tensor>(L"C", bra{m8}, ket{c2}, Symmetry::Nonsymm) *
                  ex<Tensor>(L"t", bra{c2, b3}, ket{i1, i2}, Symmetry::Antisymm);
-  simplify(term);
+  simplify(term, deduce_named_indices);
   std::vector<Index> renamed;
   for (const Index& idx : get_used_indices(term))
     if (idx.basis() == pao) renamed.push_back(idx);
@@ -800,7 +798,7 @@ TEST_CASE("index-basis-copy-while-labelling", "[elements][index][basis]") {
                  ex<Tensor>(L"f", bra{i2}, ket{ad}, Symmetry::Nonsymm) *
                  make_overlap(a1, bd) *
                  ex<Tensor>(L"t", bra{ad, bd}, ket{i1, i2}, Symmetry::Antisymm);
-  simplify(term);
+  simplify(term, deduce_named_indices);
   std::vector<Index> canonicalized;
   for (const Index& idx : get_used_indices(term))
     if (idx.basis().has_basis_instance()) canonicalized.push_back(idx);

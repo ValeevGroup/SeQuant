@@ -96,13 +96,15 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto T2 = op::tensor::t(2);
     const auto ab = bernoulli::detail::wick_commutator(V, T2);
     const auto ba = bernoulli::detail::wick_commutator(T2, V);
-    REQUIRE_THAT(ab, EquivalentTo(simplify(ex<Constant>(-1) * ba)));
+    REQUIRE_THAT(ab, EquivalentTo(simplify(ex<Constant>(-1) * ba,
+                                           deduce_named_indices)));
     // wick_reduce of a bare (already normal-ordered) operator is itself
     REQUIRE_THAT(bernoulli::detail::wick_reduce(V), EquivalentTo(V));
     // Wick reduction adds contractions beyond the naive V*T2 - T2*V
     REQUIRE(bernoulli::detail::wick_commutator(V, T2) != ex<Constant>(0));
-    REQUIRE_THAT(bernoulli::detail::wick_commutator(V, T2),
-                 !EquivalentTo(simplify(V * T2 - T2 * V)));
+    REQUIRE_THAT(
+        bernoulli::detail::wick_commutator(V, T2),
+        !EquivalentTo(simplify(V * T2 - T2 * V, deduce_named_indices)));
   }
 
   SECTION("bernoulli_wick_topology") {
@@ -112,19 +114,19 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // equivalent T2 that pruning permutes ops, and must agree with the
     // exhaustive enumeration
     auto X = op::tensor::h(2) * op::tensor::t(2) * op::tensor::t(2);
-    simplify(X);
-    FWickTheorem exhaustive{X};
+    simplify(X, deduce_named_indices);
+    FWickTheorem exhaustive{X, deduce_named_indices};
     exhaustive.use_topology(false).full_contractions(false);
     auto reference = exhaustive.compute(/*count_only=*/false,
                                         /*skip_input_canonicalization=*/true);
-    simplify(reference);
-    FWickTheorem pruned{X};
+    simplify(reference, deduce_named_indices);
+    FWickTheorem pruned{X, deduce_named_indices};
     pruned.full_contractions(false);
     pruned.compute(/*count_only=*/true, /*skip_input_canonicalization=*/true);
     REQUIRE(pruned.stats().num_attempted_contractions.load() <
             exhaustive.stats().num_attempted_contractions.load());
-    REQUIRE(simplify(bernoulli::detail::wick_reduce(X) - reference) ==
-            ex<Constant>(0));
+    REQUIRE(simplify(bernoulli::detail::wick_reduce(X) - reference,
+                     deduce_named_indices) == ex<Constant>(0));
   }
 
   SECTION("bernoulli_expand_to_blocks") {
@@ -134,8 +136,10 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto Vx = bernoulli::detail::expand_to_blocks(V);
     // identity on each manifold: the expansion changes no physical content
     for (const auto n : {1, 2})
-      REQUIRE_THAT(op::tensor::ref_av(op::tensor::P(nₚ(n)) * Vx),
-                   EquivalentTo(op::tensor::ref_av(op::tensor::P(nₚ(n)) * V)));
+      REQUIRE_THAT(
+          op::tensor::ref_av(op::tensor::P(nₚ(n)) * Vx, deduce_named_indices),
+          EquivalentTo(op::tensor::ref_av(op::tensor::P(nₚ(n)) * V,
+                                          deduce_named_indices)));
     REQUIRE(Vx.is<Sum>());
     REQUIRE(Vx.as<Sum>().size() > 1);
     REQUIRE_THAT(bernoulli::detail::expand_to_blocks(Vx),
@@ -162,10 +166,12 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto Vr = bernoulli::detail::R_part(V, 2);
     // N ⊎ R reconstructs V. R stays in compact general-index form, so check the
     // identity on the manifolds rather than symbolically.
-    const auto NR = simplify(Vn + Vr);
+    const auto NR = simplify(Vn + Vr, deduce_named_indices);
     for (const auto n : {1, 2})
-      REQUIRE_THAT(op::tensor::ref_av(op::tensor::P(nₚ(n)) * NR),
-                   EquivalentTo(op::tensor::ref_av(op::tensor::P(nₚ(n)) * V)));
+      REQUIRE_THAT(
+          op::tensor::ref_av(op::tensor::P(nₚ(n)) * NR, deduce_named_indices),
+          EquivalentTo(op::tensor::ref_av(op::tensor::P(nₚ(n)) * V,
+                                          deduce_named_indices)));
     REQUIRE(Vn != ex<Constant>(0));
     REQUIRE(Vr != ex<Constant>(0));
     // N is idempotent; R has no pure-exc/deexc content
@@ -237,25 +243,27 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     auto h1 = bernoulli::hbar(2, 1, false);
     auto h2 = bernoulli::hbar(2, 2, false);
     auto has_f = [&](const ExprPtr& e) { return has_tensor(e, L"f"); };
-    REQUIRE(has_f(simplify(h1 - h0)));  // [F,σ]
-    REQUIRE_FALSE(has_f(simplify(h2 - h1)));
+    REQUIRE(has_f(simplify(h1 - h0, deduce_named_indices)));  // [F,σ]
+    REQUIRE_FALSE(has_f(simplify(h2 - h1, deduce_named_indices)));
     REQUIRE_THAT(h0,  // H̄⁰ = F + V, Eq. (46)
-                 EquivalentTo(simplify(op::tensor::F() + op::tensor::h(2))));
+                 EquivalentTo(simplify(op::tensor::F() + op::tensor::h(2),
+                                       deduce_named_indices)));
 
     // Reference expectation values of H̄¹ and H̄², Eqs. (47) and (48), taken as
     // successive-rank differences.
-    const auto E0 = op::tensor::ref_av(h0);
-    const auto E1 = op::tensor::ref_av(h1);
-    const auto E2 = op::tensor::ref_av(h2);
-    const auto E1_contrib = simplify(E1 - E0);
-    const auto E2_contrib = simplify(E2 - E1);
+    const auto E0 = op::tensor::ref_av(h0, deduce_named_indices);
+    const auto E1 = op::tensor::ref_av(h1, deduce_named_indices);
+    const auto E2 = op::tensor::ref_av(h2, deduce_named_indices);
+    const auto E1_contrib = simplify(E1 - E0, deduce_named_indices);
+    const auto E2_contrib = simplify(E2 - E1, deduce_named_indices);
 
     // <0|H̄¹|0>: g-content is exactly 1/8 <ij||ab> σ_ij^ab + h.c.; the remainder
     // is the [F,σ] Brillouin terms, which vanish at an HF reference.
     const auto E1_g_closed = deserialize(
         L"1/8 t{a_1,a_2;i_1,i_2}:A-N-S * g{i_1,i_2;a_1,a_2}:A-C-S "
         L"+ 1/8 t⁺{i_1,i_2;a_1,a_2}:A-N-S * g{a_1,a_2;i_1,i_2}:A-C-S");
-    const auto E1_brillouin = simplify(E1_contrib - E1_g_closed);
+    const auto E1_brillouin =
+        simplify(E1_contrib - E1_g_closed, deduce_named_indices);
     REQUIRE_FALSE(has_tensor(E1_brillouin, L"g"));
     REQUIRE(has_tensor(E1_brillouin, L"f"));
 
@@ -445,13 +453,14 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
         CC(2), Exception,
         Catch::Matchers::MessageMatches(
             Catch::Matchers::ContainsSubstring("hbar_comm_rank is required")));
-    REQUIRE(simplify(CC(2, {.hbar_comm_rank = 1}).hbar() - op::H()) !=
-            ex<Constant>(0));
+    REQUIRE(simplify(CC(2, {.hbar_comm_rank = 1}).hbar() - op::H(),
+                     deduce_named_indices) != ex<Constant>(0));
 
     // H̄ must use explicit commutators, since ref_av takes no connectivity here
-    const auto expected = op::ref_av(lst(op::H(), op::T(1), 2), {});
-    REQUIRE(simplify(CC(1, {.hbar_comm_rank = 2}).energy() - expected) ==
-            ex<Constant>(0));
+    const auto expected =
+        op::ref_av(lst(op::H(), op::T(1), 2), deduce_named_indices);
+    REQUIRE(simplify(CC(1, {.hbar_comm_rank = 2}).energy() - expected,
+                     deduce_named_indices) == ex<Constant>(0));
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
     // screening must not change the result; the MR amplitudes do not commute,
@@ -600,7 +609,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // commutator built independently of mbpt::lst (plain expression arithmetic)
     const auto comm = [](const ExprPtr& A, const ExprPtr& B) {
       auto r = A * B - B * A;
-      simplify(r);
+      simplify(r, deduce_named_indices);
       return r;
     };
 
@@ -650,7 +659,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       if (has(term, label, [rank](auto r) { return r == rank; }) &&
           !has(term, L"t", [](auto r) { return r > 1; }))
         result += term;
-    REQUIRE(!simplify(result)->is<Constant>());
+    REQUIRE(!simplify(result, deduce_named_indices)->is<Constant>());
     return result;
   };
   auto symmetric = [](auto&& make_eqs) {
@@ -660,7 +669,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     return make_eqs();
   };
   auto equal = [](const ExprPtr& a, const ExprPtr& b) {
-    return simplify(a - b) == ex<Constant>(0);
+    return simplify(a - b, deduce_named_indices) == ex<Constant>(0);
   };
 
   SECTION("EE-EOM-CCSD R") {
@@ -838,6 +847,6 @@ TEST_CASE("bernoulli-keeps-basis-instance", "[mbpt][basis]") {
 
   const auto ab = bernoulli::detail::wick_commutator(V, T2);
   CHECK(instance_histogram(ab)[3] > 0);
-  CHECK(simplify(ab + bernoulli::detail::wick_commutator(T2, V)) ==
-        ex<Constant>(0));
+  CHECK(simplify(ab + bernoulli::detail::wick_commutator(T2, V),
+                 deduce_named_indices) == ex<Constant>(0));
 }

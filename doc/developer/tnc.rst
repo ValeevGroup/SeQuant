@@ -40,7 +40,7 @@ anonymous indices, which are renamed in canonical order below, but not for named
 indices of a space share a color, an automorphism may exchange them, and the labeling would place their labels by input numbering
 (`#666 <https://github.com/ValeevGroup/SeQuant/issues/666>`_). So, with labels ignored, the member ``canonicalize_graph`` selects among
 the labelings the automorphisms allow: position by position in canonical order, each named-index position gets the index with the
-smallest label (by the context's index comparer, as tensor canonicalizers order indices) that an automorphism fixing the positions
+smallest label (by the index comparer of the canonicalization options, as tensor canonicalizers order indices) that an automorphism fixing the positions
 before it can bring there. The automorphisms fixing given vertices are found by rerunning bliss's automorphism search with those
 vertices given colors of their own. The structure of the result does not depend on the labels; where the labels go does.
 
@@ -73,24 +73,38 @@ and the vertices an automorphism must fix. When a generator of phase -1 is found
 ``ex<Constant>(0)`` and leaves the tensors as they were. :doc:`Wick's theorem <wick>` applies the same test to the input of its topology
 analysis.
 
-Topological vs. lexicographic canonicalization
-----------------------------------------------------
+Canonical form and presentation stage
+----------------------------------------
 
-``CanonicalizeOptions::method`` (``SeQuant/core/options.hpp``) selects between two independently useful strategies:
+``TensorNetworkV3::canonicalize`` always runs the bliss-based procedure above, which fixes the order of the tensors and the names
+of the dummy indices, and then canonicalizes each tensor individually (``canonicalize_individual_tensors``), which orders the
+indices in the slots that the symmetry of the tensor exchanges, as the canonicalization of a lone tensor does. The second step
+does not change the network, so the result is still determined by the network alone; without it the order of, e.g., the named
+indices in the bra of an antisymmetric tensor would be left to the graph, and a lone tensor and the same tensor in a product would
+be spelled differently. This is the library's canonical form. It is not meant to be read.
 
-- ``Topological`` is the bliss-based procedure above — the only one guaranteed correct once the network contains indistinguishable
-  tensors, at the cost of building and canonicalizing a graph.
-- ``Lexicographic`` is a cheap label-based sort of tensors, slots, and indices. It produces a more human-readable ordering but is
-  incomplete on its own: it can fail to recognize two networks as equal when they contain genuinely identical tensors.
-- ``Complete`` (the default) runs ``Topological`` then ``Lexicographic``, combining correctness with a readable result; ``Rapid`` is
-  ``Lexicographic`` alone, for when speed matters more than completeness.
+With presentation settings (``CanonicalizeOptions::presentation``, set by :func:`sequant::prettify`) a presentation stage follows: the
+tensors are sorted by label (cardinal tensor labels first), the dummy indices are renamed in the order of the slots, and each tensor
+is canonicalized with the presentation's canonicalizers and comparers. Its result is meant to be read and is not recorded as the
+canonical form.
+
+Tensors that do not commute (e.g. normal operators) keep their relative order: of the orders that keep it, the one that is smallest
+by the canonical order of the tensor vertices is chosen (a sort by a comparison that takes non-commuting tensors for equivalent would
+leave an input-dependent order, since that comparison is not transitive). A tensor for which the options give a nondefault
+canonicalizer keeps the order of its slots in the graph stage, so that the canonicalizer decides it (e.g. normal operators in
+:class:`sequant::WickTheorem`, whose canonicalizer keeps them as normalized).
+
+Indices with protoindices are renamed in one pass in which every index whose image differs is given its image explicitly (its
+renamed label with its renamed protoindices): ``Index::transform`` renames the protoindices of an index that is not in the
+replacement map and then looks it up again, which would rename it a second time if the result happens to be in the map.
 
 Subtleties for contributors
 --------------------------------
 
 - ``BraKetSymmetry::Conjugate`` is not yet exploited by graph construction — indices of a conjugate-symmetric tensor are colored as
   ``Symm`` would be, since handling the associated complex conjugation correctly is, per the surrounding comment, "not entirely clear."
-- Named vs. anonymous index handling is controlled by ``CreateGraphOptions::named_indices``/``distinct_named_indices``; a newer
+- Named vs. anonymous index handling is controlled by the named indices given to ``create_graph`` (a ``NamedIndexSpec``) and
+  ``CreateGraphOptions::distinct_named_indices``; a newer
   per-index "loop color" (``NamedIndexColorMap``, ``SeQuant/core/tensor_network/typedefs.hpp``) additionally lets same-space named
   indices belonging to different DAG-scope loops be told apart, which sliced/batched evaluation relies on.
 - Auxiliary (``aux``) index slots have no permutational-symmetry support yet, both in graph construction and in the single-tensor
@@ -98,14 +112,13 @@ Subtleties for contributors
 - ``TensorNetworkV3::factorize()`` is unimplemented (aborts).
 - Canonicalizing a *single* tensor's own bra/ket order — as opposed to a whole network — is a separate, deliberately pluggable concern:
   :class:`sequant::TensorCanonicalizer` is a base class that a contributor can implement against to customize how one tensor's slots get
-  ordered, without touching the network-wide bliss machinery above. Instances are owned by the :class:`sequant::Context`, keyed by tensor
-  label. Inside network canonicalization (``TensorNetworkV3::do_individual_canonicalization``) a tensor uses
-  ``nondefault_tensor_canonicalizer_ptr(label)`` of a :func:`sequant::get_default_context_snapshot` taken once per network, i.e. the
+  ordered, without touching the network-wide bliss machinery above. Instances are passed explicitly, keyed by tensor label, in the
+  presentation settings of the canonicalization options (``CanonicalizationPresentation::tensor_canonicalizers``); the library's own
+  canonical form uses none. Inside network canonicalization (``TensorNetworkV3::do_individual_canonicalization``) a tensor uses the
   entry for exactly its own label, and otherwise the network's own canonicalizer (``DefaultTensorCanonicalizer`` or
   ``TensorBlockCanonicalizer``); the entry for the empty label is consulted only by ``Tensor::canonicalize()`` and
   ``TensorPower::canonicalize()`` on a lone tensor in which no index occurs more than once (a lone tensor with a repeated index,
-  protoindices included, is a tensor network and is canonicalized as one). Since the lookup goes through the current context, a scoped
-  context (see :doc:`/user/guide/context`) overrides it for the scope's duration, on the threads that see that scope.
+  protoindices included, is a tensor network and is canonicalized as one).
   ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort (rather than
   using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee about
   using swaps to get there.
@@ -116,22 +129,20 @@ Recorded canonical form
 A fully canonicalized expression carries a mark that makes canonicalizing it again a no-op, so callers can request full
 canonicalization without tracking whether it was already done. The free ``canonicalize()``, as well as ``Product::canonicalize()``,
 ``Sum::canonicalize()``, ``Tensor::canonicalize()`` and ``TensorPower::canonicalize()``, record their result with
-``Expr::mark_canonical(opts)`` and return at once, with no byproduct, for an expression that ``Expr::is_canonical(opts)``. Only
-``Complete`` canonicalization marks: ``Lexicographic`` alone is incomplete, and ``Topological`` alone leaves the order of named
-indices in (anti)symmetric slots to the graph, so that, e.g., a lone tensor and the same tensor scaled end up spelled differently.
+``Expr::mark_canonical(named_indices, opts)`` and return at once, with no byproduct, for an expression that
+``Expr::is_canonical(named_indices, opts)``. Only canonicalization to the library's canonical form (options without
+presentation settings) marks; a form with presentation settings is neither marked nor treated as canonical.
 Since the summands of a ``Sum`` are marked by their own canonicalization, re-canonicalizing a ``Sum`` after some of its summands
 changed canonicalizes only those.
 
-A mark is valid only for the ``CanonicalizeOptions`` it was recorded under (named indices included) and only while the contexts in
+A mark is valid only for the named indices and ``CanonicalizeOptions`` it was recorded under and only while the contexts in
 effect canonicalize as they did when it was recorded, as reported by ``current_contexts_version()`` (``SeQuant/core/context.hpp``): it
-combines the versions of the contexts in effect on the calling thread for all statistics. A context's version identifies its
-canonicalization configuration (tensor canonicalizers, index comparers, cardinal tensor labels, canonicalization options, the index
-space registry and the SP basis), so the value changes when a different configuration takes effect -- a default context is set or reset, a scoped one begins
-or ends, or a setter of one of those runs -- but not for settings canonicalization does not read, and contexts with the same
-configuration share it. It is a function of the contexts, not a counter, so marks recorded before a scoped context are valid again once
-it ends, and marks recorded in the scope of one top-level ``WickTheorem`` are valid in that of the next. Canonicalization seals its result
-with the value at which it started, so a change of the contexts while it runs leaves the result unmarked. In-place changes of a
-canonicalizer or comparer object are not tracked (see ``Context::version()``).
+combines the versions of the contexts in effect on the calling thread for all statistics. A context's version identifies the
+configuration canonicalization depends on (the index basis registry and the SP basis), so the value changes when a different
+configuration takes effect -- a default context is set or reset, a scoped one begins or ends, or a setter of one of those runs --
+but not for settings canonicalization does not read, and contexts with the same configuration share it. It is a function of the contexts, not a counter, so marks recorded before a scoped context are valid again once
+it ends. Canonicalization seals its result with the value at which it started, so a change of the contexts while it runs leaves the
+result unmarked.
 
 The contract with ``Expr`` types is that every mutation of a node's own data clears its mark: ``Expr::reset_hash_value()`` does so, and
 mutations that do not reset the hash, such as those of the ``Product`` scalar, call ``Expr::reset_canonical_mark()``; a new ``Expr``

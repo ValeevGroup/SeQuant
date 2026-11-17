@@ -80,13 +80,17 @@ rational term_weight(
 ///       MultiProduct-vacuum NormalOperator
 /// @pre every γ/η index is pure-active, and every surviving index is
 ///      pure-active, pure core or pure virtual
+/// @param external_indices the external indices of @p wick_output , which the
+///        simplification of the result does not rename
 template <Statistics S>
 ExprPtr cumulant_expand(const ExprPtr &wick_output,
                         const OpProvenance &provenance,
-                        const ExtendedWickOptions &opts);
+                        const ExtendedWickOptions &opts,
+                        const NamedIndexSpec &external_indices);
 
 extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
-    const ExprPtr &, const OpProvenance &, const ExtendedWickOptions &);
+    const ExprPtr &, const OpProvenance &, const ExtendedWickOptions &,
+    const NamedIndexSpec &);
 
 /// applies the extended (generalized-normal-order) Wick theorem to @p input;
 /// this is WickTheorem::compute() under a MultiProduct vacuum

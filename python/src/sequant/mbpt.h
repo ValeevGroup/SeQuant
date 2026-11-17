@@ -24,9 +24,7 @@ auto make_sr_op(F f) {
 
 using PyEVOptions = sequant::mbpt::EVOptions<std::string>;
 
-ExprPtr VacuumAverage(const ExprPtr& e) { return sequant::mbpt::op::vac_av(e); }
-
-ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts) {
+ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts, bool deduce) {
   // helper for converting connections lists
   auto convert = [](const sequant::mbpt::OpConnections<std::string>& pairs) {
     sequant::mbpt::OpConnections<std::wstring> result;
@@ -37,11 +35,12 @@ ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts) {
     return result;
   };
   return sequant::mbpt::op::vac_av(
-      e, {.connect = convert(opts.connect),
-          .do_not_connect = convert(opts.do_not_connect),
-          .screen = opts.screen,
-          .use_topology = opts.use_topology,
-          .skip_clone = opts.skip_clone});
+      e, named_index_spec(deduce),
+      {.connect = convert(opts.connect),
+       .do_not_connect = convert(opts.do_not_connect),
+       .screen = opts.screen,
+       .use_topology = opts.use_topology,
+       .skip_clone = opts.skip_clone});
 }
 
 #define SR_OP(OP) \
@@ -76,6 +75,9 @@ inline void __init__(py::module m) {
       "sets the normalization convention of the process-wide default MBPT "
       "context; the change is not scoped and is seen by every thread");
 
+  m.def("cardinal_tensor_labels", &sequant::mbpt::cardinal_tensor_labels,
+        "the tensor labels in the conventional order of mbpt expressions; pass "
+        "to prettify");
   m.def("F", &sequant::mbpt::F);
   m.def("H", &sequant::mbpt::H,
         "H(k = 2) returns a Hamiltonian operator with up to k-body terms",
@@ -93,11 +95,12 @@ inline void __init__(py::module m) {
       .def_readwrite("use_topology", &PyEVOptions::use_topology)
       .def_readwrite("skip_clone", &PyEVOptions::skip_clone);
 
-  m.def("VacuumAverage", py::overload_cast<const ExprPtr&>(&VacuumAverage),
-        py::arg("expr"));
-  m.def("VacuumAverage",
-        py::overload_cast<const ExprPtr&, const PyEVOptions&>(&VacuumAverage),
-        py::arg("expr"), py::arg("options"));
+  m.def("VacuumAverage", &VacuumAverage,
+        "vacuum expectation value of an operator-level expression; "
+        "deduce=True (required) deduces the external indices of its tensor "
+        "form",
+        py::arg("expr"), py::arg("options") = PyEVOptions{}, py::kw_only(),
+        py::arg("deduce"));
 }
 
 }  // namespace sequant::python::mbpt

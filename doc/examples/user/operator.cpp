@@ -77,7 +77,8 @@ int main() {
   // connect the Hamiltonian with every t: H(2) is written in terms of f or h,
   // depending on the vacuum, and default_op_connections() covers both
   const EVOptions<std::wstring> opts{.connect = default_op_connections()};
-  auto result = op::vac_av(op::P(2) * expr, opts);
+  // the projector carries the external indices
+  auto result = op::vac_av(op::P(2) * expr, deduce_named_indices, opts);
   // vac_av is equivalent to ref_av for single-determinant reference:
   // auto result = op::ref_av(op::P(2) * expr, opts);
 
