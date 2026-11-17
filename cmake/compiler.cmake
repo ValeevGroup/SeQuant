@@ -219,6 +219,17 @@ function(target_set_optimization_flags TARGET)
 	endif()
 
 	if (ENABLE_LTO)
+		# Apple's linker lets LTO internalize the global symbols of an executable unless -export_dynamic is given.
+		# That breaks weak definitions the executable shares with shared libraries, e.g. the static of an inline
+		# function such as TiledArray's default World, which then exists once in the executable and once in the
+		# libraries. (ELF linkers keep the symbols that shared libraries reference.) Object libraries pass it on
+		# to the executables linking them.
+		if (APPLE AND TARGET_TYPE STREQUAL "EXECUTABLE")
+			target_link_options("${TARGET}" PRIVATE "$<$<NOT:$<CONFIG:Debug>>:LINKER:-export_dynamic>")
+		elseif (APPLE AND TARGET_TYPE STREQUAL "OBJECT_LIBRARY")
+			target_link_options("${TARGET}" INTERFACE "$<$<NOT:$<CONFIG:Debug>>:LINKER:-export_dynamic>")
+		endif()
+
 		if (SEQUANT_LTO_FLAG_SUPPORTED)
 			# The archiver concern below only exists because we drive LTO by hand: when CMake does it
 			# (the INTERPROCEDURAL_OPTIMIZATION branch) it also substitutes a matching archiver itself

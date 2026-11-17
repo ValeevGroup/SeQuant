@@ -84,7 +84,9 @@ SeQuant library. TiledArray/MADNESS do both (e.g. the default ``World``), so SeQ
 ``SeQuant/core/eval/backends/tiledarray/tiledarray.hpp``, which includes it with default visibility. On Darwin, clang's
 ``-fvisibility-inlines-hidden`` takes precedence over that ``#pragma GCC visibility push(default)`` for inline member functions (e.g.
 TiledArray's default ``World`` accessor), so the library that compiles TiledArray code (``SeQuant-eval-ta``) is built without
-``VISIBILITY_INLINES_HIDDEN``, on every platform.
+``VISIBILITY_INLINES_HIDDEN``, on every platform. Likewise, Apple's linker lets LTO internalize the global symbols of an executable,
+including such shared statics, unless it is linked with ``-export_dynamic``, which ``target_set_optimization_flags`` adds for
+executables (and object libraries) on Apple platforms.
 
 Unit tests
 ----------
