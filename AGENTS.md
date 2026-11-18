@@ -260,7 +260,7 @@ Note the target names: `unit_tests-sequant` and `check-sequant`, not
 
 ### TiledArray-backed tests
 
-With `SEQUANT_TILEDARRAY=ON` the suite gains `test_eval_ta.cpp` (inside
+With `SEQUANT_TILEDARRAY=ON` the suite gains `test_eval_ta*.cpp` (inside
 `unit_tests-sequant`, tag `[eval]`) and the `sequant/integration/eval_ta`
 program, plus the backend under `SeQuant/core/eval/backends/tiledarray/`.
 Failures there often come down to TiledArray or MADWorld behaviour rather

@@ -1786,12 +1786,12 @@ TEST_CASE("external-scatter-replay", "[dryrun-extmode][eval]") {
   // batching at all (doc/developer/cost_model.rst,
   // "Ordered batch contexts and costing").
   // This test drives the SAME scatter branch the TA
-  // regression `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp)
-  // exercises, on the dry-run backend: a small forest carrying the occupied
-  // index ONLY as a protoindex of a composite PNO leg (canonicalization
-  // promotes it to a plain outer canon index, so index_position locates it
-  // directly -- no proto-aware locator needed, exactly as that TA test
-  // documents).
+  // regression `batched_eval_external_proto_occ_scatter`
+  // (test_eval_ta_batched_external.cpp) exercises, on the dry-run backend: a
+  // small forest carrying the occupied index ONLY as a protoindex of a
+  // composite PNO leg (canonicalization promotes it to a plain outer canon
+  // index, so index_position locates it directly -- no proto-aware locator
+  // needed, exactly as that TA test documents).
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
