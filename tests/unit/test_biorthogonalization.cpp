@@ -126,6 +126,24 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
     }
   }
 
+  SECTION("triplet sparse biorthogonalizer coefficients") {
+    // non-zero coefficients; the rest of the (n!)^2 row must be zero
+    const std::vector<std::vector<std::pair<std::size_t, rational>>> nonzeros =
+        {{{0, rational{1, 2}}},
+         {{0, rational{-1, 16}}, {3, rational{3, 16}}},
+         {{14, rational{-1, 160}},
+          {21, rational{-1, 160}},
+          {34, rational{1, 80}},
+          {35, rational{3, 80}}}};
+    const std::vector<std::size_t> row_sizes = {1, 4, 36};
+    for (std::size_t n = 1; n <= 3; ++n) {
+      std::vector<rational> expected(row_sizes[n - 1], rational{0});
+      for (const auto& [i, c] : nonzeros[n - 1]) expected[i] = c;
+      REQUIRE(mbpt::detail::compute_triplet_sparse_biorthogonalizer_coeffs(n) ==
+              expected);
+    }
+  }
+
   SECTION("error") {
     const std::vector<std::vector<std::wstring>> inputs = {
         {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}"},
