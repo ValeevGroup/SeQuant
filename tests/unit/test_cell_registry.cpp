@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 using sequant::eval::CellId;
 using sequant::eval::CellReadResolver;
@@ -312,6 +313,13 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   reg2.seed_persistent();
   CHECK(reg2.peek(2) == r2);  // seeded from the store
   CHECK_FALSE(reg2.peek(1));
+  std::vector<sequant::eval::CellId> live2;
+  reg2.for_each_live(
+      [&live2](sequant::eval::CellId c, sequant::ResultPtr const&) {
+        live2.push_back(c);
+      });
+  CHECK(live2 == std::vector<sequant::eval::CellId>{2});
+  CHECK(reg2.holds(r2));
 }
 
 TEST_CASE("registry-clear-bound-to", "[cell_registry]") {
@@ -390,4 +398,63 @@ TEST_CASE("resolver-unfetched-not-drained", "[cell_registry]") {
   });
   CHECK_FALSE(rr.operand_drained(100));  // table value, never fetched here
   CHECK(rr.operand_drained(999));        // not a table value: private
+}
+
+TEST_CASE("registry-live-cells", "[cell_registry]") {
+  // for_each_live and holds follow every way a slot gains or loses a value,
+  // and visit cells in ascending order.
+  CellTable t;
+  for (std::size_t i = 0; i < 4; ++i) {
+    TableCell c;
+    c.value_id = i;
+    c.production.kind = ProductionKind::Build;
+    c.scope.path = {{LoopKey{1, 0}, 0}};
+    c.persistent = (i == 3);
+    t.cells.push_back(c);
+  }
+  CellRegistry reg(t);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  auto make = [&cm](std::wstring_view label) {
+    return std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+        sequant::container::svector<sequant::Index>{
+            sequant::Index{std::wstring(label)}},
+        cm);
+  };
+  sequant::ResultPtr r0 = make(L"i_1"), r1 = make(L"i_2"), r3 = make(L"i_3");
+  auto live = [&reg] {
+    std::vector<CellId> out;
+    reg.for_each_live(
+        [&out](CellId c, sequant::ResultPtr const&) { out.push_back(c); });
+    return out;
+  };
+
+  CHECK(live().empty());
+  reg.set(1, r1);
+  reg.set(3, r3);
+  reg.set(0, r0);
+  CHECK(live() == std::vector<CellId>{0, 1, 3});
+  CHECK(reg.holds(r1));
+
+  (void)reg.take(1);
+  CHECK(live() == std::vector<CellId>{0, 3});
+  CHECK_FALSE(reg.holds(r1));
+
+  (void)reg.take(3);  // a persistent cell is never given away
+  CHECK(live() == std::vector<CellId>{0, 3});
+
+  reg.release(0);
+  CHECK(live() == std::vector<CellId>{3});
+
+  reg.set(0, r0);
+  reg.clear_bound_to(LoopKey{1, 0});
+  CHECK(live() == std::vector<CellId>{3});
+  CHECK(reg.holds(r3));
+
+  reg.set(2, nullptr);  // a null value does not make the cell live
+  CHECK(live() == std::vector<CellId>{3});
+
+  reg.set(3, nullptr);  // nor keeps a live (persistent) cell live
+  CHECK(live().empty());
+  CHECK_FALSE(reg.holds(r3));
 }
