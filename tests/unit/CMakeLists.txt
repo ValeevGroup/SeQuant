@@ -131,8 +131,16 @@ target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE
 # OBJECT library: TiledArray backend tests (conditional)
 ##########################
 if (SEQUANT_HAS_TILEDARRAY)
+    # test_eval_ta*.cpp are separate translation units, each kept out of the
+    # unity build: all of them in one (or in a unity batch) need more compiler
+    # memory than a CI runner has
     set(eval_ta_test_sources
         "test_eval_ta.cpp"
+        "test_eval_ta_batched_external.cpp"
+        "test_eval_ta_evaluators.cpp"
+        "test_eval_ta_lazy_views.cpp"
+        "test_eval_ta_ordered.cpp"
+        "test_eval_ta_shapes.cpp"
         "test_cache_manager.cpp"
     )
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
