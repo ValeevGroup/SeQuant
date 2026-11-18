@@ -30,6 +30,8 @@
 #include <range/v3/view/zip.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <numeric>
 
 namespace sequant::mbpt {
@@ -1044,6 +1046,91 @@ std::vector<double> compute_triplet_nns_p_coeffs(std::size_t n_particles,
       overlap *
       Eigen::Map<const Eigen::VectorXd>(
           pinv_row.data(), boost::numeric_cast<Eigen::Index>(pinv_row.size())));
+}
+
+std::vector<rational> compute_triplet_sparse_biorthogonalizer_coeffs(
+    std::size_t n_particles, double threshold) {
+  const auto overlap = triplet_overlap_matrix(n_particles);
+  const auto dense_row =
+      compute_triplet_biorthogonalizer_coeffs(n_particles, threshold);
+  const auto dim = dense_row.size();
+  const Eigen::Map<const Eigen::VectorXd> dense(
+      dense_row.data(), boost::numeric_cast<Eigen::Index>(dim));
+  // every valid row x satisfies overlap.x == target
+  const Eigen::VectorXd target = overlap * dense;
+  constexpr double rel_tol = 1e-8;
+  const double tol = rel_tol * dense.cwiseAbs().maxCoeff();
+
+  // column is the map key, so swapping two Es in TEE will be the same key.
+  container::map<std::vector<double>, std::size_t> representative;
+  for (std::size_t idx = 0; idx < dim; ++idx) {
+    std::vector<double> column(dim);
+    for (std::size_t r = 0; r < dim; ++r)
+      column[r] =
+          overlap(static_cast<Eigen::Index>(r), static_cast<Eigen::Index>(idx));
+    representative[std::move(column)] =
+        idx;  // 18 col for rank 3 (from 36 to 18 for rank 3)
+  }
+
+  // group the unique ones by equal dense coefficient (group by values)
+  std::vector<std::size_t> by_value;
+  for (const auto& [_, idx] : representative) by_value.push_back(idx);
+  std::ranges::stable_sort(by_value, {},
+                           [&](std::size_t i) { return dense_row[i]; });
+  std::vector<std::vector<std::size_t>> groups;
+  for (std::size_t k = 0; k < by_value.size(); ++k) {
+    if (k == 0 || dense_row[by_value[k]] - dense_row[by_value[k - 1]] > tol)
+      groups.emplace_back();
+    groups.back().push_back(by_value[k]);
+  }
+  for (auto& g : groups) std::ranges::sort(g);
+  std::ranges::sort(groups, {}, [](const auto& g) { return g.front(); });
+
+  // 2^g = all, zero every subset of groups; keep the solvable one with the
+  // higher sparsity
+  std::vector<std::size_t> best_support;
+  std::vector<double> best_values;
+  for (std::uint64_t zeroed = 0; zeroed < (std::uint64_t{1} << groups.size());
+       ++zeroed) {
+    std::vector<std::size_t> cols;
+    for (std::size_t g = 0; g < groups.size(); ++g)
+      if (!((zeroed >> g) & 1u))
+        cols.insert(cols.end(), groups[g].begin(), groups[g].end());
+    if (cols.empty()) continue;
+    std::ranges::sort(cols);
+
+    Eigen::MatrixXd A(overlap.rows(), static_cast<Eigen::Index>(cols.size()));
+    for (std::size_t j = 0; j < cols.size(); ++j)
+      A.col(static_cast<Eigen::Index>(j)) =
+          overlap.col(static_cast<Eigen::Index>(cols[j]));
+    Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> decomp;
+    decomp.setThreshold(threshold);
+    decomp.compute(A);
+    const Eigen::VectorXd x = decomp.solve(target);
+    if ((A * x - target).norm() > rel_tol * target.norm())
+      continue;  // if Gd=Gs
+
+    std::vector<std::size_t> support;
+    std::vector<double> values;
+    for (std::size_t j = 0; j < cols.size(); ++j)
+      if (const double v = x(static_cast<Eigen::Index>(j)); std::abs(v) > tol) {
+        support.push_back(cols[j]);
+        values.push_back(v);
+      }
+    if (best_support.empty() || support.size() < best_support.size() ||
+        (support.size() == best_support.size() &&
+         std::ranges::lexicographical_compare(best_support, support))) {
+      best_support = std::move(support);
+      best_values = std::move(values);
+    }
+  }
+  SEQUANT_ASSERT(!best_support.empty());
+
+  std::vector<rational> result(dim, rational{0});
+  for (std::size_t j = 0; j < best_support.size(); ++j)
+    result[best_support[j]] = to_rational(best_values[j], threshold);
+
+  return result;
 }
 
 }  // namespace detail

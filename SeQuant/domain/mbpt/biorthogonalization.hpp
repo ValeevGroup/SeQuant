@@ -344,6 +344,22 @@ template <typename T>
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
 
+/// \brief Computes a sparse triplet biorthogonal row, the computed counterpart
+/// of hardcoded_triplet_residual_row
+///
+/// Shifts the last row of the pseudoinverse of the triplet overlap matrix by
+/// null-space vectors so that whole groups of equal coefficients vanish,
+/// keeping the solution with the fewest non-zeros.
+///
+/// \param n_particles The rank of external index pairs
+/// \param pseudoinverse_threshold The threshold to compute the pseudoinverse
+/// \return Vector of the (n!)^2 rational and sparse coefficients
+[[nodiscard]] std::vector<rational>
+compute_triplet_sparse_biorthogonalizer_coeffs(
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+
 // clang-format off
 /// \brief Provides the identity row of the closed-shell triplet NNS
 /// projector, hardcoded to avoid numerical precision loss.
