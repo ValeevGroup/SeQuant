@@ -949,6 +949,9 @@ class CacheManager {
 
     [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
 
+    /// \return the held buffer (null if none), for pointer-identity tests.
+    [[nodiscard]] Result const* buffer() const noexcept { return data_p.get(); }
+
     /// \return true iff this entry currently holds the same buffer (pointer
     ///         identity) as @p other. A sliced/permuted/phase-shifted read of
     ///         this entry is a distinct buffer, so it compares unequal. Used by
@@ -1534,6 +1537,16 @@ class CacheManager {
     for (auto const& [k, e] : cache_map_)
       if (e.holds(value)) return true;
     return parent_ ? parent_->chain_holds(value) : false;
+  }
+
+  /// \return the buffers (by pointer identity) that \c chain_holds() would
+  ///         report as held: one pass over the chain instead of one per query.
+  [[nodiscard]] std::unordered_set<Result const*> chain_held_buffers() const {
+    std::unordered_set<Result const*> out;
+    for (CacheManager const* c = this; c; c = c->parent_)
+      for (auto const& [k, e] : c->cache_map_)
+        if (e.alive()) out.insert(e.buffer());
+    return out;
   }
 
   /// \return true iff @p value's bytes are already part of the residency a

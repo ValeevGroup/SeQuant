@@ -803,11 +803,28 @@ TEST_CASE("cache_manager chain_holds pointer identity", "[cache_manager]") {
   // Null is never held.
   REQUIRE_FALSE(child.chain_holds(nullptr));
 
+  // chain_held_buffers() reports exactly the buffers chain_holds() does.
+  auto const agrees = [&](manager_type const& m) {
+    auto const held = m.chain_held_buffers();
+    for (auto const& v : {vX, vY, other})
+      if (held.contains(v.get()) != m.chain_holds(v)) return false;
+    return !held.contains(nullptr);
+  };
+  REQUIRE(child.chain_held_buffers() ==
+          std::unordered_set<sequant::Result const*>{vX.get(), vY.get()});
+  REQUIRE(parent.chain_held_buffers() ==
+          std::unordered_set<sequant::Result const*>{vX.get()});
+  REQUIRE(agrees(child));
+  REQUIRE(agrees(parent));
+
   // Once the parent's entry is drained, its buffer is no longer held anywhere
   // on the chain.
   REQUIRE(parent.access(X) != nullptr);  // life 1 -> 0, released
   REQUIRE_FALSE(parent.alive(X));
   REQUIRE_FALSE(child.chain_holds(vX));
+  REQUIRE(child.chain_held_buffers() ==
+          std::unordered_set<sequant::Result const*>{vY.get()});
+  REQUIRE(agrees(child));
 }
 
 // The per-op working-set sample (log::working_set) against a hierarchy with an
