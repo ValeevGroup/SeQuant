@@ -314,9 +314,7 @@ void OptimizationStep::set_replay_options(const nlohmann::json &options) {
     throw Exception(name + " expects a JSON object");
   }
 
-  auto is_volatile = std::make_shared<ExpressionFilter>();
-  is_volatile->set_require_all(false);
-  bool volatile_given = false;
+  std::shared_ptr<ExpressionFilter> is_volatile;
 
   ReplayOptions replay;
 
@@ -331,35 +329,7 @@ void OptimizationStep::set_replay_options(const nlohmann::json &options) {
 
   for (const auto &[key, value] : options.items()) {
     if (key == "volatile") {
-      auto add_rule = [&](const nlohmann::json &entry) {
-        if (entry.is_string()) {
-          is_volatile->add_rule(
-              parse_contains_label(nlohmann::json{{"label", entry}}));
-        } else if (entry.is_object() && entry.contains("expr")) {
-          is_volatile->add_rule(
-              parse_contains_expr(entry, TensorComparison::Block));
-        } else if (entry.is_object() && entry.contains("label")) {
-          is_volatile->add_rule(parse_contains_label(entry));
-        } else {
-          throw Exception("Entries of " + name +
-                          ".volatile must be strings or objects containing "
-                          "either 'expr' or 'label'");
-        }
-      };
-
-      if (value.is_array()) {
-        if (value.empty()) {
-          throw Exception(name + ".volatile must not be empty");
-        }
-
-        for (const nlohmann::json &entry : value) {
-          add_rule(entry);
-        }
-      } else {
-        add_rule(value);
-      }
-
-      volatile_given = true;
+      is_volatile = parse_tensor_filter(value, name + ".volatile");
     } else if (key == "weight") {
       if (!value.is_number()) {
         throw Exception("Value for " + name + " option '" + key +
@@ -378,7 +348,7 @@ void OptimizationStep::set_replay_options(const nlohmann::json &options) {
     }
   }
 
-  if (!volatile_given) {
+  if (!is_volatile) {
     throw Exception("The 'volatile' option for " + name + " is mandatory");
   }
 

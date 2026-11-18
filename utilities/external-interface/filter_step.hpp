@@ -31,6 +31,14 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
 std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
     const nlohmann::json &spec);
 
+/// Parses @p value, a rule or a non-empty array of rules selecting tensors,
+/// into a filter that matches if any rule does. A rule is either a label
+/// pattern (string) or an object holding "expr" (compared in block mode unless
+/// it gives "tensor_equality_mode") or "label". @p name names the option in
+/// errors.
+std::shared_ptr<ExpressionFilter> parse_tensor_filter(
+    const nlohmann::json &value, const std::string &name);
+
 class FilterStep : public ProcessingStep {
  public:
   std::string kind() const override;

@@ -88,6 +88,40 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
   return rule;
 }
 
+std::shared_ptr<ExpressionFilter> parse_tensor_filter(
+    const nlohmann::json &value, const std::string &name) {
+  auto filter = std::make_shared<ExpressionFilter>();
+  filter->set_require_all(false);
+
+  auto add_rule = [&](const nlohmann::json &entry) {
+    if (entry.is_string()) {
+      filter->add_rule(parse_contains_label(nlohmann::json{{"label", entry}}));
+    } else if (entry.is_object() && entry.contains("expr")) {
+      filter->add_rule(parse_contains_expr(entry, TensorComparison::Block));
+    } else if (entry.is_object() && entry.contains("label")) {
+      filter->add_rule(parse_contains_label(entry));
+    } else {
+      throw Exception("Entries of " + name +
+                      " must be strings or objects containing either 'expr' "
+                      "or 'label'");
+    }
+  };
+
+  if (value.is_array()) {
+    if (value.empty()) {
+      throw Exception(name + " must not be empty");
+    }
+
+    for (const nlohmann::json &entry : value) {
+      add_rule(entry);
+    }
+  } else {
+    add_rule(value);
+  }
+
+  return filter;
+}
+
 /// Parses one or several full-match regular expressions from @p labels
 std::vector<std::wregex> parse_label_patterns(const nlohmann::json &labels) {
   std::vector<std::wregex> patterns;
