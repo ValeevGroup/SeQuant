@@ -36,7 +36,7 @@ if (NOT TARGET range-v3::range-v3)
     if (NOT SEQUANT_FETCHED_RANGEV3)
         # range-v3_CONFIG is the found config
     elseif (SEQUANT_INSTALL_FETCHED_DEPENDENCIES)
-        set(range-v3_CONFIG "${CMAKE_INSTALL_PREFIX}/lib/cmake/range-v3/range-v3-config.cmake")
+        set(range-v3_CONFIG "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/cmake/range-v3/range-v3-config.cmake")
         sequant_record_installed_dependency(range-v3 VERSION ${_rangev3_version})
     else()
         unset(range-v3_CONFIG)

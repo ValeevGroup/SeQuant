@@ -7,6 +7,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
 #define SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/expr.hpp>
 
@@ -103,8 +104,8 @@ struct ProjectionOptions {
 /// @throw Exception if an integral of an R2 term carries auxiliary indices,
 /// `Integral` lacks `cell_instance`, or `PartnerPair` is combined with
 /// `Amplitude`
-[[nodiscard]] ExprPtr project_integral_domains(ExprPtr const& expr,
-                                               ProjectionOptions const& opts);
+[[nodiscard]] SEQUANT_MBPT_API ExprPtr
+project_integral_domains(ExprPtr const& expr, ProjectionOptions const& opts);
 
 }  // namespace sequant::mbpt
 

@@ -8,20 +8,26 @@
 #include <SeQuant/core/op.hpp>
 
 namespace sequant {
-template <>
-const container::svector<std::wstring>&
-NormalOperator<Statistics::FermiDirac>::labels() {
+template <Statistics S>
+const container::svector<std::wstring>& NormalOperator<S>::labels() {
   using namespace std::literals;
-  static container::svector<std::wstring> labels_{L"a"s, L"ã"s};
+  static_assert(S == Statistics::FermiDirac || S == Statistics::BoseEinstein);
+  static const container::svector<std::wstring> labels_ =
+      S == Statistics::FermiDirac
+          ? container::svector<std::wstring>{L"a"s, L"ã"s}
+          : container::svector<std::wstring>{L"b"s, L"b̃"s};
   return labels_;
 }
 
-template <>
-const container::svector<std::wstring>&
-NormalOperator<Statistics::BoseEinstein>::labels() {
-  using namespace std::literals;
-  static container::svector<std::wstring> labels_{L"b"s, L"b̃"s};
-  return labels_;
-}
+template class SEQUANT_SYMB_TEMPLATE_DEF_API Operator<Statistics::FermiDirac>;
+template class SEQUANT_SYMB_TEMPLATE_DEF_API Operator<Statistics::BoseEinstein>;
+template class SEQUANT_SYMB_TEMPLATE_DEF_API
+    NormalOperator<Statistics::FermiDirac>;
+template class SEQUANT_SYMB_TEMPLATE_DEF_API
+    NormalOperator<Statistics::BoseEinstein>;
+template class SEQUANT_SYMB_TEMPLATE_DEF_API
+    NormalOperatorSequence<Statistics::FermiDirac>;
+template class SEQUANT_SYMB_TEMPLATE_DEF_API
+    NormalOperatorSequence<Statistics::BoseEinstein>;
 
 }  // namespace sequant

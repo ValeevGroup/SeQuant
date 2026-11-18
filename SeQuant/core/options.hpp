@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_OPTIONS_HPP
 #define SEQUANT_CORE_OPTIONS_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
@@ -39,14 +40,14 @@ enum class CanonicalizationMethod : std::uint8_t {
   Rapid = Lexicographic
 };
 
-CanonicalizationMethod operator&(CanonicalizationMethod m1,
-                                 CanonicalizationMethod m2);
-CanonicalizationMethod operator|(CanonicalizationMethod m1,
-                                 CanonicalizationMethod m2);
-std::wstring to_wstring(CanonicalizationMethod m);
+SEQUANT_SYMB_API CanonicalizationMethod operator&(CanonicalizationMethod m1,
+                                                  CanonicalizationMethod m2);
+SEQUANT_SYMB_API CanonicalizationMethod operator|(CanonicalizationMethod m1,
+                                                  CanonicalizationMethod m2);
+SEQUANT_SYMB_INTERNAL_API std::wstring to_wstring(CanonicalizationMethod m);
 
 /// @brief options that control behavior of `canonicalize()`
-struct CanonicalizeOptions {
+struct SEQUANT_SYMB_API CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
 

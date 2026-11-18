@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_UTILITY_STRING_HPP
 #define SEQUANT_CORE_UTILITY_STRING_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -66,10 +67,10 @@ concept basic_string_convertible =
     meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>;
 
 /// Converts the given wide-string to a UTF-8 encoded narrow string
-std::string toUtf8(std::wstring_view str);
+SEQUANT_SYMB_API std::string toUtf8(std::wstring_view str);
 
 /// Pass-through (only converts to std::string)
-std::string toUtf8(std::string_view str);
+SEQUANT_SYMB_API std::string toUtf8(std::string_view str);
 
 inline std::string toUtf8(char c) { return toUtf8(std::string_view(&c, 1)); }
 
@@ -79,10 +80,10 @@ inline std::string toUtf8(wchar_t c) {
 
 /// Converts the given UTF-8 encoded narrow-string to a wide-string, encoded
 /// in UTF-16 where wchar_t is 16 bits wide and in UTF-32 where it is 32 bits
-std::wstring toUtf16(std::string_view str);
+SEQUANT_SYMB_API std::wstring toUtf16(std::string_view str);
 
 /// Pass-through (only converts to std::wstring)
-std::wstring toUtf16(std::wstring_view str);
+SEQUANT_SYMB_API std::wstring toUtf16(std::wstring_view str);
 
 inline std::wstring toUtf16(char c) { return toUtf16(std::string_view(&c, 1)); }
 

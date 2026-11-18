@@ -567,9 +567,11 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(ibr->retrieve_space(L"κ") ==
             ibr->unIon(ibr->retrieve_space(L"p"), ibr->retrieve_space(L"α'")));
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
     REQUIRE(includes(ibr->retrieve_space(L"κ"), ibr->retrieve_space(L"m")));
     REQUIRE(!includes(ibr->retrieve_space(L"m"), ibr->retrieve_space(L"κ")));
     REQUIRE(includes(ibr->retrieve_space(L"α"), ibr->retrieve_space(L"a")));
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
     REQUIRE(ibr->valid_intersection(ibr->retrieve_space(L"i"),
                                     ibr->retrieve_space(L"p")));

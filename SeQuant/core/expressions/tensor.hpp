@@ -5,6 +5,7 @@
 #ifndef SEQUANT_EXPRESSIONS_TENSOR_HPP
 #define SEQUANT_EXPRESSIONS_TENSOR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
@@ -85,7 +86,9 @@ struct TensorSymmetries {
 
 /// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
 /// Tensors have commutative addition and product operations
-class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
+class SEQUANT_SYMB_API Tensor : public Expr,
+                                public AbstractTensor,
+                                public MutatableLabeled {
  public:
   /// @brief the fixed library defaults used to resolve the symmetry attributes
   ///        a Tensor constructor leaves unspecified

@@ -1064,6 +1064,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto vev2_t = tensor::vac_av(expr2_tnsr);  // no operator level screening
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
       // Test screen_vac_av
       // CCD Hbar in connected-product form
       auto hbar = mbpt::lst(H(), t(2), 4, {.use_connected_form = true});
@@ -1082,6 +1083,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
                        (h(1) + h(1) * t(2) + h(2) * t(2) + h(2)) *
                        R(nₚ(1), nₕ(0));
       REQUIRE(simplify(screened_expr4 - expected4) == ex<Constant>(0));
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
     }  // SECTION("screen")
 

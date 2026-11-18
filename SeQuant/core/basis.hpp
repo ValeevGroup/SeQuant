@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_BASIS_HPP
 #define SEQUANT_CORE_BASIS_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/space.hpp>
@@ -59,7 +60,7 @@ namespace sequant {
 /// (own_extent() and own_field() are null), and so sees the registry's
 /// setters for the space's label; one registered with them, even with the
 /// values the space has, does not.
-class IndexBasis {
+class SEQUANT_SYMB_API IndexBasis {
  public:
   using instance_type = std::int32_t;
   using optional_instance = std::optional<instance_type>;
@@ -235,7 +236,8 @@ class IndexBasis {
 /// @return true if @p b1 and @p b2 are of one space and instance, named or
 /// not: the relation the registry keeps one-to-one with a name (see
 /// IndexBasisRegistry::resolve())
-bool same_instance(const IndexBasis& b1, const IndexBasis& b2) noexcept;
+SEQUANT_SYMB_INTERNAL_API bool same_instance(const IndexBasis& b1,
+                                             const IndexBasis& b2) noexcept;
 
 /// @return true if @p basis includes @p subbasis, i.e. its space includes the
 /// space of @p subbasis and it is either the space's own basis (which includes
@@ -246,17 +248,18 @@ bool includes(const IndexBasis& basis, const IndexBasis& subbasis);
 /// @return true if @p b1 and @p b2 are different basis instances, i.e. both
 /// have one and the two differ in instance or name; an identity between
 /// functions of such bases is an overlap, not a Kronecker delta
-bool different_instances(const IndexBasis& b1, const IndexBasis& b2);
+SEQUANT_SYMB_INTERNAL_API bool different_instances(const IndexBasis& b1,
+                                                   const IndexBasis& b2);
 
 /// @return a reference to the unique, program-lifetime copy of @p basis, which
 /// agrees with @p basis in every attribute (unlike IndexBasis::operator==,
 /// which ignores the extent, metric and field); the copy is created on first
 /// use and never destroyed, so the reference never dangles. Two calls return
 /// the same address iff their arguments agree in all attributes. Thread-safe.
-const IndexBasis& intern(const IndexBasis& basis);
+SEQUANT_SYMB_INTERNAL_API const IndexBasis& intern(const IndexBasis& basis);
 
 /// @return `intern(IndexBasis{})`
-const IndexBasis& null_basis();
+SEQUANT_SYMB_INTERNAL_API const IndexBasis& null_basis();
 
 }  // namespace sequant
 

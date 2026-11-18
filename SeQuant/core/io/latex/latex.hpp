@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_IO_LATEX_LATEX_HPP
 #define SEQUANT_CORE_IO_LATEX_LATEX_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -27,7 +28,7 @@ class ResultExpr;
 namespace sequant::io::latex {
 
 /// @returns an empty string if @p expr is null.
-std::wstring to_string(const ExprPtr& expr);
+SEQUANT_SYMB_API std::wstring to_string(const ExprPtr& expr);
 
 template <typename T>
 concept has_to_latex_member = requires(const T& t) { t.to_latex(); };
@@ -107,19 +108,33 @@ std::wstring to_string(const std::complex<T>& t) {
   return result;
 }
 
-std::wstring to_string(const rational& num);
+SEQUANT_SYMB_API std::wstring to_string(const rational& num);
 
-std::wstring to_string(const Power& power);
+SEQUANT_SYMB_API std::wstring to_string(const Power& power);
 
-std::wstring to_string(const TensorPower& power);
+SEQUANT_SYMB_API std::wstring to_string(const TensorPower& power);
 
-std::wstring to_string(const ResultExpr& expr);
+SEQUANT_SYMB_API std::wstring to_string(const ResultExpr& expr);
 
 namespace detail {
 
 template <typename Char, typename Traits, typename Alloc>
 std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
     std::basic_string_view<Char, Traits> str);
+
+// instantiated in latex.cpp; not public API, but used by the public templates
+// below (hence exported)
+#define SEQUANT_LATEX_DECLARE_GREEK_CHARACTERS_TO_STRING_IMPL(CHAR)      \
+  extern template SEQUANT_SYMB_TEMPLATE_DECL_API std::basic_string<CHAR> \
+      greek_characters_to_string_impl<CHAR, std::char_traits<CHAR>,      \
+                                      std::allocator<CHAR>>(             \
+          std::basic_string_view<CHAR>);
+SEQUANT_LATEX_DECLARE_GREEK_CHARACTERS_TO_STRING_IMPL(char)
+SEQUANT_LATEX_DECLARE_GREEK_CHARACTERS_TO_STRING_IMPL(wchar_t)
+SEQUANT_LATEX_DECLARE_GREEK_CHARACTERS_TO_STRING_IMPL(char8_t)
+SEQUANT_LATEX_DECLARE_GREEK_CHARACTERS_TO_STRING_IMPL(char16_t)
+SEQUANT_LATEX_DECLARE_GREEK_CHARACTERS_TO_STRING_IMPL(char32_t)
+#undef SEQUANT_LATEX_DECLARE_GREEK_CHARACTERS_TO_STRING_IMPL
 
 }  // namespace detail
 
@@ -152,6 +167,20 @@ namespace detail {
 template <typename Char, typename Traits, typename Alloc>
 std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
     std::basic_string_view<Char, Traits> str);
+
+// instantiated in latex.cpp; not public API, but used by the public templates
+// below (hence exported)
+#define SEQUANT_LATEX_DECLARE_DIACTRICS_TO_STRING_IMPL(CHAR)             \
+  extern template SEQUANT_SYMB_TEMPLATE_DECL_API std::basic_string<CHAR> \
+      diactrics_to_string_impl<CHAR, std::char_traits<CHAR>,             \
+                               std::allocator<CHAR>>(                    \
+          std::basic_string_view<CHAR>);
+SEQUANT_LATEX_DECLARE_DIACTRICS_TO_STRING_IMPL(char)
+SEQUANT_LATEX_DECLARE_DIACTRICS_TO_STRING_IMPL(wchar_t)
+SEQUANT_LATEX_DECLARE_DIACTRICS_TO_STRING_IMPL(char8_t)
+SEQUANT_LATEX_DECLARE_DIACTRICS_TO_STRING_IMPL(char16_t)
+SEQUANT_LATEX_DECLARE_DIACTRICS_TO_STRING_IMPL(char32_t)
+#undef SEQUANT_LATEX_DECLARE_DIACTRICS_TO_STRING_IMPL
 
 }  // namespace detail
 

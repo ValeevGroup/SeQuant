@@ -2,15 +2,52 @@
 
 #ifdef SEQUANT_HAS_TILEDARRAY
 
+#include <SeQuant/core/eval/backends/tiledarray/tiledarray.hpp>
 #include <SeQuant/core/logger.hpp>
 
-#include <tiledarray.h>
-
+#include <atomic>
+#include <cstdlib>
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <vector>
 
 namespace sequant {
+
+namespace detail {
+
+std::atomic<std::size_t>& fence_counter() {
+  static std::atomic<std::size_t> c{0};
+  return c;
+}
+std::atomic<std::size_t>& wait_counter() {
+  static std::atomic<std::size_t> c{0};
+  return c;
+}
+std::atomic<std::size_t>& slice_counter() {
+  static std::atomic<std::size_t> c{0};
+  return c;
+}
+std::atomic<long long>& slice_ns() {
+  static std::atomic<long long> c{0};
+  return c;
+}
+
+namespace {
+struct FenceReporter {
+  ~FenceReporter() {
+    if (std::getenv("SEQUANT_SYNC_STATS"))
+      std::cerr << "TOTAL gop.fence() calls = " << fence_counter().load()
+                << " ; wait_for_lazy_cleanup calls = " << wait_counter().load()
+                << " ; slice_mode calls = " << slice_counter().load()
+                << " ; slice_mode total = " << (slice_ns().load() / 1e9) << " s"
+                << "\n";
+  }
+};
+const FenceReporter fence_reporter;
+}  // namespace
+
+}  // namespace detail
 
 void log_ta_tensor_host_memory_use([[maybe_unused]] madness::World& world,
                                    [[maybe_unused]] std::string_view label) {

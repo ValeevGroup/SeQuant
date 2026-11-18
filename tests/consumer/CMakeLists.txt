@@ -17,3 +17,12 @@ foreach (_backend IN LISTS SEQUANT_CONSUMER_BACKENDS)
     target_link_libraries(consumer PRIVATE SeQuant::eval::${_backend})
     target_compile_definitions(consumer PRIVATE SEQUANT_CONSUMER_${_backend_uc})
 endforeach ()
+
+# Windows has no RPATH: an executable finds DLLs in its own directory (or via PATH), so copy the ones it needs
+# (SeQuant's and its dependencies') next to it
+get_target_property(_sequant_symb_type SeQuant::symb TYPE)
+if (WIN32 AND _sequant_symb_type STREQUAL "SHARED_LIBRARY")
+    add_custom_command(TARGET consumer POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:consumer> $<TARGET_FILE_DIR:consumer>
+            COMMAND_EXPAND_LISTS)
+endif ()

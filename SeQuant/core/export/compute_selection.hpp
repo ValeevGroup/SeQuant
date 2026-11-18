@@ -1,6 +1,8 @@
 #ifndef SEQUANT_CORE_EXPORT_COMPUTE_SELECTION_HPP
 #define SEQUANT_CORE_EXPORT_COMPUTE_SELECTION_HPP
 
+#include <SeQuant/api.hpp>
+
 #include <cstdint>
 
 namespace sequant {
@@ -17,12 +19,16 @@ enum class ComputeSelection : std::uint8_t {
   Both = 0b11,
 };
 
-ComputeSelection operator|(ComputeSelection lhs, ComputeSelection rhs);
-ComputeSelection operator&(ComputeSelection lhs, ComputeSelection rhs);
-ComputeSelection& operator|=(ComputeSelection& lhs, ComputeSelection rhs);
-ComputeSelection& operator&=(ComputeSelection& lhs, ComputeSelection rhs);
+SEQUANT_EXPORT_API ComputeSelection operator|(ComputeSelection lhs,
+                                              ComputeSelection rhs);
+SEQUANT_EXPORT_API ComputeSelection operator&(ComputeSelection lhs,
+                                              ComputeSelection rhs);
+SEQUANT_EXPORT_API ComputeSelection& operator|=(ComputeSelection& lhs,
+                                                ComputeSelection rhs);
+SEQUANT_EXPORT_API ComputeSelection& operator&=(ComputeSelection& lhs,
+                                                ComputeSelection rhs);
 
-ComputeSelection operator~(ComputeSelection selection);
+SEQUANT_EXPORT_API ComputeSelection operator~(ComputeSelection selection);
 
 }  // namespace sequant
 

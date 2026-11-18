@@ -88,6 +88,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     }  // SECTION("λ")
   }
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
   SECTION("bernoulli_wick") {
     using namespace sequant;
     using namespace sequant::mbpt;
@@ -104,7 +105,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THAT(bernoulli::detail::wick_commutator(V, T2),
                  !EquivalentTo(simplify(V * T2 - T2 * V)));
   }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
   SECTION("bernoulli_wick_topology") {
     using namespace sequant;
     using namespace sequant::mbpt;
@@ -126,7 +129,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(simplify(bernoulli::detail::wick_reduce(X) - reference) ==
             ex<Constant>(0));
   }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
   SECTION("bernoulli_expand_to_blocks") {
     using namespace sequant;
     using namespace sequant::mbpt;
@@ -153,7 +158,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
         },
         /*atoms_only=*/true);
   }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
   SECTION("bernoulli_N_R_split") {
     using namespace sequant;
     using namespace sequant::mbpt;
@@ -183,8 +190,10 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THAT(bernoulli::detail::N_part(F, 2, /*min_rank=*/2),
                  EquivalentTo(ex<Constant>(0)));
   }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
   SECTION("bernoulli_commutator_coefficients") {
     using PathCoefficients = bernoulli::detail::PartitionPathCoefficients;
 
@@ -226,6 +235,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     for (std::size_t order = 0; order < term_counts.size(); ++order)
       REQUIRE(coefficients[order].size() == term_counts[order]);
   }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
   SECTION("bernoulli_hbar_structure") {
     using namespace sequant;
@@ -813,7 +823,8 @@ SECTION("ucc") {
 #endif
 }
 
-TEST_CASE("bernoulli-keeps-basis-instance", "[mbpt][basis]") {
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
+TEST_CASE("bernoulli-keeps-basis-instance", "[internal][mbpt][basis]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::tests::csv::instance_histogram;
@@ -841,3 +852,4 @@ TEST_CASE("bernoulli-keeps-basis-instance", "[mbpt][basis]") {
   CHECK(simplify(ab + bernoulli::detail::wick_commutator(T2, V)) ==
         ex<Constant>(0));
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS

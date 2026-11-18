@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_POWER_HPP
 #define SEQUANT_EXPRESSIONS_POWER_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
@@ -14,7 +15,7 @@ namespace sequant {
 
 /// @brief Represents base^exponent where base is a scalar (Constant or
 /// Variable) and exponent is a rational number.
-class Power : public Expr {
+class SEQUANT_SYMB_API Power : public Expr {
  public:
   using exponent_type = rational;
 

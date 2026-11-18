@@ -12,8 +12,20 @@
 
 namespace sequant {
 
+// constant-initialized, so it cannot be read before initialization
+constinit const IndexSpace::Attr Index::default_space_attr =
+    IndexSpace::Attr::make_reserved();
+const Index Index::null;
+
 std::size_t Index::min_tmp_index() noexcept {
   return get_default_context().first_dummy_index_ordinal();
+}
+
+std::atomic<std::size_t>& Index::tmp_index_accessor() {
+  // initialized so that the first call to next_tmp_index will return
+  // min_tmp_index()
+  static std::atomic<std::size_t> index = min_tmp_index() - 1;
+  return index;
 }
 
 void Index::reset_tmp_index() noexcept {

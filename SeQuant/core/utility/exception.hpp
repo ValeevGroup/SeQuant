@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_UTILITY_EXCEPTION_HPP
 #define SEQUANT_CORE_UTILITY_EXCEPTION_HPP
 
+#include <SeQuant/api.hpp>
 #include <exception>
 #include <string>
 
@@ -12,7 +13,7 @@ namespace sequant {
 
 /// basic SeQuant exception
 /// @sa SEQUANT_ASSERT
-class Exception : public std::exception {
+class SEQUANT_SYMB_API Exception : public std::exception {
  public:
   Exception(const std::string& str) : msg_(str) {}
   virtual const char* what() const noexcept { return msg_.data(); }

@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_GENERATOR_HPP
 #define SEQUANT_CORE_EXPORT_GENERATOR_HPP
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
@@ -32,8 +33,10 @@ enum class PrunableScalars : std::uint8_t {
   All = Constants | Variables
 };
 
-PrunableScalars operator&(PrunableScalars lhs, PrunableScalars rhs);
-PrunableScalars operator|(PrunableScalars lhs, PrunableScalars rhs);
+SEQUANT_EXPORT_API PrunableScalars operator&(PrunableScalars lhs,
+                                             PrunableScalars rhs);
+SEQUANT_EXPORT_API PrunableScalars operator|(PrunableScalars lhs,
+                                             PrunableScalars rhs);
 
 /// Abstract base class for all (code) generators. These work by implementing
 /// callbacks for semantic actions and their job is to perform (piecewise)

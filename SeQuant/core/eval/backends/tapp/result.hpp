@@ -210,7 +210,7 @@ class ResultTensorTAPP final : public Result {
   using annot_t = container::svector<int64_t>;
   using annot_wrap = Annot<annot_t>;
 
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<ResultTensorTAPP<T>>();
   }
 
