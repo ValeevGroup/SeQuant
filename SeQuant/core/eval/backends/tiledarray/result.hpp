@@ -18,17 +18,25 @@
 
 #include <range/v3/view/iota.hpp>
 
+#include <cxxabi.h>
+
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
+#include <string>
+#include <typeinfo>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -316,7 +324,8 @@ inline void log_ta(Args const&... args) noexcept {
 /// Batch-step data-movement record, emitted at eval log level > 0 (the same
 /// gate as the executor's `Eval | ...` records):
 ///
-///   Batch | <Slice|Scatter|Accumulate> | <time>ns | bytes=<B> | <annot>
+///   Batch | <Slice|Scatter|Accumulate> | <time>ns | bytes=<B> | [<backend
+///   suffix> |] <annot>
 ///
 /// Slice: an operand block gathered out of a mode for one batch step;
 /// Scatter: a per-batch block written into its pre-sized destination;
@@ -325,6 +334,10 @@ inline void log_ta(Args const&... args) noexcept {
 /// must reach this call whenever the level is nonzero -- the level is
 /// identical across ranks). These movements are not eval-tree ops, so the
 /// `Eval` records never see them; this is the only accounting of their cost.
+/// The backend suffix is that of the `Eval` records
+/// (`Logger::instance().eval.heap_stats`), omitted when the hook is unset or
+/// returns nothing; a hook that reports a quantity accrued since the previous
+/// record thereby attributes it to this movement and not to the next op.
 template <typename... Args>
 inline void log_batch_op([[maybe_unused]] char const* kind,
                          [[maybe_unused]] std::chrono::nanoseconds elapsed,
@@ -335,8 +348,9 @@ inline void log_batch_op([[maybe_unused]] char const* kind,
   if (l.eval.level == 0) return;
   auto bytes = TA::size_of<TA::MemorySpace::Host>(moved);
   moved.world().gop.sum(bytes);
+  auto const suffix = l.eval.heap_stats ? l.eval.heap_stats() : std::string{};
   write_log(l, "Batch | ", kind, " | ", elapsed.count(), "ns | bytes=", bytes,
-            "B | ", annot, '\n');
+            "B | ", suffix, suffix.empty() ? "" : " | ", annot, '\n');
 #endif
 }
 
@@ -471,6 +485,201 @@ inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
     }
   }
   return TA::TiledRange(dims.begin(), dims.end());
+}
+
+/// \brief A process map whose owner of a tile is a function of the tile's
+///        index along chosen ("key") modes only, and of the ELEMENT lower
+///        bounds of those tiles rather than their ordinals.
+///
+/// Two arrays that carry the same key modes therefore agree on where the
+/// tiles of a given key live, whatever their other modes, the order of the key
+/// modes (the per-mode contributions are added), and whether an array is a
+/// tile block of another (a block keeps the element bounds of its parent).
+class KeyedPmap final : public TA::Pmap {
+ public:
+  /// \param world the world
+  /// \param dims the modes, in order
+  /// \param is_key whether each mode is a key mode
+  KeyedPmap(TA::World& world, std::vector<TA::TiledRange1> const& dims,
+            std::vector<bool> const& is_key)
+      : TA::Pmap(world, volume(dims)),
+        weight_(dims.size()),
+        extent_(dims.size()),
+        contrib_(dims.size()) {
+    std::size_t w = 1;
+    for (std::size_t m = dims.size(); m-- != 0;) {
+      weight_[m] = w;
+      extent_[m] = dims[m].tile_extent();
+      w *= extent_[m];
+      if (!is_key[m]) continue;
+      contrib_[m].reserve(extent_[m]);
+      for (std::size_t t = 0; t != extent_[m]; ++t)
+        contrib_[m].push_back(mix(dims[m].tile(t).first));
+    }
+  }
+
+  size_type owner(const size_type tile) const override {
+    std::uint64_t sum = 0;
+    for (std::size_t m = 0; m != weight_.size(); ++m)
+      if (!contrib_[m].empty())
+        sum += contrib_[m][(tile / weight_[m]) % extent_[m]];
+    return sum % procs_;
+  }
+  bool is_local(const size_type tile) const override {
+    return owner(tile) == size_type(rank_);
+  }
+  bool known_local_size() const override { return false; }
+
+ private:
+  static std::size_t volume(std::vector<TA::TiledRange1> const& dims) {
+    std::size_t v = 1;
+    for (auto const& d : dims) v *= d.tile_extent();
+    return v;
+  }
+  /// splitmix64 finalizer
+  static std::uint64_t mix(std::uint64_t x) {
+    x += 0x9e3779b97f4a7c15ull;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+    return x ^ (x >> 31);
+  }
+  std::vector<std::size_t> weight_;  ///< row-major weight of each mode
+  std::vector<std::size_t> extent_;  ///< tile extent of each mode
+  std::vector<std::vector<std::uint64_t>>
+      contrib_;  ///< per key mode, per tile: its contribution to the owner
+};
+
+/// Where a binary product is computed and its result left (see
+/// keyed_product_placement); null members leave TiledArray's defaults.
+struct ProductPlacement {
+  std::shared_ptr<const TA::Pmap> result_pmap;
+  std::shared_ptr<const TA::Pmap> slab_pmap;
+};
+
+/// \return whether \p arr is kept on a KeyedPmap
+template <typename ArrayT>
+[[nodiscard]] bool is_keyed(ArrayT const& arr) {
+  return arr.is_initialized() &&
+         dynamic_cast<KeyedPmap const*>(arr.pmap().get()) != nullptr;
+}
+
+/// \return whether products are placed by key (PROTOTYPE switch: the
+///         environment variable SEQUANT_TA_KEYED_PMAP, read once; set to
+///         anything but "0" to enable)
+[[nodiscard]] inline bool keyed_product_placement_enabled() {
+  static const bool enabled = [] {
+    const char* v = std::getenv("SEQUANT_TA_KEYED_PMAP");
+    return v != nullptr && std::string(v) != "0";
+  }();
+  return enabled;
+}
+
+/// \return whether outer label \p outer is a proto-index of the inner label
+///         \p inner (the annotation of an inner index is its own label
+///         followed by those of its proto-indices)
+[[nodiscard]] inline bool is_proto_of(std::string const& outer,
+                                      std::string const& inner) {
+  for (auto pos = inner.find(outer, 1); pos != std::string::npos;
+       pos = inner.find(outer, pos + 1)) {
+    auto const end = pos + outer.size();
+    // "i_1" must not match inside "i_12"
+    if (end == inner.size() ||
+        !std::isdigit(static_cast<unsigned char>(inner[end])))
+      return true;
+  }
+  return false;
+}
+
+/// \brief The keyed placement of a binary product.
+///
+/// The key modes of an array are its outer modes that the inner
+/// (proto-indexed) modes depend on: in a tensor of tensors `I(i,j,K;a<i,j>)`
+/// they are `i` and `j`. An array is kept on a KeyedPmap of its key modes, so
+/// all tiles of one key live on one rank. A product whose fused (Hadamard)
+/// outer modes include the key modes of its operands and result is then
+/// computed, one fused slab at a time, where those operands already are
+/// (TiledArray's `set_slab_pmap`), and its result is left there.
+/// \param any_operand_keyed whether an operand is kept on a KeyedPmap (see
+///        is_keyed())
+/// \return the maps to request for the product; both null if placement by key
+///         is disabled, there is one rank, or the product has no key modes
+[[nodiscard]] inline ProductPlacement keyed_product_placement(
+    TA::World& world, TA::TiledRange const& ltr, std::string const& lannot,
+    TA::TiledRange const& rtr, std::string const& rannot,
+    std::string const& cannot, bool any_operand_keyed) {
+  ProductPlacement place;
+  if (!keyed_product_placement_enabled() || world.size() == 1) return place;
+  auto const lo = outer_annot_labels(lannot);
+  auto const ro = outer_annot_labels(rannot);
+  auto const co = outer_annot_labels(cannot);
+  if (co.empty()) return place;
+  auto const li = inner_annot_labels(lannot);
+  auto const ri = inner_annot_labels(rannot);
+  auto const ci = inner_annot_labels(cannot);
+  auto proto_in = [](std::string const& lbl, auto const& inner_labels) {
+    for (auto const& in : inner_labels)
+      if (is_proto_of(lbl, in)) return true;
+    return false;
+  };
+  auto dim_of = [&](std::string const& lbl) -> TA::TiledRange1 {
+    if (auto const i = find_position(lo, lbl)) return ltr.dim(*i);
+    auto const j = find_position(ro, lbl);
+    SEQUANT_ASSERT(j);
+    return rtr.dim(*j);
+  };
+
+  // the result: keyed on the outer modes its own inner modes depend on
+  std::vector<TA::TiledRange1> dims;
+  std::vector<bool> result_key;
+  bool any_result_key = false;
+  for (auto const& lbl : co) {
+    dims.push_back(dim_of(lbl));
+    result_key.push_back(proto_in(lbl, ci));
+    any_result_key = any_result_key || result_key.back();
+  }
+  if (any_result_key)
+    place.result_pmap = std::make_shared<KeyedPmap>(world, dims, result_key);
+
+  // the slabs: the fused modes in the order of the result, keyed on those any
+  // of the three arrays is keyed on; only if every key mode is fused
+  std::vector<TA::TiledRange1> fused_dims;
+  std::vector<bool> fused_key;
+  bool any_slab_key = false, all_keys_fused = true;
+  auto is_fused = [&](std::string const& lbl) {
+    return find_position(lo, lbl) && find_position(ro, lbl) &&
+           find_position(co, lbl);
+  };
+  for (auto const& lbl : co) {
+    bool const key =
+        proto_in(lbl, li) || proto_in(lbl, ri) || proto_in(lbl, ci);
+    if (is_fused(lbl)) {
+      fused_dims.push_back(dim_of(lbl));
+      fused_key.push_back(key);
+      any_slab_key = any_slab_key || key;
+    } else if (key) {
+      all_keys_fused = false;
+    }
+  }
+  // computing by key pulls every operand to the key map: do it only if one
+  // of them is there already, so that arrays kept elsewhere (leaves, values
+  // read back from disk) are not moved by every product that uses them
+  if (any_slab_key && all_keys_fused && any_operand_keyed)
+    place.slab_pmap = std::make_shared<KeyedPmap>(world, fused_dims, fused_key);
+  // a product with fused modes that cannot be computed by key (a key mode is
+  // not fused) keeps TiledArray's result map: moving its result to the key
+  // map afterwards costs as much as the result
+  if (!place.slab_pmap && !fused_dims.empty()) place.result_pmap.reset();
+  return place;
+}
+
+/// Requests the placement \p place of the product expression \p e
+template <typename E>
+decltype(auto) place_product(E&& e, ProductPlacement const& place) {
+  if (place.result_pmap) e.set_pmap(place.result_pmap);
+#ifdef TILEDARRAY_HAS_EXPR_SLAB_PMAP
+  if (place.slab_pmap) e.set_slab_pmap(place.slab_pmap);
+#endif
+  return std::forward<E>(e);
 }
 
 /// Map a contiguous element range `[elem_lo, elem_hi)` on a mode's TiledRange1
@@ -619,6 +828,28 @@ template <typename ArrayT>
   std::ostringstream os;
   os << arr.trange();
   return os.str();
+}
+
+/// \return " pmap=<class of the process map of \p arr >" (plus ":view" if
+///         \p is_view ) if the environment variable SEQUANT_TA_TRACE_PMAP is
+///         set to anything but "0" (PROTOTYPE diagnostic), else nothing
+template <typename ArrayT>
+[[nodiscard]] std::string ta_pmap_tag(ArrayT const& arr, bool is_view) {
+  static const bool enabled = [] {
+    const char* v = std::getenv("SEQUANT_TA_TRACE_PMAP");
+    return v != nullptr && std::string(v) != "0";
+  }();
+  if (!enabled || !arr.is_initialized()) return {};
+  auto const& pmap = *arr.pmap();
+  int status = 0;
+  char* demangled =
+      abi::__cxa_demangle(typeid(pmap).name(), nullptr, nullptr, &status);
+  std::string name =
+      (status == 0 && demangled) ? demangled : typeid(pmap).name();
+  std::free(demangled);
+  if (auto const pos = name.rfind("::"); pos != std::string::npos)
+    name = name.substr(pos + 2);
+  return " pmap=" + name + (is_view ? ":view" : "");
 }
 
 /// \return the Frobenius norm of \p arr, or -1 if its tile type does not
@@ -970,7 +1201,13 @@ class ResultTensorTA final : public Result {
       : Result{}, parent_(std::move(parent)), view_(std::move(view)) {}
 
   [[nodiscard]] std::string trange_annot() const override {
-    return detail::ta_trange_string(logical_trange());
+    return detail::ta_trange_string(logical_trange()) +
+           detail::ta_pmap_tag(view_base(), !has_value());
+  }
+
+  /// whether the array holding this result's tiles is kept on a KeyedPmap
+  [[nodiscard]] bool on_keyed_pmap() const {
+    return detail::is_keyed(view_base());
   }
 
   /// true while this result is a pending view sharing another array's tiles
@@ -1554,7 +1791,13 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   [[nodiscard]] std::string trange_annot() const override {
-    return detail::ta_trange_string(logical_trange());
+    return detail::ta_trange_string(logical_trange()) +
+           detail::ta_pmap_tag(view_base(), !has_value());
+  }
+
+  /// whether the array holding this result's tiles is kept on a KeyedPmap
+  [[nodiscard]] bool on_keyed_pmap() const {
+    return detail::is_keyed(view_base());
   }
 
   /// true while this result is a pending view sharing another array's tiles
@@ -1849,16 +2092,19 @@ class ResultTensorOfTensorTA final : public Result {
   /// produced in the natural one and permuted into place, as einsum did.
   template <typename ResultArrayT, typename L, typename R>
   static void emit_product(ResultArrayT& result, L&& le, R&& re,
-                           annot_wrap const& a) {
+                           annot_wrap const& a,
+                           detail::ProductPlacement const& place = {}) {
     if (!detail::tot_product_needs_inner_reorder(a.lannot, a.rannot,
                                                  a.this_annot)) {
-      result(a.this_annot) = le * re;
+      result(a.this_annot) = detail::place_product(le * re, place);
       return;
     }
     auto const natural =
         detail::tot_product_natural_annot(a.lannot, a.rannot, a.this_annot);
+    // the placement names outer modes only, which the two layouts share; the
+    // inner reorder that follows is rank-local and keeps the map
     ResultArrayT tmp;
-    tmp(natural) = le * re;
+    tmp(natural) = detail::place_product(le * re, place);
     ::sequant::detail::wait_for_lazy_cleanup(tmp);
     result(a.this_annot) = tmp(natural);
   }
@@ -1914,9 +2160,14 @@ class ResultTensorOfTensorTA final : public Result {
       // ToT * T -> ToT
       auto const& o = other.as<that_type>();
       ArrayT result;
+      auto const place = detail::keyed_product_placement(
+          TA::get_default_world(), logical_trange(), a.lannot,
+          o.logical_trange(), a.rannot, a.this_annot,
+          on_keyed_pmap() || o.on_keyed_pmap());
       detail::with_nested_product_operands(
-          *this, a.lannot, o, a.rannot,
-          [&](auto&& le, auto&& re) { emit_product(result, le, re, a); });
+          *this, a.lannot, o, a.rannot, [&](auto&& le, auto&& re) {
+            emit_product(result, le, re, a, place);
+          });
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
@@ -1925,9 +2176,14 @@ class ResultTensorOfTensorTA final : public Result {
       // ToT * ToT -> T: the inner tensors contracted away
       auto const& o = other.as<this_type>();
       compatible_regular_distarray_type result;
+      auto const place = detail::keyed_product_placement(
+          TA::get_default_world(), logical_trange(), a.lannot,
+          o.logical_trange(), a.rannot, a.this_annot,
+          on_keyed_pmap() || o.on_keyed_pmap());
       detail::with_nested_product_operands(
           *this, a.lannot, o, a.rannot, [&](auto&& le, auto&& re) {
-            result(a.this_annot) = le.dot_inner(re);
+            result(a.this_annot) =
+                detail::place_product(le.dot_inner(re), place);
           });
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
@@ -1937,9 +2193,14 @@ class ResultTensorOfTensorTA final : public Result {
       // ToT * ToT -> ToT
       auto const& o = other.as<this_type>();
       ArrayT result;
+      auto const place = detail::keyed_product_placement(
+          TA::get_default_world(), logical_trange(), a.lannot,
+          o.logical_trange(), a.rannot, a.this_annot,
+          on_keyed_pmap() || o.on_keyed_pmap());
       detail::with_nested_product_operands(
-          *this, a.lannot, o, a.rannot,
-          [&](auto&& le, auto&& re) { emit_product(result, le, re, a); });
+          *this, a.lannot, o, a.rannot, [&](auto&& le, auto&& re) {
+            emit_product(result, le, re, a, place);
+          });
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
@@ -2489,6 +2750,21 @@ template <typename NumericT, typename PolicyT,
   bool const l_flat = left.is<FlatResult>();
   bool const r_flat = right.is<FlatResult>();
 
+  auto trange_of = [&](Result const& r) -> TA::TiledRange {
+    if (r.is<ToTResult>()) return r.as<ToTResult>().logical_trange();
+    return r.as<FlatResult>().logical_trange();
+  };
+  auto keyed = [&](Result const& r) {
+    if (r.is<ToTResult>()) return r.as<ToTResult>().on_keyed_pmap();
+    return r.as<FlatResult>().on_keyed_pmap();
+  };
+  auto const place = ((l_tot || l_flat) && (r_tot || r_flat))
+                         ? detail::keyed_product_placement(
+                               TA::get_default_world(), trange_of(left),
+                               a.lannot, trange_of(right), a.rannot,
+                               a.this_annot, keyed(left) || keyed(right))
+                         : detail::ProductPlacement{};
+
   // No world fence after the assignments: the expression engine folds the
   // imposed shape into its own shape (a mask) when the expression is
   // initialized, inside the assignment, so the caller's shape object need not
@@ -2523,13 +2799,15 @@ template <typename NumericT, typename PolicyT,
       detail::with_nested_product_operands(
           left.as<FlatResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
           [&](auto&& le, auto&& re) {
-            out(a.this_annot) = (le * re).set_shape(shape);
+            out(a.this_annot) =
+                detail::place_product((le * re).set_shape(shape), place);
           });
     } else {
       detail::with_nested_product_operands(
           left.as<ToTResult>(), a.lannot, right.as<FlatResult>(), a.rannot,
           [&](auto&& le, auto&& re) {
-            out(a.this_annot) = (le * re).set_shape(shape);
+            out(a.this_annot) =
+                detail::place_product((le * re).set_shape(shape), place);
           });
     }
     ::sequant::detail::wait_for_lazy_cleanup(out);
@@ -2544,7 +2822,8 @@ template <typename NumericT, typename PolicyT,
       detail::with_nested_product_operands(
           left.as<ToTResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
           [&](auto&& le, auto&& re) {
-            out(a.this_annot) = le.dot_inner(re).set_shape(shape);
+            out(a.this_annot) =
+                detail::place_product(le.dot_inner(re).set_shape(shape), place);
           });
       ::sequant::detail::wait_for_lazy_cleanup(out);
       return eval_result<FlatResult>(std::move(out));
@@ -2562,7 +2841,8 @@ template <typename NumericT, typename PolicyT,
       detail::with_nested_product_operands(
           left.as<ToTResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
           [&](auto&& le, auto&& re) {
-            out(a.this_annot) = (le * re).set_shape(shape);
+            out(a.this_annot) =
+                detail::place_product((le * re).set_shape(shape), place);
           });
       ::sequant::detail::wait_for_lazy_cleanup(out);
       return eval_result<ToTResult>(std::move(out));
