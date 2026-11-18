@@ -11,8 +11,8 @@ option(SEQUANT_SKIP_LONG_TESTS "Whether to skip execution of long-running tests"
 
 # The eval tests are few, very large translation units, each a deep stack of
 # Catch2, eval and (for the TiledArray backend) TiledArray templates: one
-# compile of tests/unit/test_eval_ta.cpp runs for minutes and takes most of
-# the memory of a small machine, and two of them side by side do not fit a
+# compile of the larger tests/unit/test_eval_ta*.cpp runs for minutes and takes
+# most of the memory of a small machine, and two of them side by side do not fit a
 # 16 GB CI runner. Setting this to N lets at most N of these compiles run at a
 # time, whatever the build's -j; everything else still builds in parallel.
 # Honored by the Ninja generators only (JOB_POOLS).
