@@ -1070,6 +1070,22 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(ibr.bases().size() == 1 + 5 + 5);  // null + spaces + bases
   }
 
+  SECTION("add_fermi_spin") {
+    IndexBasisRegistry ibr;
+    ibr.add(L"i", 0b01,
+            {.dimension = 20, .qns = mbpt::Spin::any, .field = Field::Real})
+        .add(L"a", 0b10, {.dimension = 30, .qns = mbpt::Spin::any});
+    mbpt::add_fermi_spin(ibr);
+    for (const wchar_t* label : {L"i↑", L"i↓"}) {
+      CHECK(ibr.retrieve_space(label).dimension() == 20);
+      CHECK(ibr.retrieve_space(label).field() == Field::Real);
+    }
+    for (const wchar_t* label : {L"a↑", L"a↓"}) {
+      CHECK(ibr.retrieve_space(label).dimension() == 30);
+      CHECK(ibr.retrieve_space(label).field() == Field::Complex);
+    }
+  }
+
   // the paper 1 example as published; it uses deprecated spellings
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   SECTION("paper 1 example") {
