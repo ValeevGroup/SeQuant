@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <functional>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -133,6 +134,7 @@ class CellRegistry {
       discharge(s);
       s.value = std::move(v);
       s.filled_since_clear = true;
+      live_.insert(c);
       charge(s);
     }
   }
@@ -167,6 +169,10 @@ class CellRegistry {
     s.value =
         hooks_.stored_form ? hooks_.stored_form(c, std::move(v)) : std::move(v);
     s.filled_since_clear = true;
+    if (s.value)
+      live_.insert(c);
+    else
+      live_.erase(c);
     charge(s);
     if (cell.persistent && hooks_.persistent && hooks_.hash_of)
       hooks_.persistent->put(hooks_.hash_of(cell.value_id), s.value);
@@ -211,6 +217,7 @@ class CellRegistry {
     if (table_->cells[c].persistent) return s.value;
     s.filled_since_clear = false;
     discharge(s);
+    live_.erase(c);
     return std::move(s.value);  // the slot is left null by the move
   }
 
@@ -225,6 +232,7 @@ class CellRegistry {
     s.filled_since_clear = false;
     discharge(s);
     s.value.reset();
+    live_.erase(c);
   }
 
   /// Batch start: drops every cell bound to loop instance \p k -- the
@@ -271,6 +279,7 @@ class CellRegistry {
       discharge(s);
       s.value.reset();
       s.filled_since_clear = false;
+      live_.erase(c);
     }
   }
 
@@ -285,16 +294,15 @@ class CellRegistry {
   /// storage moves fully onto the table.
   template <typename F>
   void for_each_live(F&& f) const {
-    for (CellId c = 0; c < slots_.size(); ++c)
-      if (slots_[c].value) f(c, slots_[c].value);
+    for (CellId c : live_) f(c, slots_[c].value);
   }
 
   /// \return whether some slot currently holds \p value (pointer identity).
   /// Read-only: spends no life.
   [[nodiscard]] bool holds(ResultPtr const& value) const {
     if (!value) return false;
-    return std::any_of(slots_.begin(), slots_.end(),
-                       [&](Slot const& s) { return s.value == value; });
+    return std::any_of(live_.begin(), live_.end(),
+                       [&](CellId c) { return slots_[c].value == value; });
   }
 
   /// \return whether cell \p c is a non-persistent cell holding no value:
@@ -403,6 +411,8 @@ class CellRegistry {
       assemble_at_;
   std::unordered_map<std::size_t, CellId> leaf_of_;
   std::size_t live_bytes_ = 0;
+  /// The cells whose slot holds a value, in cell order.
+  std::set<CellId> live_;
 };
 
 /// Resolves one consumer cell's operand fetches to table reads. Installed on
