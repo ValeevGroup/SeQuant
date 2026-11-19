@@ -96,6 +96,70 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
   auto rA = eval_result<ResultD>(A);
   auto rB = eval_result<ResultD>(B);
 
+  SECTION("the trace layout reports where the tiles live, on request") {
+    auto& logger = sequant::Logger::instance();
+    auto const prev = logger.eval.placement;
+    std::ostringstream os;
+    os << A.trange();
+    auto const layout = os.str();
+    REQUIRE(rA->trange_annot() == layout);
+
+    // the kind of the process map
+    logger.eval.placement = 1;
+    auto const kind = rA->trange_annot();
+    REQUIRE(kind.starts_with(layout + " pmap="));
+    REQUIRE(kind.ends_with("Pmap"));
+    // a pending view reports its base's map, flagged, and stays pending
+    auto s = rA->slice_mode(1, 2, 6);
+    REQUIRE(s->trange_annot().ends_with("Pmap:view"));
+    REQUIRE(s->is_buffer_alias());
+
+    // also the bytes on each rank: max/mean, then one entry per rank
+    logger.eval.placement = 2;
+    auto const load = rA->trange_annot();
+    REQUIRE(load.starts_with(kind + " load="));
+    REQUIRE(load.ends_with("]"));
+    auto const per_rank = load.substr(load.find('[', kind.size()));
+    REQUIRE(std::count(per_rank.begin(), per_rank.end(), ',') ==
+            world.size() - 1);
+    if (world.size() == 1) REQUIRE(load.starts_with(kind + " load=1.00["));
+
+    logger.eval.placement = prev;
+    REQUIRE(rA->trange_annot() == layout);
+  }
+
+#ifdef SEQUANT_EVAL_TRACE
+  SECTION("a batch movement record carries the backend's trace suffix") {
+    auto& logger = sequant::Logger::instance();
+    auto const prev_level = logger.eval.level;
+    auto* const prev_stream = logger.eval.stream;
+    auto const prev_suffix = logger.eval.heap_stats;
+    std::ostringstream trace;
+    logger.eval.level = 1;
+    logger.eval.stream = &trace;
+
+    auto s = rA->slice_mode(1, 2, 6);
+    (void)s->get<TArrayD>();  // materializes: one record, no suffix
+    REQUIRE(trace.str().find("Batch | Materialize | ") == 0);
+    REQUIRE(trace.str().find("suffix") == std::string::npos);
+
+    trace.str({});
+    int calls = 0;
+    logger.eval.heap_stats = [&calls] {
+      ++calls;
+      return std::string("suffix=1");
+    };
+    auto s2 = rA->slice_mode(1, 2, 6);
+    (void)s2->get<TArrayD>();
+    REQUIRE(calls == 1);
+    REQUIRE(trace.str().find("B | suffix=1 | ") != std::string::npos);
+
+    logger.eval.level = prev_level;
+    logger.eval.stream = prev_stream;
+    logger.eval.heap_stats = prev_suffix;
+  }
+#endif
+
   SECTION("a batch slice is an alias until its value is asked for") {
     // mode 1, elements [2, 6) = tiles 1..2
     auto s = rA->slice_mode(1, 2, 6);

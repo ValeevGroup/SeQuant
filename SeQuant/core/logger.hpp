@@ -82,7 +82,18 @@ struct Logger : public Singleton<Logger> {
     /// function = nothing appended (default), so the annotation carries
     /// nothing beyond the running one.
     std::function<std::string(std::size_t hash)> node_meta = {};
-  } eval = {0, nullptr, {}, {}, {}, {}};
+
+    /// How much the eval trace reports on where the data of each operand and
+    /// result of an op lives across processes (appended to the layout a
+    /// \c Result::trange_annot reports; a backend whose data is not
+    /// distributed appends nothing):
+    ///   0: nothing (default).
+    ///   1: the kind of the process map that places the data.
+    ///   2: also the spread of the data's bytes over the processes. This costs
+    ///      a collective reduction per reported value, so it slows the
+    ///      evaluation down; like \c level it must be identical across ranks.
+    std::size_t placement = 0;
+  } eval = {0, nullptr, {}, {}, {}, {}, 0};
 
  private:
   friend class Singleton<Logger>;
