@@ -35,16 +35,19 @@ auto view_consumer_tiles(ResultT const& r, std::string const& annot) {
 }
 
 // true iff every tile of \p tiles (from view_consumer_tiles) that the parent
-// array \p parent holds on this rank IS the parent's tile (same buffer); the
-// view's tile (ordinal in \p view_trange) maps to the parent's at + \p lo
-// (tile coordinates). A tile the parent holds elsewhere is a fetched copy by
-// construction and is not inspected.
+// array \p parent holds on the same rank IS the parent's tile (same buffer),
+// and there is such a tile on some rank; the view's tile (ordinal in
+// \p view_trange) maps to the parent's at + \p lo (tile coordinates). A tile
+// the parent holds elsewhere is a fetched copy by construction and is not
+// inspected. Collective: the counts are summed over the ranks, so that all
+// ranks get the same answer (the view and its parent are distributed
+// independently, hence a rank may well hold no tile of both).
 template <typename ArrayT, typename Tiles>
 bool consumer_reads_parent_tiles(ArrayT const& parent,
                                  TA::TiledRange const& view_trange,
                                  Tiles const& tiles,
                                  std::vector<std::size_t> const& lo) {
-  std::size_t checked = 0;
+  std::size_t checked = 0, copies = 0;
   for (auto const& [ord, tile] : tiles) {
     auto idx = view_trange.tiles_range().idx(ord);
     for (std::size_t d = 0; d < idx.size(); ++d) idx[d] += lo[d];
@@ -52,11 +55,12 @@ bool consumer_reads_parent_tiles(ArrayT const& parent,
     auto const parent_tile = parent.find_local(idx).get();
     if (static_cast<void const*>(tile.data()) !=
         static_cast<void const*>(parent_tile.data()))
-      return false;
+      ++copies;
     ++checked;
   }
-  // every rank holds some tiles of an array this small with no zero tiles
-  return checked > 0;
+  parent.world().gop.sum(checked);
+  parent.world().gop.sum(copies);
+  return copies == 0 && checked > 0;
 }
 
 TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
