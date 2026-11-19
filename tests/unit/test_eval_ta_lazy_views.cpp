@@ -97,8 +97,8 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
   auto rB = eval_result<ResultD>(B);
 
   SECTION("the trace layout reports where the tiles live, on request") {
+    EvalLogGuard const restore_log;
     auto& logger = sequant::Logger::instance();
-    auto const prev = logger.eval.placement;
     std::ostringstream os;
     os << A.trange();
     auto const layout = os.str();
@@ -124,17 +124,16 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
             world.size() - 1);
     if (world.size() == 1) REQUIRE(load.starts_with(kind + " load=1.00["));
 
-    logger.eval.placement = prev;
+    logger.eval.placement = 0;
     REQUIRE(rA->trange_annot() == layout);
   }
 
 #ifdef SEQUANT_EVAL_TRACE
   SECTION("a batch movement record carries the backend's trace suffix") {
+    std::ostringstream trace;  // outlives the guard, which unhooks it
+    int calls = 0;             // likewise, for the hook capturing it
+    EvalLogGuard const restore_log;
     auto& logger = sequant::Logger::instance();
-    auto const prev_level = logger.eval.level;
-    auto* const prev_stream = logger.eval.stream;
-    auto const prev_suffix = logger.eval.heap_stats;
-    std::ostringstream trace;
     logger.eval.level = 1;
     logger.eval.stream = &trace;
 
@@ -144,7 +143,6 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     REQUIRE(trace.str().find("suffix") == std::string::npos);
 
     trace.str({});
-    int calls = 0;
     logger.eval.heap_stats = [&calls] {
       ++calls;
       return std::string("suffix=1");
@@ -153,10 +151,6 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     (void)s2->get<TArrayD>();
     REQUIRE(calls == 1);
     REQUIRE(trace.str().find("B | suffix=1 | ") != std::string::npos);
-
-    logger.eval.level = prev_level;
-    logger.eval.stream = prev_stream;
-    logger.eval.heap_stats = prev_suffix;
   }
 #endif
 

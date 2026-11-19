@@ -87,6 +87,19 @@ concept array = TA::detail::array_tos<T> || TA::detail::array_tot<T>;
 
 namespace sequant::tests::eval_ta {
 
+/// Restores the eval-trace settings of the Logger when it goes out of scope, so
+/// that a failed check cannot leave them pointing at a section's locals.
+class EvalLogGuard {
+ public:
+  EvalLogGuard() : saved_(sequant::Logger::instance().eval) {}
+  EvalLogGuard(EvalLogGuard const&) = delete;
+  EvalLogGuard& operator=(EvalLogGuard const&) = delete;
+  ~EvalLogGuard() { sequant::Logger::instance().eval = saved_; }
+
+ private:
+  decltype(sequant::Logger::eval) saved_;
+};
+
 ///
 /// \brief Represents the outer indices and the inner indices of a nested
 /// tensor.
