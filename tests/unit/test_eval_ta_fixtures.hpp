@@ -100,6 +100,13 @@ class EvalLogGuard {
   decltype(sequant::Logger::eval) saved_;
 };
 
+/// A process map whose demangled class name carries template arguments.
+template <typename T>
+class ProbePmap : public TA::detail::BlockedPmap {
+ public:
+  using TA::detail::BlockedPmap::BlockedPmap;
+};
+
 ///
 /// \brief Represents the outer indices and the inner indices of a nested
 /// tensor.

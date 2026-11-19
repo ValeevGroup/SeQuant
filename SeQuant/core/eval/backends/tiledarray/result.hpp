@@ -649,8 +649,10 @@ template <typename ArrayT>
     return {};
   auto const& pmap = *arr.pmap();
   std::string name = boost::core::demangle(typeid(pmap).name());
-  if (auto const pos = name.rfind("::"); pos != std::string::npos)
-    name = name.substr(pos + 2);
+  // drop the namespace, not that of a template argument
+  if (auto const pos = name.rfind("::", name.find('<'));
+      pos != std::string::npos)
+    name.erase(0, pos + 2);
   std::string tag = " pmap=" + name + (is_view ? ":view" : "");
   if (detail_level == 1) return tag;
 

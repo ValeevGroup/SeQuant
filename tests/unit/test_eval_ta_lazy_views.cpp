@@ -119,6 +119,13 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     auto s = rA->slice_mode(1, 2, 6);
     REQUIRE(s->trange_annot().ends_with("Pmap:view"));
     REQUIRE(s->is_buffer_alias());
+    // the namespace is dropped, the template arguments are kept
+    TArrayD C(
+        world, trA, A.shape(),
+        std::make_shared<ProbePmap<int>>(world, trA.tiles_range().volume()));
+    C.fill(1.0);
+    auto const probe = eval_result<ResultD>(C)->trange_annot();
+    REQUIRE(probe.ends_with(" pmap=ProbePmap<int>"));
 
     // also the bytes on each rank: max/mean, then one entry per rank
     logger.eval.placement = 2;
