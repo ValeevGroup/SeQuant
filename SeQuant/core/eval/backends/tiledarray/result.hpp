@@ -633,7 +633,8 @@ template <typename ArrayT>
 
 /// \brief Where the tiles of \p arr live, for the eval trace.
 ///
-/// Empty unless `Logger::instance().eval.placement` is nonzero. At 1:
+/// Empty unless the eval trace is printed (`Logger::instance().eval.level`
+/// nonzero) and `Logger::instance().eval.placement` is nonzero. At 1:
 /// ` pmap=<class of the array's process map>`, followed by `:view` if
 /// \p is_view (the array is the base of a pending view: its tiles, not yet
 /// those of the result). At 2 also ` load=<max/mean>[<GB on rank 0>,...]`, the
@@ -642,8 +643,10 @@ template <typename ArrayT>
 /// annotation whenever the trace is on, as the `Eval` records already require.
 template <typename ArrayT>
 [[nodiscard]] std::string ta_placement_tag(ArrayT const& arr, bool is_view) {
-  auto const detail_level = Logger::instance().eval.placement;
-  if (detail_level == 0 || !arr.is_initialized()) return {};
+  auto const& eval_log = Logger::instance().eval;
+  auto const detail_level = eval_log.placement;
+  if (eval_log.level == 0 || detail_level == 0 || !arr.is_initialized())
+    return {};
   auto const& pmap = *arr.pmap();
   std::string name = boost::core::demangle(typeid(pmap).name());
   if (auto const pos = name.rfind("::"); pos != std::string::npos)

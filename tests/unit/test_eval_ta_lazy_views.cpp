@@ -104,6 +104,12 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     auto const layout = os.str();
     REQUIRE(rA->trange_annot() == layout);
 
+    // nothing while the trace is not printed: no collective either
+    logger.eval.placement = 2;
+    logger.eval.level = 0;
+    REQUIRE(rA->trange_annot() == layout);
+    logger.eval.level = 1;
+
     // the kind of the process map
     logger.eval.placement = 1;
     auto const kind = rA->trange_annot();
