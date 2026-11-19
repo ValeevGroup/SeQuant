@@ -154,17 +154,21 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
 #ifdef SEQUANT_EVAL_TRACE
   SECTION("a batch movement record carries the backend's trace suffix") {
     std::ostringstream trace;  // outlives the guard, which unhooks it
-    int calls = 0;             // likewise, for the hook capturing it
+    std::size_t calls = 0;     // likewise, for the hook capturing it
     EvalLogGuard const restore_log;
     auto& logger = sequant::Logger::instance();
     logger.eval.level = 1;
     logger.eval.stream = &trace;
 
+    // the record format without a hook: kind, time, bytes, annotation
     auto s = rA->slice_mode(1, 2, 6);
-    (void)s->get<TArrayD>();  // materializes: one record, no suffix
-    REQUIRE(trace.str().find("Batch | Materialize | ") == 0);
-    REQUIRE(trace.str().find("suffix") == std::string::npos);
+    (void)s->get<TArrayD>();  // materializes: one record
+    auto const plain = trace.str();
+    REQUIRE(boost::regex_match(
+        plain, boost::regex(R"(Batch \| Materialize \| \d+ns \| bytes=\d+B \| )"
+                            R"([^|\n]+\n)")));
 
+    // with a hook, its suffix follows the bytes in every kind of record
     trace.str({});
     logger.eval.heap_stats = [&calls] {
       ++calls;
@@ -173,7 +177,23 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     auto s2 = rA->slice_mode(1, 2, 6);
     (void)s2->get<TArrayD>();
     REQUIRE(calls == 1);
-    REQUIRE(trace.str().find("B | suffix=1 | ") != std::string::npos);
+    (void)sequant::slice_array_over_mode(A, 1, 1, 3);
+    TArrayD Zr(world, trA);
+    Zr.fill(0.0);
+    world.gop.fence();
+    eval_result<ResultD>(Zr)->write_into_slice(*rA->slice_mode(2, 5, 10), 2, 5,
+                                               10);
+    eval_result<ResultD>(TA::clone(A))->add_inplace(*rA);
+    std::istringstream records(trace.str());
+    std::size_t nrecords = 0;
+    for (std::string line; std::getline(records, line); ++nrecords)
+      REQUIRE(boost::regex_match(
+          line, boost::regex(R"(Batch \| \w+ \| \d+ns \| bytes=\d+B \| )"
+                             R"(suffix=1 \| [^|]+)")));
+    REQUIRE(calls == nrecords);
+    for (auto const kind : {"Materialize", "Slice", "Scatter", "Accumulate"})
+      REQUIRE(trace.str().find(std::string("Batch | ") + kind + " | ") !=
+              std::string::npos);
   }
 #endif
 
@@ -494,6 +514,17 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     std::ostringstream os;
     os << eager.trange();
     REQUIRE(sT->trange_annot() == os.str());
+    {  // where the tiles live, reported as for a flat array
+      EvalLogGuard const restore_log;
+      auto& logger = sequant::Logger::instance();
+      logger.eval.level = 1;
+      logger.eval.placement = 2;
+      REQUIRE(boost::regex_match(
+          sT->trange_annot(),
+          boost::regex(R"(.* pmap=\w+:view load=\d+\.\d\d\(max=\d+B,)"
+                       R"(total=\d+B\))")));
+      REQUIRE_FALSE(sT->trange_annot() == os.str());
+    }
     REQUIRE(equal_tarrays(sT->get<ToTArray>(), eager, "i,c;x,y"));
     REQUIRE_FALSE(sT->is_buffer_alias());
 
