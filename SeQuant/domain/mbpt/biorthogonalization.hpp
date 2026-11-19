@@ -354,6 +354,7 @@ template <typename T>
 /// \param n_particles The rank of external index pairs
 /// \param pseudoinverse_threshold The threshold to compute the pseudoinverse
 /// \return Vector of the (n!)^2 rational and sparse coefficients
+/// \throw Exception if \p n_particles > 4
 [[nodiscard]] std::vector<rational>
 compute_triplet_sparse_biorthogonalizer_coeffs(
     std::size_t n_particles,

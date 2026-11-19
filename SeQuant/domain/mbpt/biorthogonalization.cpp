@@ -1050,6 +1050,11 @@ std::vector<double> compute_triplet_nns_p_coeffs(std::size_t n_particles,
 
 std::vector<rational> compute_triplet_sparse_biorthogonalizer_coeffs(
     std::size_t n_particles, double threshold) {
+  if (n_particles > 4)
+    throw Exception(
+        "compute_triplet_sparse_biorthogonalizer_coeffs: only up to 4 external "
+        "index pairs are supported, got " +
+        std::to_string(n_particles));
   const auto overlap = triplet_overlap_matrix(n_particles);
   const auto dense_row =
       compute_triplet_biorthogonalizer_coeffs(n_particles, threshold);
