@@ -273,7 +273,9 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
       auto rZ = eval_result<ResultZ>(Z);
       auto cz = rZ->slice_mode(1, 2, 6)->adjoint(annot2("a,b,c", "a,b,c"));
       auto const [tr, tiles] = view_consumer_tiles(cz->as<ResultZ>(), "a,b,c");
-      REQUIRE_FALSE(consumer_reads_parent_tiles(Z, tr, tiles, {0, 1, 0}));
+      auto const n = consumer_tile_counts(Z, tr, tiles, {0, 1, 0});
+      REQUIRE(n.tiles > 0);
+      REQUIRE(n.copies == n.tiles);
     }
   }
 
