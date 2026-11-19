@@ -89,9 +89,12 @@ struct Logger : public Singleton<Logger> {
     /// distributed appends nothing):
     ///   0: nothing (default).
     ///   1: the kind of the process map that places the data.
-    ///   2: also the spread of the data's bytes over the processes. This costs
-    ///      a collective reduction per reported value, so it slows the
-    ///      evaluation down; like \c level it must be identical across ranks.
+    ///   2: also the spread of the data's bytes over the processes (the
+    ///      busiest process's share relative to the mean, and the total).
+    ///   3: also the bytes on each process, one entry per process.
+    /// Levels 2 and 3 cost collective reductions per reported value, so they
+    /// slow the evaluation down; like \c level the value must be identical
+    /// across ranks. Reported only while the trace is printed (\c level > 0).
     std::size_t placement = 0;
   } eval = {0, nullptr, {}, {}, {}, {}, 0};
 

@@ -127,15 +127,25 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     auto const probe = eval_result<ResultD>(C)->trange_annot();
     REQUIRE(probe.ends_with(" pmap=ProbePmap<int>"));
 
-    // also the bytes on each rank: max/mean, then one entry per rank
+    // also the spread of the bytes over the ranks: max/mean, max and total
     logger.eval.placement = 2;
     auto const load = rA->trange_annot();
     REQUIRE(load.starts_with(kind + " load="));
-    REQUIRE(load.ends_with("]"));
-    auto const per_rank = load.substr(load.find('[', kind.size()));
-    REQUIRE(std::count(per_rank.begin(), per_rank.end(), ',') ==
+    REQUIRE(load.ends_with("B)"));
+    if (world.size() == 1) {
+      auto const bytes =
+          std::to_string(TA::size_of<TA::MemorySpace::Host>(A)) + "B";
+      REQUIRE(load ==
+              kind + " load=1.00(max=" + bytes + ",total=" + bytes + ")");
+    }
+
+    // also the bytes on each rank, one entry per rank
+    logger.eval.placement = 3;
+    auto const per_rank = rA->trange_annot();
+    REQUIRE(per_rank.starts_with(load + " bytes=["));
+    REQUIRE(per_rank.ends_with("]"));
+    REQUIRE(std::count(per_rank.begin() + load.size(), per_rank.end(), ',') ==
             world.size() - 1);
-    if (world.size() == 1) REQUIRE(load.starts_with(kind + " load=1.00["));
 
     logger.eval.placement = 0;
     REQUIRE(rA->trange_annot() == layout);

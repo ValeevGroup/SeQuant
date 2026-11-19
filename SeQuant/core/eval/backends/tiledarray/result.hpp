@@ -27,7 +27,9 @@
 #include <complex>
 #include <cstdio>
 #include <cstdlib>
+#include <format>
 #include <iostream>
+#include <numeric>
 #include <string>
 #include <typeinfo>
 #include <unordered_set>
@@ -637,10 +639,12 @@ template <typename ArrayT>
 /// nonzero) and `Logger::instance().eval.placement` is nonzero. At 1:
 /// ` pmap=<class of the array's process map>`, followed by `:view` if
 /// \p is_view (the array is the base of a pending view: its tiles, not yet
-/// those of the result). At 2 also ` load=<max/mean>[<GB on rank 0>,...]`, the
-/// host bytes of the array's tiles on each rank and the ratio of the busiest
-/// rank to the mean. The latter is collective: every rank must build the trace
-/// annotation whenever the trace is on, as the `Eval` records already require.
+/// those of the result). At 2 also ` load=<max/mean>(max=<B>B,total=<B>B)`:
+/// from the host bytes of the array's tiles on each rank, the ratio of the
+/// busiest rank to the mean, the busiest rank's bytes and the total. At 3 also
+/// ` bytes=[<B on rank 0>,...]`, one entry per rank. Levels 2 and 3 are
+/// collective: every rank must build the trace annotation whenever the trace
+/// is printed, as the `Eval` records already require.
 template <typename ArrayT>
 [[nodiscard]] std::string ta_placement_tag(ArrayT const& arr, bool is_view) {
   auto const& eval_log = Logger::instance().eval;
@@ -657,24 +661,28 @@ template <typename ArrayT>
   if (detail_level == 1) return tag;
 
   auto& world = arr.world();
-  std::vector<std::size_t> bytes(world.size(), 0);
-  bytes[world.rank()] = TA::size_of<TA::MemorySpace::Host>(arr);
-  world.gop.sum(bytes.data(), bytes.size());
-  std::size_t total = 0, max = 0;
-  for (auto b : bytes) {
-    total += b;
-    max = std::max(max, b);
+  std::size_t const local = TA::size_of<TA::MemorySpace::Host>(arr);
+  std::size_t total = local, max = local;
+  std::vector<std::size_t> bytes;  // per rank, only at level 3
+  if (detail_level == 2) {
+    world.gop.sum(total);
+    world.gop.max(max);
+  } else {
+    bytes.assign(world.size(), 0);
+    bytes[world.rank()] = local;
+    world.gop.sum(bytes.data(), bytes.size());
+    total = std::accumulate(bytes.begin(), bytes.end(), std::size_t{0});
+    max = *std::max_element(bytes.begin(), bytes.end());
   }
-  char buf[32];
-  std::snprintf(buf, sizeof(buf), "%.2f",
-                total ? double(max) * bytes.size() / double(total) : 0.0);
-  tag += std::string(" load=") + buf + "[";
-  for (std::size_t r = 0; r != bytes.size(); ++r) {
-    std::snprintf(buf, sizeof(buf), "%s%.3f", r ? "," : "",
-                  double(bytes[r]) / 1e9);
-    tag += buf;
+  tag += std::format(" load={:.2f}(max={}B,total={}B)",
+                     total ? double(max) * world.size() / double(total) : 0.0,
+                     max, total);
+  if (!bytes.empty()) {
+    tag += " bytes=[";
+    for (std::size_t r = 0; r != bytes.size(); ++r)
+      tag += std::format("{}{}", r ? "," : "", bytes[r]);
+    tag += "]";
   }
-  tag += "]";
   return tag;
 }
 
