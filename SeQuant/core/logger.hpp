@@ -92,9 +92,10 @@ struct Logger : public Singleton<Logger> {
     /// distributed appends nothing):
     ///   0: nothing (default).
     ///   1: the kind of the process map that places the data.
-    ///   2: also the spread of the data's bytes over the processes (the
-    ///      busiest process's share relative to the mean, and the total).
-    ///   3: also the bytes on each process, one entry per process.
+    ///   2: also the spread of the data's bytes over the processes: the
+    ///      busiest process's bytes relative to the mean, those bytes, and the
+    ///      total.
+    ///   3 (or more): also the bytes on each process, one entry per process.
     /// Levels 2 and 3 cost collective reductions per reported value, so they
     /// slow the evaluation down, and their messages count towards any
     /// inter-process traffic a \c heap_stats hook reports for the op; like
