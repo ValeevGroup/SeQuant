@@ -34,29 +34,46 @@ auto view_consumer_tiles(ResultT const& r, std::string const& annot) {
   });
 }
 
-// true iff every tile of \p tiles (from view_consumer_tiles) that the parent
-// array \p parent holds on this rank IS the parent's tile (same buffer); the
-// view's tile (ordinal in \p view_trange) maps to the parent's at + \p lo
-// (tile coordinates). A tile the parent holds elsewhere is a fetched copy by
-// construction and is not inspected.
+// Of the tiles \p tiles (from view_consumer_tiles), summed over the ranks: how
+// many there are, and how many are copies rather than the parent array
+// \p parent's own tile (same buffer, held on the same rank); the view's tile
+// (ordinal in \p view_trange) maps to the parent's at + \p lo (tile
+// coordinates). A view's tiles are evaluated where the parent holds them, so
+// a tile whose parent tile is on another rank was fetched: a copy. A rank
+// whose parent tiles all lie outside the view holds none of its tiles, hence
+// the sum. Collective.
+struct ConsumerTileCounts {
+  std::size_t tiles = 0;
+  std::size_t copies = 0;
+};
+template <typename ArrayT, typename Tiles>
+ConsumerTileCounts consumer_tile_counts(ArrayT const& parent,
+                                        TA::TiledRange const& view_trange,
+                                        Tiles const& tiles,
+                                        std::vector<std::size_t> const& lo) {
+  std::array<std::size_t, 2> n{0, 0};  // {tiles, copies}
+  for (auto const& [ord, tile] : tiles) {
+    ++n[0];
+    auto idx = view_trange.tiles_range().idx(ord);
+    for (std::size_t d = 0; d < idx.size(); ++d) idx[d] += lo[d];
+    if (!parent.is_local(idx) ||
+        static_cast<void const*>(tile.data()) !=
+            static_cast<void const*>(parent.find_local(idx).get().data()))
+      ++n[1];
+  }
+  parent.world().gop.sum(n.data(), n.size());
+  return {n[0], n[1]};
+}
+
+// true iff the view has tiles and every one of them IS the parent's tile
+// (see consumer_tile_counts). Collective.
 template <typename ArrayT, typename Tiles>
 bool consumer_reads_parent_tiles(ArrayT const& parent,
                                  TA::TiledRange const& view_trange,
                                  Tiles const& tiles,
                                  std::vector<std::size_t> const& lo) {
-  std::size_t checked = 0;
-  for (auto const& [ord, tile] : tiles) {
-    auto idx = view_trange.tiles_range().idx(ord);
-    for (std::size_t d = 0; d < idx.size(); ++d) idx[d] += lo[d];
-    if (!parent.is_local(idx)) continue;
-    auto const parent_tile = parent.find_local(idx).get();
-    if (static_cast<void const*>(tile.data()) !=
-        static_cast<void const*>(parent_tile.data()))
-      return false;
-    ++checked;
-  }
-  // every rank holds some tiles of an array this small with no zero tiles
-  return checked > 0;
+  auto const n = consumer_tile_counts(parent, view_trange, tiles, lo);
+  return n.tiles > 0 && n.copies == 0;
 }
 
 TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
@@ -256,7 +273,9 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
       auto rZ = eval_result<ResultZ>(Z);
       auto cz = rZ->slice_mode(1, 2, 6)->adjoint(annot2("a,b,c", "a,b,c"));
       auto const [tr, tiles] = view_consumer_tiles(cz->as<ResultZ>(), "a,b,c");
-      REQUIRE_FALSE(consumer_reads_parent_tiles(Z, tr, tiles, {0, 1, 0}));
+      auto const n = consumer_tile_counts(Z, tr, tiles, {0, 1, 0});
+      REQUIRE(n.tiles > 0);
+      REQUIRE(n.copies == n.tiles);
     }
   }
 
