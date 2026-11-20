@@ -147,6 +147,11 @@ jobs:
       if: ${{ startswith(matrix.os, 'windows') }}
       run: choco install ccache -y --no-progress
 
+    # CMake 4.5 rejects boost-locale 1.92's source_group(TREE ...) call (locale.hpp lies outside the tree)
+    - name: Pin CMake on Windows
+      if: ${{ startswith(matrix.os, 'windows') }}
+      uses: lukka/get-cmake@v4.4.5
+
     - name: Install prerequisites Windows packages
       if: ${{ startswith(matrix.os, 'windows') }}
       id: vcpkg
