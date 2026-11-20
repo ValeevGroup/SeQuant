@@ -229,7 +229,12 @@ class Result {
   ///         tiled range (for eval traces -- lets a reader spot a
   ///         sliced-vs-unsliced mode mismatch that a release build's elided
   ///         TA_ASSERT would otherwise let deadlock). Default empty for
-  ///         backends with no tiled range (e.g. DryRun).
+  ///         backends with no tiled range (e.g. DryRun). A distributed backend
+  ///         also appends where the data lives, per
+  ///         \c Logger::eval.placement while the eval trace is printed
+  ///         (\c Logger::eval.level > 0); at placement levels 2 and up that
+  ///         part is computed by a collective reduction, so the call must then
+  ///         be made on every rank.
   [[nodiscard]] virtual std::string trange_annot() const { return {}; }
 
   ///

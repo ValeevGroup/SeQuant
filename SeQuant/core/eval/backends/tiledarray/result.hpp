@@ -16,6 +16,7 @@
 #include <TiledArray/einsum/tiledarray.h>
 #include <tiledarray.h>
 
+#include <boost/core/demangle.hpp>
 #include <range/v3/view/iota.hpp>
 
 #include <algorithm>
@@ -26,9 +27,14 @@
 #include <complex>
 #include <cstdio>
 #include <cstdlib>
+#include <format>
 #include <iostream>
+#include <numeric>
+#include <string>
+#include <typeinfo>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -316,7 +322,8 @@ inline void log_ta(Args const&... args) noexcept {
 /// Batch-step data-movement record, emitted at eval log level > 0 (the same
 /// gate as the executor's `Eval | ...` records):
 ///
-///   Batch | <Slice|Scatter|Accumulate> | <time>ns | bytes=<B> | <annot>
+///   Batch | <Slice|Scatter|Accumulate|Materialize> | <time>ns | bytes=<B> |
+///   [<backend suffix> |] <annot>
 ///
 /// Slice: an operand block gathered out of a mode for one batch step;
 /// Scatter: a per-batch block written into its pre-sized destination;
@@ -325,6 +332,10 @@ inline void log_ta(Args const&... args) noexcept {
 /// must reach this call whenever the level is nonzero -- the level is
 /// identical across ranks). These movements are not eval-tree ops, so the
 /// `Eval` records never see them; this is the only accounting of their cost.
+/// The backend suffix is that of the `Eval` records
+/// (`Logger::instance().eval.heap_stats`), omitted when the hook is unset or
+/// returns nothing; a hook that reports a quantity accrued since the previous
+/// record thereby attributes it to this movement and not to the next op.
 template <typename... Args>
 inline void log_batch_op([[maybe_unused]] char const* kind,
                          [[maybe_unused]] std::chrono::nanoseconds elapsed,
@@ -335,8 +346,9 @@ inline void log_batch_op([[maybe_unused]] char const* kind,
   if (l.eval.level == 0) return;
   auto bytes = TA::size_of<TA::MemorySpace::Host>(moved);
   moved.world().gop.sum(bytes);
+  auto const suffix = l.eval.heap_stats ? l.eval.heap_stats() : std::string{};
   write_log(l, "Batch | ", kind, " | ", elapsed.count(), "ns | bytes=", bytes,
-            "B | ", annot, '\n');
+            "B | ", suffix, suffix.empty() ? "" : " | ", annot, '\n');
 #endif
 }
 
@@ -619,6 +631,59 @@ template <typename ArrayT>
   std::ostringstream os;
   os << arr.trange();
   return os.str();
+}
+
+/// \brief Where the tiles of \p arr live, for the eval trace.
+///
+/// Empty unless the eval trace is printed (`Logger::instance().eval.level`
+/// nonzero) and `Logger::instance().eval.placement` is nonzero. At 1:
+/// ` pmap=<class of the array's process map>`, followed by `:view` if
+/// \p is_view (the array is the base of a pending view: its tiles, not yet
+/// those of the result). At 2 also ` load=<max/mean>(max=<B>B,total=<B>B)`:
+/// from the host bytes of the array's tiles on each rank, the ratio of the
+/// busiest rank to the mean, the busiest rank's bytes and the total. At 3 also
+/// ` bytes=[<B on rank 0>,...]`, one entry per rank. Levels 2 and 3 are
+/// collective: every rank must build the trace annotation whenever the trace
+/// is printed, as the `Eval` records already require.
+template <typename ArrayT>
+[[nodiscard]] std::string ta_placement_tag(ArrayT const& arr, bool is_view) {
+  auto const& eval_log = Logger::instance().eval;
+  auto const detail_level = eval_log.placement;
+  if (eval_log.level == 0 || detail_level == 0 || !arr.is_initialized())
+    return {};
+  auto const& pmap = *arr.pmap();
+  std::string name = boost::core::demangle(typeid(pmap).name());
+  // drop the namespace, not that of a template argument
+  if (auto const pos = name.rfind("::", name.find('<'));
+      pos != std::string::npos)
+    name.erase(0, pos + 2);
+  std::string tag = " pmap=" + name + (is_view ? ":view" : "");
+  if (detail_level == 1) return tag;
+
+  auto& world = arr.world();
+  std::size_t const local = TA::size_of<TA::MemorySpace::Host>(arr);
+  std::size_t total = local, max = local;
+  std::vector<std::size_t> bytes;  // per rank, only at level 3
+  if (detail_level == 2) {
+    world.gop.sum(total);
+    world.gop.max(max);
+  } else {
+    bytes.assign(world.size(), 0);
+    bytes[world.rank()] = local;
+    world.gop.sum(bytes.data(), bytes.size());
+    total = std::accumulate(bytes.begin(), bytes.end(), std::size_t{0});
+    max = *std::max_element(bytes.begin(), bytes.end());
+  }
+  tag += std::format(" load={:.2f}(max={}B,total={}B)",
+                     total ? double(max) * world.size() / double(total) : 0.0,
+                     max, total);
+  if (!bytes.empty()) {
+    tag += " bytes=[";
+    for (std::size_t r = 0; r != bytes.size(); ++r)
+      tag += std::format("{}{}", r ? "," : "", bytes[r]);
+    tag += "]";
+  }
+  return tag;
 }
 
 /// \return the Frobenius norm of \p arr, or -1 if its tile type does not
@@ -970,7 +1035,8 @@ class ResultTensorTA final : public Result {
       : Result{}, parent_(std::move(parent)), view_(std::move(view)) {}
 
   [[nodiscard]] std::string trange_annot() const override {
-    return detail::ta_trange_string(logical_trange());
+    return detail::ta_trange_string(logical_trange()) +
+           detail::ta_placement_tag(view_base(), !has_value());
   }
 
   /// true while this result is a pending view sharing another array's tiles
@@ -1554,7 +1620,8 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   [[nodiscard]] std::string trange_annot() const override {
-    return detail::ta_trange_string(logical_trange());
+    return detail::ta_trange_string(logical_trange()) +
+           detail::ta_placement_tag(view_base(), !has_value());
   }
 
   /// true while this result is a pending view sharing another array's tiles
