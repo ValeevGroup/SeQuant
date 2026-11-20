@@ -1063,8 +1063,7 @@ std::vector<rational> compute_triplet_sparse_biorthogonalizer_coeffs(
       dense_row.data(), boost::numeric_cast<Eigen::Index>(dim));
   // every valid row x satisfies overlap.x == target
   const Eigen::VectorXd target = overlap * dense;
-  constexpr double rel_tol = 1e-8;
-  const double tol = rel_tol * dense.cwiseAbs().maxCoeff();
+  const double tol = threshold * dense.cwiseAbs().maxCoeff();
 
   // column is the map key, so swapping two Es in TEE will be the same key.
   container::map<std::vector<double>, std::size_t> representative;
@@ -1112,7 +1111,7 @@ std::vector<rational> compute_triplet_sparse_biorthogonalizer_coeffs(
     decomp.setThreshold(threshold);
     decomp.compute(A);
     const Eigen::VectorXd x = decomp.solve(target);
-    if ((A * x - target).norm() > rel_tol * target.norm())
+    if ((A * x - target).norm() > threshold * target.norm())
       continue;  // if Gd=Gs
 
     std::vector<std::size_t> support;
