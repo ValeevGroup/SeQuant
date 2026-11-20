@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8751c05ccb2d6bd355d8da322679bec7:
+
+Template Function sequant::evaluate_impl(Args&&...)
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::evaluate_impl(Args&&...)
+   :project: SeQuant

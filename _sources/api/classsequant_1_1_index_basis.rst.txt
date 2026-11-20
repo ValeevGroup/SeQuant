@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_index_basis:
+
+Class IndexBasis
+================
+
+- Defined in :ref:`file_SeQuant_core_basis.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_index_basis_1_1bad__key`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::IndexBasis
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

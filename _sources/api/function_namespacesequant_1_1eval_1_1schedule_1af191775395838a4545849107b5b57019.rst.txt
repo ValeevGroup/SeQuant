@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1schedule_1af191775395838a4545849107b5b57019:
+
+Function sequant::eval::schedule::mode_spelling
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_schedule_dag_record.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::schedule::mode_spelling(Index const&)
+   :project: SeQuant

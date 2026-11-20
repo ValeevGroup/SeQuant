@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1transform_1_1_transformer:
+
+Template Struct Transformer
+===========================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::io::serialization::v1::transform::Transformer
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa63e6935c1502379fa7408a7226c92e0:
+
+Function sequant::operator|(ComputeSelection, ComputeSelection)
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_export_compute_selection.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator|(ComputeSelection, ComputeSelection)
+   :project: SeQuant

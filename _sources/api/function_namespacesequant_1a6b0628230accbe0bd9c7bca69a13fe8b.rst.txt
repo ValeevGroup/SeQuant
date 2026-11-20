@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a6b0628230accbe0bd9c7bca69a13fe8b:
+
+Template Function sequant::strongly_connected_components_indexed
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_topological.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::strongly_connected_components_indexed(std::size_t, const IndexDepFunc&)
+   :project: SeQuant

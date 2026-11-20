@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1opt_1_1schedule_1_1_term_record:
+
+Struct TermRecord
+=================
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::opt::schedule::TermRecord
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

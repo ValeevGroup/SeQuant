@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a741e049436bf0fa28528d0dd5365f81e:
+
+Function sequant::enforce_failed
+================================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::enforce_failed(const std::string&, std::source_location)
+   :project: SeQuant

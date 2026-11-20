@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1ad5ff681b2b7df8723cc3d3f902d67ce8:
+
+Variable sequant::is_tensor_power_v
+===================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_traits.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::is_tensor_power_v
+   :project: SeQuant

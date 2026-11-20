@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a142e8da2cddca5eca7c1f02235f22d39:
+
+Template Function sequant::recycle_intermediate_names
+=====================================================
+
+- Defined in :ref:`file_SeQuant_core_export_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::recycle_intermediate_names(Groups&, const ExportContext&, const Predicate&, opt::ShapeCompatibility, opt::IntermediateNamePool::LabelGenerator, bool)
+   :project: SeQuant

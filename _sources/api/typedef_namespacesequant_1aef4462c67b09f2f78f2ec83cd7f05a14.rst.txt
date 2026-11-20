@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1aef4462c67b09f2f78f2ec83cd7f05a14:
+
+Typedef sequant::index_to_extent_t
+==================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::index_to_extent_t
+   :project: SeQuant

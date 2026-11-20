@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a190824051a9a109d2a827056a0ad123d:
+
+Template Function sequant::detail::preprocess_and_maybe_log
+===========================================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::preprocess_and_maybe_log(ExportNode<T>&, PreprocessResult&, ExportContext&, PrunableScalars)
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1opt_1_1_c_s_e_options:
+
+Template Struct CSEOptions
+==========================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::opt::CSEOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

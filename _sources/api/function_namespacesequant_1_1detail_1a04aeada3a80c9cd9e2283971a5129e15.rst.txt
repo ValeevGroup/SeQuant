@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a04aeada3a80c9cd9e2283971a5129e15:
+
+Function sequant::detail::describe(const Variable&)
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_export_utils.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::describe(const Variable&)
+   :project: SeQuant

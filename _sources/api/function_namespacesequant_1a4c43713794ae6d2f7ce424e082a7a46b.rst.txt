@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4c43713794ae6d2f7ce424e082a7a46b:
+
+Function sequant::make_identity
+===============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_identity(const Index&, const Index&)
+   :project: SeQuant

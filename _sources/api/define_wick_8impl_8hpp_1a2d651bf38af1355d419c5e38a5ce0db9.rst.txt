@@ -1,0 +1,14 @@
+.. _exhale_define_wick_8impl_8hpp_1a2d651bf38af1355d419c5e38a5ce0db9:
+
+Define SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT
+==================================================================
+
+- Defined in :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT
+   :project: SeQuant

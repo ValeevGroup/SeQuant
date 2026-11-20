@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1abde64f68ccc0a59a29bdfdc4c2746f1a:
+
+Function sequant::power_exponent
+================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::power_exponent(meta::eval_node auto const&)
+   :project: SeQuant

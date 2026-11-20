@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae47c9b6ebe22ad7c73d5e720f89fa106:
+
+Function sequant::normalize_irrep_spec
+======================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_config.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::normalize_irrep_spec(std::string_view)
+   :project: SeQuant

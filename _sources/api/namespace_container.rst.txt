@@ -1,0 +1,13 @@
+
+.. _namespace_container:
+
+Namespace container
+===================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

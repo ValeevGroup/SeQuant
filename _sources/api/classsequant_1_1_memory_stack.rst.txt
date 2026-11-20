@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_memory_stack:
+
+Class MemoryStack
+=================
+
+- Defined in :ref:`file_SeQuant_core_export_stack_checker.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::MemoryStack
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

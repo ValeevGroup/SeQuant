@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_variable:
+
+Class Variable
+==============
+
+- Defined in :ref:`file_SeQuant_core_expressions_variable.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Types
+**********
+
+- ``public sequant::Expr`` (:ref:`exhale_class_classsequant_1_1_expr`)
+- ``public sequant::MutatableLabeled`` (:ref:`exhale_class_classsequant_1_1_mutatable_labeled`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Variable
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

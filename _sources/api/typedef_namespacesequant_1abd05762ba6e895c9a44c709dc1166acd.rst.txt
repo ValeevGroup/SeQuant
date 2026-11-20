@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1abd05762ba6e895c9a44c709dc1166acd:
+
+Typedef sequant::PeakSink
+=========================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::PeakSink
+   :project: SeQuant

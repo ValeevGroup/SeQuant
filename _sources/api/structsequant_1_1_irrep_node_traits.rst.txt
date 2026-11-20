@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_irrep_node_traits:
+
+Template Struct IrrepNodeTraits
+===============================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IrrepNodeTraits
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a0521a23c122281d4399adf06a5abb52f:
+
+Typedef sequant::IndexSpecificTensorBlockLessThanComparator
+===========================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_tensor.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::IndexSpecificTensorBlockLessThanComparator
+   :project: SeQuant

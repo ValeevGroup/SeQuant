@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a602f95a94d0bdc79d2c971b3d3a29645:
+
+Template Function sequant::detail::ords_to_annot
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::ords_to_annot(RngOfOrdinals const&)
+   :project: SeQuant

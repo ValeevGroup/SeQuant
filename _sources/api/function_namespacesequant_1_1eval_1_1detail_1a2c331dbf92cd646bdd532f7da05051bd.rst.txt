@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a2c331dbf92cd646bdd532f7da05051bd:
+
+Function sequant::eval::detail::ordered_schedule_topo_sort_steps
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_schedule_topo_sort_steps(container::vector<Step>, container::vector<OrderedScheduleStepMeta> const&)
+   :project: SeQuant

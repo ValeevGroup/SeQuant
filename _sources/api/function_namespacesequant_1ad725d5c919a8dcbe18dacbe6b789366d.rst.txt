@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad725d5c919a8dcbe18dacbe6b789366d:
+
+Function sequant::profile
+=========================
+
+- Defined in :ref:`file_SeQuant_core_utility_timer.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::profile(auto, auto, auto&)
+   :project: SeQuant

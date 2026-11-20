@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0a938380f14557b6187e7e84aefbbe26:
+
+Function sequant::num_threads
+=============================
+
+- Defined in :ref:`file_SeQuant_core_runtime.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::num_threads()
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a610fbc20fa9218653eddd85eafe88ca7:
+
+Function sequant::same_instance
+===============================
+
+- Defined in :ref:`file_SeQuant_core_basis.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::same_instance(const IndexBasis&, const IndexBasis&)
+   :project: SeQuant

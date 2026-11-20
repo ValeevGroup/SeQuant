@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1_1rec_1a31a7991d268b13ec688e343d1b794013:
+
+Typedef sequant::eval::rec::SlotList
+====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::rec::SlotList
+   :project: SeQuant

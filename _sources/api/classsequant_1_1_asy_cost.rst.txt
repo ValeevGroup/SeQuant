@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_asy_cost:
+
+Class AsyCost
+=============
+
+- Defined in :ref:`file_SeQuant_core_asy_cost.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_class_classsequant_1_1_asy_cost_1_1_asy_cost_entry`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::AsyCost
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

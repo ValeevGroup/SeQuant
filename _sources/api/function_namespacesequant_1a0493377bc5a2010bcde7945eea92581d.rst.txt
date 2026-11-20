@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0493377bc5a2010bcde7945eea92581d:
+
+Function sequant::adjoint(mbpt::qns_t)
+======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::adjoint(mbpt::qns_t)
+   :project: SeQuant

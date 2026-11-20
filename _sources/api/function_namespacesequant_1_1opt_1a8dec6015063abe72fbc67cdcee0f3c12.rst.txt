@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a8dec6015063abe72fbc67cdcee0f3c12:
+
+Function sequant::opt::reorder(Sum const&, container::vector<FullBinaryNode<EvalExpr>> const&)
+==============================================================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_sum.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::reorder(Sum const&, container::vector<FullBinaryNode<EvalExpr>> const&)
+   :project: SeQuant

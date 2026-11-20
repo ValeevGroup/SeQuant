@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a485618e0a38379665a6c37cbc0afcb82:
+
+Template Function sequant::opt::recycle_intermediate_names
+==========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::recycle_intermediate_names(VectorLike&, const Transformer&, const NameRecyclingOptions<std::ranges::range_value_t<VectorLike>>&)
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_z2_algebra:
+
+Template Class Z2Algebra
+========================
+
+- Defined in :ref:`file_SeQuant_core_irreps_z2_algebra.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Z2Algebra
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0ad4d728f183d6c52271ab49b6f16826:
+
+Function sequant::null_basis
+============================
+
+- Defined in :ref:`file_SeQuant_core_basis.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::null_basis()
+   :project: SeQuant

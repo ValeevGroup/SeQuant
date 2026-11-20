@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afd6ea811a8bca1fbffe428cd64e0218c:
+
+Function sequant::simplest_radical_form
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_math.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::simplest_radical_form(const container::svector<std::pair<rational, rational>>&, unsigned, unsigned)
+   :project: SeQuant

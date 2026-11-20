@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1expr__type__rank_1a8590ab6c211aa9955b0458d8b71a6082:
+
+Variable sequant::expr_type_rank::tensor_power
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::expr_type_rank::tensor_power
+   :project: SeQuant

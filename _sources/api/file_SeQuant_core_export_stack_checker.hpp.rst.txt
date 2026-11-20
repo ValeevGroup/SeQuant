@@ -1,0 +1,76 @@
+
+.. _file_SeQuant_core_export_stack_checker.hpp:
+
+File stack_checker.hpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/stack_checker.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_stack_checker.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/forwarding_generator.hpp`` (:ref:`file_SeQuant_core_export_forwarding_generator.hpp`)
+
+- ``SeQuant/core/expressions/tensor.hpp`` (:ref:`file_SeQuant_core_expressions_tensor.hpp`)
+
+- ``SeQuant/core/expressions/variable.hpp`` (:ref:`file_SeQuant_core_expressions_variable.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``span``
+
+- ``string_view``
+
+- ``variant``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_stack_checker.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_memory_stack`
+
+- :ref:`exhale_class_classsequant_1_1_stack_checking_generator`
+

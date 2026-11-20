@@ -1,0 +1,90 @@
+
+.. _program_listing_file_SeQuant_core_batch_policy.hpp:
+
+Program Listing for File batch_policy.hpp
+=========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_batch_policy.hpp>` (``SeQuant/core/batch_policy.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_BATCH_POLICY_HPP
+   #define SEQUANT_CORE_BATCH_POLICY_HPP
+   
+   #include <SeQuant/core/utility/aggregate.hpp>
+   #include <SeQuant/core/utility/exception.hpp>
+   
+   #include <cstddef>
+   #include <cstdint>
+   #include <functional>
+   #include <limits>
+   #include <string>
+   
+   namespace sequant {
+   
+   class Index;
+   class Tensor;
+   
+   enum class BatchScheduler : std::uint8_t { forest_descent, ordered };
+   struct MemorySpace {
+     double residency_weight = 1.0;
+     double read_cost = 0.0;
+     double write_cost = 0.0;
+   };
+   
+   struct HoldPolicy {
+     bool enabled = false;
+     double slow_min_bytes = std::numeric_limits<double>::infinity();
+     MemorySpace slow = {.residency_weight = 0.0};
+   };
+   
+   struct BatchPolicy {
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     std::function<bool(Index const&)> is_batchable_contracted_index =
+         [](Index const&) { return false; };
+     std::function<bool(Index const&)> is_batchable_external_index =
+         [](Index const&) { return false; };
+   
+     std::function<bool(Index const&)> is_batchable_index() const {
+       auto contracted = is_batchable_contracted_index;
+       auto external = is_batchable_external_index;
+       return [contracted, external](Index const& ix) {
+         return contracted(ix) || external(ix);
+       };
+     }
+     std::function<std::size_t(Index const&)> batch_target_size = {};
+     std::function<bool(Tensor const&)> is_volatile_leaf = {};
+   
+     bool batch_spectator_indices = false;
+   
+     bool persistent_only = false;
+   
+     double accumulation_factor = 0.0;
+   
+     HoldPolicy hold = {};
+   
+     BatchScheduler scheduler = BatchScheduler::forest_descent;
+   
+     double peak_threshold = std::numeric_limits<double>::infinity();
+   
+     double infeasible_peak_slack = std::numeric_limits<double>::infinity();
+   
+     bool infeasible_is_error = true;
+   };
+   
+   class PeakBudgetInfeasible : public Exception {
+    public:
+     PeakBudgetInfeasible(std::string const& msg, double budget_bytes,
+                          double min_peak_bytes)
+         : Exception(msg),
+           budget_bytes(budget_bytes),
+           min_peak_bytes(min_peak_bytes) {}
+     double budget_bytes;
+     double min_peak_bytes;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_BATCH_POLICY_HPP

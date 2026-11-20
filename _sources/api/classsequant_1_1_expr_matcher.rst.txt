@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_expr_matcher:
+
+Class ExprMatcher
+=================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_matcher.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::ExprMatcher
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

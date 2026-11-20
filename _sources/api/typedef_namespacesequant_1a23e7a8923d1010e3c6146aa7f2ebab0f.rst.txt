@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a23e7a8923d1010e3c6146aa7f2ebab0f:
+
+Typedef sequant::suitable_call_operator
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::suitable_call_operator
+   :project: SeQuant

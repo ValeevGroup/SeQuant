@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_peak_budget_infeasible:
+
+Class PeakBudgetInfeasible
+==========================
+
+- Defined in :ref:`file_SeQuant_core_batch_policy.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Exception`` (:ref:`exhale_class_classsequant_1_1_exception`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::PeakBudgetInfeasible
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

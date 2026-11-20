@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a564771e4f7493f2ab4e1995a8c68a9c0:
+
+Function sequant::coprime_base
+==============================
+
+- Defined in :ref:`file_SeQuant_core_math.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::coprime_base(const container::svector<intmax_t>&)
+   :project: SeQuant

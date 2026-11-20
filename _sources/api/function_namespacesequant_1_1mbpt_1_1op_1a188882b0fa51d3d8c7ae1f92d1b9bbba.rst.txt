@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1a188882b0fa51d3d8c7ae1f92d1b9bbba:
+
+Function sequant::mbpt::op::ref_av
+==================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::ref_av(ExprPtr, EVOptions<std::wstring>)
+   :project: SeQuant

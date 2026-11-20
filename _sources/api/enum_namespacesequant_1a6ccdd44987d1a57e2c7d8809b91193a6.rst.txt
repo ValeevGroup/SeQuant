@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a6ccdd44987d1a57e2c7d8809b91193a6:
+
+Enum BatchScheduler
+===================
+
+- Defined in :ref:`file_SeQuant_core_batch_policy.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::BatchScheduler
+   :project: SeQuant

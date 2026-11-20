@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a8ec0f4965fc7e1017a447b9943e299f9:
+
+Template Function sequant::mbpt::equal
+======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::equal(const QuantumNumberChange<Tag, QNV>&, const QuantumNumberChange<Tag, QNV>&)
+   :project: SeQuant

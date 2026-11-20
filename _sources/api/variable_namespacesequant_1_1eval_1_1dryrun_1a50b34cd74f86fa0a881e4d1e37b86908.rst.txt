@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1eval_1_1dryrun_1a50b34cd74f86fa0a881e4d1e37b86908:
+
+Variable sequant::eval::dryrun::kMaxCompositeGroup
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_size_regime.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::eval::dryrun::kMaxCompositeGroup
+   :project: SeQuant

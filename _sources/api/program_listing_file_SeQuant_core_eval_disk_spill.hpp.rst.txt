@@ -1,0 +1,42 @@
+
+.. _program_listing_file_SeQuant_core_eval_disk_spill.hpp:
+
+Program Listing for File disk_spill.hpp
+=======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_disk_spill.hpp>` (``SeQuant/core/eval/disk_spill.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_EVAL_DISK_SPILL_HPP
+   #define SEQUANT_CORE_EVAL_DISK_SPILL_HPP
+   
+   #include <cstddef>
+   #include <unordered_map>
+   #include <utility>
+   #include <vector>
+   
+   namespace sequant::eval {
+   
+   struct DiskSpill {
+     std::size_t min_bytes = 1'000'000'000;
+   
+   
+     std::size_t bytes_on_disk = 0;
+     std::size_t peak_bytes_on_disk = 0;
+     bool record_peak_on_disk = false;
+     std::vector<std::pair<std::size_t, std::size_t>> peak_on_disk;
+     std::size_t n_writes = 0;
+     std::size_t bytes_written = 0;
+     std::size_t n_reads = 0;
+     std::size_t bytes_read = 0;
+     std::size_t n_assembled_on_disk = 0;
+   
+     std::unordered_map<std::size_t, std::size_t> measured_bytes;
+   };
+   
+   }  // namespace sequant::eval
+   
+   #endif  // SEQUANT_CORE_EVAL_DISK_SPILL_HPP

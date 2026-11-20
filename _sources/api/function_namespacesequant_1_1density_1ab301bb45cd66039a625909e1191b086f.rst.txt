@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1density_1ab301bb45cd66039a625909e1191b086f:
+
+Function sequant::density::make_hole_rdm
+========================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::density::make_hole_rdm(const Index&, const Index&)
+   :project: SeQuant

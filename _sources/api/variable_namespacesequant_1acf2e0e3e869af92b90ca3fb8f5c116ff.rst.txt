@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1acf2e0e3e869af92b90ca3fb8f5c116ff:
+
+Variable sequant::is_product_v
+==============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_traits.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::is_product_v
+   :project: SeQuant

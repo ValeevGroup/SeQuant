@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1aea26cc784d98585a860ed462caa0d7e7:
+
+Template Function sequant::opt::extract_subtrees
+================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_extract_subtrees.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::extract_subtrees(Range&, Pred)
+   :project: SeQuant

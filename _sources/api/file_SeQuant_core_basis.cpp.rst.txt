@@ -1,0 +1,76 @@
+
+.. _file_SeQuant_core_basis.cpp:
+
+File basis.cpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/basis.cpp``)
+---------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_basis.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/basis.hpp`` (:ref:`file_SeQuant_core_basis.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``array`` (:ref:`file_SeQuant_core_eval_backends_btas_array_ops.hpp`)
+
+- ``cstddef``
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``mutex``
+
+- ``shared_mutex``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``unordered_set``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a2242e1e789f91059b843cf8a7525e421`
+
+- :ref:`exhale_function_namespacesequant_1a08ee35f2bea826370ae7d4fd005c1e0a`
+
+- :ref:`exhale_function_namespacesequant_1a11a0e19454606c4a1c244708f70f79d7`
+
+- :ref:`exhale_function_namespacesequant_1a0ad4d728f183d6c52271ab49b6f16826`
+
+- :ref:`exhale_function_namespacesequant_1a610fbc20fa9218653eddd85eafe88ca7`
+

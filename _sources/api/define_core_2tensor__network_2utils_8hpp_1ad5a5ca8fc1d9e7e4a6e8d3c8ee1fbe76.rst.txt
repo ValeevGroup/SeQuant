@@ -1,0 +1,14 @@
+.. _exhale_define_core_2tensor__network_2utils_8hpp_1ad5a5ca8fc1d9e7e4a6e8d3c8ee1fbe76:
+
+Define SEQUANT_CHECK_IDX_GROUP
+==============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_CHECK_IDX_GROUP
+   :project: SeQuant

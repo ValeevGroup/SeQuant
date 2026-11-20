@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1ad56d19f2c34a06e8e9e043e0d4f7a303:
+
+Enum IrrepOrigin
+================
+
+- Defined in :ref:`file_SeQuant_core_export_context.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::IrrepOrigin
+   :project: SeQuant

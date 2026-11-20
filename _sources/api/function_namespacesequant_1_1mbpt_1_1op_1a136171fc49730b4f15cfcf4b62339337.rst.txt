@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1a136171fc49730b4f15cfcf4b62339337:
+
+Function sequant::mbpt::op::S
+=============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::S(std::int64_t, std::optional<std::wstring>)
+   :project: SeQuant

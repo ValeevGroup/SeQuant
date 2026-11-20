@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a27bee857ac6017079109024e3037782f:
+
+Function sequant::opt::detail::same_slot_type
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::same_slot_type(const Index&, const Index&)
+   :project: SeQuant

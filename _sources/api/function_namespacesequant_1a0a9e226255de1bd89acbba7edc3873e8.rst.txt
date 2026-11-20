@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0a9e226255de1bd89acbba7edc3873e8:
+
+Template Function sequant::bubble_sort_parity
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bubble_sort_parity(Range&&, Compare)
+   :project: SeQuant

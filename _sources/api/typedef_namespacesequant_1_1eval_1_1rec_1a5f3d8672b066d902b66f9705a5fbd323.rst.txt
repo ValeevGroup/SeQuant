@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1_1rec_1a5f3d8672b066d902b66f9705a5fbd323:
+
+Typedef sequant::eval::rec::LoopList
+====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::rec::LoopList
+   :project: SeQuant

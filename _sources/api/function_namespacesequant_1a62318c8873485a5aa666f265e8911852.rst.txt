@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a62318c8873485a5aa666f265e8911852:
+
+Template Function sequant::resolve_by_label
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::resolve_by_label(container::map<std::wstring, IrrepSet<Irrep>>)
+   :project: SeQuant

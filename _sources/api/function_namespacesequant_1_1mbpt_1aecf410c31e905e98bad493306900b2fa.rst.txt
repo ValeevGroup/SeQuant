@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1aecf410c31e905e98bad493306900b2fa:
+
+Function sequant::mbpt::decorate_label
+======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::decorate_label(std::wstring, bool)
+   :project: SeQuant

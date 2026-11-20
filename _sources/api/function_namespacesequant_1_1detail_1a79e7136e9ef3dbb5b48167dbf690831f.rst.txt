@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a79e7136e9ef3dbb5b48167dbf690831f:
+
+Template Function sequant::detail::fold_irreps
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::fold_irreps(const Node&, const Ctx&, OnNode&)
+   :project: SeQuant

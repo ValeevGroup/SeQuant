@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_backend_array_ops:
+
+Struct BackendArrayOps
+======================
+
+- Defined in :ref:`file_SeQuant_core_eval_backend_array_ops.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::BackendArrayOps
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

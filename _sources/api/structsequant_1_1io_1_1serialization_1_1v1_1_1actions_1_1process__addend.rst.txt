@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1actions_1_1process__addend:
+
+Struct process_addend
+=====================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_semantic_actions.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::io::serialization::v1::actions::process_addend
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

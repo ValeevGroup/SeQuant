@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a010a5e9a2966b4f599824e84fd9bf03f:
+
+Function sequant::io::serialization::v1::detail::serialize_exponent
+===================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::detail::serialize_exponent(const rational&, const SerializationOptions&)
+   :project: SeQuant

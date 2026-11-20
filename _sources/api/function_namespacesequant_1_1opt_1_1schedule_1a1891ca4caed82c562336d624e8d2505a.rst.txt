@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1schedule_1a1891ca4caed82c562336d624e8d2505a:
+
+Function sequant::opt::schedule::canonical_term
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::schedule::canonical_term(ExprPtr const&)
+   :project: SeQuant

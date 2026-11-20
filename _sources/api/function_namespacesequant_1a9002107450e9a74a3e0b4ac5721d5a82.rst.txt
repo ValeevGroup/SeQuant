@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9002107450e9a74a3e0b4ac5721d5a82:
+
+Template Function sequant::conjugate
+====================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_algebra.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::conjugate(const A&, const IrrepSet<typename A::irrep_type>&)
+   :project: SeQuant

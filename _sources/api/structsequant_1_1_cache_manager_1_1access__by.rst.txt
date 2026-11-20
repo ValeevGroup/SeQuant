@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_cache_manager_1_1access__by:
+
+Template Struct CacheManager::access_by
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_cache_manager`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::CacheManager::access_by
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

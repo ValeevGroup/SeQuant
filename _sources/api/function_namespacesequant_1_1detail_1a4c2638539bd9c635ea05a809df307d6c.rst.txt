@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a4c2638539bd9c635ea05a809df307d6c:
+
+Template Function sequant::detail::cumulant_expand
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::cumulant_expand(const ExprPtr&, const OpProvenance&, const ExtendedWickOptions&)
+   :project: SeQuant

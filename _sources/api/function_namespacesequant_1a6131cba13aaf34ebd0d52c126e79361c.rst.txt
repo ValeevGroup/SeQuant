@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a6131cba13aaf34ebd0d52c126e79361c:
+
+Function sequant::adjoint(Action)
+=================================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::adjoint(Action)
+   :project: SeQuant

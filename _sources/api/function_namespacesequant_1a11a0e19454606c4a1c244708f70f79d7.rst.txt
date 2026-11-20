@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a11a0e19454606c4a1c244708f70f79d7:
+
+Function sequant::intern
+========================
+
+- Defined in :ref:`file_SeQuant_core_basis.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::intern(const IndexBasis&)
+   :project: SeQuant

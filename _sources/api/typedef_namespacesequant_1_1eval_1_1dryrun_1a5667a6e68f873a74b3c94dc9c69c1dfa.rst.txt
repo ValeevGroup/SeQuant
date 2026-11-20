@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a5667a6e68f873a74b3c94dc9c69c1dfa:
+
+Typedef sequant::eval::dryrun::AssembledCoverage
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::dryrun::AssembledCoverage
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_tensor_symmetries:
+
+Struct TensorSymmetries
+=======================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::TensorSymmetries
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

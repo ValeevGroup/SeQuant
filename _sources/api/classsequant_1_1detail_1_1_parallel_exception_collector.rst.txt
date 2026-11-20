@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1_parallel_exception_collector:
+
+Class ParallelExceptionCollector
+================================
+
+- Defined in :ref:`file_SeQuant_core_runtime.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::ParallelExceptionCollector
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

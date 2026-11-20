@@ -1,0 +1,23 @@
+.. _exhale_class_classsequant_1_1_wick_theorem_1_1_stats:
+
+Class WickTheorem::Stats
+========================
+
+- Defined in :ref:`file_SeQuant_core_wick.hpp`
+
+
+Nested Relationships
+--------------------
+
+This class is a nested type of :ref:`exhale_class_classsequant_1_1_wick_theorem`.
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::WickTheorem::Stats
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

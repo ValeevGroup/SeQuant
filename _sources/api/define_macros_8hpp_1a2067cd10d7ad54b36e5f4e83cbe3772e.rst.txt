@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a2067cd10d7ad54b36e5f4e83cbe3772e:
+
+Define SEQUANT_ENFORCE
+======================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_ENFORCE
+   :project: SeQuant

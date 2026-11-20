@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1afebdbe870d9131f6df8145d5234e4ae9:
+
+Function sequant::detail::trace
+===============================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::trace(Trace)
+   :project: SeQuant

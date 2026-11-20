@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1detail_1af27f3041cf47ac155284a88cdedfc0ce:
+
+Template Function sequant::mbpt::detail::flatten_row_major
+==========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::detail::flatten_row_major(const Matrix&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afba3eb9a4c4c6659f0ee160004e98bc8:
+
+Template Function sequant::abs
+==============================
+
+- Defined in :ref:`file_SeQuant_core_complex.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::abs(const Complex<T>&)
+   :project: SeQuant

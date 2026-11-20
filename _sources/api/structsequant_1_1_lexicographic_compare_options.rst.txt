@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_lexicographic_compare_options:
+
+Struct LexicographicCompareOptions
+==================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::LexicographicCompareOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

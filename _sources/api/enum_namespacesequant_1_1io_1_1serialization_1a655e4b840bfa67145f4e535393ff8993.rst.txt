@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1io_1_1serialization_1a655e4b840bfa67145f4e535393ff8993:
+
+Enum SerializationSyntax
+========================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_serialization.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::io::serialization::SerializationSyntax
+   :project: SeQuant

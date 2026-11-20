@@ -1,0 +1,119 @@
+
+.. _file_SeQuant_core_export_context.hpp:
+
+File context.hpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/context.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_context.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``cstdint``
+
+- ``limits``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``optional``
+
+- ``span``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_context.cpp`
+
+- :ref:`file_SeQuant_core_export_export.hpp`
+
+- :ref:`file_SeQuant_core_export_generator.cpp`
+
+- :ref:`file_SeQuant_core_export_generator.hpp`
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_operations.hpp`
+
+- :ref:`file_SeQuant_core_export_name_recycling.hpp`
+
+- :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+- :ref:`file_SeQuant_core_export_reordering_context.hpp`
+
+- :ref:`file_SeQuant_core_export_text_generator.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_strategy_pair`
+
+- :ref:`exhale_class_classsequant_1_1detail_1_1_export_irrep_data_holder`
+
+- :ref:`exhale_class_classsequant_1_1_export_context`
+
+- :ref:`exhale_class_classsequant_1_1_usage_set`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1ad56d19f2c34a06e8e9e043e0d4f7a303`
+
+- :ref:`exhale_enum_namespacesequant_1a6a90bde240fccf44211a298788ea8530`
+
+- :ref:`exhale_enum_namespacesequant_1a9f00dae8f32259aba326688cf068f1a6`
+
+- :ref:`exhale_enum_namespacesequant_1af3c78d07eca54a2cc0df0668bbd67437`
+

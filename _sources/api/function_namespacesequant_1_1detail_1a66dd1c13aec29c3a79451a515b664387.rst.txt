@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a66dd1c13aec29c3a79451a515b664387:
+
+Template Function sequant::detail::extended_wick
+================================================
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::extended_wick(ExprPtr, const ExtendedWickOptions&, WickTheorem<S>&)
+   :project: SeQuant
