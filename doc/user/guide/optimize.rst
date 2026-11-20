@@ -22,6 +22,11 @@ Given an expression (or a :doc:`ResultExpr <expressions>`), :func:`sequant::opti
 - reorders the summands of every :class:`sequant::Sum` so that summands sharing common intermediates end up next to each other, which
   helps downstream common-subexpression elimination recognize them.
 
+An index is kept open (not summed over) in the contraction order if it is a *named* index: one that occurs on a single factor,
+or one declared as named in the canonicalization options of the :doc:`Context <context>`. Passing a ``ResultExpr`` declares its
+result indices as named for the duration of the call, which matters when a result index occurs on several factors (a grid or
+Laplace index shared by the factors of a tensor-hypercontraction product, say) and would otherwise be deduced to be summed over.
+
 .. literalinclude:: /examples/user/optimize.cpp
    :language: cpp
    :start-after: start-snippet-1
