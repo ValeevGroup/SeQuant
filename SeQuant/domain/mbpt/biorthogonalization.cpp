@@ -2,6 +2,7 @@
 #include <SeQuant/domain/mbpt/detail/concepts.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -1090,16 +1091,15 @@ std::vector<rational> compute_triplet_sparse_biorthogonalizer_coeffs(
   for (auto& g : groups) std::ranges::sort(g);
   std::ranges::sort(groups, {}, [](const auto& g) { return g.front(); });
 
-  // 2^g = all, zero every subset of groups; keep the solvable one with the
-  // higher sparsity
-  std::vector<std::size_t> best_support;
-  std::vector<double> best_values;
-  for (std::uint64_t zeroed = 0; zeroed < (std::uint64_t{1} << groups.size());
-       ++zeroed) {
+  // 2^g = all, keep every subset of groups (zero the rest); keep the solvable
+  // one with the higher sparsity
+  std::vector<std::size_t> nonzero_idx;
+  std::vector<double> nonzero_coeffs;
+  const std::uint64_t all_groups = (std::uint64_t{1} << groups.size()) - 1;
+  for (const auto kept : bits::subsets(all_groups)) {
     std::vector<std::size_t> cols;
-    for (std::size_t g = 0; g < groups.size(); ++g)
-      if (!((zeroed >> g) & 1u))
-        cols.insert(cols.end(), groups[g].begin(), groups[g].end());
+    for (const auto g : bits::on_bits_index(kept))
+      cols.insert(cols.end(), groups[g].begin(), groups[g].end());
     if (cols.empty()) continue;
     std::ranges::sort(cols);
 
@@ -1114,25 +1114,25 @@ std::vector<rational> compute_triplet_sparse_biorthogonalizer_coeffs(
     if ((A * x - target).norm() > threshold * target.norm())
       continue;  // if Gd=Gs
 
-    std::vector<std::size_t> support;
-    std::vector<double> values;
+    std::vector<std::size_t> candidate_idx;
+    std::vector<double> candidate_coeffs;
     for (std::size_t j = 0; j < cols.size(); ++j)
       if (const double v = x(static_cast<Eigen::Index>(j)); std::abs(v) > tol) {
-        support.push_back(cols[j]);
-        values.push_back(v);
+        candidate_idx.push_back(cols[j]);
+        candidate_coeffs.push_back(v);
       }
-    if (best_support.empty() || support.size() < best_support.size() ||
-        (support.size() == best_support.size() &&
-         std::ranges::lexicographical_compare(best_support, support))) {
-      best_support = std::move(support);
-      best_values = std::move(values);
+    if (nonzero_idx.empty() || candidate_idx.size() < nonzero_idx.size() ||
+        (candidate_idx.size() == nonzero_idx.size() &&
+         std::ranges::lexicographical_compare(nonzero_idx, candidate_idx))) {
+      nonzero_idx = std::move(candidate_idx);
+      nonzero_coeffs = std::move(candidate_coeffs);
     }
   }
-  SEQUANT_ASSERT(!best_support.empty());
+  SEQUANT_ASSERT(!nonzero_idx.empty());
 
   std::vector<rational> result(dim, rational{0});
-  for (std::size_t j = 0; j < best_support.size(); ++j)
-    result[best_support[j]] = to_rational(best_values[j], threshold);
+  for (std::size_t j = 0; j < nonzero_idx.size(); ++j)
+    result[nonzero_idx[j]] = to_rational(nonzero_coeffs[j], threshold);
 
   return result;
 }
