@@ -265,6 +265,8 @@ enum class KramersAExpansion {
 ///        with a cross-Kramers (occ or virt) pair — INTERNAL pairs included.
 ///        Defaults false (keep ḡ antisymmetric).
 /// @return one Kramers-labeled block per external representative
+/// @throw Exception if @p expr carries no antisymmetrizer Â, or if Â's bra and
+///        ket (the external virtual and occupied groups) differ in rank
 // clang-format on
 /// @param use_T if true (default) fold the external Kramers configs under
 /// global

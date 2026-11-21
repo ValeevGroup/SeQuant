@@ -19,6 +19,7 @@
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -1529,4 +1530,136 @@ TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
   // HSeOH PNS-CCD term study (2026-09-07): 493 of the 2201 terms are such
   // twins; the fold must remove at least the ~470 the canonical keys pair
   CHECK(total_in - total_out >= 450);
+}
+
+TEST_CASE("kramers_trace_index_free_term", "[spinor][kramers]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  auto count_realparts = [](const ExprPtr& expr) {
+    std::size_t n = 0;
+    expr->visit(
+        [&n](const ExprPtr& current) {
+          if (current->is<RealPart>()) ++n;
+        },
+        /* atoms_only = */ false);
+    return n;
+  };
+  // true if a - b simplifies to zero
+  auto same = [](const ExprPtr& a, const ExprPtr& b) {
+    auto d = a - b;
+    simplify(d);
+    return d->is<Constant>() && d->as<Constant>().is_zero();
+  };
+
+  // an index-free product has a single Kramers configuration, which is its
+  // own time-reversal partner: the trace is the term itself, once, complex
+  // part included
+  const auto x3 = ex<Constant>(3) * ex<Variable>(L"x");
+
+  SECTION("a bare index-free product") {
+    auto r = closed_shell_kramers_trace(x3, {}, /*fold_T=*/true);
+    INFO(toUtf8(to_latex(r)));
+    REQUIRE(count_realparts(r) == 0);
+    REQUIRE(same(r, x3));
+  }
+
+  SECTION("an index-free summand of a sum") {
+    const auto E =
+        ex<Constant>(rational{1, 4}) *
+            ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                       Symmetry::Antisymm, Hermiticity::Hermitian,
+                       ColumnSymmetry::Symm) *
+            ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                       Symmetry::Antisymm, Hermiticity::NonHermitian,
+                       ColumnSymmetry::Symm) +
+        x3;
+    auto r = closed_shell_kramers_trace(E, {}, /*fold_T=*/true);
+    INFO(toUtf8(to_latex(r)));
+    REQUIRE(r->is<Sum>());
+    container::svector<ExprPtr> scalar_terms;
+    for (const auto& term : *r)
+      if (count_realparts(term) == 0) scalar_terms.push_back(term);
+    REQUIRE(scalar_terms.size() == 1);
+    REQUIRE(same(scalar_terms.front(), x3));
+  }
+}
+
+TEST_CASE("kramers_CC_trace_rejects_malformed_residual", "[spinor][kramers]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using sequant::reserved::antisymm_label;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  SECTION("no antisymmetrizer") {
+    auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                        Symmetry::Antisymm, Hermiticity::Hermitian,
+                        ColumnSymmetry::Symm);
+    REQUIRE_THROWS_AS(closed_shell_kramers_CC_trace(g), sequant::Exception);
+  }
+
+  SECTION("antisymmetrizer with unequal bra and ket ranks") {
+    auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"}, ket{L"i_1"},
+                        Symmetry::Antisymm);
+    auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                        Symmetry::Antisymm, Hermiticity::Hermitian,
+                        ColumnSymmetry::Symm);
+    auto t = ex<Tensor>(L"t", bra{L"i_2"}, ket{}, Symmetry::Nonsymm);
+    REQUIRE_THROWS_AS(closed_shell_kramers_CC_trace(A * g * t),
+                      sequant::Exception);
+  }
+}
+
+TEST_CASE("kramers_CC_trace_keeps_composite_basis_instance",
+          "[spinor][kramers][basis]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using sequant::reserved::antisymm_label;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  // CSV pp-ladder over composites of a basis instance (a pair-natural basis
+  // is one): the trace re-labels each composite's pair proto indices per
+  // Kramers configuration and must keep the composite's basis instance
+  const Index i1{L"i_1"}, i2{L"i_2"};
+  auto csv = [&](const wchar_t* label) {
+    return Index(label, {i1, i2}).replace_basis_instance(1);
+  };
+  const Index a1 = csv(L"a_1"), a2 = csv(L"a_2"), a3 = csv(L"a_3"),
+              a4 = csv(L"a_4");
+
+  auto A = ex<Tensor>(antisymm_label(), bra{a1, a2}, ket{i1, i2},
+                      Symmetry::Antisymm);
+  auto g = ex<Tensor>(L"g", bra{a1, a2}, ket{a3, a4}, Symmetry::Antisymm,
+                      Hermiticity::Hermitian, ColumnSymmetry::Symm);
+  auto t = ex<Tensor>(L"t", bra{a3, a4}, ket{i1, i2}, Symmetry::Antisymm,
+                      Hermiticity::NonHermitian, ColumnSymmetry::Symm);
+  auto ppladder = ex<Constant>(rational{1, 2}) * A * g * t;
+
+  container::svector<ExprPtr> blocks;
+  REQUIRE_NOTHROW(blocks = closed_shell_kramers_CC_trace(ppladder));
+  REQUIRE(blocks.size() == 5);
+  std::size_t n_composites = 0, n_without_instance = 0;
+  for (const auto& b : blocks)
+    b->visit(
+        [&](const ExprPtr& node) {
+          if (!node->is<Tensor>()) return;
+          for (const auto& idx : node->as<Tensor>().const_slots()) {
+            if (!idx.has_proto_indices()) continue;
+            ++n_composites;
+            if (idx.basis().basis_instance() != 1) ++n_without_instance;
+          }
+        },
+        /* atoms_only = */ true);
+  REQUIRE(n_composites > 0);
+  REQUIRE(n_without_instance == 0);
 }

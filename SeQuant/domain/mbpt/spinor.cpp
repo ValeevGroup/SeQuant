@@ -10,6 +10,7 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
 #include <bit>
@@ -441,8 +442,10 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   // Stage 1: factor out the antisymmetrizer Â (kept, not expanded). Its bra/ket
   // are the external virtual/occupied index groups.
   auto A = find_antisymmetrizer(expr);
-  SEQUANT_ASSERT(A.has_value() &&
-                 "closed_shell_kramers_CC_trace: residual must carry Â");
+  if (!A)
+    throw Exception(
+        "closed_shell_kramers_CC_trace: the residual must carry an "
+        "antisymmetrizer Â");
 
   // External indices in bit order: bra group (virtuals) then ket group
   // (occupieds). Bit k = Kramers label of ext[k] (0 = up, 1 = down).
@@ -455,9 +458,10 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   // Stage 2 (external fold): generators = the S_k adjacent transpositions of
   // each external group (rank-general: the residual's antisymmetry in each
   // external pair/tuple) + global time reversal T. Doubles -> 5 blocks.
-  SEQUANT_ASSERT(n == 2 * n_bra &&
-                 "closed_shell_kramers_CC_trace: expected equal-rank external "
-                 "virtual/occupied groups");
+  if (n != 2 * n_bra)
+    throw Exception(
+        "closed_shell_kramers_CC_trace: the antisymmetrizer's bra and ket "
+        "(the external virtual and occupied groups) must have equal ranks");
   // Without the A-expansion the bare blocks are not antisymmetric in their
   // external groups, so the external swap generators are not symmetries of
   // the emitted blocks: fold under T only (see expand_A in the header).
@@ -538,8 +542,9 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
       // that virtual carries the down-pair proto tuple, so the amplitude spans
       // two distinct proto tuples and its ToT gains a spurious second pair of
       // outer occ axes that no longer matches the residual head.
-      kv.second =
-          Index(kv.second.space(), kv.second.ordinal(), std::move(proto));
+      // with_basis keeps the basis instance (e.g. of a pair-natural basis),
+      // which a rebuild from the space alone drops, and the ordinal as is
+      kv.second = kv.second.with_basis(kv.second.basis(), std::move(proto));
     }
   };
   for (const auto& orbit : orbits) {
@@ -714,6 +719,11 @@ ExprPtr closed_shell_kramers_trace(
   // closed contraction block(comp) = conj(block(cfg)), so the pair sums to
   // 2 Re(block). We keep the lexicographically smaller of each T-pair.
   const std::size_t n = index_groups.size();
+  // an index-free term has a single configuration, which is its own T-partner
+  // (the complement of the empty config is itself): the configuration sum is
+  // the term, once -- no 2 Re fold, which would double it and drop its
+  // imaginary part
+  if (n == 0) return mark_kramers_symmetric(traced_input);
   SEQUANT_ASSERT(n <= 62);
   const std::uint64_t nconfigs = pow2(n);
   const std::uint64_t full_mask = nconfigs - 1;
