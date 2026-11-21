@@ -400,6 +400,19 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
     };
     walk(result);
     (*opts.term_batch_axes)[result.get()] = std::move(merged);
+    // the optimized factors are put back into `result` as clones (replacer
+    // below) and freed on return; their annotations live on in `merged`.
+    // Drop every entry keyed on one of their nodes, or the key dangles: a
+    // node allocated later at the same address (a summand that records no
+    // entry of its own) would pick up the stale annotations and misalign
+    // binarize's node counter
+    for (auto const& nt : non_tensors) {
+      if (!nt) continue;
+      opts.term_batch_axes->erase(nt.get());
+      nt->visit(
+          [&opts](ExprPtr const& n) { opts.term_batch_axes->erase(n.get()); },
+          /* atoms_only = */ false);
+    }
   }
 
   auto replacer = [&non_tensors](ExprPtr& out) {

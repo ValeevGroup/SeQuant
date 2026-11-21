@@ -35,6 +35,7 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
+#include <set>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -5284,4 +5285,73 @@ TEST_CASE("pure protoindex is declared external", "[optimize][csv]") {
   cost.inner_pow = inner_pow;
   CHECK(opt::detail::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
             net, idxsz, false, cost) == open);
+}
+
+TEST_CASE("optimize keys batch annotations on live nodes only",
+          "[optimize][annotate][term_batch_axes]") {
+  // opt_mixed_product optimizes each non-tensor factor (a nested Product or
+  // Sum bracket) on its own, which keys that factor's annotations on the
+  // optimized factor, splices them into the enclosing term's list, and puts
+  // a CLONE of the factor back into the term. The optimized factor itself is
+  // freed on return, so an entry left under its address is a dangling key: a
+  // later node allocated at that address (e.g. a summand that records no
+  // entry of its own) would pick up the stale annotations. Every key left in
+  // the map must therefore be a node of the optimized expression.
+  using namespace sequant;
+  using AxesMap =
+      std::unordered_map<Expr const*, container::vector<NodeBatchAnnotation>>;
+  auto live_nodes = [](ExprPtr const& root) {
+    std::set<Expr const*> nodes{root.get()};
+    root->visit([&nodes](ExprPtr const& n) { nodes.insert(n.get()); },
+                /* atoms_only = */ false);
+    return nodes;
+  };
+  auto check_keys_live = [&](AxesMap const& axes_map, ExprPtr const& result) {
+    auto const live = live_nodes(result);
+    std::size_t n_dangling = 0;
+    for (auto const& [key, axes] : axes_map)
+      if (!live.contains(key)) ++n_dangling;
+    INFO("keys: " << axes_map.size());
+    CHECK(n_dangling == 0);
+  };
+  auto des = [](wchar_t const* s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm});
+  };
+
+  SECTION("nested Product brackets") {
+    auto bracket = [&](wchar_t const* g, wchar_t const* c1, wchar_t const* c2) {
+      auto inner = ex<Product>(
+          Product{1, ExprPtrList{des(g), des(c1)}, Product::Flatten::No});
+      return ex<Product>(
+          Product{1, ExprPtrList{inner, des(c2)}, Product::Flatten::No});
+    };
+    auto term = ex<Product>(Product{
+        1,
+        ExprPtrList{bracket(L"g{a_1;a_2}", L"C{a_1;i_1}", L"C{a_2;i_2}"),
+                    bracket(L"g{a_3;a_4}", L"C{a_3;i_3}", L"C{a_4;i_4}"),
+                    des(L"f{i_2;i_3}")},
+        Product::Flatten::No});
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized =
+        optimize(term, OptimizeOptions{.term_batch_axes = axes_map});
+    REQUIRE(optimized);
+    REQUIRE(axes_map->contains(optimized.get()));
+    check_keys_live(*axes_map, optimized);
+  }
+
+  SECTION("a Sum bracket inside a summand of a Sum") {
+    auto bracket =
+        des(L"g{a_1,a_2;a_3,a_4} t{a_3,a_4;i_3,i_4} + "
+            L"f{a_1;a_3} t{a_3,a_2;i_3,i_4}");
+    auto mixed =
+        ex<Product>(Product{1, ExprPtrList{des(L"λ{i_1,i_2;a_1,a_2}"), bracket},
+                            Product::Flatten::No});
+    auto sum = ex<Sum>(ExprPtrList{mixed, des(L"x{i_1,i_2;i_3,i_4}")});
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized =
+        optimize(sum, OptimizeOptions{.term_batch_axes = axes_map});
+    REQUIRE(optimized);
+    REQUIRE(axes_map->contains(optimized.get()));
+    check_keys_live(*axes_map, optimized);
+  }
 }
