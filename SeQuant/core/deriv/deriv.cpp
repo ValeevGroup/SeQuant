@@ -1,5 +1,6 @@
 #include <SeQuant/core/deriv/deriv.hpp>
 
+#include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
@@ -13,6 +14,7 @@
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
@@ -307,6 +309,84 @@ ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y) {
                         : ex<Sum>(result.begin(), result.end());
 }
 
+/// whether the slots @p l and @p r of the variable @p y are like: one basis,
+/// the same protoindices, and each protoindex list of y holds both or neither
+bool alike(const Tensor& y, const Index& l, const Index& r) {
+  return l.basis() == r.basis() && l.proto_indices() == r.proto_indices() &&
+         std::ranges::all_of(y.slots(), [&](const Index& i) {
+           return std::ranges::count(i.proto_indices(), l) ==
+                  std::ranges::count(i.proto_indices(), r);
+         });
+}
+
+/// whether @p y is column-symmetric without slot symmetry
+bool column_symmetric(const Tensor& y) {
+  return y.symmetry() == Symmetry::Nonsymm &&
+         y.column_symmetry() == ColumnSymmetry::Symm;
+}
+
+/// the pairs of positions among the slots of @p x of two slots of one side
+/// that a symmetry of x relates: any two (Antisymm); those of two columns
+/// (column symmetry)
+container::svector<std::pair<std::size_t, std::size_t>> related_slots(
+    const Tensor& x) {
+  const bool antisymm = x.symmetry() == Symmetry::Antisymm;
+  const bool columns = column_symmetric(x);
+  const auto nb = x.bra_rank();
+  const auto nk = x.ket_rank();
+  // whether slot l of a side, paired with an earlier one, is related to it
+  const auto related = [&](std::size_t l) {
+    return antisymm || (columns && l < std::min(nb, nk));
+  };
+  container::svector<std::pair<std::size_t, std::size_t>> result;
+  for (std::size_t k = 0; k != nb; ++k)
+    for (std::size_t l = k + 1; l != nb; ++l)
+      if (related(l)) result.emplace_back(k, l);
+  for (std::size_t k = 0; k != nk; ++k)
+    for (std::size_t l = k + 1; l != nk; ++l)
+      if (related(l)) result.emplace_back(nb + k, nb + l);
+  return result;
+}
+
+/// the slots of @p y in its bra and in its ket that its symmetry permutes
+/// among like ones: those of a related pair that are alike, and for column
+/// symmetry whose column partners are alike too
+std::pair<container::svector<Index>, container::svector<Index>> like_slots(
+    const Tensor& y) {
+  const auto slots = y.slots();
+  const auto nb = y.bra_rank();
+  const auto partner = [nb](std::size_t k) { return k < nb ? nb + k : k - nb; };
+  container::svector<bool> like(y.num_slots(), false);
+  for (const auto& [k, l] : related_slots(y))
+    if (alike(y, slots[k], slots[l]) &&
+        (!column_symmetric(y) ||
+         alike(y, slots[partner(k)], slots[partner(l)])))
+      like[k] = like[l] = true;
+  container::svector<Index> B, K;
+  for (std::size_t k = 0; k != like.size(); ++k)
+    if (like[k]) (k < nb ? B : K).push_back(slots[k]);
+  return {B, K};
+}
+
+/// P_y: @p G summed over the permutations of the like slots (or columns) of
+/// @p y , i.e. each term of @p G times SeQuant's normalized Â (or Ŝ) over them
+/// and the number of permutations it covers
+ExprPtr block_sum(const ExprPtr& G, const Tensor& y) {
+  const auto [B, K] = like_slots(y);
+  if (B.empty() && K.empty()) return G;
+  const bool columns = column_symmetric(y);
+  const auto count =
+      columns ? factorial(B.size()) : factorial(B.size()) * factorial(K.size());
+  const auto P = columns ? make_symmetrizer(bra(B), ket(K))
+                         : make_antisymmetrizer(bra(B), ket(K));
+  container::vector<ExprPtr> result;
+  for (const auto& term : terms_of(G))
+    if (!term->is_zero())
+      result.push_back(ex<Product>(count, ExprPtrList{P->clone(), term}));
+  return result.empty() ? ex<Constant>(0)
+                        : ex<Sum>(result.begin(), result.end());
+}
+
 /// the derivative of @p E by the one variable @p x
 ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
   auto e = E->clone();
@@ -317,7 +397,7 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
     result = one_way(terms, x);
   } else {
     rename_apart(terms, x);
-    result = one_way(terms, x);
+    result = block_sum(one_way(terms, x), x->as<Tensor>());
   }
   rapid_simplify(result);
   return result;

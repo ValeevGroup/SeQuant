@@ -210,3 +210,80 @@ TEST_CASE("deriv/rules/tensors", "[deriv][rules]") {
       L"k{a_1<i_1,i_2>;a_3<i_3,i_4>}:N-N-N v{i_1,i_2,i_3,i_4;}:N-N-N",
       L"k{a_2<i_5,i_6>;a_4<i_7,i_8>}:N-N-N");
 }
+
+TEST_CASE("deriv/rules/symmetry", "[deriv][rules]") {
+  using sequant::deriv::test::check_rule;
+  const auto diff = [](const ExprPtr& E, const ExprPtr& x) {
+    return sequant::deriv::diff(E, {x});
+  };
+  auto T = [](std::wstring_view s) { return deserialize(s); };
+  const auto R = [](std::wstring_view f, std::wstring_view x,
+                    std::wstring_view expected) { check_rule(f, x, expected); };
+
+  // antisymmetric: 4 Â on the gradient; Â g = g here
+  R(L"1/4 g{i_1,i_2;a_1,a_2}:A-C-S t{a_1,a_2;i_1,i_2}:A-N-S",
+    L"t{a_3,a_4;i_3,i_4}:A-N-S",
+    L"Â{a_3,a_4;i_3,i_4}:A-N-S g{i_3,i_4;a_3,a_4}:A-C-S");
+  // a leaf by itself
+  R(L"t{a_1,a_2;i_1,i_2}:A-N-S", L"t{a_3,a_4;i_3,i_4}:A-N-S",
+    L"4 Â{a_3,a_4;i_3,i_4}:A-N-S δ{a_1;a_3}:N-S-S δ{a_2;a_4}:N-S-S "
+    L"δ{i_3;i_1}:N-S-S δ{i_4;i_2}:N-S-S");
+  // column symmetry: 2 Ŝ
+  R(L"g{i_1,i_2;a_1,a_2}:N-C-S t{a_1,a_2;i_1,i_2}:N-N-S",
+    L"t{a_3,a_4;i_3,i_4}:N-N-S",
+    L"2 Ŝ{a_3,a_4;i_3,i_4}:N-N-S g{i_3,i_4;a_3,a_4}:N-C-S");
+  // the ket slots alone share a basis: a one-sided Â
+  R(L"W{i_1,i_2;i_3,a_1}:N-N-N g{i_3,a_1;i_1,i_2}:A-C-S",
+    L"g{i_4,a_4;i_5,i_6}:A-C-S",
+    L"2 Â{;i_5,i_6}:A-N-S W{i_5,i_6;i_4,a_4}:N-N-N");
+  // complex Hermitian over two spaces: the other block is the conjugate, a
+  // constant
+  R(L"1/4 W{i_1,i_2;a_1,a_2}:A-N-S g{a_1,a_2;i_1,i_2}:A-C-S + 1/4 "
+    L"V{a_1,a_2;i_1,i_2}:A-N-S g{i_1,i_2;a_1,a_2}:A-C-S",
+    L"g{a_3,a_4;i_3,i_4}:A-C-S",
+    L"Â{a_3,a_4;i_3,i_4}:A-N-S W{i_3,i_4;a_3,a_4}:A-N-S");
+  // complex Hermitian over one space: every element is its own variable
+  R(L"G{p_2;p_1}:N-N-N h{p_1;p_2}:N-C-N", L"h{p_3;p_4}:N-C-N",
+    L"G{p_4;p_3}:N-N-N");
+  // a CSV amplitude
+  R(L"1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-C-S "
+    L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S",
+    L"t{a_3<i_3,i_4>,a_4<i_3,i_4>;i_3,i_4}:A-N-S",
+    L"Â{a_3<i_3,i_4>,a_4<i_3,i_4>;i_3,i_4}:A-N-S "
+    L"g{i_3,i_4;a_3<i_3,i_4>,a_4<i_3,i_4>}:A-C-S");
+  // a group that is part of a side: the two occupied bra slots and the two
+  // unoccupied ket slots of a rank-3 tensor (the judge alone decides, and the
+  // result is not zero)
+  check_rule(
+      T(L"W{a_2,a_3,i_3;i_1,i_2,a_1}:N-N-N w{i_1,i_2,a_1;a_2,a_3,i_3}:A-N-S"),
+      T(L"w{i_4,i_5,a_4;a_5,a_6,i_6}:A-N-S"), nullptr);
+  REQUIRE_FALSE(diff(T(L"W{a_2,a_3,i_3;i_1,i_2,a_1}:N-N-N "
+                       L"w{i_1,i_2,a_1;a_2,a_3,i_3}:A-N-S"),
+                     T(L"w{i_4,i_5,a_4;a_5,a_6,i_6}:A-N-S"))
+                    ->is_zero());
+  // a leaf over the union space by a variable whose related slots are alike:
+  // the operations that keep the block are all its arrangements
+  R(L"1/4 W{p_3,p_4;p_1,p_2}:N-N-N g{p_1,p_2;p_3,p_4}:A-N-S",
+    L"g{i_5,i_6;a_5,a_6}:A-N-S",
+    L"Â{i_5,i_6;a_5,a_6}:A-N-S W{a_5,a_6;i_5,i_6}:N-N-N");
+  R(L"1/4 W{i_1,i_2;p_1,p_2}:N-N-N t{p_1,p_2;i_1,i_2}:A-N-S",
+    L"t{a_3,a_4;i_3,i_4}:A-N-S",
+    L"Â{a_3,a_4;i_3,i_4}:A-N-S W{i_3,i_4;a_3,a_4}:N-N-N");
+  // E with its own Â, x with a projector: both stay as factors
+  check_rule(T(L"Â{i_1,i_2;a_1,a_2}:A-N-S g{a_1,a_2;i_1,i_2}:A-C-S"),
+             T(L"g{a_3,a_4;i_3,i_4}:A-C-S"), nullptr);
+  // second derivatives commute
+  {
+    const auto E =
+        T(L"1/2 w{i_1,i_2,i_3;a_1,a_2,a_3}:N-N-N t{a_1,a_2;i_1,i_2}:A-N-S "
+          L"t{a_3;i_3}:N-N-N");
+    const auto x2 = T(L"t{a_51,a_52;i_51,i_52}:A-N-S"),
+               x1 = T(L"t{a_71;i_71}:N-N-N");
+    REQUIRE_THAT(diff(diff(E, x2), x1), EquivalentTo(diff(diff(E, x1), x2)));
+    REQUIRE_THAT(sequant::deriv::diff(E, {x2, x1}),
+                 EquivalentTo(diff(diff(E, x2), x1)));
+    REQUIRE_THAT(diff(diff(E, x2), x1),
+                 EquivalentTo(L"2 Â{a_51,a_52;i_51,i_52}:A-N-S "
+                              L"w{i_51,i_52,i_71;a_51,a_52,a_71}:N-N-N"));
+  }
+}
