@@ -1,6 +1,9 @@
 # Unit tests of SeQuant-deriv (symbolic differentiation), kept in their own executable
 add_executable(unit_tests-sequant-deriv ${BUILD_BY_DEFAULT}
     "../test_main.cpp"
+    "evaluator.cpp"
+    "judge.cpp"
+    "test_deriv_judge.cpp"
     "test_deriv_rules.cpp"
 )
 set_target_properties(unit_tests-sequant-deriv PROPERTIES CXX_SCAN_FOR_MODULES OFF)
