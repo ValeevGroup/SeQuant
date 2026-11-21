@@ -132,6 +132,14 @@ class TextGenerator : public Generator<Context> {
                                 /*double_slash*/ false, &wrap_conj);
   }
 
+  std::string represent(const TensorPower &power,
+                        const Context &ctx) const override {
+    SEQUANT_ASSERT(power.base()->is<Tensor>());
+    return detail::format_tensor_power(
+        power, represent(power.base()->as<Tensor>(), ctx), "^",
+        /*double_slash*/ false);
+  }
+
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     m_generated += m_indent + "Create " + represent(tensor, ctx);
@@ -214,6 +222,20 @@ class TextGenerator : public Generator<Context> {
                const Context &ctx) override {
     m_generated += m_indent + "Compute " + represent(result, ctx) +
                    " += " + stringify(expression, ctx) + "\n";
+  }
+
+  void broadcast_add(const Expr &operand, const Tensor &result,
+                     const Context &ctx) override {
+    const Tensor *operand_tensor = detail::broadcast_operand_tensor(operand);
+    std::string new_modes;
+    for (const Index &idx : result.const_indices()) {
+      if (detail::broadcast_carries(operand_tensor, idx)) continue;
+      if (!new_modes.empty()) new_modes += ", ";
+      new_modes += represent(idx, ctx);
+    }
+    m_generated += m_indent + "Compute " + represent(result, ctx) +
+                   " += " + stringify(operand, ctx) + " (broadcast over " +
+                   new_modes + ")\n";
   }
 
   void declare(const Index &idx, const Context &ctx) override {
@@ -329,7 +351,8 @@ class TextGenerator : public Generator<Context> {
   /// @return @p leaf rendered in a value position
   template <typename T>
   std::string stringify_leaf(const T &leaf, const Context &ctx) const {
-    return represent(leaf, ctx);
+    // through the base so that no overload is hidden in a derived class
+    return static_cast<const Generator<Context> &>(*this).represent(leaf, ctx);
   }
 
   /// @return @p variable rendered in a value position
@@ -337,7 +360,8 @@ class TextGenerator : public Generator<Context> {
   ///       has to be spelled out, because the name does not carry it
   std::string stringify_leaf(const Variable &variable,
                              const Context &ctx) const {
-    std::string repr = represent(variable, ctx);
+    std::string repr =
+        static_cast<const Generator<Context> &>(*this).represent(variable, ctx);
     if (variable.conjugated()) repr = wrap_conj(std::move(repr));
     return repr;
   }

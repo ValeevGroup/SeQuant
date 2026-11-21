@@ -8,3 +8,8 @@
     max-width: 100%;
     height: auto;
 }
+
+/* Let long identifiers (e.g. CMake variable names) wrap so the table fits the content width */
+table.wrap-ids td {
+    overflow-wrap: anywhere;
+}

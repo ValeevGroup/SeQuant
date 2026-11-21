@@ -18,6 +18,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <range/v3/algorithm/contains.hpp>
@@ -39,10 +40,37 @@
 
 namespace sequant::opt {
 
+/// \brief An invocable giving the integer extent of a proto-free index.
+///
+/// The optimizer and the dry run invoke it only on indices without proto
+/// indices (plain base-space modes: occupied, PAO, DF-aux, ...). A
+/// proto-indexed composite (a CSV/PNO/OSV index such as `a<i,j>`) has no
+/// single integer extent -- its size is a statistical quantity, a domain
+/// power mean times a cluster-grid occupancy -- and is sized exclusively by
+/// the separate, double-valued `inner_pow` hook (see \ref inner_aware_volume).
+/// A backend therefore never has to invent an integer for a composite; every
+/// call site goes through \ref detail::outer_extent, which refuses one.
 template <typename F>
 concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
 
 namespace detail {
+
+/// \brief The integer extent of the proto-free index \p ix under \p ixex.
+///
+/// The single seam through which the cost models ask a backend for an integer
+/// extent, so the \ref has_index_extent contract ("proto-free indices only")
+/// is enforced in one place: a composite index is a programming error here,
+/// not a request the backend has to answer.
+template <typename Ixex>
+std::size_t outer_extent(Ixex const& ixex, Index const& ix) {
+  if (ix.has_proto_indices())
+    throw Exception(
+        "outer_extent: the integer index-extent hook was asked for a "
+        "proto-indexed (CSV/PNO) composite index " +
+        toUtf8(ix.full_label()) +
+        " -- composites have no integer extent and are sized by inner_pow");
+  return ixex(ix);
+}
 
 /// \brief Whether an "option-like" callable is engaged.
 ///
@@ -86,7 +114,9 @@ constexpr bool option_engaged(F const& f) {
 template <typename Tot, typename Ixex, typename InnerPow>
 double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
                           InnerPow const& inner_pow) {
-  double mem = ranges::accumulate(tot_idxs.outer, 1., std::multiplies{}, ixex);
+  double mem = 1.;
+  for (auto const& o : tot_idxs.outer)
+    mem *= static_cast<double>(outer_extent(ixex, o));
   if (option_engaged(inner_pow)) {
     for (auto const& c : tot_idxs.inner) {
       std::size_t k = 0;
@@ -106,7 +136,6 @@ double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
           "inner_aware_volume: composite (CSV/PNO) indices present but no "
           "inner_pow provided -- sizing composites by base extent is a bug. "
           "Pass a real inner_pow (e.g. SizeRegime::inner_pow_fn()).");
-    mem = ranges::accumulate(tot_idxs.inner, mem, std::multiplies{}, ixex);
   }
   return mem;
 }
@@ -317,8 +346,7 @@ inline container::vector<Index> batchable_mode_list(
            (is_batchable_external && is_batchable_external(ix));
   };
   for (auto&& t : network.tensors()) {
-    auto tp = std::dynamic_pointer_cast<Tensor>(t);
-    for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux())) {
+    for (auto&& ix : slots(*t)) {
       if (match(ix) && ranges::find(aux, ix) == ranges::end(aux))
         aux.push_back(ix);
       for (auto&& p : ix.proto_indices())
@@ -367,7 +395,7 @@ container::vector<container::vector<double>> sliced_footprints(
   container::vector<container::vector<double>> tables(std::size_t{1} << m);
   for (std::size_t B = 0; B < tables.size(); ++B) {
     auto extent = [&, B](Index const& ix) -> std::size_t {
-      std::size_t e = idxsz(ix);
+      std::size_t e = outer_extent(idxsz, ix);
       // Membership in aux_list is the authoritative "this is a batchable mode"
       // test: that list spans all batchability roles (contracted and external).
       // Gating additionally on the contracted-role predicate silently makes a
@@ -394,7 +422,8 @@ container::vector<container::vector<double>> sliced_footprints(
 /// \param network           The TensorNetwork.
 /// \param is_volatile_leaf  Predicate identifying volatile leaf tensors; may
 ///        be empty.
-/// \return Bitmask with bit i set iff tensor i is a volatile leaf.
+/// \return Bitmask with bit i set iff tensor i is a volatile leaf, or a
+///         TensorPower of one.
 inline std::size_t leaf_volatile_mask(
     TensorNetwork const& network,
     std::function<bool(Tensor const&)> const& is_volatile_leaf) {
@@ -402,7 +431,13 @@ inline std::size_t leaf_volatile_mask(
   if (!is_volatile_leaf) return mask;
   std::size_t i = 0;
   for (auto&& t : network.tensors()) {
-    auto tp = std::dynamic_pointer_cast<Tensor>(t);
+    // a power is as volatile as its base, the leaf the evaluator sees
+    auto const* tp = dynamic_cast<Tensor const*>(t.get());
+    if (auto const* pw = dynamic_cast<TensorPower const*>(t.get())) {
+      // the base of a TensorPower is a c-number Tensor leaf
+      tp = dynamic_cast<Tensor const*>(&pw->base_tensor());
+      SEQUANT_ASSERT(tp);
+    }
     if (tp && is_volatile_leaf(*tp)) mask |= (std::size_t{1} << i);
     ++i;
   }
@@ -595,7 +630,7 @@ inline SubnetMetadata build_subnet_metadata(
     auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
     container::vector<ExprPtr> ts_expr;
     for (auto&& t : ts)
-      ts_expr.emplace_back(std::dynamic_pointer_cast<Tensor>(t)->clone());
+      ts_expr.emplace_back(std::dynamic_pointer_cast<Expr>(t)->clone());
 
     auto tn = TensorNetwork{ts_expr};
     auto meta =

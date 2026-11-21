@@ -808,6 +808,33 @@ class Index : public Taggable {
     return result;
   }
 
+  /// @brief re-homes this index into @p basis: same ordinal (a generated /
+  /// tmp ordinal is kept as-is, unlike the public ordinal ctor), same
+  /// proto-index bundle unless @p proto_indices is given, same bundle
+  /// symmetry
+  /// @return the re-homed index
+  Index with_basis(
+      const IndexBasis &basis,
+      std::optional<index_vector> proto_indices = std::nullopt) const {
+    Index result =
+        ordinal_ ? Index(basis, *ordinal_, IndexFactoryTag{}) : Index(basis);
+    result.proto_indices_ =
+        proto_indices ? std::move(*proto_indices) : proto_indices_;
+    result.symmetric_proto_indices_ = symmetric_proto_indices_;
+    result.canonicalize_proto_indices();
+    result.validate_proto_indices();
+    return result;
+  }
+
+  /// @brief re-homes this index into @p space (its own basis, i.e. without a
+  /// basis instance), see with_basis()
+  /// @return the re-homed index
+  Index with_space(
+      const IndexSpace &space,
+      std::optional<index_vector> proto_indices = std::nullopt) const {
+    return with_basis(IndexBasis{space}, std::move(proto_indices));
+  }
+
   /// @return the smallest index of a generated index
   static std::size_t min_tmp_index() noexcept;
 
@@ -1270,6 +1297,75 @@ Field base_field(BraRange bra, KetRange ket) {
     return false;
   };
   return (has_complex(bra) || has_complex(ket)) ? Field::Complex : Field::Real;
+}
+
+/// @brief the basis of the Kramers image of an index over @p basis: the
+/// partner space registered in @p isr, with the basis instance kept and
+/// resolved against @p isr (a named basis, e.g. the flavoured PAO basis μ̃↑,
+/// is an instance over the flavoured particle space a↑, so its image is the
+/// registry's entry for that instance over the partner space, μ̃↓)
+/// @return the image basis, or nullopt if @p basis's space has no partner
+inline std::optional<IndexBasis> kramers_partner_basis(
+    const IndexBasis &basis, const IndexBasisRegistry &isr) {
+  auto partner = isr.kramers_partner(basis.space());
+  if (!partner) return std::nullopt;
+  return isr.resolve(IndexBasis{*partner, basis.basis_instance()});
+}
+
+/// @brief the Kramers (time-reversal) image of @p idx: same ordinal in the
+/// partner space registered in @p isr (basis instance kept, see
+/// kramers_partner_basis), proto indices flipped recursively (proto indices
+/// without a partner are kept)
+/// @return the flipped index, or nullopt if @p idx's space has no partner
+inline std::optional<Index> kramers_flipped(const Index &idx,
+                                            const IndexBasisRegistry &isr) {
+  auto partner = kramers_partner_basis(idx.basis(), isr);
+  if (!partner) return std::nullopt;
+  if (!idx.has_proto_indices()) return idx.with_basis(*partner);
+  Index::index_vector protos;
+  for (const auto &p : idx.proto_indices()) {
+    auto fp = kramers_flipped(p, isr);
+    protos.push_back(fp ? *fp : p);
+  }
+  return idx.with_basis(*partner, std::move(protos));
+}
+
+/// @brief the DEEP Kramers image of @p idx: kramers_flipped when @p idx's
+/// space has a partner; otherwise @p idx itself with its proto indices
+/// flipped recursively (kramers_flipped leaves a composite of an unflavoured
+/// space untouched even when its protos are flavoured -- e.g. a Kramers-union
+/// CSV composite a<i↓,j> carrying flavoured pair labels; the deep image is
+/// what a whole-expression time-reversal flip needs, so the pair labels inside
+/// such a composite follow their plain-slot occurrences)
+inline Index kramers_flipped_deep(const Index &idx,
+                                  const IndexBasisRegistry &isr) {
+  auto partner = kramers_partner_basis(idx.basis(), isr);
+  if (!idx.has_proto_indices()) return partner ? idx.with_basis(*partner) : idx;
+  Index::index_vector protos;
+  for (const auto &p : idx.proto_indices())
+    protos.push_back(kramers_flipped_deep(p, isr));
+  return idx.with_basis(partner ? *partner : idx.basis(), std::move(protos));
+}
+
+/// @brief replaces every index of @p ixs by its deep Kramers image (see
+/// kramers_flipped_deep) in place; ordinals and order are kept
+inline void kramers_flip_deep(Index::index_vector &ixs,
+                              const IndexBasisRegistry &isr) {
+  for (auto &ix : ixs) ix = kramers_flipped_deep(ix, isr);
+}
+
+/// @brief flips every index of @p ixs that has a Kramers partner to its
+/// image (see kramers_flipped) in place; ordinals and order are kept
+/// @return whether any index was flipped
+inline bool kramers_flip(Index::index_vector &ixs,
+                         const IndexBasisRegistry &isr) {
+  bool flipped = false;
+  for (auto &ix : ixs)
+    if (auto f = kramers_flipped(ix, isr)) {
+      ix = std::move(*f);
+      flipped = true;
+    }
+  return flipped;
 }
 
 }  // namespace sequant

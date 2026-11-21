@@ -109,8 +109,9 @@ std::strong_ordering canonical_operand_cmp(TreeNode const &a,
 /// left/right the DP emitted.
 ///
 /// Meaningful for a commutative (Product) node; callers use the emitted order
-/// for everything else (a Sum's left child is the in-place accumulator), so
-/// this is not applied there.
+/// for everything else (a Sum's left child is the in-place accumulator, a
+/// unary (Adjoint, Power) node's right child is a sentinel), so this is not
+/// applied there.
 ///
 /// \param n a non-leaf node
 /// \pre \p n is not a leaf
@@ -167,6 +168,12 @@ struct TreeNodeEqualityComparator {
     const TreeNode *lhsp = &lhs_in;
     const TreeNode *rhsp = &rhs_in;
     while (true) {
+      // A node is its own equal. The cache keys on the forest's own nodes
+      // (eval::CachedValue), so a probe with a forest node meets itself here;
+      // without this exit, matching a Sum-spine node would walk its whole
+      // subtree, making the lookups of an equation's spine O(terms^2).
+      if (lhsp == rhsp) return true;
+
       const TreeNode &lhs = *lhsp;
       const TreeNode &rhs = *rhsp;
 
@@ -231,8 +238,12 @@ struct TreeNodeEqualityComparator {
         // its ket leg. Hence only graph-less tensor nodes -- protoindex-free
         // leaves (block-canonicalized in place at construction) and
         // scalar*tensor results -- are compared here by block.
-        const Tensor &lhs_tensor = lhs->as_tensor();
-        const Tensor &rhs_tensor = rhs->as_tensor();
+        // a Kramers-blind erased leaf is compared by its erased spelling
+        // (eval_expr.hpp identity_tensor)
+        const Tensor &lhs_tensor =
+            lhs->identity_tensor() ? *lhs->identity_tensor() : lhs->as_tensor();
+        const Tensor &rhs_tensor =
+            rhs->identity_tensor() ? *rhs->identity_tensor() : rhs->as_tensor();
 
         if (!block_comparator_(lhs_tensor, rhs_tensor)) {
           return false;
@@ -287,13 +298,15 @@ struct TreeNodeEqualityComparator {
         return (*this)(lfirst, rfirst) && (*this)(lsecond, rsecond);
       }
 
-      // Non-Product internal node (Sum, scalar*tensor product): its
+      // Non-Product internal node (Sum, scalar*tensor product, unary): its
       // left/right assignment is canonical (e.g. the in-place Sum tree is
-      // left-folded), so operand order carries meaning and the children are
-      // compared in order. The right child (a single summand / the scalar
-      // factor) is bounded in depth and compared recursively; the left child
-      // is the deep spine, so rather than recurse into it the loop starts
-      // over with it as the new (lhs, rhs), unwinding the spine iteratively.
+      // left-folded; a unary node's right child is a sentinel), so operand
+      // order carries meaning and the children are compared in order. The
+      // right child (a single summand / the scalar factor / the unary sentinel,
+      // which for a Power holds the exponent) is bounded in depth and compared
+      // recursively; the left child is the deep spine, so rather than recurse
+      // into it the loop starts over with it as the new (lhs, rhs), unwinding
+      // the spine iteratively.
       if (!(*this)(lhs.right(), rhs.right())) {
         return false;
       }

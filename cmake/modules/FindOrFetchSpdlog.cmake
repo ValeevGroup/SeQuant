@@ -1,6 +1,8 @@
 if (NOT TARGET spdlog::spdlog)
     include(FetchContent)
 
+    sequant_fetch_only_dependency(spdlog "set SEQUANT_UTILITIES=OFF")
+
 	set(SPDLOG_USE_STD_FORMAT ON)
 
     FetchContent_Declare(

@@ -1,0 +1,65 @@
+D{i_1,i_2;a_1} = g{a_1;i_2} + f{i_1;a_1}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+
+Declare tensor D[i_1, i_2, a_1]
+Declare tensor f[i_1, a_1]
+Declare tensor g[a_1, i_2]
+
+Create D[i_1, i_2, a_1] and initialize to zero
+Load g[a_1, i_2]
+Compute D[i_1, i_2, a_1] += g[a_1, i_2] (broadcast over i_1)
+Unload g[a_1, i_2]
+Load f[i_1, a_1]
+Compute D[i_1, i_2, a_1] += f[i_1, a_1] (broadcast over i_2)
+Unload f[i_1, a_1]
+Persist D[i_1, i_2, a_1]
+
+=================================================
+Julia (TensorOperations)
+=================================================
+D_oov = zeros(Float64, nocc, nocc, nv)
+g_vo = deserialize("g_vo.jlbin")
+D_oov .+= reshape(permutedims(g_vo, (2, 1)), (1, nocc, nv))
+g_vo = nothing
+f_ov = deserialize("f_ov.jlbin")
+D_oov .+= reshape(f_ov, (nocc, 1, nv))
+f_ov = nothing
+return D_oov
+
+=================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+D_oov = np.zeros((nocc, nocc, nvirt), order='F')
+g_vo = np.load('g_vo.npy')
+D_oov += np.einsum('ai->ia', g_vo, optimize=True)[None, :, :]
+del g_vo
+f_ov = np.load('f_ov.npy')
+D_oov += np.einsum('ia->ia', f_ov, optimize=True)[:, None, :]
+del f_ov
+np.save('D_oov.npy', D_oov)
+
+=================================================
+PyTorch (einsum)
+=================================================
+import torch
+import os
+
+D_oov = torch.zeros((nocc, nocc, nvirt), dtype=torch.float64)
+g_vo = torch.load('g_vo.pt')
+D_oov += torch.einsum('ai->ia', g_vo)[None, :, :]
+del g_vo
+f_ov = torch.load('f_ov.pt')
+D_oov += torch.einsum('ia->ia', f_ov)[:, None, :]
+del f_ov
+torch.save(D_oov, 'D_oov.pt')
+
+=================================================

@@ -75,3 +75,6 @@ _codeql_detected_source_root
 .vscode
 out
 run
+
+# plans and specs written by agent workflows stay out of the tree (see AGENTS.md)
+/docs/superpowers/

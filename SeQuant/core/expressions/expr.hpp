@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_EXPR_HPP
 #define SEQUANT_EXPRESSIONS_EXPR_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
@@ -12,6 +13,7 @@
 #include <boost/core/demangle.hpp>
 
 #include <atomic>
+#include <compare>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -184,6 +186,23 @@ constexpr std::string type_name_of() {
   else
     return detail::compiler_type_name<T>();
 }
+
+/// State shared by a (recursive) lexicographic comparison of expressions
+/// @sa Expr::lexicographic_compare
+struct LexicographicCompareOptions {
+  /// tensor labels that precede all others, in this order
+  /// @sa Context::cardinal_tensor_labels
+  container::vector<std::wstring> cardinal_tensor_labels;
+
+  /// @return the options that use the cardinal tensor labels of the default
+  /// context
+  static LexicographicCompareOptions from_default_context();
+
+  /// @return position of (the non-adjoint form of) @p label among
+  /// cardinal_tensor_labels, or `cardinal_tensor_labels.size()` if it is not a
+  /// cardinal label
+  std::size_t cardinal_position(std::wstring_view label) const;
+};
 
 /// @brief Base expression class
 
@@ -462,6 +481,10 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @tparam T Expr or a class derived from Expr
   /// @return true if @c *this is less than @c that
   /// @note the derived class must implement Expr::static_less_than
+  /// @note unless overridden by Expr::static_less_than , objects of same type
+  /// are ordered by hash value, hence the order changes with the hashing
+  /// algorithm; see Expr::lexicographic_compare (and LexicographicExprCompare)
+  /// for an order that does not
   template <typename T>
     requires(is_an_expr_v<T>)
   bool operator<(const T &that) const {
@@ -473,6 +496,24 @@ class Expr : public std::enable_shared_from_this<Expr> {
       return type_id() < that.type_id();
     }
   }
+
+  /// Compares @c *this with @p that lexicographically, i.e. based on their
+  /// contents only (unlike operator<, which orders same-type objects by their
+  /// hash value by default). The resulting order is thus independent of the
+  /// hashing algorithm, at the price of being slower than operator< .
+  /// Unlike types are ordered by type id, as done by operator< .
+  /// @param that an Expr object
+  /// @param opts the comparison options
+  /// @return the order of @c *this relative to @p that
+  /// @note the derived class must implement Expr::static_lexicographic_compare
+  std::weak_ordering lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const;
+
+  /// Same as lexicographic_compare(that, opts) with
+  /// `opts = LexicographicCompareOptions::from_default_context()`
+  /// @note prefer the overload taking options (or LexicographicExprCompare)
+  /// when performing many comparisons to avoid repeatedly querying the context
+  std::weak_ordering lexicographic_compare(const Expr &that) const;
 
   /// @return the type id of a type of rank @p rank named @p name : @p rank in
   /// the top 8 bits, the top 56 bits of `fnv1a_64(name)` below them
@@ -689,6 +730,18 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
   /// @param that an Expr object
+  /// @param opts the comparison options, to be passed on to the comparison of
+  /// subexpressions
+  /// @note @c that is guaranteed to be of same type as @c *this, hence can be
+  /// statically cast
+  /// @note the comparison must not depend on hash values, and must regard
+  /// objects for which static_equal is true as equivalent
+  /// @return the lexicographic order of @c *this relative to @p that
+  /// @sa Expr::lexicographic_compare
+  virtual std::weak_ordering static_lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const = 0;
+
+  /// @param that an Expr object
   /// @note @c *this and @c that are guaranteed to be leaves, and neither is a
   /// c-number , hence honest checking is needed
   /// @return true if @c *this multiplicatively commutes with @c that
@@ -716,7 +769,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
 /// ranks (`type_rank`) of SeQuant's own Expr types; Expr::operator< orders
 /// unlike types by rank first, so this is their order. Spaced so that a new
 /// type can be inserted between them; types of Expr::default_type_rank sort
-/// between `power` and `boperator`.
+/// between `tensor_power` and `boperator`.
 namespace expr_type_rank {
 inline constexpr Expr::type_rank_type tensor = 10;
 inline constexpr Expr::type_rank_type product = 20;
@@ -724,6 +777,7 @@ inline constexpr Expr::type_rank_type constant = 30;
 inline constexpr Expr::type_rank_type sum = 40;
 inline constexpr Expr::type_rank_type variable = 50;
 inline constexpr Expr::type_rank_type power = 60;
+inline constexpr Expr::type_rank_type tensor_power = 70;
 inline constexpr Expr::type_rank_type boperator = 250;
 inline constexpr Expr::type_rank_type foperator = 251;
 inline constexpr Expr::type_rank_type bnoperator = 252;

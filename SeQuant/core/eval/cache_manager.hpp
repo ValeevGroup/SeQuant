@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
+#include <SeQuant/core/eval/disk_spill.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
@@ -35,31 +36,45 @@
 #include <optional>
 #include <ostream>
 #include <ranges>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace sequant::eval {
+
+/// \brief A store of values held outside a \c CacheManager hierarchy's own
+///        entries that the peak metering must still see -- in practice the
+///        ordered executor's \c CellRegistry.
+///
+/// One object describes the store from all three angles the metering needs,
+/// so they cannot disagree: how many bytes it holds, which values those are,
+/// and whether it holds a given buffer. A hierarchy is told about the store
+/// with \c CacheManager::set_external_store on its chain-root cache.
+struct ExternalStore {
+  /// \return the bytes the store holds that no scope cache already counts.
+  std::function<std::size_t()> bytes;
+
+  /// Calls \c emit(hash, bytes) once per value \c bytes() counts.
+  std::function<void(
+      std::function<void(std::size_t hash, std::size_t bytes)> const& emit)>
+      for_each;
+
+  /// \return whether the store physically holds \p value (pointer identity),
+  ///         i.e. whether \p value's bytes are among those \c bytes() counts
+  ///         (or a scope cache's).
+  std::function<bool(ResultPtr const& value)> holds;
+};
 
 // Forward declaration only: CellReadResolver (cell_registry.hpp) is a plain,
 // non-template type, so CacheManager only needs a non-owning pointer to it;
 // cell_registry.hpp includes this header, not the reverse.
 class CellReadResolver;
-
-/// \brief Destination for the structured schedule dump (SCHEDULE_RUN_EVENT
-/// records) emitted by `evaluate()`. A caller sets one on the (root) cache to
-/// capture one evaluation's batched schedule to \c os; \c fired is a fire-once
-/// latch the caller raises after the first capture so a later re-entry (e.g. a
-/// subsequent CC iteration) does not re-dump. Null sink / null \c os => no dump
-/// (the default). Non-owning: \c os must
-/// outlive the cache.
-struct ScheduleSink {
-  std::ostream* os = nullptr;
-  bool fired = false;
-};
 
 /// \brief diagnostic (analysis-only, off by default): a global monotonic
 ///        "access clock" stamped on every genuine cache read, plus a
@@ -671,6 +686,18 @@ struct BatchContextEntry {
 /// This class implements a cache manager useful for the cases when the number
 /// of times the cached objects will be accessed is known.
 ///
+/// \note The cache does not own the nodes its entries are keyed by (see \c
+///       eval::CachedValue): a key points at a node of the forest the cache
+///       was built over. That forest must outlive the cache and keep its
+///       nodes in place -- do not reallocate the vector holding its roots,
+///       or move a \c container::svector that stores them inline, while the
+///       cache is in use. Nothing checks this at run time; breaking it is
+///       undefined behavior, and can serve a value cached for a different
+///       node. \c cache_manager() holds a forest passed to it as a temporary;
+///       \c ensure_hoist_slot() and a by-value constructor argument are held
+///       too (see \c hold()). A copy of a cache shares its keys and what it
+///       holds.
+///
 /// \tparam TreeNode The evaluation tree node type used as the cache key.
 /// \tparam force_hash_collisions If true, forces all hash values to 0 (for
 ///         testing collision safety).
@@ -950,6 +977,12 @@ class CacheManager {
   std::unordered_map<cache_key_type, entry, hasher_type, comparator_type>
       cache_map_;
 
+  /// What the keys of cache_map_ point into, where this cache owns it: a
+  /// forest handed to cache_manager() as a temporary, and the copies hoist
+  /// slots key (ensure_hoist_slot). Shared, so a copy of this cache keeps
+  /// them alive too.
+  std::vector<std::shared_ptr<void const>> held_;
+
   /// Diagnostic: per-distinct-value build tally (see BuildTally), keyed by the
   /// same node identity as cache_map_. Populated by tally_build() from the eval
   /// loop's build choke point (eval.hpp finish_phase_b) for every product
@@ -1044,29 +1077,20 @@ class CacheManager {
   /// pointee must outlive this cache.
   eval::PeakMonitor* peak_monitor_ = nullptr;
 
-  /// Explicit value cells: optional source of bytes held outside
-  /// this cache hierarchy's own \c cache_map_ entries that must still count
-  /// toward \c chain_residency() -- the ordered executor's \c CellRegistry,
-  /// once storage moves onto the table (see \c set_external_residency).
-  /// Looked up along the parent chain like \c array_ops_ (only the root
-  /// cache is wired in practice); empty (default) => \c chain_residency()
-  /// counts this hierarchy's own entries alone.
-  std::function<std::size_t()> external_residency_{};
+  /// Non-owning: when set, the ordered executor charges large idle values as
+  /// kept on disk and accounts for them here (see \c eval::DiskSpill).
+  /// Looked up along the parent chain like \c peak_monitor_. Null (default)
+  /// => every value is charged as in memory. The pointee must outlive its
+  /// installation.
+  eval::DiskSpill* disk_spill_ = nullptr;
 
-  /// Optional source of an external alive-entry enumeration (hash,
-  /// bytes) to fold into \c note_working_set()'s diagnostic liveset capture
-  /// alongside this hierarchy's own \c cache_map_ entries -- the counterpart
-  /// of \c external_residency_ for \c PeakMonitor::on_peak_liveset. Looked
-  /// up along the parent chain the same way. Empty (default) => the liveset
-  /// capture is unchanged (this hierarchy's own entries only).
-  std::function<void(std::function<void(std::size_t hash, std::size_t bytes)>)>
-      external_liveset_{};
-
-  /// Non-owning schedule-dump sink (see \c eval::ScheduleSink). Null (default)
-  /// => `evaluate()` emits no SCHEDULE_RUN_EVENT records; falls through to
-  /// \c parent_ (only the root cache is wired in practice). The pointee must
-  /// outlive this cache.
-  eval::ScheduleSink* schedule_sink_ = nullptr;
+  /// Non-owning: the store of values held outside this hierarchy's own \c
+  /// cache_map_ entries that the peak metering must still count (see \c
+  /// eval::ExternalStore) -- the ordered executor's \c CellRegistry. Looked
+  /// up along the parent chain like \c array_ops_ (only the root cache is
+  /// wired in practice). Null (default) => the metering sees this hierarchy's
+  /// own entries alone. The pointee must outlive its installation.
+  eval::ExternalStore const* external_store_ = nullptr;
 
   /// Per-instance cache-fill-once strictness (see entry::store), consulted
   /// instead of reading \c eval::strict_fill_once() directly. Defaults to
@@ -1151,6 +1175,18 @@ class CacheManager {
   /// Non-owning; the pointee must outlive this cache.
   void set_peak_monitor(eval::PeakMonitor* m) noexcept { peak_monitor_ = m; }
 
+  /// Sets the disk-spill switch and accounting (see \c disk_spill_). Pass
+  /// nullptr to detach. Non-owning; the pointee must outlive this cache.
+  void set_disk_spill(eval::DiskSpill* s) noexcept { disk_spill_ = s; }
+
+  /// \return the local disk-spill object if set, else the one inherited
+  ///         from \c parent_; nullptr if none is wired along the chain.
+  [[nodiscard]] eval::DiskSpill* disk_spill() const noexcept {
+    return disk_spill_ ? disk_spill_
+           : parent_   ? parent_->disk_spill()
+                       : nullptr;
+  }
+
   /// \return the local peak monitor if set, else the one inherited from
   ///         \c parent_ (only the root cache is wired in practice); nullptr
   ///         if none is wired anywhere along the chain. Non-owning.
@@ -1158,19 +1194,6 @@ class CacheManager {
     return peak_monitor_ ? peak_monitor_
            : parent_     ? parent_->peak_monitor()
                          : nullptr;
-  }
-
-  /// Sets the schedule-dump sink (see schedule_sink_). Pass nullptr to detach.
-  /// Non-owning; the pointee (and its \c os) must outlive this cache.
-  void set_schedule_sink(eval::ScheduleSink* s) noexcept { schedule_sink_ = s; }
-
-  /// \return the local schedule sink if set, else the one inherited from
-  ///         \c parent_ (only the root cache is wired in practice); nullptr if
-  ///         none is wired anywhere along the chain. Non-owning.
-  [[nodiscard]] eval::ScheduleSink* schedule_sink() const noexcept {
-    return schedule_sink_ ? schedule_sink_
-           : parent_      ? parent_->schedule_sink()
-                          : nullptr;
   }
 
   /// Sets the backend array-ops (see BackendArrayOps). Non-owning; the pointee
@@ -1219,66 +1242,40 @@ class CacheManager {
                                : nullptr;
   }
 
-  /// Sets the external residency source (see \c external_residency_). Pass
-  /// an empty \c std::function to detach.
+  /// Sets the external store (see \c external_store_). Pass \c nullptr to
+  /// detach.
   ///
   /// Installed on the chain-root handle only, and asserted so: \c
-  /// chain_residency() folds the hook in exactly where its parent walk bottoms
-  /// out (\c parent_ == nullptr), and the lookup that finds it walks upward,
-  /// so a hook installed on a child would never be folded in at all -- its
-  /// bytes would silently vanish from every residency and peak figure.
-  void set_external_residency(std::function<std::size_t()> f) noexcept {
+  /// chain_residency() folds the store in exactly where its parent walk
+  /// bottoms out (\c parent_ == nullptr), and the lookup that finds it walks
+  /// upward, so a store installed on a child would never be folded in at all
+  /// -- its bytes would silently vanish from every residency and peak figure.
+  void set_external_store(eval::ExternalStore const* store) noexcept {
     SEQUANT_ASSERT(parent_ == nullptr &&
-                   "CacheManager::set_external_residency: the external "
-                   "residency hook must be installed on the chain-root handle "
-                   "(chain_residency() folds it in only there)");
-    external_residency_ = std::move(f);
+                   "CacheManager::set_external_store: the external store must "
+                   "be installed on the chain-root handle (chain_residency() "
+                   "folds it in only there)");
+    external_store_ = store;
   }
 
-  /// \return the raw external-residency hook visible from this cache (local
-  ///         if set, else \c parent_'s, like \c array_ops() / \c
-  ///         cell_read_resolver()) -- an empty \c std::function if none is
-  ///         wired anywhere along the chain. \c chain_residency() invokes
-  ///         this only where its own recursion bottoms out (\c parent_ ==
-  ///         nullptr), so whichever single frame the hook resolves to is
-  ///         folded in exactly once per \c chain_residency() call regardless
-  ///         of which scope in the chain that call started from. Also lets a
-  ///         caller (e.g. an RAII install guard) save the hook currently in
-  ///         effect before overriding it locally and restore exactly that
-  ///         afterward, the same way \c CellReadResolverGuard saves/restores
-  ///         \c cell_read_resolver().
-  [[nodiscard]] std::function<std::size_t()> const& external_residency_hook()
-      const noexcept {
-    if (external_residency_) return external_residency_;
-    static std::function<std::size_t()> const empty{};
-    return parent_ ? parent_->external_residency_hook() : empty;
+  /// \return the external store visible from this cache (local if set, else
+  ///         \c parent_'s, like \c array_ops() / \c cell_read_resolver());
+  ///         \c nullptr if none is wired anywhere along the chain. Whichever
+  ///         single frame it resolves to is folded in exactly once per \c
+  ///         chain_residency() call regardless of which scope in the chain
+  ///         that call started from. Also lets a caller (e.g. an RAII install
+  ///         guard) save the store currently in effect before overriding it
+  ///         and restore exactly that afterward.
+  [[nodiscard]] eval::ExternalStore const* external_store() const noexcept {
+    return external_store_ ? external_store_
+           : parent_       ? parent_->external_store()
+                           : nullptr;
   }
 
-  /// Sets the external liveset source (see \c external_liveset_). Pass an
-  /// empty \c std::function to detach. Installed on the chain-root handle
-  /// only, and asserted so, for the same reason \c set_external_residency is.
-  void set_external_liveset(
-      std::function<
-          void(std::function<void(std::size_t hash, std::size_t bytes)>)>
-          f) noexcept {
-    SEQUANT_ASSERT(parent_ == nullptr &&
-                   "CacheManager::set_external_liveset: the external liveset "
-                   "hook must be installed on the chain-root handle");
-    external_liveset_ = std::move(f);
-  }
-
-  /// \return the local external-liveset source if set, else the one
-  ///         inherited from \c parent_; an empty \c std::function if none is
-  ///         wired anywhere along the chain. Looked up like \c
-  ///         external_residency() / \c array_ops().
-  [[nodiscard]] std::function<
-      void(std::function<void(std::size_t hash, std::size_t bytes)>)> const&
-  external_liveset() const noexcept {
-    if (external_liveset_) return external_liveset_;
-    static std::function<void(
-        std::function<void(std::size_t hash, std::size_t bytes)>)> const
-        empty{};
-    return parent_ ? parent_->external_liveset() : empty;
+  /// \return the bytes the external store holds (0 if none is wired).
+  [[nodiscard]] std::size_t external_residency() const noexcept {
+    auto const* const store = external_store();
+    return store && store->bytes ? store->bytes() : 0;
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
@@ -1294,8 +1291,16 @@ class CacheManager {
   /// effective_count is 1, which as a life would drain the entry on first use;
   /// reset() is the correct lifetime boundary for a hoisted invariant.
   void ensure_hoist_slot(key_type const& key) {
+    if (cache_map_.find(key) != cache_map_.end()) return;
+    // The batched evaluator may hoist a node of a tree that does not outlive
+    // this cache, and the key does not own its node, so the slot keys a copy
+    // the cache holds. A hoisted invariant is a bounded subtree, so the copy
+    // is cheap.
+    auto copy = std::make_shared<TreeNode const>(key);
     cache_map_.try_emplace(
-        key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
+        cache_key_type{*copy},
+        entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
+    held_.push_back(std::move(copy));
   }
 
   /// Default persistence classifier: every entry is non-persistent (NP).
@@ -1304,19 +1309,52 @@ class CacheManager {
   };
 
   /// \param decaying iterable of (node, use-count) pairs to register for
-  ///        caching.
+  ///        caching. The keys are not owned by the map (see \c
+  ///        eval::CachedValue): given as node pointers, as \c cache_manager()
+  ///        does, every node must outlive this cache and stay at its address;
+  ///        given by value, the cache holds \p decaying itself and keys into
+  ///        that.
   /// \param is_persistent predicate classifying each node as persistent (P,
   ///        never released on access, survives reset()) or non-persistent (NP,
   ///        released after its last use and by reset()). Defaults to all-NP.
+  ///        Consulted during construction only.
   /// \note P nodes should be registered with whatever use-count is convenient
   ///       (it is not consulted for P entries) and may have a count of 1 even
   ///       though NP caching only registers nodes repeated min_repeats times.
   template <typename Iterable, typename PersistencePred = all_non_persistent>
     requires(!std::same_as<std::remove_cvref_t<Iterable>, CacheManager>)
   explicit CacheManager(Iterable&& decaying,
-                        PersistencePred is_persistent = {}) noexcept {
-    for (auto&& [k, c] : decaying)
-      cache_map_.try_emplace(k, entry{c, is_persistent(k)});
+                        PersistencePred is_persistent = {}) {
+    using Key = std::remove_cvref_t<
+        std::tuple_element_t<0, std::ranges::range_value_t<Iterable>>>;
+    auto const register_all = [&](auto const& pairs) {
+      for (auto&& [k, c] : pairs) {
+        TreeNode const* n;
+        if constexpr (std::is_convertible_v<Key, TreeNode const*>)
+          n = k;
+        else
+          n = &k;
+        cache_map_.try_emplace(cache_key_type{*n}, entry{c, is_persistent(*n)});
+      }
+    };
+    if constexpr (std::is_convertible_v<Key, TreeNode const*>) {
+      register_all(decaying);
+    } else {
+      static_assert(std::same_as<Key, TreeNode>,
+                    "CacheManager: register (node, count) or (node pointer, "
+                    "count) pairs");
+      auto held = std::make_shared<std::remove_cvref_t<Iterable> const>(
+          std::forward<Iterable>(decaying));
+      register_all(*held);
+      held_.push_back(std::move(held));
+    }
+  }
+
+  /// Keeps @p owner alive for as long as this cache (or the cache it is
+  /// moved into) exists. \c cache_manager() hands it the forest it was given
+  /// as a temporary, whose nodes the keys point into.
+  void hold(std::shared_ptr<void const> owner) {
+    if (owner) held_.push_back(std::move(owner));
   }
 
   ///
@@ -1343,23 +1381,27 @@ class CacheManager {
     working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
     if (auto* m = peak_monitor()) {
       // Diagnostic (analysis-only): if a live-set capture hook is installed,
-      // enumerate the chain's alive entries before observe() advances the mark,
-      // on each real high-water advance. Gated on on_peak_liveset being set, so
-      // the default path enumerates nothing.
-      if (m->on_peak_liveset && current_bytes > m->hwmark_bytes) {
+      // enumerate the chain's alive entries before observe() advances the mark
+      // -- on every sample for on_sample, on each real high-water advance for
+      // on_peak_liveset. Gated on a hook being set, so the default path
+      // enumerates nothing.
+      bool const advances =
+          m->on_peak_liveset && current_bytes > m->hwmark_bytes;
+      if (m->on_sample || advances) {
         std::vector<eval::PeakLiveEntry> live;
         for (CacheManager const* c = this; c; c = c->parent_)
           for (auto const& [k, e] : c->cache_map_)
             if (e.alive()) live.push_back({k->hash_value(), e.size_in_bytes()});
-        // Fold in the external liveset (the ordered executor's
-        // CellRegistry, once wired via set_external_liveset) alongside this
-        // hierarchy's own cache_map_ entries, exactly as external_residency()
-        // folds into chain_residency() above.
-        if (auto const& ext = external_liveset())
-          ext([&live](std::size_t hash, std::size_t bytes) {
+        // Fold in the external store's values (the ordered executor's
+        // CellRegistry) alongside this hierarchy's own cache_map_ entries,
+        // exactly as external_residency() folds into chain_residency().
+        if (auto const* const store = external_store();
+            store && store->for_each)
+          store->for_each([&live](std::size_t hash, std::size_t bytes) {
             live.push_back({hash, bytes});
           });
-        m->on_peak_liveset(current_bytes, live);
+        if (m->on_sample) m->on_sample(current_bytes, op_hash, live);
+        if (advances) m->on_peak_liveset(current_bytes, live);
       }
       m->observe(current_bytes, op_hash);
     }
@@ -1409,10 +1451,8 @@ class CacheManager {
   /// Routes to the scope-chain root so every build -- from any per-batch
   /// scratch -- accumulates in one map keyed by node identity (see
   /// recompute_tally_). Called only in the dry-run costing replay.
-  /// @param key the node whose build is tallied. A node (not a \c
-  /// cache_key_type): converting at the call boundary would copy the node --
-  /// deep-copying its whole subtree -- on every build, including on the wet
-  /// path where the tally is disabled.
+  /// @param key the node whose build is tallied; any node structurally equal
+  /// to a tallied one folds into its record.
   void tally_build(key_type const& key, std::string const& slice_sig,
                    double flops, double exec) noexcept {
     if (parent_) {
@@ -1455,17 +1495,30 @@ class CacheManager {
   }
   /// current_residency() of this cache plus every ancestor along the scope
   /// chain (parent_), plus -- exactly where the chain walk bottoms out
-  /// (parent_ == nullptr) -- the external residency hook's bytes: the total
-  /// live residency visible at this scope at one instant, table-owned
-  /// storage (the \c CellRegistry, once wired via \c
-  /// set_external_residency) included. Adding it only at the walk's base,
-  /// rather than at every recursive level, is what keeps a single external
-  /// total from being folded in once per scope on the chain -- see \c
-  /// external_residency_hook()'s own doc comment.
+  /// (parent_ == nullptr) -- the external store's bytes: the total live
+  /// residency visible at this scope at one instant, table-owned storage
+  /// (the \c CellRegistry, once wired via \c set_external_store) included.
+  /// Adding it only at the walk's base, rather than at every recursive
+  /// level, is what keeps a single external total from being folded in once
+  /// per scope on the chain -- see \c external_store()'s own doc comment.
   [[nodiscard]] size_t chain_residency() const noexcept {
     if (parent_) return current_residency() + parent_->chain_residency();
-    auto const& ext = external_residency_hook();
-    return current_residency() + (ext ? ext() : 0);
+    return current_residency() + external_residency();
+  }
+
+  /// The residency visible at this scope that is NOT this cache's own
+  /// entries: every ancestor's \c current_residency() plus the external
+  /// store's bytes, i.e. \c chain_residency() less \c
+  /// current_residency(). This is what a per-op working-set sample adds on
+  /// top of this cache's own bytes (\c log::bytes(cache, ...)).
+  ///
+  /// \note On a chain-root cache (\c parent_ == nullptr) this is the external
+  /// residency alone -- not zero. An op evaluated against the root cache sees
+  /// the externally held values (the ordered executor's \c CellRegistry) just
+  /// as an op in a nested scope does; asking only the parent for its \c
+  /// chain_residency() silently dropped them at the outermost scope.
+  [[nodiscard]] size_t outer_residency() const noexcept {
+    return parent_ ? parent_->chain_residency() : external_residency();
   }
 
   /// \return true iff some alive entry on this cache or any ancestor along the
@@ -1482,6 +1535,22 @@ class CacheManager {
     for (auto const& [k, e] : cache_map_)
       if (e.holds(value)) return true;
     return parent_ ? parent_->chain_holds(value) : false;
+  }
+
+  /// \return true iff @p value's bytes are already part of the residency a
+  ///         working-set sample counts at this scope: some alive entry on the
+  ///         scope chain holds it (\c chain_holds()), or the external store
+  ///         does (\c eval::ExternalStore::holds -- the ordered executor's
+  ///         \c CellRegistry). Read-only. The per-op peak trace uses this, not
+  ///         \c chain_holds() alone, to decide whether an operand's bytes
+  ///         must be added: an operand read whole from the external store is
+  ///         the very buffer \c outer_residency() / \c chain_residency()
+  ///         already count.
+  [[nodiscard]] bool resident(ResultPtr const& value) const noexcept {
+    if (!value) return false;
+    if (chain_holds(value)) return true;
+    auto const* const store = external_store();
+    return store && store->holds && store->holds(value);
   }
 
   /// \return true iff some alive entry on this cache or any ancestor along the
@@ -1541,10 +1610,8 @@ class CacheManager {
   /// miss returns {nullptr, 0}. The hop distance surfaces the value's lifetime
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
-  /// @param key the node to look up. Taken as a node (not a \c cache_key_type)
-  /// on purpose: the map is probed heterogeneously, so a lookup never
-  /// materializes a \c CachedValue -- which would copy the node, i.e.
-  /// deep-copy its whole subtree (see \c CachedValueHasher).
+  /// @param key the node to look up: any node structurally equal to a keyed
+  /// one (the map is probed heterogeneously, see \c CachedValueHasher).
   [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
@@ -1608,6 +1675,17 @@ class CacheManager {
   /// \brief Check if the key exists in the database: does not check if cache
   ///        exists
   ///
+  /// Diagnostic accessor (SEQUANT_EVAL_WARN_CACHE_IDENTITY): the local entry
+  /// for \p key as {persistent, max_life, life_c}, or nullopt if none.
+  [[nodiscard]] std::optional<std::tuple<bool, size_t, size_t>> entry_state(
+      key_type const& key) const noexcept {
+    auto found = cache_map_.find(key);
+    if (found == cache_map_.end()) return std::nullopt;
+    return std::tuple{found->second.persistent(),
+                      found->second.max_life_count(),
+                      found->second.life_count()};
+  }
+
   [[nodiscard]] bool exists(key_type const& key) const noexcept {
     return cache_map_.find(key) != cache_map_.end();
   }
@@ -1624,7 +1702,7 @@ class CacheManager {
   void for_each_key(F&& fn) const {
     // The map key is a CachedValue; callers enumerate nodes (key_type), so hand
     // them the node.
-    for (auto const& [k, v] : cache_map_) fn(k.node);
+    for (auto const& [k, v] : cache_map_) fn(*k);
   }
 
   /// if the key exists in the database, return the current lifetime count of
@@ -1709,9 +1787,7 @@ class CacheManager {
   /// Get an empty cache manager.
   ///
   static CacheManager empty() noexcept {
-    using map_type =
-        std::unordered_map<TreeNode, size_t, hasher_type, comparator_type>;
-    return CacheManager{map_type{}};
+    return CacheManager{std::vector<std::pair<TreeNode const*, size_t>>{}};
   }
 
   // for unit testing
@@ -1729,24 +1805,27 @@ class CacheManager {
 ///
 /// \param min_repeats Minimum number of repeats for a node to be cached. By
 ///                    default (1) everything is cached, so use-count tracking
-///                    is exact.
-///                    The table-driven ordered executor derives every life
-///                    from the cell table's exact per-cell read count, and a
-///                    use-count-tracking cache that silently declines
-///                    single-use nodes makes that count wrong; with 1 the
-///                    cache and the table agree by construction. Pass 2 to
+///                    is exact. Pass 2 to
 ///                    cache only nodes reached more than once, which caches
-///                    less and leaves the use counts approximate.
+///                    less and leaves the use counts approximate. Either way
+///                    registration costs O(1) per cached node: the cache keys
+///                    on the nodes' addresses and copies none of them.
 ///
-/// \return A cache manager.
+/// \return A cache manager. Its keys point into \p nodes, which must outlive
+///         it with its nodes in place (see \c CacheManager); the overload
+///         below takes a temporary forest and has the cache hold it.
 ///
 /// \see CacheManager
 ///
 template <bool force_hash_collisions = false>
 auto cache_manager(meta::eval_node_range auto const& nodes,
-                   size_t min_repeats = 1) noexcept {
+                   size_t min_repeats = 1) {
   using TreeNode =
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
+  static_assert(
+      std::is_reference_v<std::ranges::range_reference_t<decltype(nodes)>>,
+      "cache_manager(): the node range must yield references to nodes (the "
+      "cache keys on their addresses)");
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -1766,13 +1845,27 @@ auto cache_manager(meta::eval_node_range auto const& nodes,
     tree.visit_internal(imed_visitor);
   });
 
-  // Copy repeated entries (node by value)
-  std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
+  // Register the repeated entries by address: no node is copied.
+  std::vector<std::pair<TreeNode const*, size_t>> filtered;
   for (auto&& [ptr, count] : imed_counts) {
-    if (count >= min_repeats) filtered.emplace(*ptr, count);
+    if (count >= min_repeats) filtered.emplace_back(ptr, count);
   }
 
   return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered)};
+}
+
+/// \overload A forest passed as a temporary -- a container such as
+/// `std::vector{node}`, or a view, which may own its nodes too (e.g.
+/// `views::single(node)`) -- is moved into a holder the cache keeps, and the
+/// cache is built over that. Holding a view that merely refers to nodes
+/// elsewhere is harmless.
+template <bool force_hash_collisions = false, typename Nodes>
+  requires(meta::eval_node_range<Nodes> && !std::is_lvalue_reference_v<Nodes>)
+auto cache_manager(Nodes&& nodes, size_t min_repeats = 1) {
+  auto const forest = std::make_shared<Nodes const>(std::move(nodes));
+  auto cache = cache_manager<force_hash_collisions>(*forest, min_repeats);
+  cache.hold(forest);
+  return cache;
 }
 
 ///
@@ -1809,12 +1902,7 @@ struct zero_footprint {
 /// \param is_volatile `bool(TreeNode const&)`: true if the node is
 ///        intrinsically volatile. Only its value on leaves matters in practice
 ///        (volatility propagates up), but it is consulted on every node.
-/// \param min_repeats minimum NP repeats to cache (default 1).
-///                    The table-driven ordered executor derives every life
-///                    from the cell table's exact per-cell read count, and a
-///                    use-count-tracking cache that silently declines
-///                    single-use nodes makes that count wrong; with 1 the
-///                    cache and the table agree by construction. Pass 2 to
+/// \param min_repeats minimum NP repeats to cache (default 1). Pass 2 to
 ///                    cache only nodes reached more than once, which caches
 ///                    less and leaves the use counts approximate.
 ///                    Cost note: 1 registers every internal node, and a cached
@@ -1876,23 +1964,20 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
-  // The DAG walk below keys on non-owning pointers into \p nodes, not on
-  // TreeNode by value: copying a TreeNode deep-copies its whole subtree
-  // (binary_node.hpp), so a by-value walk map costs the sum of all subtree
-  // sizes -- quadratic in the number of terms on the left-leaning Sum-tree
-  // binarize now builds for a whole equation (one spine node per summand; a UCC
-  // BCH energy expansion has thousands of them). Only the nodes actually cached
-  // are copied, at the end of this function. \p nodes must therefore be a range
-  // of references to nodes that outlive this call (asserted below) -- the same
-  // contract the min_repeats-only overload's pointer-keyed scan already relies
-  // on. Hasher/Comp are heterogeneous (eval_node_compare.hpp): a pointer key
-  // still hashes and compares by node content, so structurally equal nodes
-  // dedup exactly as they did with by-value keys.
+  // The DAG walk below keys on non-owning pointers into \p nodes, and so does
+  // the cache it returns: copying a TreeNode deep-copies its whole subtree
+  // (binary_node.hpp), which on the left-leaning Sum-tree of a whole equation
+  // (one spine node per summand) costs O(terms^2). \p nodes must therefore be
+  // a range of references to nodes that outlive the cache (asserted below;
+  // the overload after this one holds a temporary forest). Hasher/Comp are
+  // heterogeneous (eval_node_compare.hpp): a pointer key still hashes and
+  // compares by node content, so structurally equal nodes dedup exactly as they
+  // did with by-value keys.
   static_assert(
       std::is_reference_v<
           std::ranges::range_reference_t<std::remove_cvref_t<decltype(nodes)>>>,
       "cache_manager(): the node range must yield references to "
-      "nodes that outlive the call (the DAG walk keys on their "
+      "nodes that outlive the cache (the cache keys on their "
       "addresses)");
   using NodePtr = TreeNode const*;
   std::unordered_map<NodePtr, size_t, Hasher, Comp> counts;     // internal uses
@@ -1965,6 +2050,23 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
       stack.pop_back();
     }
   }
+  // Diagnostic (SEQUANT_CACHE_EXCLUDE_HASHES="h1,h2,..."): never cache the
+  // listed node hashes, so a suspected slot can be bisected out at runtime.
+  if (char const* ex = std::getenv("SEQUANT_CACHE_EXCLUDE_HASHES")) {
+    std::vector<std::size_t> excluded;
+    std::string tok;
+    for (std::istringstream in{std::string{ex}}; std::getline(in, tok, ',');)
+      if (!tok.empty()) excluded.push_back(std::stoull(tok));
+    for (auto it = counts.begin(); it != counts.end();) {
+      if (std::find(excluded.begin(), excluded.end(),
+                    (*it->first)->hash_value()) != excluded.end()) {
+        persistent.erase(it->first);
+        it = counts.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
 
   // Cache NP repeats + every P node; persistence = membership in `persistent`.
   // Footprint gate: a node whose result is larger than max_footprint is never
@@ -1993,8 +2095,8 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // Only the selected nodes are copied by value here -- into the cache map and,
   // for the frontier, into the owning set the returned is_persistent closes
   // over. A node that is not cached never pays a (deep) copy.
-  std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
-  std::unordered_set<TreeNode, Hasher, Comp> persistent_nodes;
+  std::vector<std::pair<TreeNode const*, size_t>> filtered;
+  std::unordered_set<TreeNode const*> persistent_nodes;
   for (auto&& [np, c] : counts) {
     TreeNode const& n = *np;
     bool const is_p = persistent.contains(np);
@@ -2010,16 +2112,38 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
       // is_persistent consistent with what is cached.
       continue;
     }
-    filtered.emplace(n, c);
-    if (is_p) persistent_nodes.insert(n);
+    filtered.emplace_back(np, c);
+    if (is_p) persistent_nodes.insert(np);
   }
 
-  auto is_persistent = [persistent =
-                            std::move(persistent_nodes)](TreeNode const& n) {
-    return persistent.contains(n);
+  // Consulted by the CacheManager constructor alone: the pointer set is
+  // dropped once the entries carry their persistence flags.
+  auto is_persistent = [&persistent_nodes](TreeNode const& n) {
+    return persistent_nodes.contains(&n);
   };
-  return CacheManager<TreeNode, force_hash_collisions>{
-      std::move(filtered), std::move(is_persistent)};
+  return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered),
+                                                       is_persistent};
+}
+
+/// \overload A forest passed as a temporary is moved into a holder the cache
+/// keeps, and the cache is built over that (see the min_repeats-only
+/// overload).
+template <bool force_hash_collisions = false, typename Nodes,
+          typename FootprintOf = zero_footprint>
+  requires(meta::eval_node_range<Nodes> && !std::is_lvalue_reference_v<Nodes>)
+auto cache_manager(Nodes&& nodes, auto&& is_volatile, size_t min_repeats = 1,
+                   FootprintOf footprint_of = {}, double max_footprint = 0.)
+  requires requires(std::ranges::range_value_t<Nodes> const& n) {
+    { is_volatile(n) } -> std::convertible_to<bool>;
+    { footprint_of(n) } -> std::convertible_to<double>;
+  }
+{
+  auto const forest = std::make_shared<Nodes const>(std::move(nodes));
+  auto cache = cache_manager<force_hash_collisions>(
+      *forest, std::forward<decltype(is_volatile)>(is_volatile), min_repeats,
+      std::move(footprint_of), max_footprint);
+  cache.hold(forest);
+  return cache;
 }
 
 ///

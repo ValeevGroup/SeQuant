@@ -5,17 +5,17 @@
 #ifndef SEQUANT_SRC_SEQUANT_VERSION_H_IN_H
 #define SEQUANT_SRC_SEQUANT_VERSION_H_IN_H
 
-/* SeQuant version X.Y.Z-id */
+/* SeQuant version YY.N[.P] (calendar versioning; the prerelease id is separate) */
 #define SEQUANT_VERSION "@SEQUANT_VERSION@"
 
-/* SeQuant major version */
-#define SEQUANT_MAJOR_VERSION @SEQUANT_MAJOR_VERSION@
+/* SeQuant year version: two-digit year */
+#define SEQUANT_YEAR_VERSION @SEQUANT_YEAR_VERSION@
 
-/* SeQuant minor version */
-#define SEQUANT_MINOR_VERSION @SEQUANT_MINOR_VERSION@
+/* SeQuant year-major version: zero-based release counter within the year */
+#define SEQUANT_YMAJOR_VERSION @SEQUANT_YMAJOR_VERSION@
 
-/* SeQuant micro version */
-#define SEQUANT_MICRO_VERSION @SEQUANT_MICRO_VERSION@
+/* SeQuant patch version: patch level, 0 if none */
+#define SEQUANT_PATCH_VERSION @SEQUANT_PATCH_VERSION@
 
 /* SeQuant prerelease id */
 #define SEQUANT_PRERELEASE_ID "@SEQUANT_PRERELEASE_ID@"

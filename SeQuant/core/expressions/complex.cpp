@@ -1,4 +1,5 @@
 #include <SeQuant/core/expressions/complex.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>

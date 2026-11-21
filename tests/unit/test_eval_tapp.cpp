@@ -3,9 +3,12 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/tapp/array_ops.hpp>
 #include <SeQuant/core/eval/backends/tapp/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/tapp/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
@@ -17,6 +20,7 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <cmath>
 #include <complex>
 #include <cstdint>
 #include <string>
@@ -66,20 +70,20 @@ class rand_tensor_yield {
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto isr = sequant::get_default_context().index_basis_registry();
+    auto ibr = sequant::get_default_context().index_basis_registry();
 
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
-                       [&isr](auto const& idx) {
-                         return idx.space() == isr->retrieve_space(L"i") ||
-                                idx.space() == isr->retrieve_space(L"a");
+                       [&ibr](auto const& idx) {
+                         return idx.space() == ibr->retrieve_space(L"i") ||
+                                idx.space() == ibr->retrieve_space(L"a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
     auto extents =
-        tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
+        tnsr.const_braket_indices() | transform([this, &ibr](auto const& idx) {
           return static_cast<int64_t>(
-              idx.space() == isr->retrieve_space(L"i") ? nocc_ : nvirt_);
+              idx.space() == ibr->retrieve_space(L"i") ? nocc_ : nvirt_);
         }) |
         ranges::to<sequant::container::svector<int64_t>>;
 
@@ -96,6 +100,17 @@ class rand_tensor_yield {
       }
     });
     return result;
+  }
+
+  /// array ops sizing the occupied and the virtual space as this yield's
+  /// tensors
+  [[nodiscard]] sequant::BackendArrayOps array_ops() const {
+    auto ibr = sequant::get_default_context().index_basis_registry();
+    auto const bk = [&ibr](wchar_t const* l) {
+      return std::wstring(ibr->retrieve_space(l).base_key());
+    };
+    return sequant::make_tapp_array_ops<Tensor_t>(
+        {{bk(L"i"), nocc_}, {bk(L"a"), nvirt_}});
   }
 
   sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
@@ -414,7 +429,8 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
                                100 * std::numeric_limits<double>::epsilon()));
 
     // high-rank residuals: cleanup applies:
-    // result = identity - (1/ket_rank!) * sum_of_ket_permutations
+    // result = 5/6 * identity - 1/6 * sum of the other ket permutations
+    // (the idempotent NNS projector row)
     auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
     auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
     auto eval2 = eval_biorthogonal_nns_project(expr2, tidx2);
@@ -423,6 +439,7 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     TAPPTensorD man2{r2.extents()};
     for (size_t i = 0; i < r2.volume(); ++i)
       const_cast<double*>(man2.data())[i] = r2.data()[i];
+    tapp_ops::scal(5.0 / 6.0, man2);
 
     TAPPTensorD perm_sum{r2.extents()};
     perm_sum.fill(0);
@@ -439,7 +456,7 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     tapp_ops::permute(r2, {0, 1, 2, 3, 4, 5}, perm_res, {0, 1, 2, 5, 4, 3});
     perm_sum += perm_res;
 
-    tapp_ops::scal(1.0 / 5.0, perm_sum);
+    tapp_ops::scal(1.0 / 6.0, perm_sum);
     auto man2_result = man2 - perm_sum;
     REQUIRE(norm(eval2) == Catch::Approx(norm(man2_result)));
 
@@ -525,6 +542,179 @@ TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
     }
 }
 
+TEST_CASE("eval_tensor_power_tapp", "[eval_tapp]") {
+  using namespace sequant;
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<TAPPTensorD>{nocc, nvirt};
+
+  // the harness fills tensors with values in [0, 1], so every exponent applies
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+  auto const target = tidxs(D->as<Tensor>());
+
+  auto eval_at = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), target, yield_)->get<TAPPTensorD>();
+  };
+  // every element of got == f(element of ref), in lockstep (same layout)
+  auto check_elementwise = [](TAPPTensorD const& got, TAPPTensorD const& ref,
+                              auto const& f) {
+    REQUIRE(got.extents() == ref.extents());
+    auto g = got.begin();
+    for (auto r = ref.begin(); r != ref.end(); ++r, ++g)
+      CHECK(*g == Catch::Approx(f(*r)).margin(1e-12));
+  };
+
+  auto node = eval_node(pow(D, rational{-1}));
+  REQUIRE(node->op_type() == EvalOp::Power);
+  auto const src = yield_(node.left()->as_tensor())->get<TAPPTensorD>();
+  auto const d = eval_at(D);
+
+  check_elementwise(eval_at(pow(D, rational{-1})), d,
+                    [](double x) { return 1 / x; });
+  check_elementwise(eval_at(pow(D, rational{0})), d,
+                    [](double) { return 1.0; });
+  check_elementwise(eval_at(pow(D, rational{2})), d,
+                    [](double x) { return x * x; });
+  check_elementwise(eval_at(pow(D, rational{1, 2})), d,
+                    [](double x) { return std::sqrt(x); });
+
+  // ℓ = M ⊙ D^-1, a Hadamard product
+  auto const m = eval_at(M);
+  ResultExpr ell(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm}),
+                 M * pow(D, rational{-1}));
+  auto const got_ell =
+      evaluate(binarize<EvalExprTAPP>(ell), target, yield_)->get<TAPPTensorD>();
+  {
+    TAPPTensorD expected = m;
+    auto di = d.begin();
+    for (auto& x : expected) x /= *di++;
+    check_elementwise(got_ell, expected, [](double x) { return x; });
+  }
+
+  // E = L · (M ⊙ D^-1): every index appears on three tensors
+  {
+    auto ctx = get_default_context();
+    ctx.set(AssertStrictBraKetSymmetry::No);
+    auto _ = set_scoped_default_context(ctx);
+    auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    ResultExpr E(Variable(L"E"), L * M * pow(D, rational{-1}));
+    auto const got_E = evaluate(binarize<EvalExprTAPP>(E),
+                                container::svector<int64_t>{}, yield_)
+                           ->get<double>();
+    auto const l = eval_at(L);
+    double expected = 0;
+    auto mi = m.begin();
+    auto di = d.begin();
+    for (auto li = l.begin(); li != l.end(); ++li, ++mi, ++di)
+      expected += *li * *mi / *di;
+    CHECK(got_E == Catch::Approx(expected).margin(1e-10));
+  }
+
+  // M ⊙ D^-1 + D^-1, with D^-1 as either summand, evaluates correctly and
+  // leaves the cached D untouched
+  for (bool const power_first : {false, true}) {
+    auto const hadamard = M * pow(D, rational{-1});
+    auto const power = pow(D, rational{-1});
+    ResultExpr sum(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          TensorSymmetries{.perm = Symmetry::Nonsymm}),
+                   power_first ? power + hadamard : hadamard + power);
+    auto const got_sum = evaluate(binarize<EvalExprTAPP>(sum), target, yield_)
+                             ->get<TAPPTensorD>();
+    TAPPTensorD expected = m;
+    auto di = d.begin();
+    for (auto& x : expected) {
+      x = (x + 1) / *di;
+      ++di;
+    }
+    check_elementwise(got_sum, expected, [](double x) { return x; });
+    check_elementwise(yield_(node.left()->as_tensor())->get<TAPPTensorD>(), src,
+                      [](double x) { return x; });
+  }
+}
+
+TEST_CASE("eval_broadcast_sum_tapp", "[eval_tapp][broadcast]") {
+  using namespace sequant;
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<TAPPTensorD>{nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto const aops = yield_.array_ops();
+  auto eval_aops = [&](ResultExpr const& res) {
+    auto const node = binarize<EvalExprTAPP>(res);
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, tidxs(res.result_as_tensor()), yield_, cache)
+        ->get<TAPPTensorD>();
+  };
+  auto const extents = container::svector<int64_t>{
+      int64_t(nocc), int64_t(nocc), int64_t(nvirt), int64_t(nvirt)};
+  auto vec = [&](ExprPtr const& e) {
+    return yield_(e->as<Tensor>())->get<TAPPTensorD>();
+  };
+
+  SECTION("four-term denominator") {
+    auto eps_a = [](wchar_t const* a) {
+      return ex<Tensor>(L"ε", bra{}, ket{a});
+    };
+    auto eps_i = [](wchar_t const* i) {
+      return ex<Tensor>(L"ε", bra{i}, ket{});
+    };
+    // every ket-ε occurrence shares one yielded array by key, likewise every
+    // bra-ε occurrence
+    auto const ea = vec(eps_a(L"a_1"));
+    auto const ei = vec(eps_i(L"i_1"));
+    const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                                .braket = BraKetSymmetry::Symm,
+                                .column = ColumnSymmetry::Symm};
+    ResultExpr res(
+        Tensor(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym),
+        eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
+    auto const got = eval_aops(res);
+    REQUIRE(got.extents() == extents);
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            CHECK(
+                got(i1, i2, a1, a2) ==
+                Catch::Approx(ea(a1) + ea(a2) - ei(i1) - ei(i2)).margin(1e-12));
+  }
+
+  SECTION("asymmetric head and a constant summand") {
+    // distinct leaves and a nonsymmetric head: the expected tensor changes
+    // under any mode swap, so this pins the result layout
+    auto const e1 = ex<Tensor>(L"ε1", bra{}, ket{L"a_1"});
+    auto const e2 = ex<Tensor>(L"ε2", bra{}, ket{L"a_2"});
+    auto const e3 = ex<Tensor>(L"ε3", bra{L"i_1"}, ket{});
+    auto const e4 = ex<Tensor>(L"ε4", bra{L"i_2"}, ket{});
+    auto const v1 = vec(e1), v2 = vec(e2), v3 = vec(e3), v4 = vec(e4);
+    const TensorSymmetries nsym{.perm = Symmetry::Nonsymm,
+                                .braket = BraKetSymmetry::Nonsymm,
+                                .column = ColumnSymmetry::Nonsymm};
+    ResultExpr res(
+        Tensor(L"D'", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, nsym),
+        e1 + e2 - e3 - e4 + ex<Constant>(rational{3, 2}));
+    auto const got = eval_aops(res);
+    REQUIRE(got.extents() == extents);
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            CHECK(got(i1, i2, a1, a2) ==
+                  Catch::Approx(v1(a1) + v2(a2) - v3(i1) - v4(i2) + 1.5)
+                      .margin(1e-12));
+  }
+}
+
 // Custom-evaluator interception (the pruning mechanism batched eval relies on),
 // exercised on the plain non-batched code path: evaluate() must consult the
 // cache's custom evaluator on each non-leaf node before its standard scheme,
@@ -568,7 +758,7 @@ TEST_CASE("evaluate consults the custom evaluator and short-circuits",
     CHECK(result == marker);      // the custom result is used as-is
   }
 
-  SECTION("null result declines: the standard scheme evaluates the children") {
+  SECTION("declines-to-standard") {
     auto cache = cache_manager(std::vector{node});
     size_t decline_calls = 0;
     cache.set_custom_evaluator([&](auto const&, auto&) -> ResultPtr {

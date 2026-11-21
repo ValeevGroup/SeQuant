@@ -75,7 +75,7 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
     REQUIRE(&n2.left().parent() == &n2);
   }
 
-  SECTION("derefence") {
+  SECTION("dereference") {
     auto const n1 = FullBinaryNode{100};
 
     REQUIRE_NOTHROW(*n1);
@@ -306,38 +306,21 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
         str2 += *n;
       };
 
-      node.visit(visitor, TreeTraversal::PostOrder);
-      node.visit(extended_visitor, TreeTraversal::PostOrder);
-      REQUIRE(str1 == "ABC");
-      REQUIRE(str1 == str2);
-
-      str1.clear();
-      str2.clear();
-      node.visit(visitor, TreeTraversal::PreOrder);
-      node.visit(extended_visitor, TreeTraversal::PreOrder);
-      REQUIRE(str1 == "CAB");
-      REQUIRE(str1 == str2);
-
-      str1.clear();
-      str2.clear();
-      node.visit(visitor, TreeTraversal::InOrder);
-      node.visit(extended_visitor, TreeTraversal::InOrder);
-      REQUIRE(str1 == "ACB");
-      REQUIRE(str1 == str2);
-
-      str1.clear();
-      str2.clear();
-      node.visit_leaf(visitor);
-      node.visit_leaf(extended_visitor);
-      REQUIRE(str1 == "AB");
-      REQUIRE(str1 == str2);
-
-      str1.clear();
-      str2.clear();
-      node.visit_internal(visitor);
-      node.visit_internal(extended_visitor);
-      REQUIRE(str1 == "C");
-      REQUIRE(str1 == str2);
+      // applies the plain and the extended visitor, which must agree
+      auto check = [&](std::string const& expected, auto&& traverse) {
+        str1.clear();
+        str2.clear();
+        traverse(visitor);
+        traverse(extended_visitor);
+        CAPTURE(expected);
+        REQUIRE(str1 == expected);
+        REQUIRE(str1 == str2);
+      };
+      check("ABC", [&](auto&& v) { node.visit(v, TreeTraversal::PostOrder); });
+      check("CAB", [&](auto&& v) { node.visit(v, TreeTraversal::PreOrder); });
+      check("ACB", [&](auto&& v) { node.visit(v, TreeTraversal::InOrder); });
+      check("AB", [&](auto&& v) { node.visit_leaf(v); });
+      check("C", [&](auto&& v) { node.visit_internal(v); });
 
       auto not_vowel = [&str1](node_t const& n) -> bool {
         bool yn = std::string{"AEIOU"}.find(*n) == std::string::npos;
@@ -377,21 +360,20 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
         str2 += *n;
       };
 
-      node.visit(extended_visitor, TreeTraversal::PreAndPostOrder);
-      REQUIRE(str2 == "PreCAnyAAnyBPostC");
-      str2.clear();
-
-      node.visit(extended_visitor, TreeTraversal::PreAndInOrder);
-      REQUIRE(str2 == "PreCAnyAInCAnyB");
-      str2.clear();
-
-      node.visit(extended_visitor, TreeTraversal::PostAndInOrder);
-      REQUIRE(str2 == "AnyAInCAnyBPostC");
-      str2.clear();
-
-      node.visit(extended_visitor, TreeTraversal::Any);
-      REQUIRE(str2 == "PreCAnyAInCAnyBPostC");
-      str2.clear();
+      for (const auto& [traversal, expected] :
+           {std::pair{TreeTraversal::PreAndPostOrder,
+                      std::string{"PreCAnyAAnyBPostC"}},
+            std::pair{TreeTraversal::PreAndInOrder,
+                      std::string{"PreCAnyAInCAnyB"}},
+            std::pair{TreeTraversal::PostAndInOrder,
+                      std::string{"AnyAInCAnyBPostC"}},
+            std::pair{TreeTraversal::Any,
+                      std::string{"PreCAnyAInCAnyBPostC"}}}) {
+        CAPTURE(expected);
+        str2.clear();
+        node.visit(extended_visitor, traversal);
+        REQUIRE(str2 == expected);
+      }
     }
   }
 }

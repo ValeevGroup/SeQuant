@@ -9,6 +9,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -313,6 +314,61 @@ class Result {
   }
 
   ///
+  /// \brief Raise every element of this result to the power \p exponent.
+  ///
+  /// Used to evaluate the EvalOp::Power IR node. Returns a fresh result of the
+  /// same layout as this one (the node's canon indices are its operand's); this
+  /// result is not modified. An integer exponent is exact (repeated
+  /// multiplication, and the reciprocal for a negative exponent); any other
+  /// goes through \c std::pow on the element type with the exponent converted
+  /// to \c double (for complex elements, \c std::pow(std::complex, double)).
+  /// A zero element raised to a negative power yields `inf` per IEEE; it is
+  /// neither checked nor asserted. Not a pure virtual: only tensor-backed
+  /// results need it; the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr pow(rational const& /*exponent*/) const {
+    throw detail::unimplemented_method("pow");
+  }
+
+  ///
+  /// \brief Expand this result over the modes it lacks.
+  ///
+  /// Used to evaluate the EvalOp::Broadcast IR node. Returns a fresh result
+  /// over the modes of \p ann[1] that is constant along every mode absent
+  /// from \p ann[0] and equals this result along the others. \p ann is
+  /// [operand_annot, result_annot]; the result's modes are a superset of this
+  /// result's. \p new_mode_ranges holds one rank-1 result per mode of the
+  /// result that this result lacks (none if it lacks none), in the result's
+  /// mode order, built by BackendArrayOps::make_zeros (and restricted to the
+  /// current batch when a batch loop runs over that mode): the result's range
+  /// along that mode is that result's range. A mode this result carries keeps
+  /// this result's range. Not a pure virtual: only tensor-backed results need
+  /// it; the default throws. A ResultScalar forwards to broadcast_scalar() of
+  /// \p new_mode_ranges' first element.
+  ///
+  [[nodiscard]] virtual ResultPtr broadcast(
+      std::array<std::any, 2> const& /*ann*/,
+      container::svector<ResultPtr> const& /*new_mode_ranges*/) const {
+    throw detail::unimplemented_method("broadcast");
+  }
+
+  ///
+  /// \brief Expand the scalar \p scalar over every mode of \p ann[1].
+  ///
+  /// The broadcast() of a scalar operand (a ResultScalar), dispatched to the
+  /// backend's tensor type through the first of \p new_mode_ranges, which
+  /// hold one rank-1 result per mode of the result (see broadcast()). Returns
+  /// a fresh result every element of which is \p scalar's value; this result
+  /// is not modified. Not a pure virtual: only tensor-backed results need it;
+  /// the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& /*ann*/,
+      container::svector<ResultPtr> const& /*new_mode_ranges*/) const {
+    throw detail::unimplemented_method("broadcast_scalar");
+  }
+
+  ///
   /// \brief Restrict this result to a contiguous *element* range of one mode.
   ///
   /// Keeps elements `[elem_lo, elem_hi)` of mode \p mode and all elements of
@@ -356,8 +412,63 @@ class Result {
   }
 
   ///
+  /// \brief Build a zero-filled result shaped like \c *this but with mode
+  ///        \p mode carrying the FULL extent of an external (spectator) axis.
+  ///
+  /// Used to PRE-SIZE the destination of an external-axis scatter (see
+  /// make_batched_custom_evaluator's External branch): \c *this is one block
+  /// partial (the node's result with the external axis sliced to a single
+  /// block, but full on every other mode), and \p axis_src is the unsliced
+  /// axis-carrying leaf whose mode \p axis_src_mode holds the external axis at
+  /// its FULL extent/tiling. The returned result has \c *this's TiledRange with
+  /// dim \p mode replaced by \c axis_src's dim \p axis_src_mode, zero-filled,
+  /// so the per-block partials can be write_into_slice()d into their disjoint
+  /// slices. \p axis_src's tiling on \p axis_src_mode must be the tiling the
+  /// block partials slice from (guaranteed when both derive from the same
+  /// leaf). Not a pure virtual: only tensor-backed results need it; the default
+  /// throws. Mirrors the slice_mode()/write_into_slice() precedent.
+  ///
+  [[nodiscard]] virtual ResultPtr pre_sized_zeros_over_mode(
+      std::size_t /*mode*/, Result const& /*axis_src*/,
+      std::size_t /*axis_src_mode*/) const {
+    throw detail::unimplemented_method("pre_sized_zeros_over_mode");
+  }
+
+  ///
   /// \brief Add other Result object into this object.
   ///
+  /// \name keeping a value on disk
+  /// A backend that can keep a value on disk gives it a second, *on-disk*
+  /// form: a result that holds the same value without holding it in memory.
+  /// The on-disk form is for storage, not arithmetic: of the operations
+  /// above it need only support \c slice_mode, which reads a slice into
+  /// memory, and \c write_into_slice, which writes a block; the rest may
+  /// throw. \c size_in_bytes of an on-disk form is the size of the value,
+  /// wherever it is.
+  /// @{
+
+  /// \return this value in its on-disk form, or null if this kind of result
+  ///         cannot be kept on disk (the default). This result is unchanged;
+  ///         its memory is released when it is.
+  [[nodiscard]] virtual ResultPtr on_disk() const { return nullptr; }
+
+  /// \return whether this result is the on-disk form of a value.
+  [[nodiscard]] virtual bool is_on_disk() const noexcept { return false; }
+
+  /// \return whether this result is lazily evaluated: its value is computed
+  ///         when it is read (in_memory(), or slice_mode() for a block of it)
+  ///         and is not held. A lazy result takes no part in arithmetic
+  ///         itself: the evaluator reads it first (apply_one_op, the cell
+  ///         registry).
+  [[nodiscard]] virtual bool is_lazy() const noexcept { return false; }
+
+  /// \return the value of this on-disk or lazy result, whole, in memory.
+  ///         Only those forms implement it; the default throws.
+  [[nodiscard]] virtual ResultPtr in_memory() const {
+    throw detail::unimplemented_method("in_memory");
+  }
+  /// @}
+
   virtual void add_inplace(Result const&) = 0;
 
   /// Diagnostic: the Frobenius norm of the held value (0 for scalars and
@@ -406,10 +517,12 @@ class Result {
   ///
   /// \return Cast the type-erased data to the type \tparam T, and return a ref.
   ///
+  /// A result that is a pending view of another result's storage (see
+  /// is_buffer_alias()) materializes its value here first, once.
   template <typename T>
   [[nodiscard]] T& get() {
-    SEQUANT_ASSERT(has_value());
     ensure_materialized();
+    SEQUANT_ASSERT(has_value());
     return *std::any_cast<T>(&value_);
   }
 
@@ -417,28 +530,44 @@ class Result {
   /// \return Cast the type-erased data to the type \tparam T, and return a
   ///         const ref.
   ///
+  /// A result that is a pending view of another result's storage (see
+  /// is_buffer_alias()) materializes its value here first, once.
   template <typename T>
   [[nodiscard]] T const& get() const {
-    SEQUANT_ASSERT(has_value());
     ensure_materialized();
+    SEQUANT_ASSERT(has_value());
     return *std::any_cast<const T>(&value_);
   }
 
-  /// @return whether this result's buffer is _owned by another_ result -- the
-  ///         value is an alias, produced by a transform (phase, conjugation,
-  ///         relabel) that was recorded instead of performed, whether or not
-  ///         anything is still pending (a transform composing to the identity
-  ///         leaves an alias with nothing to apply). Producing one allocates
-  ///         nothing, so a tracer must charge it 0 allocated bytes
-  ///         (size_in_bytes() still reports the value's logical size) and must
-  ///         not count its buffer twice in a working set.
-  [[nodiscard]] virtual bool is_buffer_alias() const { return false; }
+  /// \return true while this result stands for a transformation of another
+  ///         result's storage that has not been applied -- a batch slice, a
+  ///         mode permutation, a conjugation, a scaling by a constant -- and
+  ///         so shares that storage instead of holding its own: it costs no
+  ///         allocation, and a backend consumer that can take the
+  ///         transformation into its own expression does so instead of
+  ///         asking for the value. get<T>() applies it (once) on demand.
+  ///         Default: false (a value held).
+  [[nodiscard]] virtual bool is_buffer_alias() const noexcept { return false; }
 
-  /// @return the size of the object in bytes. For a lazy view (see
-  ///         is_buffer_alias()) this is the _logical_ size of the value it
-  ///         represents, which is the size of the buffer it shares -- not a
-  ///         buffer of its own.
+  /// @return the bytes of storage this result keeps alive that no other
+  ///         result accounts for: for a result that holds its own value, the
+  ///         value's size. Storage shared between results (see
+  ///         is_buffer_alias()) is meant to be reported by exactly one of
+  ///         them; a backend that cannot tell which may approximate this, so
+  ///         a sum over results is exact only where results never share
+  ///         storage. Within SeQuant it feeds diagnostics (the eval trace,
+  ///         the peak monitor, the residency counts), not evaluation.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
+
+  /// @return the size of the object in bytes, measured even where
+  ///         size_in_bytes() is switched off for cost: a backend whose
+  ///         measurement is collective (TiledArray's) gates size_in_bytes()
+  ///         behind the eval trace, since the trace calls it on every op; the
+  ///         schedule document's run record calls this once per production
+  ///         instead. Default: size_in_bytes().
+  [[nodiscard]] virtual std::size_t measured_size_in_bytes() const {
+    return size_in_bytes();
+  }
 
   /// Diagnostic (analysis-only): force any deferred/asynchronous computation
   /// backing this result to complete. Default no-op (scalars are always ready);
@@ -452,6 +581,16 @@ class Result {
             typename = std::enable_if_t<!std::is_convertible_v<T, Result>>>
   explicit Result(T&& arg) noexcept
       : value_{std::make_any<std::decay_t<T>>(std::forward<T>(arg))} {}
+
+  /// a result without a value yet: a pending view (see is_buffer_alias()),
+  /// which stores its value through reset_value() when first asked for it
+  Result() noexcept = default;
+
+  /// Stores \p value as this result's value. Logically const: a pending view
+  /// materializing itself does not change what the result stands for.
+
+  /// Called by get<T>() before the cast: a pending view materializes its value
+  /// here (reset_value()). Default no-op.
 
   [[nodiscard]] virtual id_t type_id() const noexcept = 0;
 
@@ -482,10 +621,10 @@ class Result {
   }
 
  private:
-  /// mutable so that a lazily transformed result can materialize itself on
-  /// first read through a const handle. _Not_ thread-safe: a Result is owned
-  /// by one evaluation (the serial evaluate() stack / cache); concurrent
-  /// get<>() on a pending view is not supported
+  /// mutable so that a pending view can materialize itself on first read
+  /// through a const handle. _Not_ thread-safe: a Result is owned by one
+  /// evaluation (the serial evaluate() stack / cache); concurrent get<>() on
+  /// a pending view is not supported
   mutable std::any value_;
 
   [[nodiscard]] static id_t next_id() noexcept;
@@ -504,6 +643,10 @@ class ResultScalar final : public Result {
   explicit ResultScalar(T v) noexcept : Result{std::move(v)} {}
 
   [[nodiscard]] T value() const noexcept { return get<T>(); }
+
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultScalar<T>>(value());
+  }
 
   [[nodiscard]] ResultPtr sum(Result const& other,
                               std::array<std::any, 3> const&) const override {
@@ -541,6 +684,14 @@ class ResultScalar final : public Result {
     throw detail::unimplemented_method("permute");
   }
 
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    SEQUANT_ASSERT(!new_mode_ranges.empty());
+    return new_mode_ranges.front()->broadcast_scalar(*this, ann,
+                                                     new_mode_ranges);
+  }
+
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<ResultScalar<T>>());
     detail::log_constant(value(), " += ", other.get<T>(), "\n");
@@ -558,10 +709,6 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     return eval_result<ResultScalar<T>>(value() * T(factor));
-  }
-
-  [[nodiscard]] ResultPtr clone() const override {
-    return eval_result<ResultScalar<T>>(value());
   }
 
   [[nodiscard]] ResultPtr apply_transform(

@@ -5,6 +5,7 @@
 #include "processing_step.hpp"
 
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/utility/expr_filter.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 
 #include <nlohmann/json_fwd.hpp>
@@ -17,28 +18,6 @@
 #include <vector>
 
 namespace sequant::util::extint {
-
-class ExpressionFilter {
- public:
-  struct Rule {
-    bool negate = false;
-
-    virtual ~Rule() = default;
-
-    virtual bool matches(const Expr &expr) const = 0;
-  };
-
-  ExpressionFilter() = default;
-
-  bool matches(const Expr &) const;
-
-  void set_require_all(bool require);
-  void add_rule(std::unique_ptr<Rule> rule);
-
- private:
-  bool require_all_ = true;
-  std::vector<std::unique_ptr<Rule>> rules_;
-};
 
 /// Parses a "contains" rule matching @p spec's "expr" (a serialized
 /// expression). @p default_cmp is used if @p spec has no

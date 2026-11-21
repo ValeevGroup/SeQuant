@@ -17,7 +17,7 @@ TEST_CASE("index", "[elements][index]") {
   using namespace sequant;
 
   SECTION("constructors") {
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
 
     // default
     REQUIRE_NOTHROW(Index{});
@@ -50,27 +50,27 @@ TEST_CASE("index", "[elements][index]") {
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
-    REQUIRE(i1.space() == isr->retrieve_space(L"i"));
+    REQUIRE(i1.space() == ibr->retrieve_space(L"i"));
     REQUIRE(i1.ordinal() == 1);
     REQUIRE(static_cast<bool>(i1) == true);
 
     Index i1_alt("i1");
     REQUIRE(i1 == i1_alt);
 
-    Index i2(isr->retrieve_space(L'i'), 2);  // N.B. using retrieve_space(char)
+    Index i2(ibr->retrieve_space(L'i'), 2);  // N.B. using retrieve_space(char)
     REQUIRE(i2.label() == L"i_2");
-    REQUIRE(i2.space() == isr->retrieve_space(L"i_1"));
+    REQUIRE(i2.space() == ibr->retrieve_space(L"i_1"));
     REQUIRE(i2.ordinal() == 2);
 
-    Index i2_alt(isr->retrieve_space("i1"), 2);
+    Index i2_alt(ibr->retrieve_space("i1"), 2);
     REQUIRE(i2 == i2_alt);
 
     SECTION("with proto-indices") {
-      REQUIRE_NOTHROW(Index(isr->retrieve_space(L"i"), 3, {i1, i2}));
-      Index i3(isr->retrieve_space(L"i"), 3, {i1, i2});
+      REQUIRE_NOTHROW(Index(ibr->retrieve_space(L"i"), 3, {i1, i2}));
+      Index i3(ibr->retrieve_space(L"i"), 3, {i1, i2});
       REQUIRE(i3.label() == L"i_3");
       REQUIRE(i3.to_string() == "i_3");
-      REQUIRE(i3.space() == isr->retrieve_space(L"i_3"));
+      REQUIRE(i3.space() == ibr->retrieve_space(L"i_3"));
       REQUIRE(i3.has_proto_indices());
       REQUIRE(i3.proto_indices().size() == 2);
       REQUIRE(i3.proto_indices()[0] == i1);
@@ -81,7 +81,7 @@ TEST_CASE("index", "[elements][index]") {
       Index i4(L"i_4", {L"i_1", L"i_2"});
       REQUIRE(i4.label() == L"i_4");
       REQUIRE(i4.to_string() == "i_4");
-      REQUIRE(i4.space() == isr->retrieve_space(L"i_4"));
+      REQUIRE(i4.space() == ibr->retrieve_space(L"i_4"));
       REQUIRE(i4.has_proto_indices());
       REQUIRE(i4.proto_indices().size() == 2);
       REQUIRE(i4.proto_indices()[0] == i1);
@@ -92,7 +92,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE_NOTHROW(Index(L"i_5", {i2, i1}, false));
       Index i5(L"i_5", {i2, i1}, false);
       REQUIRE(i5.label() == L"i_5");
-      REQUIRE(i5.space() == isr->retrieve_space(L"i_5"));
+      REQUIRE(i5.space() == ibr->retrieve_space(L"i_5"));
       REQUIRE(i5.has_proto_indices());
       REQUIRE(i5.proto_indices().size() == 2);
       REQUIRE(i5.proto_indices()[0] == i2);
@@ -107,7 +107,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE_NOTHROW(Index(L"i_6", {i1, i5}, false));
       Index i6(L"i_6", {i1, i5}, false);
       REQUIRE(i6.label() == L"i_6");
-      REQUIRE(i6.space() == isr->retrieve_space(L"i_6"));
+      REQUIRE(i6.space() == ibr->retrieve_space(L"i_6"));
       REQUIRE(i6.has_proto_indices());
       REQUIRE(i6.proto_indices().size() == 2);
       REQUIRE(i6.proto_indices()[0] == i1);
@@ -118,7 +118,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE_NOTHROW(Index(L"i_7", {i2, i1}));
       Index i7(L"i_7", {i2, i1});
       REQUIRE(i7.label() == L"i_7");
-      REQUIRE(i7.space() == isr->retrieve_space(L"i_7"));
+      REQUIRE(i7.space() == ibr->retrieve_space(L"i_7"));
       REQUIRE(i7.has_proto_indices());
       REQUIRE(i7.proto_indices().size() == 2);
       REQUIRE(i7.proto_indices()[0] == i1);  // !!
@@ -139,7 +139,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(i7_copy.nonnull() == false);
 
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
-        REQUIRE_THROWS_AS(Index(isr->retrieve_space(L"i"), 4, {i1, i1}),
+        REQUIRE_THROWS_AS(Index(ibr->retrieve_space(L"i"), 4, {i1, i1}),
                           sequant::Exception);
         REQUIRE_THROWS_AS(Index(L"i_5", {L"i_1", L"i_1"}), sequant::Exception);
         REQUIRE_THROWS_AS(Index(L"i_5", {L"i_1", L""}), sequant::Exception);
@@ -149,11 +149,11 @@ TEST_CASE("index", "[elements][index]") {
     SECTION("from bytestring") {
       Index i1("i_1");
       REQUIRE(i1.label() == L"i_1");
-      REQUIRE(i1.space() == isr->retrieve_space("i"));
+      REQUIRE(i1.space() == ibr->retrieve_space("i"));
 
       Index i2('i');
       REQUIRE(i2.label() == L"i");
-      REQUIRE(i2.space() == isr->retrieve_space("i"));
+      REQUIRE(i2.space() == ibr->retrieve_space("i"));
       REQUIRE(!i2.ordinal());
 
       // to make things interesting use F12 registry with greek letters
@@ -390,11 +390,11 @@ TEST_CASE("index", "[elements][index]") {
     auto ctx = get_default_context();
     ctx.set(sequant::mbpt::make_F12_sr_spaces());
     auto context_resetter = set_scoped_default_context(ctx);
-    auto isr = get_default_context().index_basis_registry();
-    Index alpha(L"α", isr->retrieve_space(L"α"));
-    Index alpha1(L"α_1", isr->retrieve_space(L"α"));
-    Index alpha_up(L"α↑", isr->retrieve_space(L"α"));
-    Index alpha1_up(L"α↑_1", isr->retrieve_space(L"α"));
+    auto ibr = get_default_context().index_basis_registry();
+    Index alpha(L"α", ibr->retrieve_space(L"α"));
+    Index alpha1(L"α_1", ibr->retrieve_space(L"α"));
+    Index alpha_up(L"α↑", ibr->retrieve_space(L"α"));
+    Index alpha1_up(L"α↑_1", ibr->retrieve_space(L"α"));
     REQUIRE_NOTHROW(alpha.make_label_plus_suffix(L'↑'));
     REQUIRE(alpha.make_label_plus_suffix(L'↑') == L"α↑");
     REQUIRE_NOTHROW(alpha.make_label_minus_substring(L'↑'));
@@ -442,8 +442,8 @@ TEST_CASE("index", "[elements][index]") {
       // named bases of the particle space, with diacritics in their labels
       const IndexSpace uocc = registry.retrieve_space(
           registry.particle_space(/* nulltype_ok = */ false), mbpt::Spin::any);
-      registry.add(L"μ̃", IndexBasis{uocc, 1});
-      if (!registry.contains(L"f̌")) registry.add(L"f̌", IndexBasis{uocc, 2});
+      registry.add(L"μ̃", uocc, 1);
+      if (!registry.contains(L"f̌")) registry.add(L"f̌", uocc, 2);
     }
     const auto ctx_resetter = set_scoped_default_context(
         get_default_context_snapshot().set(std::move(registry)));
@@ -462,4 +462,131 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(j11.to_latex() == L"{j_{11}}");
     }
   }
+}
+
+TEST_CASE("kramers_partner", "[elements][index][kramers]") {
+  using namespace sequant;
+  // Kramers partner spaces are registered when the spin clones are made
+  // (mbpt::add_fermi_spin); spaces without a partner (the DF aux, plain
+  // spin-free spaces) are unflavored and never flip
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  const auto& a_up = isr->retrieve_space(L"a↑");
+  const auto& a_dn = isr->retrieve_space(L"a↓");
+  auto p = isr->kramers_partner(a_up);
+  REQUIRE(p.has_value());
+  REQUIRE(*p == a_dn);
+  auto q = isr->kramers_partner(a_dn);
+  REQUIRE(q.has_value());
+  REQUIRE(*q == a_up);
+  REQUIRE(!isr->kramers_partner(isr->retrieve_space(L"a")).has_value());
+  // orientation: the up flavor is canonical, down is not, unflavored is
+  REQUIRE(isr->kramers_canonical(a_up));
+  REQUIRE(!isr->kramers_canonical(a_dn));
+  REQUIRE(isr->kramers_canonical(isr->retrieve_space(L"a")));
+
+  // the registry copies/clones carry the partner map
+  IndexBasisRegistry cloned(*isr);
+  REQUIRE(cloned.kramers_partner(a_up).has_value());
+
+  // temporary (generated) indices flip too, keeping their tmp ordinal: the
+  // eval leaf folds trace-marked tensors whose CSV/expansion dummies are
+  // tmp indices (the non-tmp ctor would throw on such an ordinal)
+  {
+    auto tmp = Index::make_tmp_index(a_dn);
+    auto ftmp = kramers_flipped(tmp, *isr);
+    REQUIRE(ftmp.has_value());
+    REQUIRE(ftmp->space() == a_up);
+    REQUIRE(ftmp->ordinal() == tmp.ordinal());
+    auto tmp_proto =
+        Index::make_tmp_index(a_dn, Index::index_vector{Index(L"i↑_1")});
+    auto ftp = kramers_flipped(tmp_proto, *isr);
+    REQUIRE(ftp.has_value());
+    REQUIRE(ftp->ordinal() == tmp_proto.ordinal());
+    REQUIRE(ftp->proto_indices().size() == 1);
+    REQUIRE(ftp->proto_indices()[0].space() == isr->retrieve_space(L"i↓"));
+  }
+  // index flip: ordinal kept, protos mapped recursively, unflavored kept
+  Index i1(L"i↑_1"), i2(L"i↓_2");
+  Index a(L"a↓_3", {i1, i2});
+  auto f = kramers_flipped(a, *isr);
+  REQUIRE(f.has_value());
+  REQUIRE(f->space() == a_up);
+  REQUIRE(f->ordinal() == a.ordinal());
+  REQUIRE(f->proto_indices().size() == 2);
+  {  // symmetric proto bundles are canonically ordered: check membership
+    bool has_dn = false, has_up = false;
+    for (auto const& pr : f->proto_indices()) {
+      has_dn |= pr.space() == isr->retrieve_space(L"i↓");
+      has_up |= pr.space() == isr->retrieve_space(L"i↑");
+    }
+    REQUIRE((has_dn && has_up));
+  }
+  // twice = identity
+  auto ff = kramers_flipped(*f, *isr);
+  REQUIRE(ff.has_value());
+  REQUIRE(*ff == a);
+  // unflavored index: no flip
+  REQUIRE(!kramers_flipped(Index(L"a_1"), *isr).has_value());
+}
+
+TEST_CASE("kramers_partner_named_basis", "[elements][index][kramers]") {
+  using namespace sequant;
+  // the PAO basis is a named instance of the particle space, and its
+  // flavoured counterparts μ̃↑ / μ̃↓ the same instance of the flavoured
+  // particle spaces a↑ / a↓ (mbpt::add_pao_basis), whose Kramers pairing
+  // add_fermi_spin registers: the image of a μ̃↑ index is a μ̃↓ index (same
+  // instance, the registry's name), not a plain a↓ one
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  const auto spin_any = IndexSpace::QuantumNumbers{mbpt::Spin::any};
+  mbpt::add_ao_basis(isr, spin_any);
+  mbpt::add_pao_basis(isr, spin_any);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  const IndexBasis pao = isr->retrieve(L"μ̃");
+  const IndexBasis pao_up = isr->retrieve(L"μ̃↑");
+  const IndexBasis pao_dn = isr->retrieve(L"μ̃↓");
+  REQUIRE(pao_up.has_name());
+  REQUIRE(pao_up.space() == isr->retrieve_space(L"a↑"));
+  REQUIRE(pao_dn.space() == isr->retrieve_space(L"a↓"));
+
+  // the image basis of a flavoured PAO basis is the other flavour's
+  auto pb = kramers_partner_basis(pao_up, *isr);
+  REQUIRE(pb.has_value());
+  REQUIRE(*pb == pao_dn);
+  REQUIRE(pb->name() == pao_dn.name());
+  REQUIRE(!kramers_partner_basis(pao, *isr).has_value());
+
+  // a composite PAO index flips with its protos, basis instance kept
+  Index i1(L"i↑_1"), i2(L"i↓_2");
+  Index idx(pao_up, 3, {i1, i2});
+  auto f = kramers_flipped(idx, *isr);
+  REQUIRE(f.has_value());
+  REQUIRE(f->basis() == pao_dn);
+  REQUIRE(f->basis().name() == pao_dn.name());
+  REQUIRE(f->space() == isr->retrieve_space(L"a↓"));
+  REQUIRE(f->ordinal() == idx.ordinal());
+  REQUIRE(f->proto_indices().size() == 2);
+  REQUIRE(kramers_flipped_deep(idx, *isr) == *f);
+  // twice = identity
+  auto ff = kramers_flipped(*f, *isr);
+  REQUIRE(ff.has_value());
+  REQUIRE(*ff == idx);
+
+  // a spin-free PAO index has no partner; its deep image keeps its basis
+  // while its protos flip
+  Index plain(pao, 4, {i1, i2});
+  REQUIRE(!kramers_flipped(plain, *isr).has_value());
+  auto dp = kramers_flipped_deep(plain, *isr);
+  REQUIRE(dp.basis() == pao);
+  REQUIRE(dp.basis().has_name());
+  REQUIRE(dp.ordinal() == plain.ordinal());
+  REQUIRE(dp != plain);  // the protos flipped
 }

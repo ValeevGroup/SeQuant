@@ -4,12 +4,15 @@
 
 #include <SeQuant/core/export/utils.hpp>
 
+#include <SeQuant/core/export/marked_name.hpp>
+
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <sstream>
@@ -17,6 +20,18 @@
 #include <utility>
 
 namespace sequant::detail {
+
+std::string describe(const Tensor &tensor) {
+  // the exported name: a mark (adjoint, conjugation) folds into it
+  std::string str = export_name(tensor);
+  str += ":";
+  for (const Index &idx : tensor.indices()) {
+    str += toUtf8(idx.space().reduce_key(idx.label()));
+  }
+  return str;
+}
+
+std::string describe(const Variable &variable) { return export_name(variable); }
 
 std::string basis_instance_tag(const Index &idx) {
   if (!idx.basis().has_basis_instance()) return {};
@@ -86,6 +101,42 @@ std::string format_power(
            format_power_exponent(power.exponent(), double_slash);
   if (power.conjugated()) s = wrap_conj(std::move(s));
   return s;
+}
+
+std::string format_tensor_power(const TensorPower &power, std::string base_str,
+                                std::string_view pow_op, bool double_slash) {
+  return std::move(base_str) + std::string(pow_op) +
+         format_power_exponent(power.exponent(), double_slash);
+}
+
+const Tensor *broadcast_operand_tensor(const Expr &operand) {
+  auto tensor_of = [](const Expr &e) -> const Tensor * {
+    if (e.is<Tensor>()) return &e.as<Tensor>();
+    if (e.is<TensorPower>() && e.as<TensorPower>().base()->is<Tensor>())
+      return &e.as<TensorPower>().base()->as<Tensor>();
+    if (e.is_scalar()) return nullptr;
+    throw Exception("export: cannot broadcast a " + e.type_name());
+  };
+
+  if (!operand.is<Product>()) return tensor_of(operand);
+
+  const Tensor *tensor = nullptr;
+  for (const ExprPtr &factor : operand.as<Product>().factors()) {
+    if (const Tensor *t = tensor_of(*factor)) {
+      if (tensor)
+        throw Exception(
+            "export: the operand of a broadcast has more than one tensor "
+            "factor");
+      tensor = t;
+    }
+  }
+  return tensor;
+}
+
+bool broadcast_carries(const Tensor *operand_tensor, const Index &idx) {
+  if (!operand_tensor) return false;
+  auto indices = operand_tensor->const_indices();
+  return std::ranges::find(indices, idx) != std::ranges::end(indices);
 }
 
 }  // namespace sequant::detail

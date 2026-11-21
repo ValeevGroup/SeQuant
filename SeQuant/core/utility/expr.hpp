@@ -52,6 +52,10 @@ bool is_valid(const Expr &expr, std::string *msg = nullptr);
 
 /// Checks whether the given expression is valid (i.e. uses
 /// consistent indexing etc.)
+///
+/// Unlike a bare Sum, a Sum on the rhs may broadcast: its summands may have
+/// different external indices if each is a subset of the result's indices
+/// and together they are all of them.
 /// @param expr The expression to validate
 /// @param msg If given, the function will set the string to a message
 ///            describing why the provided expression is considered to
@@ -91,6 +95,52 @@ std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression);
 
 /// @copydoc pop_symmetrizer(ExprPtr&)
 std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression);
+
+namespace detail {
+/// @return a copy of @p expression without its symmetrizer and
+/// antisymmetrizer (see pop_tensor), e.g. to determine its external indices;
+/// @p expression itself (not a copy) if it has neither
+ExprPtr without_symmetrizers(const ExprPtr &expression);
+
+/// @param result a result head
+/// @param term a summand of the rhs of @p result; whether its symmetrizers
+///        supply their indices is the caller's choice (is_valid() passes
+///        @p term without them, see without_symmetrizers())
+/// @return the (non-null) indices of @p result that @p term supplies, i.e. uses
+///         in a bra, ket or aux slot; a head index is never contracted, so one
+///         that @p term uses in several slots is supplied, too
+container::set<Index> supplied_result_indices(const ResultExpr &result,
+                                              const Expr &term);
+}  // namespace detail
+
+/// Inverse of pop_symmetrizer: multiplies the given expression from the left
+/// with the given (anti)symmetrization operator
+///
+/// @param expression The expression to modify
+/// @param symmetrizer The operator to re-attach, as returned by
+/// pop_symmetrizer. If empty, @p expression is left unchanged.
+void push_symmetrizer(ResultExpr &expression,
+                      std::optional<ExprPtr> symmetrizer);
+
+/// @returns Whether the given expression contains a symmetrization operator,
+/// i.e. a tensor labeled reserved::symm_label(), anywhere
+/// @note The assumption is that there are no cases in which only part of the
+/// expression requires symmetrization
+bool has_symmetrizer(const ExprPtr &expression);
+
+/// Generates the expression that symmetrizes the given result over all
+/// cyclic permutations of its bra-ket index pairs, based on the tensor named
+/// @p precursor_name (with the same symmetries as @p result). Auxiliary
+/// indices are not symmetrized.
+///
+/// @param result The result to symmetrize
+/// @param precursor_name The name of the not yet symmetrized tensor
+ExprPtr result_symmetrization(const Tensor &result,
+                              std::wstring_view precursor_name);
+
+/// @copydoc result_symmetrization(const Tensor&, std::wstring_view)
+ExprPtr result_symmetrization(const ResultExpr &result,
+                              std::wstring_view precursor_name);
 
 /// Replaces a given target expression by a given replacement
 ///

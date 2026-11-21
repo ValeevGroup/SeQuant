@@ -9,6 +9,8 @@ add_executable(unit_tests-external-interface
     test_steps.cpp
     test_expr_steps.cpp
     test_tree_steps.cpp
+    test_json_include.cpp
+    test_one_by_one_step.cpp
     test_template_expansion.cpp
 )
 set_target_properties(unit_tests-external-interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)

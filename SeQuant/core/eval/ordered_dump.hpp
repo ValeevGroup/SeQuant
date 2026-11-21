@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -64,9 +65,6 @@
 /// | SEQUANT_UT_BLOCK_DIAG     | `[block]` / `[cell-registry]` -- per-batch  |
 /// |                           | build and assemble steps, block skips, and  |
 /// |                           | the end-of-call registry residency.         |
-/// | SEQUANT_SCHED_DUMP        | `ORDERED_RUN_BLOCK` / `SCHEDULE_RUN_GROUP`  |
-/// |                           | JSON lines for the schedule visualizer      |
-/// |                           | (emitted by the executors themselves).      |
 ///
 /// Cache / runtime knobs documented with their own facility (cache_manager.hpp,
 /// runtime.hpp, optimize/): SEQUANT_NUM_THREADS, SEQUANT_FACTORIZER_DEBUG,
@@ -104,13 +102,14 @@ namespace sequant::eval::detail {
 // SEQUANT_DUMP_SCHEDULE
 // ---------------------------------------------------------------------------
 
-/// \brief `[levels]`: value \p v's pass was bumped by its operand \p o, which
-/// is either carried across a loop or read inside the loop that reduces it.
-inline void dump_level_bump(std::size_t v, std::size_t o, bool carried,
+/// \brief `[levels]`: value \p v's pass was bumped by its operand \p o, for
+/// the reason \p why (the operand is carried across a loop, is read inside
+/// the loop that reduces it, or the two would tie steps of one pass into a
+/// cycle).
+inline void dump_level_bump(std::size_t v, std::size_t o, wchar_t const* why,
                             int level) {
-  std::wcerr << L"[levels] v" << v << L" bumped by operand v" << o
-             << (carried ? L" (carried)" : L" (reduction read inside)")
-             << L" -> level " << level << L"\n";
+  std::wcerr << L"[levels] v" << v << L" bumped by operand v" << o << L" ("
+             << why << L") -> level " << level << L"\n";
 }
 
 /// \brief `[sched]`: the pairwise loop order the rich schedule witnesses, and
@@ -159,6 +158,21 @@ void dump_sched_materialize(Ids const& ids) {
              << L" member(s) built AND escaped across the forced split:";
   for (std::size_t v : ids) std::wcerr << L" v" << v;
   std::wcerr << L"\n";
+}
+
+/// \brief `[sched-rebuild]`: the values built again in a later pass of their
+/// nest (\p rebuilt_in: value -> passes), and the (value, reader, reason)
+/// triples a copy cannot serve, which keep the assembled form.
+template <typename Rebuilt, typename Unserved>
+void dump_sched_rebuilds(Rebuilt const& rebuilt_in, Unserved const& unserved) {
+  for (auto const& [v, ps] : rebuilt_in) {
+    std::wcerr << L"[sched-rebuild] v" << v << L" built again in pass";
+    for (int k : ps) std::wcerr << L" " << k;
+    std::wcerr << L"\n";
+  }
+  for (auto const& [v, u, why] : unserved)
+    std::wcerr << L"[sched-rebuild] v" << v << L" stays assembled for reader v"
+               << u << L": " << why << L"\n";
 }
 
 /// \brief `[sched-nest]`: per nest, its outermost depth and the passes emitted
@@ -307,7 +321,7 @@ void dump_occs_of(Table const& table, Rich const& rich,
   for (std::size_t vid = 0; vid < rich.cells.size(); ++vid)
     for (std::size_t o = 0; o < rich.cells[vid].occurrences.size(); ++o)
       point_to[rich.cells[vid].occurrences[o].point] = {vid, o};
-  auto const labels = [](container::svector<Index> const& c) {
+  auto const labels = [](container::svector_base<Index> const& c) {
     std::string s;
     for (auto const& ix : c) s += toUtf8(std::wstring(ix.full_label())) + " ";
     return s;
@@ -331,6 +345,29 @@ void dump_occs_of(Table const& table, Rich const& rich,
       } else {
         std::cerr << "(root)";
       }
+      // what the occurrence opens, what encloses it (with each opener), and
+      // the loops it reduces
+      std::cerr << " point=" << occ.point << " opens={";
+      for (auto const& [ix, k] : occ.opens)
+        std::cerr << toUtf8(std::wstring(ix.full_label())) << ":"
+                  << (k == BatchModeType::Contracted ? "C" : "E") << " ";
+      std::cerr << "} ectx={";
+      for (std::size_t k = 0; k < occ.ectx.size(); ++k) {
+        std::cerr << toUtf8(std::wstring(occ.ectx[k].first.full_label()))
+                  << "@pt"
+                  << (k < occ.ectx_opener_point.size()
+                          ? occ.ectx_opener_point[k]
+                          : 0);
+        if (k < occ.ectx_opener_point.size())
+          if (auto it = point_to.find(occ.ectx_opener_point[k]);
+              it != point_to.end())
+            std::cerr << "(v" << it->second.first << ")";
+        std::cerr << " ";
+      }
+      std::cerr << "} reduced={";
+      for (auto const& [rm, rs] : occ.reduced_slot)
+        std::cerr << toUtf8(std::wstring(rm.full_label())) << "#" << rs << " ";
+      std::cerr << "}";
       std::cerr << "\n";
     }
     for (auto const& r : table.reads) {

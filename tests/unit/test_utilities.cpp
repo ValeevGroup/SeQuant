@@ -6,6 +6,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -13,6 +14,7 @@
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/expr_filter.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -218,6 +220,20 @@ TEST_CASE("join_strings", "[utilities]") {
           }) == "1-2-3");
 }
 
+TEST_CASE("utf-conversion", "[utilities]") {
+  using namespace sequant;
+
+  // BMP and astral-plane (a surrogate pair in UTF-16) characters
+  for (const std::wstring& str : {std::wstring(L"t_1"), std::wstring(L"Âδγ"),
+                                  std::wstring(L"𝟙"), std::wstring(L"a𝟙b")}) {
+    const std::string utf8 = toUtf8(str);
+    REQUIRE(toUtf16(utf8) == str);
+    REQUIRE(toUtf8(toUtf16(utf8)) == utf8);
+  }
+  REQUIRE(toUtf8(std::wstring(L"𝟙")) == "\xF0\x9D\x9F\x99");
+  REQUIRE(toUtf16(std::string("\xF0\x9D\x9F\x99")) == L"𝟙");
+}
+
 TEST_CASE("pop_symmetrizer", "[utilities]") {
   using namespace sequant;
 
@@ -232,6 +248,94 @@ TEST_CASE("pop_symmetrizer", "[utilities]") {
   REQUIRE(has_tensor(expr, L"t"));
 
   REQUIRE_FALSE(pop_symmetrizer(expr).has_value());
+
+  // a TensorPower holds no symmetrizer
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  expr = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                    ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+         t * pow(D, rational{-1});
+  REQUIRE(pop_symmetrizer(expr).has_value());
+  REQUIRE(*expr == *(t * pow(D, rational{-1})));
+}
+
+TEST_CASE("push_symmetrizer", "[utilities]") {
+  using namespace sequant;
+
+  auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  ExprPtr expr = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                            ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+                 t;
+  ResultExpr result(Tensor(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
+                    expr->clone());
+  ExprPtr original = result.expression()->clone();
+
+  push_symmetrizer(result, std::nullopt);
+  REQUIRE(result.expression() == original);
+
+  std::optional<ExprPtr> symmetrizer = pop_symmetrizer(result);
+  REQUIRE(symmetrizer.has_value());
+  REQUIRE_FALSE(has_tensor(result.expression(), reserved::antisymm_label()));
+
+  push_symmetrizer(result, std::move(symmetrizer));
+  REQUIRE(has_tensor(result.expression(), reserved::antisymm_label()));
+  REQUIRE(has_tensor(result.expression(), L"t"));
+}
+
+TEST_CASE("has_symmetrizer", "[utilities]") {
+  using namespace sequant;
+
+  auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  ExprPtr symmetrizer = ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                                   ket{L"a_1", L"a_2"});
+
+  REQUIRE_FALSE(has_symmetrizer(t));
+  REQUIRE(has_symmetrizer(symmetrizer * t));
+}
+
+TEST_CASE("result_symmetrization", "[utilities]") {
+  using namespace sequant;
+
+  Tensor result(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+
+  ExprPtr expected =
+      ex<Constant>(rational(1, 2)) *
+          ex<Tensor>(L"Ru", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) +
+      ex<Constant>(rational(1, 2)) *
+          ex<Tensor>(L"Ru", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"});
+
+  REQUIRE(result_symmetrization(result, L"Ru") == expected);
+  REQUIRE(result_symmetrization(ResultExpr(result, ex<Constant>(0)), L"Ru") ==
+          expected);
+}
+
+TEST_CASE("ExpressionFilter", "[utilities]") {
+  using namespace sequant;
+
+  ExprPtr t = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
+  ExprPtr f = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"});
+  ExprPtr g = ex<Tensor>(L"g", bra{L"i_1"}, ket{L"a_1"});
+  ExprPtr expr = t * f + g;
+
+  ExpressionFilter filter;
+  filter.add_rule(
+      std::make_unique<LabelRule>(std::vector<std::wregex>{std::wregex(L"t")}));
+  REQUIRE(filter.matches(*expr));
+  REQUIRE_FALSE(filter.matches(*g));
+
+  ExpressionFilter contains;
+  contains.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*g)));
+  REQUIRE(contains.matches(*expr));
+  REQUIRE_FALSE(contains.matches(*t));
+
+  ExpressionFilter any;
+  any.set_require_all(false);
+  any.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*g)));
+  any.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*t)));
+  REQUIRE(any.matches(*g));
+  REQUIRE_FALSE(any.matches(*f));
+
+  // Only the summand containing t is kept
+  REQUIRE(prune_to_matches(*expr, filter) == ex<Sum>(ExprPtrList{t * f}));
 }
 
 TEST_CASE("utilities", "[utilities]") {
@@ -904,6 +1008,25 @@ TEST_CASE("utilities", "[utilities]") {
     }
   }
 
+  SECTION("replace keeps result indices if externals are unaffected") {
+    ResultExpr input = deserialize<ResultExpr>(
+        L"R{a1,p3;p1,p2} = Â{p1,p2;} Y{p3,p4;p1,p2} T{a1;p4}");
+    const ExprPtr target = deserialize(L"T{a1;p4}");
+    const ExprPtr replacement = deserialize(L"S{a1;p4}");
+
+    replace(
+        input,
+        ExprMatcher(*target,
+                    ExprMatcherOptions{.tensor_cmp = TensorComparison::Block}),
+        *replacement);
+
+    const ResultExpr expected = deserialize<ResultExpr>(
+        L"R{a1,p3;p1,p2} = Â{p1,p2;} Y{p3,p4;p1,p2} S{a1;p4}");
+    REQUIRE(std::ranges::equal(input.bra(), expected.bra()));
+    REQUIRE(std::ranges::equal(input.ket(), expected.ket()));
+    REQUIRE(std::ranges::equal(input.aux(), expected.aux()));
+  }
+
   SECTION("is_valid") {
     SECTION("Expr") {
       for (auto [expr_str, msg] :
@@ -918,7 +1041,6 @@ TEST_CASE("utilities", "[utilities]") {
                {L"t{a1} t{a1} t{a1}", "Index a_1 appears more than 2 times"},
                {L"1 + t{a1} t{a1} t{a1}",
                 "Index a_1 appears more than 2 times"},
-               {L"1 + t{a1}", "Inconsistent external indices in sum"},
                // Allow bra/ket inconsistencies in external indices
                {L"t{;a1} + t{a1}", ""},
            }) {
@@ -947,6 +1069,39 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(actual_msg == msg);
         REQUIRE(actual == expected);
       }
+
+      // without a head, a Sum whose summands have different external indices
+      // is invalid even when it could broadcast under one (see ResultExpr)
+      for (const auto& expr_str :
+           {L"1 + t{a1}", L"ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}"}) {
+        CAPTURE(toUtf8(expr_str));
+        std::string msg;
+        REQUIRE_FALSE(is_valid(deserialize(expr_str), &msg));
+        REQUIRE(msg == "Inconsistent external indices in sum");
+      }
+    }
+    SECTION("nested sum bracket") {
+      // A CSV projection bracket expanded over two flavors of its expansion
+      // dummy is a nested Sum inside a Product; its externals count ONCE
+      // (the bracket's value fills one summand's slots), so the term matches
+      // its proto-indexed sibling. Summing the occurrences over both flavor
+      // summands made every external even, i.e. absent, and flagged the
+      // residual block "Inconsistent external indices in sum".
+      auto bracket = ex<Sum>(ExprPtrList{
+          deserialize(L"g{i1,i2;a1,a2} C{a1;a3<i1,i2>} C{a2;a4<i1,i2>}"),
+          deserialize(L"g{i1,i2;a5,a2} C{a5;a3<i1,i2>} C{a2;a4<i1,i2>}")});
+      auto term1 = ex<Product>(2, ExprPtrList{bracket}, Product::Flatten::No);
+      auto term2 = deserialize(L"f{i3;i1} t{a3<i1,i2>,a4<i1,i2>;i3,i2}");
+      auto block = ex<Sum>(ExprPtrList{term1, term2});
+      REQUIRE(term1->as<Product>().factor(0)->is<Sum>());
+      std::string actual_msg;
+      REQUIRE(is_valid(block, &actual_msg));
+      REQUIRE(actual_msg.empty());
+      // a genuinely inconsistent sibling is still caught
+      auto bad = ex<Sum>(ExprPtrList{
+          term1, deserialize(L"f{i3;i1} t{a3<i1,i2>,a4<i1,i2>;i3,i1}")});
+      REQUIRE_FALSE(is_valid(bad, &actual_msg));
+      REQUIRE(actual_msg == "Inconsistent external indices in sum");
     }
     SECTION("ResultExpr") {
       for (const auto& [expr_str, msg] :
@@ -965,6 +1120,39 @@ TEST_CASE("utilities", "[utilities]") {
                 "expression"},
                // Allow bra/ket inconsistencies in external indices
                {L"R{a2;a1} = t{a1;i1} t{i1;a2}", ""},
+               // a Sum under a head may broadcast: each summand covers a
+               // subset of the result's indices, all of them together
+               {L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}",
+                ""},
+               {L"D{i_1;a_1} = ε{;a_1} - ε{i_1;} - E", ""},
+               {L"R{a1} = 1 + t{a1}", ""},
+               // a Sum nested in a factor does not broadcast
+               {L"R{i_1;} = (f{i_1;} + g{i_1;}) c", ""},
+               // a summand's (anti)symmetrizer does not count
+               {L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1,a2;i1,i2} + ε{a1;}", ""},
+               {L"R{a1,a2;i1,i2} = 1/2 (Â{i1,i2;a1,a2} t{a1,a2;i1,i2} + "
+                L"Â{i1,i2;a1,a2} u{a1,a2;i1,i2})",
+                ""},
+               {L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}", ""},
+               {L"D{i_1;a_1} = ε{;a_1} + ε{;a_2}",
+                "Summand index a_2 is not an index of the result"},
+               {L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2}",
+                "Result index i_1 appears in no summand"},
+               {L"D{i_1;a_1} = ε{;a_1} - E",
+                "Result index i_1 appears in no summand"},
+               {L"R{} = 1 + t{a1}",
+                "Summand index a_1 is not an index of the result"},
+               // a result index is never contracted: a summand that uses it
+               // in several slots supplies it
+               {L"R{i1} = f{i1;} + g{i1;i2} h{i2;i1}", ""},
+               {L"R{i_1;a_1} = f{i_1;a_1} + M{i_1;a_1} D{a_1;i_1}", ""},
+               // aux modes cannot be broadcast over
+               {L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}",
+                "Summand does not supply result aux index a_2"},
+               {L"R{i_1,i_2;;a_2} = f{i_1;;a_2} + g{i_2;;a_2}", ""},
+               {L"R{i1} = g{i1;i2} h{i2;i1}",
+                "Bra indices of result are inconsistent with the rhs "
+                "expression"},
            }) {
         CAPTURE(toUtf8(expr_str));
 
@@ -1336,6 +1524,32 @@ TEST_CASE("utilities", "[utilities]") {
         }
       }
     }
+  }
+
+  SECTION("strongly_connected_components_indexed") {
+    // 0 -> 1 -> 2 -> 0 is one component; 3 depends on 1 and on 4; 4 -> 5
+    // -> 4 is another; 6 depends on nothing.
+    std::vector<std::vector<std::size_t>> const deps{{1}, {2}, {0}, {1, 4},
+                                                     {5}, {4}, {}};
+    auto const get_deps = [&](std::size_t i) -> const auto& {
+      return deps.at(i);
+    };
+    auto const c = strongly_connected_components_indexed(deps.size(), get_deps);
+    REQUIRE(c.size() == deps.size());
+    CHECK(c[0] == c[1]);
+    CHECK(c[1] == c[2]);
+    CHECK(c[4] == c[5]);
+    CHECK(c[0] != c[4]);
+    CHECK(c[3] != c[0]);
+    CHECK(c[3] != c[4]);
+    CHECK(c[6] != c[3]);
+    // a component completes after the components it depends on
+    CHECK(c[3] > c[0]);
+    CHECK(c[3] > c[4]);
+    std::size_t n_components = 0;
+    for (std::size_t x : c) n_components = std::max(n_components, x + 1);
+    CHECK(n_components == 4);
+    CHECK(strongly_connected_components_indexed(0, get_deps).empty());
   }
 
   SECTION("topological_order_indexed") {

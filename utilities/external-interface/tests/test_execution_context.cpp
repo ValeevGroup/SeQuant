@@ -3,6 +3,7 @@
 
 #include "execution_context.hpp"
 #include "processing_data.hpp"
+#include "test_extint.hpp"
 
 #include <SeQuant/core/utility/exception.hpp>
 
@@ -130,6 +131,41 @@ TEST_CASE("ExecutionContext aliasing", "[extint]") {
   }
 }
 
+TEST_CASE("ExecutionContext releasing data", "[extint]") {
+  ExecutionContext ctx;
+  ctx.set_data("input", 0, expr_data());
+  ctx.set_data("input", 1, expr_data());
+  ctx.add_data_alias(std::vector<std::string>{"input.0", "input.1"}, "both");
+  ctx.add_data_alias("input.1", "keep.1");
+
+  auto needed = [](std::string_view id) { return id.starts_with("keep"); };
+
+  REQUIRE(ctx.release_data(needed) == 1);
+
+  SECTION("released data can't be retrieved") {
+    REQUIRE_THROWS_WITH(
+        ctx.get_data("input.0"),
+        Catch::Matchers::ContainsSubstring("has already been released"));
+    REQUIRE_THROWS_AS(ctx.get_data("both"), Exception);
+  }
+
+  SECTION("data with a needed alias is retained") {
+    REQUIRE(ctx.get_data("input.1").size() == 1);
+    REQUIRE(ctx.get_data("keep.1").size() == 1);
+  }
+
+  SECTION("IDs remain registered") {
+    REQUIRE(ctx.has_data("input.0"));
+    REQUIRE(ctx.dataset_size("both") == 2);
+    REQUIRE(ctx.ids_are_equivalent("input.1", "keep.1"));
+  }
+
+  SECTION("releasing is idempotent") {
+    REQUIRE(ctx.release_data(needed) == 0);
+    REQUIRE(ctx.release_data([](std::string_view) { return false; }) == 1);
+  }
+}
+
 TEST_CASE("convert_data enforces the data kind", "[extint]") {
   ProcessingData expr = expr_data();
   ProcessingData tree = tree_data();
@@ -141,4 +177,85 @@ TEST_CASE("convert_data enforces the data kind", "[extint]") {
   REQUIRE_THROWS_WITH(
       convert_data<ExportTreeData>(expr),
       Catch::Matchers::ContainsSubstring("Can't convert ExpressionData"));
+}
+
+TEST_CASE("ExecutionContext working copies", "[extint]") {
+  ExecutionContext ctx;
+  ctx.set_data("input", 0,
+               ProcessingData{
+                   test_support::expr_data({L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
+  ctx.add_data_alias("input.0", "alias");
+
+  auto datum = [&ctx]() { return ctx.get_data("input.0").front(); };
+  const ExpressionData *stored =
+      &convert_data<ExpressionData>(datum().data.get());
+
+  SECTION("without predicate the data is assumed to be needed") {
+    REQUIRE(ctx.is_needed_later(datum()));
+
+    WorkingCopy<ExpressionData> working =
+        ctx.working_copy<ExpressionData>(datum());
+    REQUIRE(working.is_copy());
+    REQUIRE(working.original == stored);
+    REQUIRE(working.unchanged());
+    REQUIRE_NOTHROW(ctx.get_data("input.0"));
+  }
+
+  SECTION("copies do not share mutable state with the original") {
+    WorkingCopy<ExpressionData> working =
+        ctx.working_copy<ExpressionData>(datum());
+    REQUIRE(working.data.expressions.front().expression().get() !=
+            stored->expressions.front().expression().get());
+
+    working.data.expressions.clear();
+    REQUIRE_FALSE(working.unchanged());
+    REQUIRE(stored->expressions.size() == 1);
+  }
+
+  SECTION("data that isn't needed later is moved out") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    REQUIRE_FALSE(ctx.is_needed_later(datum()));
+
+    const ExecutionContext::Data<ProcessingData> handle = datum();
+    WorkingCopy<ExpressionData> working =
+        ctx.working_copy<ExpressionData>(handle);
+    REQUIRE_FALSE(working.is_copy());
+    REQUIRE_FALSE(working.unchanged());
+    REQUIRE(working.data.expressions.size() == 1);
+
+    // IDs stay known, but the data is gone
+    REQUIRE(ctx.has_data("input.0"));
+    REQUIRE_THROWS_WITH(
+        ctx.get_data("input.0"),
+        Catch::Matchers::ContainsSubstring("has already been consumed"));
+    REQUIRE_THROWS_WITH(
+        ctx.working_copy<ExpressionData>(handle),
+        Catch::Matchers::ContainsSubstring("has already been consumed"));
+  }
+
+  SECTION("the original can be kept on request") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+
+    WorkingCopy<ExpressionData> working =
+        ctx.working_copy<ExpressionData>(datum(), /* keep_original = */ true);
+    REQUIRE(working.is_copy());
+    REQUIRE(working.unchanged());
+    REQUIRE_NOTHROW(ctx.get_data("input.0"));
+  }
+
+  SECTION("any needed ID keeps the data") {
+    ctx.set_needed_later_predicate(
+        [](std::string_view id) { return id == "alias"; });
+    REQUIRE(ctx.is_needed_later(datum()));
+    REQUIRE(ctx.working_copy<ExpressionData>(datum()).is_copy());
+
+    ctx.clear_needed_later_predicate();
+    REQUIRE(ctx.is_needed_later(datum()));
+  }
+
+  SECTION("mismatching data type throws") {
+    REQUIRE_THROWS_AS(ctx.working_copy<ExportTreeData>(datum()), Exception);
+    // A failed request must not consume the data
+    REQUIRE_NOTHROW(ctx.get_data("input.0"));
+  }
 }

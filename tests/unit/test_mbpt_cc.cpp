@@ -48,6 +48,15 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
         }
       }
 
+      SECTION("screening does not change CCSD t") {
+        // here screening drops about half of H̄'s terms at each projection
+        const auto screened = CC{2}.t();
+        const auto unscreened = CC{2, {.screen = false}}.t();
+        REQUIRE(screened.size() == unscreened.size());
+        for (std::size_t p = 0; p != screened.size(); ++p)
+          REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
+      }
+
     }  // SECTION("t")
 
     SECTION("λ") {
@@ -121,14 +130,14 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THAT(bernoulli::detail::expand_to_blocks(Vx),
                  EquivalentTo(Vx));  // idempotent
     // no general index survives: every residual index is occ or uocc
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
     Vx->visit(
         [&](const ExprPtr& n) {
           if (!n.is<NormalOperator<Statistics::FermiDirac>>()) return;
           for (const auto& o :
                n.as<NormalOperator<Statistics::FermiDirac>>().creann()) {
             const auto& sp = o.index().space();
-            REQUIRE((isr->is_pure_occupied(sp) || isr->is_pure_unoccupied(sp)));
+            REQUIRE((ibr->is_pure_occupied(sp) || ibr->is_pure_unoccupied(sp)));
           }
         },
         /*atoms_only=*/true);
@@ -444,6 +453,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(simplify(CC(1, {.hbar_comm_rank = 2}).energy() - expected) ==
             ex<Constant>(0));
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
     // screening must not change the result; the MR amplitudes do not commute,
     // so the BCH expansion at rank 2 and up exceeds several GB, hence rank 1
     const auto screened = CC(2, {.hbar_comm_rank = 1}).t();
@@ -451,6 +461,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(has_tensor(screened.at(1), L"t"));
     for (std::size_t p = 0; p != screened.size(); ++p)
       REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
     if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
       // match the message: under THROW an unrelated SEQUANT_ASSERT throws
@@ -828,12 +839,12 @@ TEST_CASE("bernoulli-keeps-basis-instance", "[mbpt][basis]") {
 
   // t(2) as a grant of instance 3 on its virtual legs authors it, in one
   // commutator [V, σ] of the Bernoulli UCC derivation
-  const auto& isr = get_default_context().index_basis_registry();
+  const auto& ibr = get_default_context().index_basis_registry();
   const auto V = op::tensor::h(2);
   const auto T2raw = op::tensor::t(2);
   container::map<Index, Index> m;
   for (const auto& idx : get_used_indices(T2raw))
-    if (isr->is_pure_unoccupied(idx.space()))
+    if (ibr->is_pure_unoccupied(idx.space()))
       m.emplace(idx, idx.replace_basis_instance(3));
   const auto T2 = transform_expr(T2raw, m);
 

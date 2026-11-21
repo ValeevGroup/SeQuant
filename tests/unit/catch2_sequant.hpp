@@ -192,6 +192,16 @@ std::size_t count_product_canonicalizations(
       [&opts](Context &ctx) { ctx.set(opts); });
 }
 
+/// @return a guard that scopes, for every Statistics, a copy of the default
+/// context in effect for it that does not assert the strict bra-ket pairing
+/// of dummy indices (Context::assert_strict_braket_symmetry()), as MPQC's
+/// CCk context does not: a hand-built network may then contract a dummy
+/// between two bra (or two ket) slots of rigid tensors
+[[nodiscard]] inline auto scoped_lax_braket_pairing() {
+  return set_scoped_modified_default_context(
+      [](Context &ctx) { ctx.set(AssertStrictBraKetSymmetry::No); });
+}
+
 }  // namespace sequant::tests
 
 namespace Catch {
@@ -502,6 +512,20 @@ SimplifiesToMatcher SimplifiesTo(T &&expression) {
 template <typename String>
 StringDiffMatcher DiffedStringEquals(String &&str) {
   return StringDiffMatcher(std::forward<String>(str));
+}
+
+/// Pushes a scoped default context in which every index space of the current
+/// registry is real, for tests whose byte and flop numbers assume 8-byte real
+/// elements and one real flop per multiply-add. The registry default is
+/// complex, which the cost models price at 16 bytes and four real flops per
+/// element (sequant::opt::detail::field_cost_factors). Call it after the
+/// test's own registry edits (spaces added later default to complex again).
+inline auto scoped_real_field_context() {
+  auto ctx = sequant::get_default_context_snapshot();
+  sequant::IndexBasisRegistry reg(*ctx.index_basis_registry());
+  sequant::tests::declare_real_basis(reg);
+  ctx.set(std::move(reg));
+  return sequant::set_scoped_default_context(std::move(ctx));
 }
 
 #endif

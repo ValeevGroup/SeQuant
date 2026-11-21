@@ -1,8 +1,12 @@
 #include <SeQuant/core/expressions/complex.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
@@ -16,11 +20,11 @@
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
-#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -28,9 +32,16 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <cstddef>
+#include <utility>
 
+#include <TiledArray/tensor/arena_kernels.h>
+#include <TiledArray/tensor/arena_tensor.h>
 #include <tiledarray.h>
 #include <boost/regex.hpp>
+
+#include <data_info.hpp>
+#include <eval_utils.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/view/concat.hpp>
@@ -40,9 +51,11 @@
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstdlib>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -184,9 +197,11 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 }
 
 auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
-                           spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
-                           ->as<sequant::Tensor>());
+  return tensor_to_key(
+      sequant::deserialize<sequant::ExprPtr>(
+          spec, {.def_perm_symm = sequant::Symmetry::Nonsymm,
+                 .def_braket_symm = sequant::Hermiticity::NonHermitian})
+          ->as<sequant::Tensor>());
 }
 
 template <typename NumericT>
@@ -197,20 +212,53 @@ auto random_tensor(TA::Range const& rng) {
   return result;
 }
 
+/// The inner tile of every nested (ToT) array in these tests: the arena-pinned
+/// view a CSV/PNO array stores (the inner tile SeQuant-eval-ta instantiates its
+/// nested Result for), not an owning TA::Tensor<T>. An arena cell is a view
+/// into its outer tile's slab, so a nested tile is built in one pass through
+/// make_tot_tile() instead of by assigning inner tensors into an outer tile.
+template <typename NumericT>
+using tot_inner_t = TA::ArenaTensor<NumericT>;
+template <typename NumericT>
+using tot_tile_t = TA::Tensor<tot_inner_t<NumericT>>;
+
+/// A nested tile over \p outer_rng whose inner cell at outer ordinal \c o spans
+/// \c inner_rng(o) (a TA::Range; zero volume leaves the cell empty) and holds
+/// \c fill(o, k) at its ordinal \c k. An arena cell's range is zero-based, so
+/// only the extents of \c inner_rng(o) carry over.
+template <typename NumericT, typename InnerRangeFn, typename FillFn>
+tot_tile_t<NumericT> make_tot_tile(TA::Range const& outer_rng,
+                                   InnerRangeFn&& inner_rng, FillFn&& fill) {
+  using inner_range_t = typename tot_inner_t<NumericT>::range_type;
+  return TA::detail::make_nested_tile<tot_tile_t<NumericT>>(
+      outer_rng,
+      [&](auto const& idx) {
+        // extent() is a view into the range, which must outlive it; the arena
+        // range type is built from an extent vector, not from a TA::Range.
+        TA::Range const r = inner_rng(outer_rng.ordinal(idx));
+        auto const ext = r.extent();
+        return inner_range_t(std::vector<std::size_t>(ext.begin(), ext.end()));
+      },
+      [&](auto& cell, auto const& idx) {
+        auto const o = outer_rng.ordinal(idx);
+        for (std::size_t k = 0; k < cell.size(); ++k)
+          cell.data()[k] = fill(o, k);
+      });
+}
+
 // note: all the inner tensors (elements of the outer tensor)
 //       have the same @c inner_rng
 template <typename NumericT>
 auto random_tensor_of_tensor(TA::Range const& outer_rng,
                              TA::Range const& inner_rng) {
-  TA::Tensor<TA::Tensor<NumericT>> result{outer_rng};
-
-  std::generate(result.begin(), result.end(),
-                [inner_rng]() { return random_tensor<NumericT>(inner_rng); });
-
-  return result;
+  return make_tot_tile<NumericT>(
+      outer_rng, [&inner_rng](std::size_t) { return inner_rng; },
+      [](std::size_t, std::size_t) {
+        return TA::detail::MakeRandom<NumericT>::generate_value();
+      });
 }
 
-template <typename NumericT = double, typename TAPolicyT = TA::DensePolicy>
+template <typename NumericT = double, typename TAPolicyT = TA::SparsePolicy>
 class rand_tensor_yield {
   TA::World& world;
   size_t nocc_;
@@ -241,9 +289,64 @@ class rand_tensor_yield {
     layout_of_.erase(lbl);
   }
 
+  /// Serve \p r for every occurrence of tensor \p tnsr (by tensor_to_key);
+  /// \p r must be in the tensor's slot layout. For tests that need leaf data
+  /// they choose: same-shaped random arrays may hold identical values.
+  void set_leaf(sequant::Tensor const& tnsr, sequant::ResultPtr r) {
+    label_to_er_.insert_or_assign(tensor_to_key(tnsr), std::move(r));
+  }
+
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
-  using array_tot_type =
-      TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
+
+  /// Serve f(slot ordinals of \p tnsr) for every occurrence of the leaf
+  /// \p tnsr, in either orientation: a leaf node of a bra-ket symmetric
+  /// tensor may hold either. Occupied (i) modes have nocc elements, all others
+  /// nvirt.
+  template <typename F>
+  void pin(sequant::Tensor const& tnsr, F f) {
+    using namespace sequant;
+    // The array a leaf provider serves is the STORED (block-canonical)
+    // spelling's, in its slot layout (see EvalExpr(Tensor const&)): both
+    // orientations of a bra-ket symmetric tensor are one stored spelling and
+    // one key (tensor_to_key). The elements are assigned by index role, so a
+    // slot the canonicalizer moved (a bra<->ket exchange, a reorder) reads
+    // the element \p f defines for \p tnsr's slot order; the sign of a
+    // reorder is applied on retrieval, so the stored array carries its
+    // inverse.
+    EvalExprTA const canon{tnsr};
+    Tensor const& stored = canon.as_tensor();
+    auto const written =
+        tnsr.const_braket_indices() | ranges::to<std::vector<Index>>;
+    std::vector<std::size_t> role;  // stored slot k -> position in tnsr
+    for (Index const& ix : stored.const_braket_indices()) {
+      auto const it = std::find_if(
+          written.begin(), written.end(),
+          [&ix](Index const& w) { return w.full_label() == ix.full_label(); });
+      SEQUANT_ASSERT(it != written.end());
+      role.push_back(static_cast<std::size_t>(it - written.begin()));
+    }
+    auto const phase = static_cast<NumericT>(canon.canon_transform().phase);
+    std::vector<TA::TiledRange1> tr1s;
+    for (Index const& ix : stored.const_braket_indices())
+      tr1s.push_back(
+          tr1_for(L"", ix.space().base_key() == L"i" ? nocc_ : nvirt_));
+    array_type arr(world, TA::TiledRange(tr1s.begin(), tr1s.end()));
+    arr.init_tiles([f, role, phase](TA::Range const& r) {
+      TA::Tensor<NumericT> tile(r);
+      for (auto const& idx : r) {
+        std::vector<std::size_t> x(role.size());
+        for (std::size_t k = 0; k < role.size(); ++k) x[role[k]] = idx[k];
+        tile(idx) = phase * f(x);
+      }
+      return tile;
+    });
+    // f may refer to the caller's locals, and nothing else waits for the
+    // tiles of a leaf that no evaluation reads
+    world.gop.fence();
+    set_leaf(stored, eval_result<ResultTensorTA<array_type>>(arr));
+  }
+
+  using array_tot_type = TA::DistArray<tot_tile_t<NumericT>, TAPolicyT>;
   using numeric_type = NumericT;
 
   rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt)
@@ -276,10 +379,10 @@ class rand_tensor_yield {
 
   template <typename ToTArray = array_type>
   sequant::BackendArrayOps array_ops() const {
-    auto isr = sequant::get_default_context().index_basis_registry();
+    auto ibr = sequant::get_default_context().index_basis_registry();
     std::map<std::wstring, TA::TiledRange1> m;
     auto const bk = [&](wchar_t const* l) {
-      return std::wstring(isr->retrieve_space(l).base_key());
+      return std::wstring(ibr->retrieve_space(l).base_key());
     };
     m[bk(L"i")] = tr1_for(bk(L"i"), nocc_);
     m[bk(L"a")] = tr1_for(bk(L"a"), nvirt_);
@@ -452,17 +555,17 @@ class rand_tensor_yield {
     } nested{sl.outer, sl.inner};
 
     ResultPtr result{nullptr};
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
 
-    auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
-      return ixs | transform([this, &isr](auto const& ix) -> size_t {
-               SEQUANT_ASSERT(ix.space() == isr->retrieve_space(L"i") ||
-                              ix.space() == isr->retrieve_space(L"a") ||
-                              ix.space() == isr->retrieve_space(L"x") ||
-                              ix.space() == isr->retrieve_space(L"m"));
-               return ix.space() == isr->retrieve_space(L"i")   ? nocc_
-                      : ix.space() == isr->retrieve_space(L"a") ? nvirt_
-                      : ix.space() == isr->retrieve_space(L"x")
+    auto make_extents = [this, &ibr](auto&& ixs) -> container::svector<size_t> {
+      return ixs | transform([this, &ibr](auto const& ix) -> size_t {
+               SEQUANT_ASSERT(ix.space() == ibr->retrieve_space(L"i") ||
+                              ix.space() == ibr->retrieve_space(L"a") ||
+                              ix.space() == ibr->retrieve_space(L"x") ||
+                              ix.space() == ibr->retrieve_space(L"m"));
+               return ix.space() == ibr->retrieve_space(L"i")   ? nocc_
+                      : ix.space() == ibr->retrieve_space(L"a") ? nvirt_
+                      : ix.space() == ibr->retrieve_space(L"x")
                           ? naux_
                           : nvirt_;  // m (flat
                                      // PAO-like
@@ -519,7 +622,7 @@ class rand_tensor_yield {
       result = eval_result<ResultTensorTA<ArrayT>>(array);
     } else {
       // tensor of tensor
-      using ArrayT = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
+      using ArrayT = TA::DistArray<tot_tile_t<NumericT>, TAPolicyT>;
 
       auto const inner_extent = make_extents(nested.inner);
       auto const inner_r = TA::Range(inner_extent);
@@ -656,7 +759,7 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
   using sequant::ResultPtr;
   using sequant::ResultTensorOfTensorTA;
   using sequant::detail::tot_inner_rank;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using ResultToT = ResultTensorOfTensorTA<ToTArray>;
 
   auto& world = TA::get_default_world();
@@ -671,13 +774,10 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
     TA::Range inner_r(inner_ext);
 
     auto tile_fn = [inner_r, empty_inner](TA::Range const& orng) {
-      TA::Tensor<TA::Tensor<double>> t{orng};
-      if (!empty_inner)
-        for (auto& inner : t) {
-          inner = TA::Tensor<double>{inner_r};
-          std::fill(inner.begin(), inner.end(), 1.0);
-        }
-      return t;
+      return make_tot_tile<double>(
+          orng,
+          [&](std::size_t) { return empty_inner ? TA::Range{} : inner_r; },
+          [](std::size_t, std::size_t) { return 1.0; });
     };
 
     ToTArray arr{world, outer_tr};
@@ -688,7 +788,7 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
     return arr;
   };
 
-  SECTION("add_inplace: empty += populated adopts the populated inner rank") {
+  SECTION("add-inplace-empty-populated") {
     auto empty = build(1, /*empty_inner=*/true);
     auto full = build(1, /*empty_inner=*/false);
     REQUIRE(tot_inner_rank(empty) == 0);
@@ -704,7 +804,8 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
       if (res.is_local(it.index()))
         for (auto const& inner : it->get()) {
           REQUIRE_FALSE(inner.empty());
-          for (auto const& x : inner) REQUIRE(x == 1.0);
+          for (std::size_t k = 0; k < inner.size(); ++k)
+            REQUIRE(inner[k] == 1.0);
         }
   }
 
@@ -744,8 +845,7 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
     REQUIRE(sliced.trange().dim(0).tile_extent() == 1);
   }
 
-  SECTION(
-      "slice_array_over_mode: rebasing matches block() on a multi-tile cut") {
+  SECTION("slice-rebase-multitile") {
     // Slice across two tiles at a non-zero base; hand-built trange must match
     // what the populated path gets from TA's block().
     TA::TiledRange1 const tr1{0, 3, 6, 9};
@@ -756,6 +856,320 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
     REQUIRE(tot_inner_rank(s_empty) == 0);
     REQUIRE(s_empty.trange() == s_full.trange());
   }
+}
+
+TEST_CASE("tot_inner_rank_memo", "[eval][tot]") {
+  // The inner rank of a nested result is a static property of its array (the
+  // annotation that produced it), carried on the Result so the annotation-free
+  // operations (accumulate, slice, scatter) do not re-derive it from the tiles
+  // -- a world-collective max -- on every call.
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::detail::tot_inner_rank;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+  auto& world = TA::get_default_world();
+  TA::TiledRange1 const tr1{0, 3, 6};
+
+  auto build = [&](bool empty_inner) -> ToTArray {
+    TA::TiledRange outer_tr({tr1});
+    TA::Range inner_r(std::vector<std::size_t>{4});
+    auto tile_fn = [inner_r, empty_inner](TA::Range const& orng) {
+      TA::Tensor<TA::Tensor<double>> t{orng};
+      if (!empty_inner)
+        for (auto& inner : t) {
+          inner = TA::Tensor<double>{inner_r};
+          std::fill(inner.begin(), inner.end(), 1.0);
+        }
+      return t;
+    };
+    ToTArray arr{world, outer_tr};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = world.taskq.add(tile_fn, it.make_range());
+    world.gop.fence();
+    return arr;
+  };
+  auto const memo_of = [](ResultPtr const& r) {
+    return r->as<ResultToT>().inner_rank();
+  };
+
+  SECTION("inner_rank() reads a populated array once and memoizes it") {
+    auto r = eval_result<ResultToT>(build(false));
+    REQUIRE(memo_of(r) == 1);
+    REQUIRE(memo_of(r) == 1);
+  }
+
+  SECTION("an all-empty array without a hint reports 0 and is not memoized") {
+    auto r = eval_result<ResultToT>(build(true));
+    REQUIRE(memo_of(r) == 0);
+    // it becomes populated behind the result's back: re-read, not stale
+    auto full = eval_result<ResultToT>(build(false));
+    r->add_inplace(*full);
+    REQUIRE(memo_of(r) == 1);
+  }
+
+  SECTION("a known-zero result slices to a zero ToT that is known zero") {
+    auto r = eval_result<ResultToT>(build(true));
+    r->as<ResultToT>().note_inner_rank(0);
+    auto sl = r->slice_mode(0, 0, 3);
+    REQUIRE(sl->is<ResultToT>());
+    REQUIRE(memo_of(sl) == 0);
+    REQUIRE(tot_inner_rank(sl->get<ToTArray>()) == 0);
+    REQUIRE(sl->get<ToTArray>().trange().dim(0).tile_extent() == 1);
+  }
+
+  SECTION("accumulating into a known-zero result adopts the addend's rank") {
+    auto acc = eval_result<ResultToT>(build(true));
+    acc->as<ResultToT>().note_inner_rank(0);
+    auto full = eval_result<ResultToT>(build(false));
+    acc->add_inplace(*full);
+    REQUIRE(memo_of(acc) == 1);
+    auto const& res = acc->get<ToTArray>();
+    REQUIRE(tot_inner_rank(res) == 1);
+    for (auto it = res.begin(); it != res.end(); ++it)
+      if (res.is_local(it.index()))
+        for (auto const& inner : it->get()) {
+          REQUIRE_FALSE(inner.empty());
+          for (auto const& x : inner) REQUIRE(x == 1.0);
+        }
+  }
+
+  SECTION("a scatter into a pre-sized zero destination records the rank") {
+    auto full = eval_result<ResultToT>(build(false));
+    auto dest = full->pre_sized_zeros_over_mode(0, *full, 0);
+    REQUIRE(memo_of(dest) == 0);
+    auto block = full->slice_mode(0, 3, 6);
+    REQUIRE(memo_of(block) == 1);
+    dest->write_into_slice(*block, 0, 3, 6);
+    REQUIRE(memo_of(dest) == 1);
+    REQUIRE(tot_inner_rank(dest->get<ToTArray>()) == 1);
+  }
+
+  SECTION("a scatter of a known-zero block leaves the destination known zero") {
+    auto full = eval_result<ResultToT>(build(false));
+    auto dest = full->pre_sized_zeros_over_mode(0, *full, 0);
+    auto zero = eval_result<ResultToT>(build(true));
+    zero->as<ResultToT>().note_inner_rank(0);
+    auto block = zero->slice_mode(0, 3, 6);
+    dest->write_into_slice(*block, 0, 3, 6);
+    REQUIRE(memo_of(dest) == 0);
+    REQUIRE(tot_inner_rank(dest->get<ToTArray>()) == 0);
+  }
+
+  SECTION("a sum and a product carry the annotation's inner rank") {
+    auto full = eval_result<ResultToT>(build(false));
+    auto s = full->sum(
+        *full, {std::string{"i;a"}, std::string{"i;a"}, std::string{"i;a"}});
+    REQUIRE(memo_of(s) == 1);
+    REQUIRE(tot_inner_rank(s->get<ToTArray>()) == 1);
+    auto p = full->prod(*eval_result<sequant::ResultScalar<double>>(2.0),
+                        {std::string{"i;a"}, std::string{}, std::string{"i;a"}},
+                        sequant::DeNest::False);
+    REQUIRE(memo_of(p) == 1);
+  }
+
+  SECTION("views and clones inherit the memo") {
+    auto full = eval_result<ResultToT>(build(false));
+    REQUIRE(memo_of(full) == 1);
+    REQUIRE(memo_of(full->clone()) == 1);
+    REQUIRE(memo_of(full->mult_by_phase(-1)) == 1);
+    REQUIRE(memo_of(full->permute({std::string{"i;a"}, std::string{"i;a"}})) ==
+            1);
+  }
+}
+
+// Result::pow on a ToT: an absent (empty) inner tile is exactly zero, which a
+// positive exponent keeps; a non-positive exponent would make it inf or 1,
+// which an empty tile cannot hold, so it is refused.
+TEST_CASE("tot_elementwise_pow", "[eval][tot]") {
+  using sequant::rational;
+  using sequant::detail::ta_elementwise_pow;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+
+  auto& world = TA::get_default_world();
+  TA::Range const inner_r(std::vector<std::size_t>{2, 2});
+
+  // a single outer tile of 3 inner tiles; inner element j of inner tile i is
+  // 1 + i + j/4 (never zero). With `empty_middle` inner tile 1 is empty.
+  auto build = [&world, inner_r](bool empty_middle) -> ToTArray {
+    auto tile_fn = [inner_r, empty_middle](TA::Range const& orng) {
+      return make_tot_tile<double>(
+          orng,
+          [&](std::size_t i) {
+            return empty_middle && i == 1 ? TA::Range{} : inner_r;
+          },
+          [](std::size_t i, std::size_t j) {
+            return 1.0 + static_cast<double>(i) + j / 4.0;
+          });
+    };
+    ToTArray arr{world, TA::TiledRange{TA::TiledRange1{0, 3}}};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = world.taskq.add(tile_fn, it.make_range());
+    world.gop.fence();
+    return arr;
+  };
+
+  // checks that every inner element of `got` is f(element of `in`), and that
+  // the empty inner tiles of `in` are exactly those of `got`
+  auto check = [](ToTArray const& in, ToTArray const& got, auto const& f) {
+    for (auto it = in.begin(); it != in.end(); ++it) {
+      auto const t_in = it->get();
+      auto const t_got = got.find_local(it.index()).get();
+      REQUIRE(t_got.size() == t_in.size());
+      for (std::size_t i = 0; i < t_in.size(); ++i) {
+        REQUIRE(t_got.data()[i].empty() == t_in.data()[i].empty());
+        for (std::size_t j = 0; j < t_in.data()[i].size(); ++j)
+          CHECK(t_got.data()[i].data()[j] ==
+                Catch::Approx(f(t_in.data()[i].data()[j])).margin(1e-12));
+      }
+    }
+  };
+
+  SECTION("positive exponent keeps an absent inner tile absent") {
+    auto const arr = build(/*empty_middle=*/true);
+    check(arr, ta_elementwise_pow(arr, rational{2}),
+          [](double x) { return x * x; });
+  }
+
+  SECTION("negative exponent without absent inner tiles") {
+    auto const arr = build(/*empty_middle=*/false);
+    check(arr, ta_elementwise_pow(arr, rational{-1}),
+          [](double x) { return 1 / x; });
+  }
+
+  SECTION("non-positive exponent of an absent inner tile is refused") {
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      auto const arr = build(/*empty_middle=*/true);
+      REQUIRE_THROWS_AS(ta_elementwise_pow(arr, rational{-1}),
+                        sequant::Exception);
+      REQUIRE_THROWS_AS(ta_elementwise_pow(arr, rational{0}),
+                        sequant::Exception);
+    }
+  }
+}
+
+TEST_CASE("measured size counts a shared nested cell once", "[eval][tot]") {
+  // A pair-mirrored leaf stores its K <= L tiles and gives each L > K tile
+  // cells that are shallow views of its partner's cells (MPQC's
+  // mirror_pair_tiles), so the array holds the upper tiles' bytes only.
+  // TA::size_of counts a shared cell once per tile it appears in; the
+  // measurement must count the storage once.
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+  auto& world = TA::get_default_world();
+  if (world.size() != 1) return;  // a mirror tile must be local to its partner
+  TA::TiledRange const tr{{0, 2, 4}, {0, 2, 4}};
+  auto const& tiles = tr.tiles_range();
+  auto const inner = [](std::size_t) { return TA::Range{3}; };
+  auto const fill = [](std::size_t o, std::size_t k) {
+    return 1.0 + static_cast<double>(o) + static_cast<double>(k);
+  };
+  auto const owning = [&](std::size_t ord) {
+    return make_tot_tile<double>(tr.make_tile_range(ord), inner, fill);
+  };
+  auto build = [&](bool mirrored) {
+    ToTArray arr(world, tr);
+    auto const upper = owning(tiles.ordinal({0, 1}));
+    arr.set(tiles.ordinal({0, 0}), owning(tiles.ordinal({0, 0})));
+    arr.set(tiles.ordinal({1, 1}), owning(tiles.ordinal({1, 1})));
+    arr.set(tiles.ordinal({0, 1}), upper);
+    auto const lower_ord = tiles.ordinal({1, 0});
+    if (!mirrored) {
+      arr.set(lower_ord, owning(lower_ord));
+    } else {
+      // null cells, each rebound to the transposed cell of the partner
+      tot_tile_t<double> lower(tr.make_tile_range(lower_ord));
+      for (auto const& e : lower.range()) {
+        std::array<std::size_t, 2> const m{static_cast<std::size_t>(e[1]),
+                                           static_cast<std::size_t>(e[0])};
+        lower(e) = upper(m);
+      }
+      arr.set(lower_ord, std::move(lower));
+    }
+    world.gop.fence();
+    return arr;
+  };
+  auto const ta_bytes = [](ToTArray const& arr) {
+    return TA::size_of<TA::MemorySpace::Host>(arr);
+  };
+  auto const measured = [](ToTArray const& arr) {
+    return sequant::eval_result<sequant::ResultTensorOfTensorTA<ToTArray>>(arr)
+        ->measured_size_in_bytes();
+  };
+  // no sharing: the measurement is TA's count
+  auto const plain = build(false);
+  REQUIRE(measured(plain) == ta_bytes(plain));
+  // the four cells of the lower tile view the upper tile's cells: TA counts
+  // their storage twice, the measurement once
+  auto const mirrored = build(true);
+  REQUIRE(ta_bytes(mirrored) - measured(mirrored) ==
+          4 * tot_inner_t<double>::cell_size(3));
+  // and the mirrored array holds less than the plain one by the same amount
+  REQUIRE(measured(plain) - measured(mirrored) ==
+          4 * tot_inner_t<double>::cell_size(3));
+}
+
+TEST_CASE("measured-size-trace-gate", "[eval]") {
+  // size_in_bytes() is collective for a DistArray and so switched off
+  // untraced; the schedule document's run record measures through
+  // measured_size_in_bytes() instead
+  auto& world = TA::get_default_world();
+  TA::TSpArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6}});
+  arr.fill(1.0);
+  world.gop.fence();
+  auto const res =
+      sequant::eval_result<sequant::ResultTensorTA<TA::TSpArrayD>>(arr);
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 0;
+  REQUIRE(res->size_in_bytes() == 0);
+  REQUIRE(res->measured_size_in_bytes() >= 4 * 6 * sizeof(double));
+  logger.eval.level = 1;
+  REQUIRE(res->size_in_bytes() == res->measured_size_in_bytes());
+  logger.eval.level = prev_level;
+}
+
+TEST_CASE("canon-phase-of-a-cached-view", "[eval]") {
+  // A cache entry memoizes its bytes when first measured. An entry that is
+  // itself a phase view, the only holder of its parent's tiles, owns those
+  // bytes; the read that applies the node's phase again must not make it
+  // look shared before the cache measures it.
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using ResultD = sequant::ResultTensorTA<TA::TArrayD>;
+  auto& world = TA::get_default_world();
+  // the phase of the antisymmetric g, written out of canonical order, sits on
+  // the product (see ordered-canon-phase-once)
+  auto const node = eval_node(sequant::deserialize<sequant::ExprPtr>(
+      L"g{a_2,a_1;i_3,i_4} * t{i_3,i_4;i_1,i_2}",
+      {.def_perm_symm = sequant::Symmetry::Antisymm}));
+  REQUIRE(node->canon_phase() == -1);
+  TA::TArrayD arr(world,
+                  TA::TiledRange{{0, 2, 4}, {0, 2, 4}, {0, 2, 4}, {0, 2, 4}});
+  arr.fill(1.0);
+  world.gop.fence();
+
+  auto& level = sequant::Logger::instance().eval.level;
+  struct Restore {
+    std::size_t& level;
+    std::size_t prev;
+    ~Restore() { level = prev; }
+  } const restore{level, level};
+  level = 1;  // size_in_bytes() measures only traced
+
+  auto const bytes = sequant::eval_result<ResultD>(arr)->size_in_bytes();
+  REQUIRE(bytes > 0);
+  sequant::CacheManager<node_t> cache{
+      std::vector<std::pair<node_t, std::size_t>>{{node, 2}}};
+  auto const stored = cache.store_and_access(
+      node, sequant::eval_result<ResultD>(TA::clone(arr))->mult_by_phase(-1));
+  REQUIRE(stored->is_buffer_alias());
+  auto const read =
+      sequant::apply_canon_transform<sequant::Trace::On>(node, stored, cache);
+  REQUIRE(read->is_buffer_alias());
+  REQUIRE(cache.size_in_bytes() == bytes);
 }
 
 TEST_CASE("eval_with_tiledarray", "[eval]") {
@@ -769,7 +1183,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
   // Over a real basis (where the Symm pin is derivable) the bug fires under
   // both the Hermitian and the Symm spelling whenever the canonical
   // orientation puts an external on the "wrong" side.
-  SECTION("eval-graph head bra/ket split is positional, not external-aware") {
+  SECTION("head-braket-positional") {
     using sequant::deserialize;
     using sequant::EvalExprTA;
     using sequant::ExprPtr;
@@ -810,14 +1224,16 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // assigned by external SLOT, not by space.
     auto expr_bra_external_symm = deserialize(
         L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_bra_external_symm);
     auto [br_symm, kr_symm] =
         report(expr_bra_external_symm, "g{i_2,a_3;...}:N-S-S");
 
     auto expr_bra_external_conj = deserialize(
         L"2 g{i_2,a_3;i_3,i_4}:N-C-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_bra_external_conj);
     auto [br_conj, kr_conj] =
         report(expr_bra_external_conj, "g{i_2,a_3;...}:N-C-S");
@@ -830,7 +1246,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // layout — use the ResultExpr API (C) to pin it.
     auto expr_ket_external_swap = deserialize(
         L"2 g{i_3,i_4;i_2,a_3}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_ket_external_swap);
     auto [br_swap, kr_swap] =
         report(expr_ket_external_swap, "g{i_3,i_4;i_2,a_3}:N-S-S (pre-swap)");
@@ -843,7 +1260,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto res_explicit_layout = sequant::deserialize<sequant::ResultExpr>(
         L"R2{a_1,a_2;i_1,i_2}:N-N-S = "
         L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto node_explicit = eval_node(res_explicit_layout);
     auto const& head_explicit = node_explicit->as_tensor();
     std::wstring head_explicit_str = sequant::to_latex(head_explicit);
@@ -882,51 +1300,58 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using sequant::evaluate_antisymm;
     using sequant::evaluate_symm;
 
-    using TA::TArrayD;
+    using TArrayD = TA::TSpArrayD;
 
     auto parse_antisymm = [](auto const& xpr) {
       return sequant::deserialize<sequant::ExprPtr>(
-          xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
+          xpr, {.def_perm_symm = sequant::Symmetry::Antisymm,
+                .def_braket_symm = sequant::Hermiticity::NonHermitian});
     };
 
     auto& world = TA::get_default_world();
 
     const size_t nocc = 2, nvirt = 20;
     auto yield_ =
-        rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
-    auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
-      return yield_(lbl)->get<TA::TArrayD>();
+        rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+    auto yield = [&yield_](std::wstring_view lbl) -> TA::TSpArrayD const& {
+      return yield_(lbl)->get<TA::TSpArrayD>();
     };
 
     auto yield_d = [&yield_](std::wstring_view lbl) ->
-        typename TA::TArrayD::numeric_type {
-          return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
+        typename TA::TSpArrayD::numeric_type {
+          return yield_(lbl)->get<typename TA::TSpArrayD::numeric_type>();
         };
 
     auto eval = [&yield_](sequant::ExprPtr const& expr,
                           std::string const& target_labels) {
       return evaluate(eval_node(expr), target_labels, yield_)
-          ->get<TA::TArrayD>();
+          ->get<TA::TSpArrayD>();
     };
 
     auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
                                std::string const& target_labels) {
       return evaluate_symm(eval_node(expr), target_labels, yield_)
-          ->get<TA::TArrayD>();
+          ->get<TA::TSpArrayD>();
     };
 
     auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
                                    std::string const& target_labels) {
       return evaluate_antisymm(eval_node(expr), target_labels, yield_)
-          ->get<TA::TArrayD>();
+          ->get<TA::TSpArrayD>();
     };
 
-    auto eval_biorthogonal_nns_project = [&yield_](
-                                             sequant::ExprPtr const& expr,
+    auto eval_biorthogonal_nns_project_with =
+        [](decltype(yield_)& yield, sequant::ExprPtr const& expr,
+           std::string const& target_labels) {
+          auto result = evaluate(eval_node(expr), target_labels, yield);
+          return sequant::mbpt::biorthogonal_nns_project(
+              result->get<TA::TSpArrayD>(),
+              eval_node(expr)->as_tensor().bra_rank());
+        };
+
+    auto eval_biorthogonal_nns_project = [&](sequant::ExprPtr const& expr,
                                              std::string const& target_labels) {
-      auto result = evaluate(eval_node(expr), target_labels, yield_);
-      return sequant::mbpt::biorthogonal_nns_project(
-          result->get<TA::TArrayD>(), eval_node(expr)->as_tensor().bra_rank());
+      return eval_biorthogonal_nns_project_with(yield_, expr, target_labels);
     };
 
     SECTION("evaluate hands out an array of the caller's own") {
@@ -938,7 +1363,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE_FALSE(result->is_buffer_alias());
       auto const& leaf = yield(L"t{v;o}");
       double const leaf_norm = TA::norm2(leaf);
-      TA::TArrayD arr = result->get<TA::TArrayD>();
+      // the fixture's array type (block-sparse): a mismatched get<T>() is a
+      // null reference
+      TArrayD arr = result->get<TArrayD>();
       TA::foreach_inplace(arr, [](auto& tile) { tile.scale_to(2.0); });
       REQUIRE(TA::norm2(leaf) == Catch::Approx(leaf_norm));
       REQUIRE(TA::norm2(arr) == Catch::Approx(2 * leaf_norm));
@@ -1008,7 +1435,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(prod2_rel < 1e-12);
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
-          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayD{};
       prod3_man("a1,i1,i2") =
@@ -1016,7 +1444,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayD{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
@@ -1045,7 +1474,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-          L"f_{i2}^{a3} * t_{a2}^{i2}");
+          L"f_{i2}^{a3} * t_{a2}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
 
       auto man2 = TArrayD{};
@@ -1212,8 +1642,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto man2 = TArrayD{};
       man2("0,1,2,3,4,5") =
-          arr2("0,1,2,3,4,5") -
-          (1.0 / 5.0) *
+          (5.0 / 6.0) * arr2("0,1,2,3,4,5") -
+          (1.0 / 6.0) *
               (arr2("0,1,2,3,5,4") + arr2("0,1,2,4,3,5") + arr2("0,1,2,4,5,3") +
                arr2("0,1,2,5,3,4") + arr2("0,1,2,5,4,3"));
 
@@ -1221,36 +1651,41 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       // for rank 4 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
+      // (own extents: nocc >= rank, else every ket tuple repeats an index and
+      // the antisymmetric part of the projector goes unchecked; small nvirt,
+      // since the projection acts on the kets only)
+      auto yield4_ = rand_tensor_yield<double, TA::SparsePolicy>{world, 4, 2};
       auto expr3 = parse_antisymm(L"R_{a1, a2, a3, a4}^{i1, i2, i3, i4}");
-      auto eval3 = eval_biorthogonal_nns_project(
-          expr3, "a_1,a_2,a_3,a_4,i_1,i_2,i_3,i_4");
-      auto const& arr3 = yield(L"R{a1,a2,a3,a4;i1,i2,i3,i4}");
+      auto eval3 = eval_biorthogonal_nns_project_with(
+          yield4_, expr3, "a_1,a_2,a_3,a_4,i_1,i_2,i_3,i_4");
+      auto const& arr3 =
+          yield4_(L"R{a1,a2,a3,a4;i1,i2,i3,i4}")->get<TA::TSpArrayD>();
 
       auto man3 = TArrayD{};
-      man3("0,1,2,3,4,5,6,7") = 1.0 * arr3("0,1,2,3,4,5,6,7") +
-                                -4.0 / 14.0 * arr3("0,1,2,3,4,5,7,6") +
-                                -4.0 / 14.0 * arr3("0,1,2,3,4,6,5,7") +
-                                -1.0 / 14.0 * arr3("0,1,2,3,4,6,7,5") +
-                                -1.0 / 14.0 * arr3("0,1,2,3,4,7,5,6") +
-                                -4.0 / 14.0 * arr3("0,1,2,3,4,7,6,5") +
-                                -4.0 / 14.0 * arr3("0,1,2,3,5,4,6,7") +
-                                2.0 / 14.0 * arr3("0,1,2,3,5,4,7,6") +
-                                -1.0 / 14.0 * arr3("0,1,2,3,5,6,4,7") +
-                                2.0 / 14.0 * arr3("0,1,2,3,5,6,7,4") +
-                                2.0 / 14.0 * arr3("0,1,2,3,5,7,4,6") +
-                                -1.0 / 14.0 * arr3("0,1,2,3,5,7,6,4") +
-                                -1.0 / 14.0 * arr3("0,1,2,3,6,4,5,7") +
-                                2.0 / 14.0 * arr3("0,1,2,3,6,4,7,5") +
-                                -4.0 / 14.0 * arr3("0,1,2,3,6,5,4,7") +
-                                -1.0 / 14.0 * arr3("0,1,2,3,6,5,7,4") +
-                                2.0 / 14.0 * arr3("0,1,2,3,6,7,4,5") +
-                                2.0 / 14.0 * arr3("0,1,2,3,6,7,5,4") +
-                                2.0 / 14.0 * arr3("0,1,2,3,7,4,5,6") +
-                                -1.0 / 14.0 * arr3("0,1,2,3,7,4,6,5") +
-                                -1.0 / 14.0 * arr3("0,1,2,3,7,5,4,6") +
-                                -4.0 / 14.0 * arr3("0,1,2,3,7,5,6,4") +
-                                2.0 / 14.0 * arr3("0,1,2,3,7,6,4,5") +
-                                2.0 / 14.0 * arr3("0,1,2,3,7,6,5,4");
+      man3("0,1,2,3,4,5,6,7") = 14.0 / 24.0 * arr3("0,1,2,3,4,5,6,7") +
+                                -4.0 / 24.0 * arr3("0,1,2,3,4,5,7,6") +
+                                -4.0 / 24.0 * arr3("0,1,2,3,4,6,5,7") +
+                                -1.0 / 24.0 * arr3("0,1,2,3,4,6,7,5") +
+                                -1.0 / 24.0 * arr3("0,1,2,3,4,7,5,6") +
+                                -4.0 / 24.0 * arr3("0,1,2,3,4,7,6,5") +
+                                -4.0 / 24.0 * arr3("0,1,2,3,5,4,6,7") +
+                                2.0 / 24.0 * arr3("0,1,2,3,5,4,7,6") +
+                                -1.0 / 24.0 * arr3("0,1,2,3,5,6,4,7") +
+                                2.0 / 24.0 * arr3("0,1,2,3,5,6,7,4") +
+                                2.0 / 24.0 * arr3("0,1,2,3,5,7,4,6") +
+                                -1.0 / 24.0 * arr3("0,1,2,3,5,7,6,4") +
+                                -1.0 / 24.0 * arr3("0,1,2,3,6,4,5,7") +
+                                2.0 / 24.0 * arr3("0,1,2,3,6,4,7,5") +
+                                -4.0 / 24.0 * arr3("0,1,2,3,6,5,4,7") +
+                                -1.0 / 24.0 * arr3("0,1,2,3,6,5,7,4") +
+                                2.0 / 24.0 * arr3("0,1,2,3,6,7,4,5") +
+                                2.0 / 24.0 * arr3("0,1,2,3,6,7,5,4") +
+                                2.0 / 24.0 * arr3("0,1,2,3,7,4,5,6") +
+                                -1.0 / 24.0 * arr3("0,1,2,3,7,4,6,5") +
+                                -1.0 / 24.0 * arr3("0,1,2,3,7,5,4,6") +
+                                -4.0 / 24.0 * arr3("0,1,2,3,7,5,6,4") +
+                                2.0 / 24.0 * arr3("0,1,2,3,7,6,4,5") +
+                                2.0 / 24.0 * arr3("0,1,2,3,7,6,5,4");
 
       REQUIRE(equal_tarrays<Loose>(eval3, man3));
     }
@@ -1263,14 +1698,14 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
 
       auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
-                       ->get<TA::TArrayD>();
+                       ->get<TA::TSpArrayD>();
 
       auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
         return eval_node(x);
       }) | ranges::to_vector;
 
       auto eval2 =
-          evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayD>();
+          evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TSpArrayD>();
 
       REQUIRE(equal_tarrays(eval1, eval2));
     }
@@ -1280,24 +1715,24 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       using sequant::EvalExprTA;
       using sequant::evaluate;
 
-      using TA::TArrayD;
       auto& world = TA::get_default_world();
       const size_t nocc = 2, nvirt = 4, naux = 12;
 
       auto yield_ =
-          rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt, naux};
-      auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
-        return yield_(lbl)->get<TA::TArrayD>();
+          rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt, naux};
+      auto yield = [&yield_](std::wstring_view lbl) -> TA::TSpArrayD const& {
+        return yield_(lbl)->get<TA::TSpArrayD>();
       };
 
       auto eval = [&yield_](sequant::ExprPtr const& expr,
                             std::string const& target_labels) {
         return evaluate(eval_node(expr), target_labels, yield_)
-            ->get<TA::TArrayD>();
+            ->get<TA::TSpArrayD>();
       };
 
       auto expr1 = deserialize(
-          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
+          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
       auto man1 = [&]() {
         auto X1 = yield(L"X{a1;;x1}");
@@ -1330,10 +1765,11 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // (in aux of result); binarize(ResultExpr) must keep them uncontracted
       {
         auto res = deserialize<sequant::ResultExpr>(
-            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
+            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto node = eval_node(res);
         auto eval_rdm = evaluate(node, std::string("a_2,a_1,i_1,i_2"), yield_)
-                            ->get<TA::TArrayD>();
+                            ->get<TA::TSpArrayD>();
         auto man_rdm = [&]() {
           auto t = yield(L"t{i1,i2;a1,a3}");
           auto T2 = yield(L"T2{a2,a3;i1,i2}");
@@ -1348,7 +1784,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                 sequant::AssertStrictBraKetSymmetry::No));
 
         // hyperindex i1 in ket slots of 3 tensors
-        auto expr2 = deserialize(L"T{a1;i1} T{a2;i1} T{a3;i1}");
+        auto expr2 = deserialize(
+            L"T{a1;i1} T{a2;i1} T{a3;i1}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto eval2 = eval(expr2, "a_1,a_2,a_3");
         auto man2 = [&]() {
           auto T1 = yield(L"T{a1;i1}");
@@ -1360,7 +1798,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         REQUIRE(equal_tarrays(eval2, man2, "a1,a2,a3"));
 
         // hyperindex a1 in bra slots of 3 tensors
-        auto expr3 = deserialize(L"T{a1;i1} T{a1;i2} T{a1;i3}");
+        auto expr3 = deserialize(
+            L"T{a1;i1} T{a1;i2} T{a1;i3}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto eval3 = eval(expr3, "i_1,i_2,i_3");
         auto man3 = [&]() {
           auto T1 = yield(L"T{a1;i1}");
@@ -1380,9 +1820,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
          //   R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}
          //   R[x] = sum_{a1,a2} A[a1,x] B[a1,a2,x] C[a2,x]
         auto res = deserialize<sequant::ResultExpr>(
-            L"R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}");
+            L"R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto evalR = evaluate(eval_node(res), std::string("x_1"), yield_)
-                         ->get<TA::TArrayD>();
+                         ->get<TA::TSpArrayD>();
         auto manR = [&]() {
           auto A = yield(L"A{;a1;x1}");    // [a1, x]
           auto B = yield(L"B{a1;a2;x1}");  // [a1, a2, x]
@@ -1396,12 +1837,13 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
   }
 
   SECTION("complex") {
-    using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
+    using TArrayC =
+        TA::DistArray<TA::Tensor<std::complex<double>>, TA::SparsePolicy>;
 
     const size_t nocc = 2, nvirt = 20;
     auto& world = TA::get_default_world();
 
-    auto yield_ = rand_tensor_yield<std::complex<double>, TA::DensePolicy>{
+    auto yield_ = rand_tensor_yield<std::complex<double>, TA::SparsePolicy>{
         world, nocc, nvirt};
 
     auto yield = [&yield_](std::wstring_view lbl) -> TArrayC const& {
@@ -1429,7 +1871,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using namespace std::string_literals;
 
     SECTION("summation") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"t_{a1}^{i1} + f_{i1}^{a1}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"t_{a1}^{i1} + f_{i1}^{a1}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto sum1_eval = eval(expr1, "i_1,a_1");
 
@@ -1439,8 +1883,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
-      auto expr2 =
-          deserialize<sequant::ExprPtr>(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto sum2_eval = eval(expr2, "i_1,a_1");
 
@@ -1454,7 +1899,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
     SECTION("product") {
       auto expr1 = deserialize<sequant::ExprPtr>(
-          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
       TArrayC prod1_man{};
@@ -1466,7 +1912,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
-          L"i4}");
+          L"i4}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
 
       auto prod2_man = TArrayC{};
@@ -1478,7 +1925,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
-          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayC{};
       prod3_man("a1,i1,i2") =
@@ -1487,7 +1935,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayC{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
@@ -1500,7 +1949,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
-          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
 
       auto man1 = TArrayC{};
@@ -1517,7 +1967,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-          L"f_{i2}^{a3} * t_{a2}^{i2}");
+          L"f_{i2}^{a3} * t_{a2}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
 
       auto man2 = TArrayC{};
@@ -1530,7 +1981,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -1543,7 +1996,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
-      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1, i2, i3}^{a1, a2}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2, i3}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
 
@@ -1556,7 +2011,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval2, man2));
 
-      auto expr3 = deserialize<sequant::ExprPtr>(L"R_{a1,a2}^{}");
+      auto expr3 = deserialize<sequant::ExprPtr>(
+          L"R_{a1,a2}^{}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayC{};
@@ -1567,7 +2024,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -1577,7 +2036,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval1, man1));
 
-      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1,i2,i3}^{a1,a2,a3}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"g_{i1,i2,i3}^{a1,a2,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
@@ -1595,7 +2056,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
-          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
                        ->get<TArrayC>();
@@ -1634,7 +2096,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     size_t const nocc = 2;
     size_t const nvirt = 3;
 
-    rand_tensor_yield<int> yield{world, nocc, nvirt};
+    rand_tensor_yield<double> yield{world, nocc, nvirt};
 
     using ArrayT = typename decltype(yield)::array_type;
     using ArrayToT = typename decltype(yield)::array_tot_type;
@@ -1647,7 +2109,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"f{i3;i1}"
           L" * "
           L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
-      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(
+          expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
       std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
       ArrayToT ref;
@@ -1692,7 +2155,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
           L" * "
           L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
-      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(
+          expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
 
       auto result = evaluate(node, yield)->get<NumericT>();
 
@@ -1709,10 +2173,6 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("symmetrize") {
-      // A double-valued yield is used because the 1/n! prefactor is fractional.
-      rand_tensor_yield<double> dyield{world, nocc, nvirt};
-      using DArrayToT = typename decltype(dyield)::array_tot_type;
-
       // n=2 (logical rank 4): outer = occupied (i1,i2), inner = virtual
       // (a1,a2). symmetrize() must produce S(i,j;a,b) = 1/2! * (R(i,j;a,b) +
       // R(j,i;b,a))
@@ -1720,17 +2180,17 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       {
         auto const Rnode = eval_node(
             deserialize<sequant::ExprPtr>(L"R{a1<i1,i2>,a2<i1,i2>;i1,i2}"));
-        auto const Rres = dyield(Rnode);
-        auto const& R = Rres->get<DArrayToT>();
+        auto const Rres = yield(Rnode);
+        auto const& R = Rres->get<ArrayToT>();
 
-        auto const symm = Rres->symmetrize()->get<DArrayToT>();
+        auto const symm = Rres->symmetrize()->get<ArrayToT>();
 
         std::string const annot{"i_1,i_2;a_1i_1i_2,a_2i_1i_2"};
-        DArrayToT ref;
+        ArrayToT ref;
         ref(annot) = R(annot) + R("i_2,i_1;a_2i_1i_2,a_1i_1i_2");
         ref(annot) = 0.5 * ref(annot);
 
-        DArrayToT diff;
+        ArrayToT diff;
         diff(annot) = symm(annot) - ref(annot);
         // Norm-squared of the difference; an absolute margin is needed because
         // Approx(0.0) is a pure relative test. The reference sums the same
@@ -1746,14 +2206,14 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       {
         auto const Rnode = eval_node(deserialize<sequant::ExprPtr>(
             L"R{a1<i1,i2,i3>,a2<i1,i2,i3>,a3<i1,i2,i3>;i1,i2,i3}"));
-        auto const Rres = dyield(Rnode);
-        auto const& R = Rres->get<DArrayToT>();
+        auto const Rres = yield(Rnode);
+        auto const& R = Rres->get<ArrayToT>();
 
-        auto const symm = Rres->symmetrize()->get<DArrayToT>();
+        auto const symm = Rres->symmetrize()->get<ArrayToT>();
 
         std::string const annot{
             "i_1,i_2,i_3;a_1i_1i_2i_3,a_2i_1i_2i_3,a_3i_1i_2i_3"};
-        DArrayToT ref;
+        ArrayToT ref;
         ref(annot) = R("i_1,i_2,i_3;a_1i_1i_2i_3,a_2i_1i_2i_3,a_3i_1i_2i_3") +
                      R("i_1,i_3,i_2;a_1i_1i_2i_3,a_3i_1i_2i_3,a_2i_1i_2i_3") +
                      R("i_3,i_1,i_2;a_3i_1i_2i_3,a_1i_1i_2i_3,a_2i_1i_2i_3") +
@@ -1762,7 +2222,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                      R("i_2,i_1,i_3;a_2i_1i_2i_3,a_1i_1i_2i_3,a_3i_1i_2i_3");
         ref(annot) = (1.0 / 6.0) * ref(annot);
 
-        DArrayToT diff;
+        ArrayToT diff;
         diff(annot) = symm(annot) - ref(annot);
         // Norm-squared of the difference; an absolute margin is needed because
         // Approx(0.0) is a pure relative test. The reference sums the same
@@ -1775,21 +2235,813 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
   }
 }
 
+TEST_CASE("eval_tensor_power_ta", "[eval]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 3;
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+  std::string const target = "i_1,i_2,a_1,a_2";
+
+  // the elements of an array in local-tile order; arrays evaluated into the
+  // same layout from the same yield share a tiling, so these line up
+  auto elements = [](auto const& arr) {
+    using T = typename std::remove_cvref_t<decltype(arr)>::numeric_type;
+    std::vector<T> out;
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      auto const tile = it->get();
+      out.insert(out.end(), tile.begin(), tile.end());
+    }
+    return out;
+  };
+  auto check_elementwise = [](auto const& got, auto const& expected) {
+    REQUIRE(got.size() == expected.size());
+    REQUIRE(!got.empty());
+    for (std::size_t k = 0; k < got.size(); ++k) {
+      CHECK(std::real(got[k]) ==
+            Catch::Approx(std::real(expected[k])).margin(1e-12));
+      CHECK(std::imag(got[k]) ==
+            Catch::Approx(std::imag(expected[k])).margin(1e-12));
+    }
+  };
+
+  SECTION("real") {
+    auto yield_ =
+        rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+    auto eval_at = [&](ExprPtr const& expr) {
+      return elements(
+          evaluate(eval_node(expr), target, yield_)->get<TA::TSpArrayD>());
+    };
+    auto map = [](std::vector<double> v, auto const& f) {
+      for (auto& x : v) x = f(x);
+      return v;
+    };
+
+    auto node = eval_node(pow(D, rational{-1}));
+    REQUIRE(node->op_type() == EvalOp::Power);
+    auto const src =
+        TA::clone(yield_(node.left())->get<TA::TSpArrayD>());  // pristine copy
+    auto const d = eval_at(D);
+
+    check_elementwise(eval_at(pow(D, rational{-1})),
+                      map(d, [](double x) { return 1 / x; }));
+    check_elementwise(eval_at(pow(D, rational{0})),
+                      map(d, [](double) { return 1.0; }));
+    check_elementwise(eval_at(pow(D, rational{3})),
+                      map(d, [](double x) { return x * x * x; }));
+    // the harness's data are signed: a fractional power of a negative
+    // element is NaN
+    {
+      auto const got = eval_at(pow(D, rational{1, 2}));
+      REQUIRE(got.size() == d.size());
+      for (std::size_t k = 0; k < d.size(); ++k) {
+        if (d[k] < 0)
+          CHECK(std::isnan(got[k]));
+        else
+          CHECK(got[k] == Catch::Approx(std::sqrt(d[k])).margin(1e-12));
+      }
+    }
+
+    // ℓ = M ⊙ D^-1, a Hadamard product
+    auto const m = eval_at(M);
+    ResultExpr ell(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          TensorSymmetries{.perm = Symmetry::Antisymm}),
+                   M * pow(D, rational{-1}));
+    {
+      auto expected = m;
+      for (std::size_t k = 0; k < m.size(); ++k) expected[k] /= d[k];
+      check_elementwise(
+          elements(
+              evaluate(eval_node(ell), target, yield_)->get<TA::TSpArrayD>()),
+          expected);
+    }
+
+    // E = L · (M ⊙ D^-1): every index appears on three tensors
+    {
+      auto ctx = get_default_context();
+      ctx.set(AssertStrictBraKetSymmetry::No);
+      auto _ = set_scoped_default_context(ctx);
+      auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                          TensorSymmetries{.perm = Symmetry::Antisymm});
+      ResultExpr E(Variable(L"E"), L * M * pow(D, rational{-1}));
+      auto const got =
+          evaluate(eval_node(E), std::string{}, yield_)->get<double>();
+      auto const l = eval_at(L);
+      double expected = 0;
+      for (std::size_t k = 0; k < l.size(); ++k) expected += l[k] * m[k] / d[k];
+      CHECK(got == Catch::Approx(expected).margin(1e-10));
+    }
+
+    // M ⊙ D^-1 + D^-1, with D^-1 as either summand, evaluates correctly and
+    // leaves the cached D untouched
+    for (bool const power_first : {false, true}) {
+      auto const hadamard = M * pow(D, rational{-1});
+      auto const power = pow(D, rational{-1});
+      ResultExpr sum(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                            TensorSymmetries{.perm = Symmetry::Nonsymm}),
+                     power_first ? power + hadamard : hadamard + power);
+      auto expected = m;
+      for (std::size_t k = 0; k < m.size(); ++k)
+        expected[k] = (m[k] + 1) / d[k];
+      check_elementwise(
+          elements(
+              evaluate(eval_node(sum), target, yield_)->get<TA::TSpArrayD>()),
+          expected);
+      check_elementwise(elements(yield_(node.left())->get<TA::TSpArrayD>()),
+                        elements(src));
+    }
+  }
+
+  SECTION("sparse") {
+    using TSpArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+    auto yield_ =
+        rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+    auto const d =
+        elements(evaluate(eval_node(D), target, yield_)->get<TSpArrayD>());
+    auto expected = d;
+    for (auto& x : expected) x = x * x;
+    check_elementwise(
+        elements(evaluate(eval_node(pow(D, rational{2})), target, yield_)
+                     ->get<TSpArrayD>()),
+        expected);
+
+    // a zero tile of a sparse array would become inf under a negative
+    // exponent, which a zero tile cannot hold
+    if (assert_behavior() != AssertBehavior::Abort) {
+      TA::TiledRange const tr{TA::TiledRange1{0, 2, 4}};
+      TA::Tensor<float> norms(tr.tiles_range(), 1.0f);
+      norms.at_ordinal(1) = 0.0f;
+      TSpArrayD arr(world, tr, TA::SparseShape<float>(norms, tr));
+      arr.fill(2.0);
+      REQUIRE(arr.shape().sparsity() > 0);
+      REQUIRE_THROWS_AS(detail::ta_elementwise_pow(arr, rational{-1}),
+                        Exception);
+    }
+  }
+
+  SECTION("complex") {
+    using TArrayC =
+        TA::DistArray<TA::Tensor<std::complex<double>>, TA::SparsePolicy>;
+    auto yield_ = rand_tensor_yield<std::complex<double>, TA::SparsePolicy>{
+        world, nocc, nvirt};
+    auto const d =
+        elements(evaluate(eval_node(D), target, yield_)->get<TArrayC>());
+    auto square = d;
+    auto inverse = d;
+    for (std::size_t k = 0; k < d.size(); ++k) {
+      square[k] = d[k] * d[k];
+      inverse[k] = 1.0 / d[k];
+    }
+    check_elementwise(
+        elements(evaluate(eval_node(pow(D, rational{2})), target, yield_)
+                     ->get<TArrayC>()),
+        square);
+    check_elementwise(
+        elements(evaluate(eval_node(pow(D, rational{-1})), target, yield_)
+                     ->get<TArrayC>()),
+        inverse);
+  }
+}
+
+TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto eval_with = [](auto const& node, std::string const& layout,
+                      auto const& yield) {
+    auto const aops = yield.array_ops();
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, layout, yield, cache);
+  };
+  auto eval_aops = [&](auto const& node, std::string const& layout) {
+    return eval_with(node, layout, yield_);
+  };
+
+  // the elements of an array in row-major order of its (single-tile) layout
+  auto elements = [](TA::TSpArrayD const& arr) {
+    std::vector<double> out;
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      auto const tile = it->get();
+      out.insert(out.end(), tile.begin(), tile.end());
+    }
+    return out;
+  };
+  auto check_elementwise = [](std::vector<double> const& got,
+                              std::vector<double> const& expected) {
+    REQUIRE(got.size() == expected.size());
+    REQUIRE(!got.empty());
+    for (std::size_t k = 0; k < got.size(); ++k)
+      CHECK(got[k] == Catch::Approx(expected[k]).margin(1e-12));
+  };
+
+  auto eps_a = [](wchar_t const* a) { return ex<Tensor>(L"ε", bra{}, ket{a}); };
+  auto eps_i = [](wchar_t const* i) { return ex<Tensor>(L"ε", bra{i}, ket{}); };
+  // the yielded ε vectors: every ket-ε occurrence shares one array by key,
+  // likewise every bra-ε occurrence
+  auto const ea =
+      elements(yield_(eps_a(L"a_1")->as<Tensor>())->get<TA::TSpArrayD>());
+  auto const ei =
+      elements(yield_(eps_i(L"i_1")->as<Tensor>())->get<TA::TSpArrayD>());
+  REQUIRE(ea.size() == nvirt);
+  REQUIRE(ei.size() == nocc);
+
+  SECTION("four-term denominator") {
+    // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+    // over the (default) complex basis no trait derives
+    [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+    const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                                .braket = BraKetSymmetry::Symm,
+                                .column = ColumnSymmetry::Symm};
+    ResultExpr res(
+        Tensor(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym),
+        eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            expected.push_back(ea[a1] + ea[a2] - ei[i1] - ei[i2]);
+    check_elementwise(
+        elements(
+            eval_aops(eval_node(res), "i_1,i_2,a_1,a_2")->get<TA::TSpArrayD>()),
+        expected);
+  }
+
+  SECTION("asymmetric head") {
+    // distinct leaves and a nonsymmetric head: the expected tensor changes
+    // under any mode swap, so this pins the result layout
+    // the yield's same-shaped random vectors can coincide, so the four leaves
+    // get chosen, pairwise distinct data
+    auto const e1 = ex<Tensor>(L"ε1", bra{}, ket{L"a_1"});
+    auto const e2 = ex<Tensor>(L"ε2", bra{}, ket{L"a_2"});
+    auto const e3 = ex<Tensor>(L"ε3", bra{L"i_1"}, ket{});
+    auto const e4 = ex<Tensor>(L"ε4", bra{L"i_2"}, ket{});
+    std::vector<double> const v1{0.5, 1.7, 2.3}, v2{-3.1, 4.9, 0.2},
+        v3{0.37, -1.3}, v4{2.9, 0.61};
+    REQUIRE(v1.size() == nvirt);
+    REQUIRE(v3.size() == nocc);
+    for (auto const& [e, v] : {std::pair{e1, v1}, std::pair{e2, v2},
+                               std::pair{e3, v3}, std::pair{e4, v4}}) {
+      TA::TSpArrayD arr(world, TA::TiledRange{yield_.tr1_for(L"", v.size())});
+      arr.init_tiles([v](TA::Range const& r) {
+        TA::Tensor<double> t(r);
+        for (std::size_t k = 0; k < t.size(); ++k)
+          t.at_ordinal(k) = v[r.lobound()[0] + k];
+        return t;
+      });
+      yield_.set_leaf(e->as<Tensor>(),
+                      eval_result<ResultTensorTA<TA::TSpArrayD>>(arr));
+    }
+    const TensorSymmetries nsym{.perm = Symmetry::Nonsymm,
+                                .braket = BraKetSymmetry::Nonsymm,
+                                .column = ColumnSymmetry::Nonsymm};
+    ResultExpr res(
+        Tensor(L"D'", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, nsym),
+        e1 + e2 - e3 - e4);
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            expected.push_back(v1[a1] + v2[a2] - v3[i1] - v4[i2]);
+    check_elementwise(
+        elements(
+            eval_aops(eval_node(res), "i_1,i_2,a_1,a_2")->get<TA::TSpArrayD>()),
+        expected);
+  }
+
+  SECTION("scalar summand") {
+    ResultExpr res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+                   eps_a(L"a_1") - eps_i(L"i_1") - ex<Variable>(L"E"));
+    double const e = yield_(Variable(L"E"))->get<double>();
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+        expected.push_back(ea[a1] - ei[i1] - e);
+    check_elementwise(
+        elements(eval_aops(eval_node(res), "i_1,a_1")->get<TA::TSpArrayD>()),
+        expected);
+  }
+
+  SECTION("without array ops") {
+    ResultExpr res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+                   eps_a(L"a_1") - eps_i(L"i_1"));
+    REQUIRE_THROWS_WITH(
+        evaluate(eval_node(res), std::string{"i_1,a_1"}, yield_),
+        Catch::Matchers::ContainsSubstring("needs BackendArrayOps"));
+  }
+
+  SECTION("sparse policy") {
+    using TSpArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+    auto syield =
+        rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+    syield.set_max_tile(1);
+    // single-element tiles; the second of the ket vector is zero, so the
+    // sparse leaf screens it out
+    auto const e1 = ex<Tensor>(L"ε1", bra{}, ket{L"a_1"});
+    auto const e3 = ex<Tensor>(L"ε3", bra{L"i_1"}, ket{});
+    std::vector<double> const v1{0.5, 0.0, 2.3}, v3{0.37, -1.3};
+    auto sparse_of = [&](std::vector<double> const& v) {
+      return TA::make_array<TSpArrayD>(
+          world, TA::TiledRange{syield.tr1_for(L"", v.size())},
+          [v](TA::Tensor<double>& t, TA::Range const& r) -> float {
+            t = TA::Tensor<double>(r);
+            for (std::size_t k = 0; k < t.size(); ++k)
+              t.at_ordinal(k) = v[r.lobound()[0] + k];
+            return t.norm();
+          });
+    };
+    for (auto const& [e, v] : {std::pair{e1, v1}, std::pair{e3, v3}})
+      syield.set_leaf(e->as<Tensor>(),
+                      eval_result<ResultTensorTA<TSpArrayD>>(sparse_of(v)));
+
+    // a result tile is zero iff the operand tile it repeats is
+    {
+      auto const aops = syield.array_ops();
+      ResultPtr const operand = syield(e1->as<Tensor>());
+      REQUIRE(operand->get<TSpArrayD>().is_zero({1}));
+      auto const b =
+          operand->broadcast({std::string{"a_1"}, std::string{"i_1,a_1"}},
+                             {aops.make_zeros({Index{L"i_1"}})});
+      auto const& arr = b->get<TSpArrayD>();
+      REQUIRE(arr.trange().dim(0).tile_extent() == nocc);
+      REQUIRE(arr.trange().dim(1).tile_extent() == nvirt);
+      for (std::size_t i = 0; i < nocc; ++i)
+        for (std::size_t a = 0; a < nvirt; ++a) {
+          CHECK(arr.is_zero({i, a}) == (a == 1));
+          if (a != 1)
+            CHECK(arr.find({i, a}).get()(i, a) ==
+                  Catch::Approx(v1[a]).margin(1e-12));
+        }
+    }
+
+    // D{i;a} = ε1{;a} - ε3{i;}; the screened ε1 tile still gives a nonzero
+    // result tile through ε3
+    ResultExpr res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}), e1 - e3);
+    auto const d =
+        eval_with(eval_node(res), "i_1,a_1", syield)->get<TSpArrayD>();
+    REQUIRE(d.trange().dim(0).tile_extent() == nocc);
+    REQUIRE(d.trange().dim(1).tile_extent() == nvirt);
+    for (std::size_t i = 0; i < nocc; ++i)
+      for (std::size_t a = 0; a < nvirt; ++a) {
+        REQUIRE_FALSE(d.is_zero({i, a}));
+        CHECK(d.find({i, a}).get()(i, a) ==
+              Catch::Approx(v1[a] - v3[i]).margin(1e-12));
+      }
+  }
+}
+
+TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  namespace tp = sequant::tests::tensor_power;
+  namespace data = tp::data;
+  using System = container::svector<ResultExpr>;
+  using Flags = container::svector<bool>;
+  auto& world = TA::get_default_world();
+  // three occupied orbitals: with two, an antisymmetric pair leaves E{i_2;i_3}
+  // diagonal
+  const size_t nocc = 3, nvirt = 3;
+  auto yield_ = rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto eval_with = [](auto const& node, std::string const& layout,
+                      auto const& yield) {
+    auto const aops = yield.array_ops();
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, layout, yield, cache);
+  };
+  auto eval_aops = [&](auto const& node, std::string const& layout) {
+    return eval_with(node, layout, yield_);
+  };
+  // the elements of an array in row-major order of its (single-tile) layout
+  auto elements = [](TA::TSpArrayD const& arr) {
+    std::vector<double> out;
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      auto const tile = it->get();
+      out.insert(out.end(), tile.begin(), tile.end());
+    }
+    return out;
+  };
+  auto check_elementwise = [](std::vector<double> const& got,
+                              std::vector<double> const& expected) {
+    REQUIRE(got.size() == expected.size());
+    REQUIRE(!got.empty());
+    for (std::size_t k = 0; k < got.size(); ++k)
+      CHECK(got[k] == Catch::Approx(expected[k]).margin(1e-12));
+  };
+  auto pin = [&](ExprPtr const& tnsr, auto f) {
+    yield_.pin(tnsr->as<Tensor>(), std::move(f));
+  };
+  auto const M = tp::antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  auto const D = tp::power_base();
+  auto const L = tp::contractor();
+  auto pin_M = [&] {
+    pin(M, [](std::vector<std::size_t> const& x) {
+      return data::M(x[0], x[1], x[2], x[3]);
+    });
+  };
+  auto pin_D = [&] {
+    pin(D, [](std::vector<std::size_t> const& x) {
+      return data::D(x[0], x[1], x[2], x[3]);
+    });
+  };
+  auto pin_L = [&] {
+    pin(L, [](std::vector<std::size_t> const& x) {
+      return data::L(x[0], x[1], x[2], x[3]);
+    });
+  };
+  // the value of the one root of a system
+  auto eval_system = [&](System const& sys, std::string const& layout) {
+    auto const res = binarize<EvalExprTA>(sys);
+    REQUIRE(res.roots().size() == 1);
+    return eval_aops(res.roots()[0].get(), layout);
+  };
+  // ℓ read at the given slots
+  auto ell_use = [](auto b, auto k) {
+    return ex<Tensor>(tp::relabelled(tp::ell_definition().result_as_tensor(),
+                                     std::move(b), std::move(k)));
+  };
+  std::string const e_layout = "i_2,i_3";
+  // E{i_2;i_3} of consumer_E(), row-major
+  auto const expected_E = [&] {
+    std::vector<double> result;
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      for (std::size_t i3 = 0; i3 < nocc; ++i3)
+        result.push_back(data::contract_with_ell(data::L, i3, i2, nocc, nvirt));
+    return result;
+  };
+
+  SECTION("inlined E equals the driver-chained E and the direct form") {
+    pin_M();
+    pin_D();
+    pin_L();
+    System const sys{tp::ell_definition(), tp::consumer_E()};
+    REQUIRE(binarize(sys).consumed == Flags{true, false});
+    auto const inlined =
+        elements(eval_system(sys, e_layout)->get<TA::TSpArrayD>());
+    check_elementwise(inlined, expected_E());
+
+    // ℓ evaluated by itself, then served as the leaf E reads, in either
+    // orientation (see pin)
+    auto serve_ell = [&](ExprPtr const& use, std::string const& layout) {
+      yield_.set_leaf(
+          use->as<Tensor>(),
+          evaluate(eval_node(tp::ell_definition()), layout, yield_));
+    };
+    serve_ell(ell_use(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+              "i_1,i_2,a_1,a_2");
+    serve_ell(ell_use(bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
+              "a_1,a_2,i_1,i_2");
+    check_elementwise(inlined, elements(evaluate(eval_node(tp::consumer_E()),
+                                                 e_layout, yield_)
+                                            ->get<TA::TSpArrayD>()));
+
+    // the direct form contracts L with M and D in one network, which the
+    // strict bra-ket rule rejects
+    auto _ = set_scoped_default_context(tp::lax_braket_context());
+    check_elementwise(inlined,
+                      elements(evaluate(eval_node(tp::hadamard_power_term()),
+                                        e_layout, yield_)
+                                   ->get<TA::TSpArrayD>()));
+  }
+
+  SECTION("three levels: ε into D into ℓ into E") {
+    pin_M();
+    pin_L();
+    pin(ex<Tensor>(L"ε", bra{}, ket{L"a_1"}),
+        [](std::vector<std::size_t> const& x) { return data::eps_virt(x[0]); });
+    pin(ex<Tensor>(L"ε", bra{L"i_1"}, ket{}),
+        [](std::vector<std::size_t> const& x) { return data::eps_occ(x[0]); });
+    System const sys{tp::D_broadcast(), tp::ell_definition(), tp::consumer_E()};
+    REQUIRE(binarize(sys).consumed == Flags{true, true, false});
+    check_elementwise(
+        elements(eval_system(sys, e_layout)->get<TA::TSpArrayD>()),
+        expected_E());
+  }
+
+  SECTION("three levels batched over i_1, a mode the broadcasts add") {
+    // one occupied orbital per tile, so the loop over i_1 runs one batch per
+    // orbital; the Broadcast nodes of ε{;a_1}, ε{;a_2} and ε{i_2;} add i_1,
+    // so each builds its batch's slice of i_1 from the array ops
+    yield_.set_max_tile(1);
+    pin_M();
+    pin_L();
+    pin(ex<Tensor>(L"ε", bra{}, ket{L"a_1"}),
+        [](std::vector<std::size_t> const& x) { return data::eps_virt(x[0]); });
+    pin(ex<Tensor>(L"ε", bra{L"i_1"}, ket{}),
+        [](std::vector<std::size_t> const& x) { return data::eps_occ(x[0]); });
+    System const sys{tp::D_broadcast(), tp::ell_definition(), tp::consumer_E()};
+    auto const res = binarize<EvalExprTA>(sys);
+    REQUIRE(res.roots().size() == 1);
+    auto batched = res.roots()[0].get();
+    tp::stamp_occ_loop(batched);
+    auto policy = tp::occ_contracted_policy();
+    auto const unbatched = elements(
+        eval_aops(res.roots()[0].get(), e_layout)->get<TA::TSpArrayD>());
+    check_elementwise(unbatched, expected_E());
+    auto const aops = yield_.array_ops();
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto cache =
+          CacheManager<std::remove_cvref_t<decltype(batched)>>::empty();
+      cache.set_array_ops(&aops);
+      if (scheduler == BatchScheduler::forest_descent)
+        cache.set_custom_evaluator(
+            make_evaluator(policy, yield_, make_no_scope_guard{}));
+      auto const slices_before = detail::slice_counter().load();
+      auto const got =
+          evaluate(std::vector{batched}, policy, e_layout, yield_, cache);
+      check_elementwise(elements(got->get<TA::TSpArrayD>()), unbatched);
+      // the ordered executor runs the loop: the operands and the added modes
+      // of the Broadcast nodes are sliced per batch
+      if (scheduler == BatchScheduler::ordered)
+        CHECK(detail::slice_counter().load() > slices_before);
+    }
+  }
+
+  SECTION("two uses of one definition") {
+    pin_M();
+    pin_D();
+    pin_L();
+    // G{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2}
+    //            + K{a_1,a_2;i_1,i_2} ℓ{i_1,i_3;a_1,a_2}
+    auto const K = tp::antisymm(L"K", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+    pin(K, [](std::vector<std::size_t> const& x) {
+      return data::K(x[0], x[1], x[2], x[3]);
+    });
+    ResultExpr const g(
+        tp::head(L"G"),
+        L * ell_use(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) +
+            K * ell_use(bra{L"i_1", L"i_3"}, ket{L"a_1", L"a_2"}));
+    System const sys{tp::ell_definition(), g};
+    REQUIRE(binarize(sys).consumed == Flags{true, false});
+    std::vector<double> expected;
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      for (std::size_t i3 = 0; i3 < nocc; ++i3)
+        expected.push_back(
+            data::contract_with_ell(data::L, i3, i2, nocc, nvirt) +
+            data::contract_with_ell(data::K, i2, i3, nocc, nvirt));
+    check_elementwise(
+        elements(eval_system(sys, e_layout)->get<TA::TSpArrayD>()), expected);
+  }
+
+  SECTION("a bra-ket-swapped use of a bra-ket-symmetric head") {
+    pin(ex<Tensor>(L"ε", bra{}, ket{L"a_1"}),
+        [](std::vector<std::size_t> const& x) { return data::eps_virt(x[0]); });
+    pin(ex<Tensor>(L"ε", bra{L"i_1"}, ket{}),
+        [](std::vector<std::size_t> const& x) { return data::eps_occ(x[0]); });
+    auto const t = ex<Tensor>(L"t", bra{L"i_2"}, ket{L"a_2"});
+    pin(t,
+        [](std::vector<std::size_t> const& x) { return data::t(x[0], x[1]); });
+    // Y{i_1;a_1} = t{i_2;a_2} D{a_1,a_2;i_1,i_2}, D read with bra and ket
+    // swapped
+    auto y_of = [&t](auto b, auto k) {
+      return ResultExpr(
+          Tensor(L"Y", bra{L"i_1"}, ket{L"a_1"}),
+          t * ex<Tensor>(L"D", std::move(b), std::move(k), tp::symmetric()));
+    };
+    System const sys{tp::D_broadcast(),
+                     y_of(bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"})};
+    REQUIRE(binarize(sys).consumed == Flags{true, false});
+    auto const swapped =
+        elements(eval_system(sys, "i_1,a_1")->get<TA::TSpArrayD>());
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1) {
+        double y = 0;
+        for (std::size_t i2 = 0; i2 < nocc; ++i2)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            y += data::t(i2, a2) * data::D(i1, i2, a1, a2);
+        expected.push_back(y);
+      }
+    check_elementwise(swapped, expected);
+
+    // the use spelled like the head
+    System const plain{tp::D_broadcast(),
+                       y_of(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})};
+    check_elementwise(
+        swapped, elements(eval_system(plain, "i_1,a_1")->get<TA::TSpArrayD>()));
+  }
+
+  SECTION("a scalar head") {
+    pin_M();
+    pin_D();
+    pin_L();
+    // E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}
+    ResultExpr const e(
+        Variable(L"E"),
+        tp::antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+            ell_use(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}));
+    // F{i_1;a_1} = E t{i_1;a_1}
+    auto const t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+    pin(t,
+        [](std::vector<std::size_t> const& x) { return data::t(x[0], x[1]); });
+    ResultExpr const f(Tensor(L"F", bra{L"i_1"}, ket{L"a_1"}),
+                       ex<Variable>(L"E") * t);
+    System const sys{tp::ell_definition(), e, f};
+    REQUIRE(binarize(sys).consumed == Flags{true, true, false});
+
+    // E through its own tree
+    double const e_val =
+        eval_system(System{tp::ell_definition(), e}, std::string{})
+            ->get<double>();
+    double e_ref = 0;
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      e_ref += data::contract_with_ell(data::L, i2, i2, nocc, nvirt);
+    CHECK(e_val == Catch::Approx(e_ref).margin(1e-12));
+
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+        expected.push_back(e_val * data::t(i1, a1));
+    check_elementwise(
+        elements(
+            eval_system(sys, std::string{"i_1,a_1"})->get<TA::TSpArrayD>()),
+        expected);
+  }
+}
+
+// The spin-orbital MP2 energy of water (STO-3G, the data of the eval
+// integration test), authored as a system of three equations:
+//
+//   D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}
+//   t{i_1,i_2;a_1,a_2} = g{i_1,i_2;a_1,a_2} ⊙ pow(D{i_1,i_2;a_1,a_2}, -1)
+//   E = -1/4 g{a_1,a_2;i_1,i_2} t{i_1,i_2;a_1,a_2}
+//
+// t is the first-order doubles amplitude, here with the sign convention
+// t = g / (ε_a + ε_b - ε_i - ε_j), hence the minus in E. D is a broadcast
+// sum: each rank-1 ε is repeated over the modes of D it lacks (EvalOp::
+// Broadcast, which shapes the added modes through the array ops of the
+// cache); pow(D, -1) is an element-wise power (TensorPower). t reads D, and E
+// reads t, through the head of the defining equation, so binarize(system)
+// inlines D into t and t into E: only the tree of E is left to evaluate.
+TEST_CASE("mp2-energy", "[eval][mp2]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  namespace tp = sequant::tests::tensor_power;
+  using Flags = container::svector<bool>;
+
+  // Fock matrix and antisymmetrized integrals <pq||rs> over all spin orbitals,
+  // occupied ones first, row-major as the files store them
+  std::string const dir = SEQUANT_EVAL_DATA_DIR;
+  REQUIRE(std::ifstream(dir + "/fock_so.dat").good());
+  REQUIRE(std::ifstream(dir + "/eri_so.dat").good());
+  eval::DataInfo const info(dir + "/fock_so.dat", dir + "/eri_so.dat");
+  std::size_t const nocc = info.nocc(), nvirt = info.nvirt(),
+                    nobs = nocc + nvirt;
+  REQUIRE(nocc == 10);
+  REQUIRE(nvirt == 4);
+  std::vector<double> fock(nobs * nobs), eri(nobs * nobs * nobs * nobs);
+  eval::read_tensor(info.fock_file(), fock);
+  eval::read_tensor(info.eri_file(), eri);
+  // orbital energies: the diagonal of the (canonical) Fock matrix
+  auto eps = [&](std::size_t p) { return fock[p * nobs + p]; };
+  auto g = [&](std::size_t p, std::size_t q, std::size_t r, std::size_t s) {
+    return eri[((p * nobs + q) * nobs + r) * nobs + s];
+  };
+
+  // leaves: ε as rank-1 tensors, g antisymmetric in each slot pair and
+  // bra-ket symmetric
+  auto& world = TA::get_default_world();
+  auto yield_ = rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+  auto pin_leaves = [&] {
+    yield_.pin(
+        Tensor(L"ε", bra{}, ket{L"a_1"}),
+        [&](std::vector<std::size_t> const& x) { return eps(nocc + x[0]); });
+    yield_.pin(Tensor(L"ε", bra{L"i_1"}, ket{}),
+               [&](std::vector<std::size_t> const& x) { return eps(x[0]); });
+    // pin serves g{a,b;i,j} with the values of g{i,j;a,b}: the data is
+    // bra-ket symmetric (checked below)
+    yield_.pin(Tensor(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      tp::antisymmetric()),
+               [&](std::vector<std::size_t> const& x) {
+                 return g(x[0], x[1], nocc + x[2], nocc + x[3]);
+               });
+  };
+
+  // the reference: E = -1/4 Σ_{ijab} g_{ijab} g_{abij} / (ε_a+ε_b-ε_i-ε_j)
+  double e_ref = 0;
+  for (std::size_t i = 0; i < nocc; ++i)
+    for (std::size_t j = 0; j < nocc; ++j)
+      for (std::size_t a = nocc; a < nobs; ++a)
+        for (std::size_t b = nocc; b < nobs; ++b) {
+          REQUIRE(g(a, b, i, j) == Catch::Approx(g(i, j, a, b)).margin(1e-12));
+          e_ref -= g(i, j, a, b) * g(a, b, i, j) /
+                   (4 * (eps(a) + eps(b) - eps(i) - eps(j)));
+        }
+  // the eval integration program (tests/integration/eval/ta) prints the same
+  // value as the CCSD energy of its second iteration, the energy of the
+  // amplitudes after one update from zero
+  CHECK(e_ref == Catch::Approx(-0.04914988716234519).margin(1e-12));
+
+  // the system
+  Tensor const D(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.perm = Symmetry::Symm,
+                                  .braket = BraKetSymmetry::Symm,
+                                  .column = ColumnSymmetry::Symm});
+  Tensor const t(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.perm = Symmetry::Antisymm,
+                                  .braket = BraKetSymmetry::Symm,
+                                  .column = ColumnSymmetry::Symm});
+  auto eps_a = [](wchar_t const* a) { return ex<Tensor>(L"ε", bra{}, ket{a}); };
+  auto eps_i = [](wchar_t const* i) { return ex<Tensor>(L"ε", bra{i}, ket{}); };
+  auto g_of = [](auto b, auto k) {
+    return ex<Tensor>(L"g", std::move(b), std::move(k), tp::antisymmetric());
+  };
+  ResultExpr const D_eq(
+      D, eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
+  ResultExpr const t_eq(t, g_of(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+                               pow(ex<Tensor>(D), rational{-1}));
+  ResultExpr const E_eq(Variable(L"E"),
+                        ex<Constant>(rational{-1, 4}) *
+                            g_of(bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+                            ex<Tensor>(t));
+  container::svector<ResultExpr> const system{D_eq, t_eq, E_eq};
+
+  // D and t are inlined into their uses; E alone remains
+  auto const inlined = binarize<EvalExprTA>(system);
+  REQUIRE(inlined.consumed == Flags{true, true, false});
+  REQUIRE(inlined.roots().size() == 1);
+
+  SECTION("unbatched") {
+    pin_leaves();
+    auto const aops = yield_.array_ops();
+    auto const roots = inlined.roots();
+    auto const& root = roots[0].get();
+    auto cache = CacheManager<std::remove_cvref_t<decltype(root)>>::empty();
+    cache.set_array_ops(&aops);
+    double const e =
+        evaluate(root, std::string{}, yield_, cache)->get<double>();
+    CHECK(e == Catch::Approx(e_ref).margin(1e-12));
+  }
+
+  SECTION("batched over i_1") {
+    // one occupied orbital per tile, so the loop over i_1 runs one batch per
+    // orbital
+    yield_.set_max_tile(1);
+    pin_leaves();
+    auto batched = inlined.roots()[0].get();
+    // the root scales by -1/4 the contraction g·t, its left operand, which
+    // sums over i_1
+    tp::stamp_occ_loop(batched.left());
+    auto policy = tp::occ_contracted_policy();
+    auto const aops = yield_.array_ops();
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto cache =
+          CacheManager<std::remove_cvref_t<decltype(batched)>>::empty();
+      cache.set_array_ops(&aops);
+      if (scheduler == BatchScheduler::forest_descent)
+        cache.set_custom_evaluator(
+            make_evaluator(policy, yield_, make_no_scope_guard{}));
+      auto const slices_before = detail::slice_counter().load();
+      double const e =
+          evaluate(std::vector{batched}, policy, std::string{}, yield_, cache)
+              ->get<double>();
+      CHECK(e == Catch::Approx(e_ref).margin(1e-12));
+      // the ordered executor runs the loop, slicing the operands per batch
+      if (scheduler == BatchScheduler::ordered)
+        CHECK(detail::slice_counter().load() > slices_before);
+    }
+  }
+}
+
 TEST_CASE("eval_custom_evaluator", "[eval]") {
   using sequant::evaluate;
   using sequant::ResultPtr;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
   const size_t nocc = 2, nvirt = 20;
-  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+  auto yield_ = rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
 
   // a multi-product expression: several non-leaf nodes in the eval tree.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
       L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
-      {.def_perm_symm = sequant::Symmetry::Antisymm});
+      {.def_perm_symm = sequant::Symmetry::Antisymm,
+       .def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "a_1,a_2,i_1,i_2";
   auto const node = eval_node(expr);
 
@@ -1835,7 +3087,8 @@ TEST_CASE("eval_batch_axis", "[eval]") {
   using sequant::contracted_indices;
 
   auto node_of = [](std::wstring_view xpr) {
-    return eval_node(sequant::deserialize<sequant::ExprPtr>(xpr));
+    return eval_node(sequant::deserialize<sequant::ExprPtr>(
+        xpr, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
   };
 
   SECTION("single contracted index") {
@@ -1905,8 +3158,8 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
   auto& world = TA::get_default_world();
 
   // arr: a(2 tiles), b(3 tiles), c(1 tile); bb shares b's TiledRange1.
-  TA::TArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6, 9}, {0, 5}});
-  TA::TArrayD bb(world, TA::TiledRange{{0, 3, 6, 9}, {0, 7}});
+  TA::TSpArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6, 9}, {0, 5}});
+  TA::TSpArrayD bb(world, TA::TiledRange{{0, 3, 6, 9}, {0, 7}});
   arr.fill_random();
   bb.fill_random();
   world.gop.fence();
@@ -1920,10 +3173,9 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
             arr.trange().dim(2).tile_extent());
   }
 
-  SECTION(
-      "blocked contraction over the sliced mode reconstructs the full one") {
+  SECTION("blocked-contraction-sliced-mode") {
     // full contraction over b
-    TA::TArrayD full;
+    TA::TSpArrayD full;
     full("a,c,d") = arr("a,b,c") * bb("b,d");
 
     // split b's 3 tiles into [0,1) and [1,3), contract each, sum
@@ -1931,7 +3183,7 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
     auto const a1 = slice_array_over_mode(arr, 1, 1, 3);
     auto const b0 = slice_array_over_mode(bb, 0, 0, 1);
     auto const b1 = slice_array_over_mode(bb, 0, 1, 3);
-    TA::TArrayD p0, p1, summed;
+    TA::TSpArrayD p0, p1, summed;
     p0("a,c,d") = a0("a,b,c") * b0("b,d");
     p1("a,c,d") = a1("a,b,c") * b1("b,d");
     summed("a,c,d") = p0("a,c,d") + p1("a,c,d");
@@ -1943,13 +3195,13 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
     // mode 1 (b) tiles {0,3,6,9}; element range [3,9) (tile-aligned, as
     // mode_batches produces) corresponds to tiles [1,3).
     sequant::ResultPtr const r =
-        sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
-    auto const via_result = r->slice_mode(1, 3, 9)->get<TA::TArrayD>();
+        sequant::eval_result<sequant::ResultTensorTA<TA::TSpArrayD>>(arr);
+    auto const via_result = r->slice_mode(1, 3, 9)->get<TA::TSpArrayD>();
     auto const direct = slice_array_over_mode(arr, 1, 1, 3);
     REQUIRE(equal_tarrays(via_result, direct));
   }
 
-  SECTION("mode_batches_of_trange1 partitions a mode into element ranges") {
+  SECTION("mode-batches-of-trange1") {
     using batches_t = sequant::container::svector<std::pair<size_t, size_t>>;
     // The TA realization of axis_batches: partition a TiledRange1 into tile-
     // grouped element ranges. mode 1 (b) has 3 tiles of 3 elements each (extent
@@ -1990,6 +3242,128 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
 // blocks of a whole array R and scatter each back into a fresh, pre-sized
 // destination, then require the reassembled destination == R elementwise.
 TEST_CASE("eval_write_into_slice", "[eval]") {
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::ResultTensorTA;
+  using sequant::slice_array_over_mode;
+  auto& world = TA::get_default_world();
+
+  SECTION("flat: disjoint tile-aligned blocks reassemble exactly") {
+    // mode 0 has 3 multi-element tiles (size 3 each; occ_tile_size>1 analog),
+    // mode 1 a single tile. Split mode 0 into element ranges [0,3) and [3,9)
+    // (tiles [0,1) and [1,3)): disjoint, tile-aligned, and tile-SPANNING.
+    TA::TSpArrayD R(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5}});
+    R.fill_random();
+    world.gop.fence();
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // elements [0,3)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 3);  // elements [3,9)
+
+    // destination pre-sized to R's full shape, then filled block by block.
+    TA::TSpArrayD dest(world, R.trange());
+    dest.fill_local(0.0);
+    world.gop.fence();
+
+    auto rdest = eval_result<ResultTensorTA<TA::TSpArrayD>>(dest);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TSpArrayD>>(b0), 0,
+                            0, 3);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TSpArrayD>>(b1), 0,
+                            3, 9);
+
+    REQUIRE(equal_tarrays<Tight>(rdest->get<TA::TSpArrayD>(), R));
+  }
+
+  SECTION("flat-nonzero-lobound") {
+    // mode 0 has element lobound 2 (a frozen-core-like offset) and two size-3
+    // tiles; split into [2,5) and [5,8). The block bounds honor the lobound.
+    TA::TSpArrayD R(world, TA::TiledRange{{2, 5, 8}, {0, 4}});
+    R.fill_random();
+    world.gop.fence();
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // elements [2,5)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 2);  // elements [5,8)
+    // the gathered blocks keep the source element lobound
+    REQUIRE(b0.trange().dim(0).elements_range().first == 2);
+
+    TA::TSpArrayD dest(world, R.trange());
+    dest.fill_local(0.0);
+    world.gop.fence();
+
+    auto rdest = eval_result<ResultTensorTA<TA::TSpArrayD>>(dest);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TSpArrayD>>(b0), 0,
+                            2, 5);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TSpArrayD>>(b1), 0,
+                            5, 8);
+
+    auto const& out = rdest->get<TA::TSpArrayD>();
+    REQUIRE(out.trange().dim(0).elements_range().first == 2);  // lobound kept
+    REQUIRE(equal_tarrays<Tight>(out, R));
+  }
+
+  SECTION("tot: disjoint tile-aligned blocks reassemble exactly") {
+    using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+    using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+    // outer mode 0: two size-3 tiles (multi-element, tile-spanning split);
+    // outer mode 1: one size-2 tile. Inner tensors are 2x2. Inner values are
+    // position-dependent (derived from the outer coordinate) so a mis-scattered
+    // block -- wrong offset -- would change the reassembled norm.
+    TA::TiledRange const outer_tr{{0, 3, 6}, {0, 2}};
+    TA::Range const inner_r(std::array<std::size_t, 2>{2, 2});
+
+    auto build = [&world, inner_r](TA::TiledRange const& otr,
+                                   bool zero) -> ToTArray {
+      auto tile_fn = [inner_r, zero](TA::Range const& orng) {
+        return make_tot_tile<double>(
+            orng, [&](std::size_t) { return inner_r; },
+            [&](std::size_t o, std::size_t k) {
+              if (zero) return 0.0;
+              double base = 0.0;
+              for (auto c : orng.idx(o))
+                base = base * 37.0 + static_cast<double>(c + 1);
+              return base * 100.0 + static_cast<double>(k + 1);
+            });
+      };
+      ToTArray arr{world, otr};
+      for (auto it = arr.begin(); it != arr.end(); ++it)
+        if (arr.is_local(it.index()))
+          *it = world.taskq.add(tile_fn, it.make_range());
+      world.gop.fence();
+      return arr;
+    };
+
+    ToTArray R = build(outer_tr, /*zero=*/false);
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // outer elements [0,3)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 2);  // outer elements [3,6)
+
+    // destination pre-sized to R's full shape with well-formed (zero) inners.
+    ToTArray dest = build(outer_tr, /*zero=*/true);
+
+    auto rdest = eval_result<ResultToT>(dest);
+    rdest->write_into_slice(*eval_result<ResultToT>(b0), 0, 0, 3);
+    rdest->write_into_slice(*eval_result<ResultToT>(b1), 0, 3, 6);
+
+    // ToT elementwise invariance: norm of the difference (dot of the diff with
+    // itself) must vanish. TA::norm2 does not support ToT tiles, so use dot.
+    auto const& out = rdest->get<ToTArray>();
+    ToTArray diff;
+    diff("i,j;a,b") = out("i,j;a,b") - R("i,j;a,b");
+    REQUIRE(Catch::Approx(diff("i,j;a,b").dot(diff("i,j;a,b"))) == 0.0);
+    // and the reassembled result is nonzero (guards against a trivial all-zero
+    // pass, e.g. if both blocks silently no-op'd).
+    REQUIRE(out("i,j;a,b").dot(out("i,j;a,b")) > 0.0);
+  }
+}
+
+// Numeric-invariance for Result::write_into_slice on the TA backend: the union
+// of disjoint, tile-aligned blocks scattered into a pre-sized destination must
+// reconstruct the whole array EXACTLY. write_into_slice() is the inverse of
+// slice_array_over_mode() (which GATHERS a block out): here we gather disjoint
+// blocks of a whole array R and scatter each back into a fresh, pre-sized
+// destination, then require the reassembled destination == R elementwise.
+TEST_CASE("eval_write_into_slice_lazy_view", "[eval]") {
   using sequant::eval_result;
   using sequant::ResultPtr;
   using sequant::ResultTensorOfTensorTA;
@@ -2109,22 +3483,150 @@ TEST_CASE("eval_write_into_slice", "[eval]") {
   }
 }
 
+// The on-disk form of a TiledArray result (Result::on_disk): the value lives
+// in a TA::DiskArray, comes back whole (in_memory) or by tile block
+// (slice_mode), and can be assembled by blocks (write_into_slice).
+TEST_CASE("eval_on_disk_ta", "[eval][disk]") {
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultTensorTA;
+  using sequant::slice_array_over_mode;
+  auto& world = TA::get_default_world();
+  auto const disk_reads = [&world] {
+    world.gop.fence();
+    std::size_t n = TA::disk_io_stats().tiles_read;
+    world.gop.sum(n);
+    return n;
+  };
+
+  SECTION("flat") {
+    using Res = ResultTensorTA<TA::TSpArrayD>;
+    TA::TSpArrayD R(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5}});
+    R.fill_random();
+    world.gop.fence();
+    auto const r = eval_result<Res>(R);
+
+    ResultPtr const d = r->on_disk();
+    REQUIRE(d);
+    CHECK(d->is_on_disk());
+    CHECK(!r->is_on_disk());
+    CHECK(d->size_in_bytes() >= 9 * 5 * sizeof(double));
+
+    // whole
+    ResultPtr const m = d->in_memory();
+    CHECK(!m->is_on_disk());
+    CHECK(equal_tarrays<Tight>(m->get<TA::TSpArrayD>(), R));
+
+    // by block: equal to the slice of the in-memory value, and only the
+    // block's tiles are read
+    TA::reset_disk_io_stats();
+    world.gop.fence();
+    ResultPtr const sl = d->slice_mode(0, 3, 9);
+    CHECK(!sl->is_on_disk());
+    CHECK(equal_tarrays<Tight>(sl->get<TA::TSpArrayD>(),
+                               slice_array_over_mode(R, 0, 1, 3)));
+    CHECK(disk_reads() == 2);
+
+    // a pending view goes to disk as the value it stands for
+    ResultPtr const dv = r->slice_mode(0, 0, 3)->on_disk();
+    REQUIRE(dv);
+    CHECK(equal_tarrays<Tight>(dv->in_memory()->get<TA::TSpArrayD>(),
+                               slice_array_over_mode(R, 0, 0, 1)));
+
+    // the on-disk form is for storage, not arithmetic
+    CHECK_THROWS(d->mult_by_phase(-1));
+    CHECK_THROWS(d->add_inplace(*r));
+
+    // assembled on disk block by block
+    TA::TSpArrayD zero(world, R.trange());
+    zero.fill_local(0.0);
+    world.gop.fence();
+    ResultPtr const dest = eval_result<Res>(zero)->on_disk();
+    REQUIRE(dest);
+    dest->write_into_slice(*eval_result<Res>(slice_array_over_mode(R, 0, 0, 1)),
+                           0, 0, 3);
+    dest->write_into_slice(*eval_result<Res>(slice_array_over_mode(R, 0, 1, 3)),
+                           0, 3, 9);
+    world.gop.fence();
+    CHECK(dest->is_on_disk());
+    CHECK(equal_tarrays<Tight>(dest->in_memory()->get<TA::TSpArrayD>(), R));
+  }
+
+  SECTION("nested") {
+    using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+    using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
+    TA::TiledRange const outer_tr{{0, 3, 6}, {0, 2}};
+    TA::Range const inner_r(std::array<std::size_t, 2>{2, 2});
+    auto build = [&world, inner_r](TA::TiledRange const& otr,
+                                   bool zero) -> ToTArray {
+      auto tile_fn = [inner_r, zero](TA::Range const& orng) {
+        return make_tot_tile<double>(
+            orng, [&](std::size_t) { return inner_r; },
+            [&](std::size_t o, std::size_t k) {
+              if (zero) return 0.0;
+              double base = 0.0;
+              for (auto c : orng.idx(o))
+                base = base * 37.0 + static_cast<double>(c + 1);
+              return base * 100.0 + static_cast<double>(k + 1);
+            });
+      };
+      ToTArray arr{world, otr};
+      for (auto it = arr.begin(); it != arr.end(); ++it)
+        if (arr.is_local(it.index()))
+          *it = world.taskq.add(tile_fn, it.make_range());
+      world.gop.fence();
+      return arr;
+    };
+    auto const same = [](ToTArray const& a, ToTArray const& b) {
+      ToTArray diff;
+      diff("i,j;a,b") = a("i,j;a,b") - b("i,j;a,b");
+      return diff("i,j;a,b").dot(diff("i,j;a,b")).get() == 0.0 &&
+             a("i,j;a,b").dot(a("i,j;a,b")).get() > 0.0;
+    };
+    ToTArray const R = build(outer_tr, /*zero=*/false);
+    auto const r = eval_result<ResultToT>(R);
+
+    ResultPtr const d = r->on_disk();
+    REQUIRE(d);
+    CHECK(d->is_on_disk());
+    CHECK(same(d->in_memory()->get<ToTArray>(), R));
+
+    TA::reset_disk_io_stats();
+    world.gop.fence();
+    ResultPtr const sl = d->slice_mode(0, 3, 6);
+    CHECK(!sl->is_on_disk());
+    CHECK(same(sl->get<ToTArray>(), slice_array_over_mode(R, 0, 1, 2)));
+    CHECK(disk_reads() == 1);
+
+    ResultPtr const dest =
+        eval_result<ResultToT>(build(outer_tr, /*zero=*/true))->on_disk();
+    REQUIRE(dest);
+    dest->write_into_slice(
+        *eval_result<ResultToT>(slice_array_over_mode(R, 0, 0, 1)), 0, 0, 3);
+    dest->write_into_slice(
+        *eval_result<ResultToT>(slice_array_over_mode(R, 0, 1, 2)), 0, 3, 6);
+    world.gop.fence();
+    CHECK(same(dest->in_memory()->get<ToTArray>(), R));
+  }
+}
+
 TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
   // multi-tile arrays so batching over a contracted index actually engages:
   // unoccupied extent 12 in tiles of <=4 -> 3 tiles.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 12};
   yield_.set_max_tile(4);
 
   // contracts a1,a2 (unoccupied) -> batch mode is an unoccupied index (3 tiles)
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto node = eval_node(expr);
 
@@ -2162,18 +3664,19 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
 TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 12};
   yield_.set_max_tile(4);
 
   // Contracts a1,a2 (unoccupied, 3 tiles) -> batchable over an unoccupied mode.
   // The subtree contains a "t" leaf, which we treat as volatile.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto node = eval_node(expr);
   // The runtime batches STRICTLY on the optimizer's annotations (there is no
@@ -2312,12 +3815,14 @@ TEST_CASE("ta_tot_conj_complex", "[eval]") {
   using namespace sequant;
   auto& world = TA::get_default_world();
   size_t const nocc = 2, nvirt = 3;
-  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
-                                                                 nvirt};
+  rand_tensor_yield<std::complex<double>, TA::SparsePolicy> yield{world, nocc,
+                                                                  nvirt};
   using ArrayToT = typename decltype(yield)::array_tot_type;
 
   std::string const annot{"i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
-  auto const t = deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
+  auto const t = deserialize<sequant::ExprPtr>(
+      L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const& src = yield(t->as<sequant::Tensor>())->get<ArrayToT>();
 
   ArrayToT conjd;
@@ -2354,7 +3859,8 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   // children, contracted at the root; an aux-aux edge, like the DF index K).
   // Every orbital contraction pairs a bra with a ket.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const node = eval_node(expr);
   REQUIRE_FALSE(node.leaf());
   REQUIRE_FALSE(node.left().leaf());
@@ -2386,7 +3892,8 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // mode (an index the shared subnode does not carry) gives it signature
     // 'absent' while the first gives a position -> inconsistent -> unshared
     auto const expr2 = sequant::deserialize<sequant::ExprPtr>(
-        L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}");
+        L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const node2 = eval_node(expr2);
     auto const bogus_axis = Index(L"i_9");
     std::vector<std::pair<node_t const*, Index>> const members{
@@ -2405,10 +3912,12 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // sliced value. D must end up unregistered.
     auto const expr_m1 = sequant::deserialize<sequant::ExprPtr>(
         L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * "
-        L"(g{a_3;i_2;x_1} * h{i_4;a_3})");
+        L"(g{a_3;i_2;x_1} * h{i_4;a_3})",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const m1 = eval_node(expr_m1);
     auto const expr_m2 = sequant::deserialize<sequant::ExprPtr>(
-        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}");
+        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const m2 = eval_node(expr_m2);
     // structural preconditions: m1 = X * D2, X = D * u, D2 == D == m2's X
     // child canonically
@@ -2439,17 +3948,6 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   }
 }
 
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-
 // Ordered executor (see ordered_schedule.hpp's own doc comments for the
 // OrderedSchedule IR and
 // ordered_executor.hpp's detail::run_ordered_contracted_block for the
@@ -2469,11 +3967,8 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
 // i_3-reducing node of g{i_3;i_1} * t{a_1,a_2;i_3,i_2}); the builder nests the
 // contracted loop between the externals and the node's value is built inside
 // all three, partial over the contracted loop, escaping scatter -> sum ->
-// scatter. Plain dense arrays; ground truth = the unbatched evaluation.
-TEST_CASE(
-    "evaluate_ordered_schedule: mixed same-node open (two External occ + one "
-    "Contracted occ) matches the unbatched result",
-    "[eval][ordered-executor][mixed-open]") {
+// scatter. Ground truth = the unbatched evaluation.
+TEST_CASE("ordered-mixed-open", "[eval][ordered-executor][mixed-open]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -2481,12 +3976,12 @@ TEST_CASE(
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
   // nocc 4 tiled by 2 -> two occ batches of one tile each.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(2);
   auto const occ =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
@@ -2580,149 +4075,8 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
-TEST_CASE(
-    "evaluate_ordered_schedule: mixed same-node open over an aux-contracted "
-    "inner product (invariant on the inner external loop) matches the "
-    "unbatched "
-    "result",
-    "[eval][ordered-executor][mixed-open][mixed-open-pia]") {
-  using sequant::evaluate;
-  using sequant::eval::analyze_legality;
-  using sequant::eval::build_ordered_schedule;
-  using sequant::eval::compute_dag_boulevard;
-  using sequant::eval::evaluate_ordered_schedule;
-  using sequant::eval::OrderedSchedule;
-  using sequant::eval::RichSchedule;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-
-  // The fixture's a_3 sits in the BRA of both h and t, which trips the
-  // tensor-network canonicalizer's strict bra<->ket policy (an internal index
-  // may appear at most once per side under Conjugate). This case is about the
-  // array operations of a mixed same-node open, not about the canonicalizer's
-  // covariance assumptions, so relax the policy for its scope -- the same
-  // treatment the other multi-bra fixtures in this file already use.
-  auto ctx_relaxed = sequant::get_default_context_snapshot();
-  ctx_relaxed.set(sequant::AssertStrictBraKetSymmetry::No);
-  auto const ctx_resetter =
-      sequant::set_scoped_default_context(std::move(ctx_relaxed));
-  auto& world = TA::get_default_world();
-  // nocc 4 tiled by 2 -> two occ batches of one tile each.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
-  yield_.set_max_tile(2);
-  auto const occ =
-      sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"i");
-
-  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
-  std::vector<node_t> forest{eval_node(t1)};
-  std::string target;
-  for (auto const& ix : forest[0]->canon_indices()) {
-    if (!target.empty()) target += ",";
-    target += sequant::toUtf8(ix.full_label());
-  }
-
-  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
-
-  // The i_3-reducing root opens all three occ loops; its leaves carry the
-  // externals they hold (the DP stamps External on every carrying node).
-  auto const find = [&](std::wstring const& lbl) {
-    std::optional<sequant::Index> out;
-    forest[0].visit([&](node_t const& n) {
-      for (auto const& ix : n->canon_indices())
-        if (ix.full_label() == lbl) out = ix;
-    });
-    if (!out) throw sequant::Exception{"index not found"};
-    return *out;
-  };
-  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
-  using sequant::BatchModeType;
-  forest[0]->set_node_slice_mask({{i1, BatchModeType::External},
-                                  {i2, BatchModeType::External},
-                                  {i3, BatchModeType::Contracted}});
-  forest[0]->set_batch_loops_opened_here({{i1, BatchModeType::External},
-                                          {i2, BatchModeType::External},
-                                          {i3, BatchModeType::Contracted}});
-  auto const aux =
-      sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
-  forest[0].visit([&](node_t const& cn) {
-    if (&cn == &forest[0]) return;
-    auto& n = const_cast<node_t&>(cn);
-    sequant::container::svector<std::pair<sequant::Index, BatchModeType>> m;
-    for (auto const& ix : n->canon_indices())
-      if (ix == i1 || ix == i2) m.push_back({ix, BatchModeType::External});
-    if (!n.leaf()) {
-      // the x_1-contracting node opens the aux loop
-      for (auto const& ix : n.left()->canon_indices())
-        if (ix.space() == aux) {
-          m.push_back({ix, BatchModeType::Contracted});
-          n->set_batch_loops_opened_here({{ix, BatchModeType::Contracted}});
-        }
-    }
-    if (!m.empty()) n->set_node_slice_mask(m);
-  });
-  sequant::eval::stamp_lifetime_masks(forest);
-
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [occ, aux](sequant::Index const& ix) {
-    return ix.space() == occ || ix.space() == aux;
-  };
-  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
-    return ix.space() == occ;
-  };
-
-  sequant::eval::dryrun::SizeRegime const regime;
-  sequant::eval::dryrun::CostModel const cm{regime};
-  auto const block_of = [occ](sequant::Index const& ix) -> std::size_t {
-    return ix.space() == occ ? 2 : 4;
-  };
-  RichSchedule rich = compute_dag_boulevard(forest, cm, block_of);
-  // Force the culprit's nesting: External > Contracted > External. Same-node
-  // opens carry no order of their own (the builder tie-breaks by slot), so
-  // impose it through loop_order exactly as cross-term constraints did in
-  // the w8 schedule.
-  {
-    std::vector<int> ext, con;
-    for (auto const& [key, kind] : rich.loop_kind)
-      if (key.first == L"i")
-        (kind == BatchModeType::External ? ext : con).push_back(key.second);
-    REQUIRE(ext.size() == 2);
-    REQUIRE(con.size() == 1);
-    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
-        b{L"i", ext[1]};
-    rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
-    rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
-  }
-  auto const legality = analyze_legality(rich, forest, policy);
-  OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"i", L"x"});
-  if (std::getenv("SEQUANT_UT_SCHED_TREE"))
-    sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
-
-  auto cache = sequant::CacheManager<node_t>::empty();
-  auto aops = yield_.array_ops();
-  cache.set_array_ops(&aops);
-  std::function<std::size_t(sequant::Index const&)> const target_batch =
-      [occ](sequant::Index const& ix) -> std::size_t {
-    return ix.space() == occ ? 2 : 4;
-  };
-  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
-                                             yield_, cache, target_batch)
-                       ->get<TArrayD>();
-
-  TArrayD diff;
-  diff(target) = got(target) - ref(target);
-  double const rel = TA::norm2(diff) / TA::norm2(ref);
-  INFO("relative L2 diff = " << rel);
-  CHECK(rel < 1e-10);
-}
-
-TEST_CASE(
-    "evaluate_ordered_schedule: mixed same-node open over an aux-contracted "
-    "inner product, SPARSE policy, matches the unbatched result",
-    "[eval][ordered-executor][mixed-open][mixed-open-pia-sparse]") {
+TEST_CASE("ordered-mixed-open-aux-sparse",
+          "[eval][ordered-executor][mixed-open][mixed-open-pia-sparse]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -2867,24 +4221,24 @@ TEST_CASE(
 }
 
 // Minimal TA-level probe for the nested-tile permutation crash seen in the
-// hidden ToT replica: permute a Tensor<Tensor<double>> array on its outer
-// modes only, on inner only, and on both, through TA expressions.
+// ToT culprit replica: permute a nested array on its outer modes only, on
+// inner only, and on both, through TA expressions.
 TEST_CASE("TA nested-tile permutation probe", "[tot][tot-perm-probe]") {
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   auto& world = TA::get_default_world();
   TA::TiledRange tr{{0, 2, 4}, {0, 3, 6}};
   ToTArray in{world, tr};
   for (auto it = in.begin(); it != in.end(); ++it) {
     if (!in.is_local(it.index())) continue;
-    auto const r = it.make_range();
-    TA::Tensor<TA::Tensor<double>> tile(r);
-    std::size_t k = 0;
-    for (auto& el : tile) {
-      // inner 2x3 tensors, a few left EMPTY (screened cells)
-      if ((k++ % 5) == 3) continue;
-      el = TA::Tensor<double>(TA::Range{2, 3}, 1.0 + k);
-    }
-    *it = tile;
+    // inner 2x3 tensors, a few left EMPTY (screened cells)
+    *it = make_tot_tile<double>(
+        it.make_range(),
+        [](std::size_t o) {
+          return o % 5 == 3 ? TA::Range{} : TA::Range{2, 3};
+        },
+        [](std::size_t o, std::size_t) {
+          return 2.0 + static_cast<double>(o);
+        });
   }
   world.gop.fence();
   ToTArray outer_only, inner_only, both;
@@ -2936,11 +4290,8 @@ TEST_CASE("TA nested tile with empty inner cells: permuting constructor",
 // reduction node N1 opening all three loops, the aux-contracted integral
 // product invariant on the inner external loop. Ground truth = the unbatched
 // evaluation.
-TEST_CASE(
-    "evaluate_ordered_schedule: ToT culprit replica (t sliced on two outer "
-    "modes under external > contracted > external) matches the unbatched "
-    "result",
-    "[eval][ordered-executor][mixed-open][mixed-open-tot]") {
+TEST_CASE("ordered-tot-culprit",
+          "[eval][ordered-executor][mixed-open][mixed-open-tot]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -2948,7 +4299,7 @@ TEST_CASE(
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using sequant::BatchModeType;
 
@@ -2961,11 +4312,11 @@ TEST_CASE(
       sequant::set_scoped_default_context(std::move(ctx_relaxed));
   auto& world = TA::get_default_world();
   // nocc 4 tiled by 2 -> two occ batches; aux 8 tiled by 4 -> two aux batches.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 8};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 4, 8};
   yield_.set_max_tile(2);
-  auto const isr = sequant::get_default_context().index_basis_registry();
-  auto const occ = isr->retrieve_space(L"i");
-  auto const aux = isr->retrieve_space(L"x");
+  auto const ibr = sequant::get_default_context().index_basis_registry();
+  auto const occ = ibr->retrieve_space(L"i");
+  auto const aux = ibr->retrieve_space(L"x");
 
   // P = g*h (K node) ; Q = (P*C)*C{a_1;m_1} (carries a_1<i_1,i_2>, so i_2
   // survives the i_3 reduction as in the MPQC tree) ; U = t*C ; N1 = Q*U
@@ -3117,10 +4468,7 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent over one Contracted "
-    "loop block",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-contracted-block", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3129,12 +4477,12 @@ TEST_CASE(
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
   using sequant::eval::ScopeBlock;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
   // aux multi-tiled (naux 12 in tiles of 4 -> 3 tiles) so x_1 batches.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(4);
 
   auto const aux =
@@ -3254,10 +4602,7 @@ TEST_CASE(
 // batching OFF, and which the batched flat tests above never cover. If the
 // ordered result disagrees with forest descent here, the bug is in that
 // unbatched core, not in the batched loop path or in ToT tiles.
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent for an unbatched "
-    "flat forest",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-flat", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3265,11 +4610,11 @@ TEST_CASE(
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(4);
 
   // Two summable roots sharing S = g*h, both contracting the aux x_1 (an
@@ -3330,10 +4675,7 @@ TEST_CASE(
 // divergence in the fast unit suite: if the ordered ToT result disagrees with
 // forest descent, the bug is in the ordered executor's ToT path (root-walk /
 // combine_forest_roots / homing), independent of batching.
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent for an unbatched "
-    "ToT forest",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-tot", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3342,11 +4684,11 @@ TEST_CASE(
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
-                                                    /*nvirt=*/4, /*naux=*/8};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/12,
+                                                     /*nvirt=*/4, /*naux=*/8};
   yield_.set_max_tile(4);
 
   // Two summable ToT roots (composite proto occ a<i_1,i_2>), sharing the g leg;
@@ -3407,10 +4749,7 @@ TEST_CASE(
 // the second ordered result disagrees with forest descent, the ordered homing
 // leaks stale 't'-dependent state (or mutates a persistent buffer) across
 // reset().
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent across a reset "
-    "with a changed volatile leaf",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-reset", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3418,11 +4757,11 @@ TEST_CASE(
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 8, 4, 8};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 8, 4, 8};
   yield_.set_max_tile(4);
 
   // Shared composite S = g*h (t-INDEPENDENT -> persistent, survives reset).
@@ -3507,10 +4846,18 @@ TEST_CASE(
 // volatile, recomputed with the new 't'); root F2 = S*(p*q) has no 't'
 // (persistent). If ordered disagrees with forest descent on iteration 2, the
 // batched path leaks stale 't'-dependent state across reset.
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent across a reset in "
-    "a batched Contracted loop",
-    "[eval][ordered-executor][ordered-crossiter-bug]") {
+//
+// It runs once per cache reuse threshold (min_repeats): 1 registers every
+// eligible internal node in the cache's node-keyed map, 2 only the repeated
+// ones plus the persistent frontier, and 1000000 the frontier alone. The
+// ordered executor takes values, lives and persistence from its cell table
+// and the persistent store, not from that map, so its result must not depend
+// on the threshold -- which is what lets MPQC hand it the same
+// eval:cache:min_repeats (default 2) as forest descent.
+// The ordered executor with values kept on disk (eval::DiskSpill) on the
+// TiledArray backend: same numbers as forest descent, with the qualifying
+// values really written to and read back from scratch files.
+TEST_CASE("ordered-disk-spill-ta", "[eval][ordered-executor][disk]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3518,11 +4865,203 @@ TEST_CASE(
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(4);
+  auto const aux =
+      sequant::get_default_context().index_basis_registry()->retrieve_space(
+          L"x");
+
+  // two roots sharing the aux-carrying intermediate g*h; x_1 is batched
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (t{a_3;i_2;x_1} * q{i_4;a_3})");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+  auto accept_aux = [aux](sequant::Index const& ix) {
+    return ix.space() == aux;
+  };
+  for (auto& nd : forest) {
+    auto const ax = sequant::batch_axis(nd, accept_aux);
+    REQUIRE(ax.has_value());
+    nd->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
+    nd->set_batch_loops_opened_here(
+        {{*ax, sequant::BatchModeType::Contracted}});
+  }
+  std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = accept_aux;
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"x"});
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+  auto const rel_error = [&ref](TArrayD const& got) {
+    TArrayD d;
+    d(std::string("0,1,2,3")) =
+        got(std::string("0,1,2,3")) - ref(std::string("0,1,2,3"));
+    return TA::norm2(d) / TA::norm2(ref);
+  };
+  auto const disk_stats = [&world] {
+    world.gop.fence();
+    auto const s = TA::disk_io_stats();
+    std::array<std::size_t, 2> n{s.tiles_written, s.tiles_read};
+    world.gop.sum(n.data(), 2);
+    return n;
+  };
+
+  auto cache = sequant::cache_manager(forest, is_vol, std::size_t{2});
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
+  sequant::eval::DiskSpill spill;
+  spill.min_bytes = 1;  // everything that qualifies
+  cache.set_disk_spill(&spill);
+
+  TA::reset_disk_io_stats();
+  world.gop.fence();
+  for (int iteration = 0; iteration < 2; ++iteration) {
+    INFO("iteration " << iteration);
+    auto const got =
+        evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                  target_batch, {}, is_vol)
+            ->get<TArrayD>();
+    CHECK(rel_error(got) < 1e-12);
+    cache.reset();
+  }
+  // values went to disk and came back
+  CHECK(spill.n_writes > 0);
+  CHECK(spill.n_reads > 0);
+  auto const io = disk_stats();
+  CHECK(io[0] > 0);  // tiles written
+  CHECK(io[1] > 0);  // tiles read
+}
+
+// A value assembled by scattering the batches of a loop into disjoint blocks,
+// and read after the loop, is assembled on disk block by block once its size
+// is known from an earlier evaluation (DiskSpill::measured_bytes): it is
+// never whole in memory.
+TEST_CASE("ordered-disk-scatter-ta", "[eval][ordered-executor][disk]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::OutputKind;
+  using sequant::eval::RichSchedule;
+  using sequant::eval::ScopeBlock;
+  using TArrayD = TA::TSpArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 8, 6, 12};
+  yield_.set_max_tile(4);
+  auto const occ =
+      sequant::get_default_context().index_basis_registry()->retrieve_space(
+          L"i");
+
+  // S = g*h carries i_1 and is built inside a loop over i_1 (opened at S);
+  // the root reads S whole, after the loop. g is volatile, so S is rebuilt
+  // by every evaluation rather than carried over from the previous one.
+  auto const t = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1} * h{a_3;a_2}) * q{i_1;a_5}");
+  std::string const target = "a_3,a_5";
+  std::vector<node_t> forest{eval_node(t)};
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  sequant::Index const i1{L"i_1"};
+  auto& S = const_cast<node_t&>(forest.front().left());
+  REQUIRE(!S.leaf());
+  S->set_node_slice_mask({{i1, sequant::BatchModeType::External}});
+  S->set_batch_loops_opened_here({{i1, sequant::BatchModeType::External}});
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i"});
+  ScopeBlock const* i_block = nullptr;
+  for (auto const& step : ordered.root.steps)
+    if (auto const* b = std::get_if<ScopeBlock>(&step.value)) i_block = b;
+  REQUIRE(i_block != nullptr);
+  REQUIRE(i_block->outputs.size() == 1);
+  REQUIRE(i_block->outputs.front().second == OutputKind::AccumulateScatter);
+
+  std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"g";
+  };
+  auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  REQUIRE(static_cast<bool>(aops.make_zeros_on_disk));
+  cache.set_array_ops(&aops);
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  sequant::eval::DiskSpill spill;
+  spill.min_bytes = 1;
+  cache.set_disk_spill(&spill);
+
+  auto const rel_error = [&](TArrayD const& got) {
+    TArrayD d;
+    d(target) = got(target) - ref(target);
+    return TA::norm2(d) / TA::norm2(ref);
+  };
+  for (int iteration = 0; iteration < 3; ++iteration) {
+    INFO("iteration " << iteration);
+    auto const got =
+        evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                  target_batch, {}, is_vol)
+            ->get<TArrayD>();
+    CHECK(rel_error(got) < 1e-12);
+    // the first evaluation learns the value's size while assembling it in
+    // memory; later ones assemble it on disk
+    if (iteration == 0)
+      CHECK(spill.n_assembled_on_disk == 0);
+    else
+      CHECK(spill.n_assembled_on_disk == static_cast<std::size_t>(iteration));
+    cache.reset();
+  }
+  CHECK(spill.n_writes > 0);
+  CHECK(spill.n_reads > 0);
+}
+
+TEST_CASE("ordered-vs-forest-reset-batched",
+          "[eval][ordered-executor][ordered-crossiter-bug][cache_manager]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TArrayD = TA::TSpArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(4);
   auto const aux =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
@@ -3575,9 +5114,27 @@ TEST_CASE(
 
   std::function<std::size_t(sequant::Index const&)> const target_batch =
       [](sequant::Index const&) -> std::size_t { return 4; };
-  auto cache = sequant::cache_manager(forest, is_vol_leaf);
+  auto const min_repeats =
+      GENERATE(std::size_t{1}, std::size_t{2}, std::size_t{1000000});
+  INFO("min_repeats = " << min_repeats);
+  auto cache = sequant::cache_manager(forest, is_vol_leaf, min_repeats);
   auto aops = yield_.array_ops();
   cache.set_array_ops(&aops);
+
+  // The threshold really changes what the map holds. At 1 it registers the two
+  // roots; S, t*q and p*q carry the batched x_1 and are refused run-scope
+  // residence whatever the threshold. Above 1 nothing qualifies, so the map is
+  // empty and the ordered executor must manage on its cell table and
+  // persistent store alone.
+  auto const n_keys = [](auto const& c) {
+    std::size_t n = 0;
+    c.for_each_key([&n](node_t const&) { ++n; });
+    return n;
+  };
+  auto const n_keys_at_1 =
+      n_keys(sequant::cache_manager(forest, is_vol_leaf, std::size_t{1}));
+  REQUIRE(n_keys_at_1 > 0);
+  if (min_repeats > 1) CHECK(n_keys(cache) < n_keys_at_1);
 
   auto const ref1 = evaluate(forest, target, yield_)->get<TArrayD>();
   auto const got1 =
@@ -3629,10 +5186,7 @@ TEST_CASE(
 // TYPE under more than one physical Index in one block is out of scope here.
 // Real TA data at a small tractable size (the DryRun backend is zero-data and
 // cannot witness a dropped/double-written scatter slice).
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent over one External "
-    "loop block",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-external-block", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3642,13 +5196,13 @@ TEST_CASE(
   using sequant::eval::OutputKind;
   using sequant::eval::RichSchedule;
   using sequant::eval::ScopeBlock;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
   // occ multi-tiled (nocc 8 in tiles of 4 -> 2 tiles) so i_1 batches into
   // more than one disjoint scatter slice.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 8, 6, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 8, 6, 12};
   yield_.set_max_tile(4);
 
   auto const occ =
@@ -3755,248 +5309,6 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
-TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
-          "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-  using cache_t = sequant::CacheManager<node_t>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // W-analog: root contracts the aux index x_1; the two children are
-  // canonically equal
-  auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
-  std::string const target = "i_1,i_3,i_2,i_4";
-  auto node = eval_node(expr);
-  // The runtime batches STRICTLY on the optimizer's annotations (there is no
-  // heuristic fallback), so this test must state the mode it wants batched.
-  // batch_axis() picks exactly what the removed depth-0 heuristic used to pick.
-  auto const ax = sequant::batch_axis(node);
-  REQUIRE(ax.has_value());
-  node->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-
-  // x_1 is auxiliary: extent 12, tiles of 4; target 4 elements -> 3 batches
-  int const n_b = 3;
-  auto cache = cache_t::empty();
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; }));
-  auto const res =
-      evaluate(node, target, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res, ref));
-
-  // with within-batch dedup: per batch the left child evaluates (g and h
-  // yielded once each), the right child is a scratch cache hit; plus one g
-  // from the evaluator's mode_batches probe of the x_1-carrying leaf
-  CHECK(n_yield[L"g"] == n_b + 1);
-  CHECK(n_yield[L"h"] == n_b);
-}
-
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-TEST_CASE("eval_batched_custom_evaluator group replay",
-          "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // Two persistent finals sharing the sub-intermediate S = g*h (carries the
-  // auxiliary batch mode x_1):
-  //   F1 = S * S'   (canonically-equal siblings; contracts x_1, aux-aux)
-  //   F2 = S * p    (contracts x_1, aux-aux)
-  // Volatile heads (label "t") make F1 and F2 persistent. Every orbital
-  // contraction pairs a bra with a ket.
-  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3}))"
-      L" * t{i_1,i_2;i_3,i_9}");
-  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}");
-  std::string const tgt1 = "i_4,i_9";
-  std::string const tgt2 = "i_5,i_6";
-  auto n1 = eval_node(t1);
-  auto n2 = eval_node(t2);
-  // Annotate explicitly: the runtime batches STRICTLY on the optimizer's
-  // annotations (no heuristic fallback), so each final must state the mode it
-  // wants batched. batch_axis() picks exactly what the old depth-0 heuristic
-  // picked, so this reproduces the behaviour these assertions were written for.
-  for (auto* nd : {&n1, &n2}) {
-    auto const ax = sequant::batch_axis(*nd);
-    REQUIRE(ax.has_value());
-    (*nd)->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  }
-
-  auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
-  };
-
-  // references (unbatched, uncached, uncounted)
-  auto const ref1 = evaluate(n1, tgt1, yield_)->get<TArrayD>();
-  auto const ref2 = evaluate(n2, tgt2, yield_)->get<TArrayD>();
-
-  // real cache over the two-term forest; F1 and F2 must classify persistent
-  auto cache = sequant::cache_manager(std::vector{n1, n2}, is_volatile_t);
-  REQUIRE(cache.persistent(n1.left()));
-  REQUIRE(cache.persistent(n2.left()));
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-  // persistent_only=true: gate volatile term heads so the group replay streams
-  // only the persistent finals F1/F2 (the across-the-board default would also
-  // batch volatile triggers, changing the yield counts asserted below).
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
-      sequant::accept_any_index{}, sequant::make_no_scope_guard{},
-      is_volatile_t,
-      /*persistent_only=*/true));
-
-  // evaluating term 1 triggers at F1 and must prebuild F2 in the same passes
-  auto const res1 = evaluate(n1, tgt1, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(cache.alive(n2.left()));  // F2 prebuilt by the group replay
-
-  auto const res2 = evaluate(n2, tgt2, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res1, ref1));
-  REQUIRE(equal_tarrays<Loose>(res2, ref2));
-
-  // S evaluated once per batch (n_b = 3), shared by F1 (twice) and F2 (once):
-  // g: 3 (S evals) + 1 (trigger probe) + 1 (F2 candidacy probe) = 5
-  // h: 3; p: 3 (sliced, once per batch); t: 2 (one per term head)
-  CHECK(n_yield[L"g"] == 5);
-  CHECK(n_yield[L"h"] == 3);
-  CHECK(n_yield[L"p"] == 3);
-  CHECK(n_yield[L"t"] == 2);
-}
-
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
-          "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // F_in = (g*h)*p (contracts the aux index x_1; persistent) nests inside
-  // F_out, which contracts its own aux mode x_2:  F_out = (F_in * r) * q,
-  // with r and q carrying x_2. Triggering at F_out must build F_in in an
-  // inner layer first, then seed its full value into F_out's pass (F_in
-  // carries no x_2). Every orbital contraction pairs a bra with a ket.
-  auto const t_out = sequant::deserialize<sequant::ExprPtr>(
-      L"((((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * r{i_6;i_7;x_2})"
-      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}");
-  auto const t_in = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}");
-  std::string const tgt_out = "i_5,i_8,i_9";
-  std::string const tgt_in = "i_5,i_6,i_7";
-  auto n_out = eval_node(t_out);
-  auto n_in = eval_node(t_in);
-
-  auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
-  };
-
-  auto const ref_out = evaluate(n_out, tgt_out, yield_)->get<TArrayD>();
-  auto const ref_in = evaluate(n_in, tgt_in, yield_)->get<TArrayD>();
-
-  auto cache = sequant::cache_manager(std::vector{n_out, n_in}, is_volatile_t);
-  // structural preconditions: both finals persistent; F_in nests in F_out
-  REQUIRE(cache.persistent(n_out.left()));
-  REQUIRE(cache.persistent(n_in.left()));
-  {
-    sequant::TreeNodeEqualityComparator<node_t> const eq;
-    REQUIRE(eq(n_out.left().left().left(), n_in.left()));
-  }
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-  // batch only over auxiliary indices (as a DF-batched application would)
-  auto const aux_space =
-      sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
-  auto accept_aux = [aux_space](sequant::Index const& ix) {
-    return ix.space() == aux_space;
-  };
-
-  // Annotate explicitly: the runtime batches STRICTLY on the optimizer's
-  // annotations (no heuristic fallback), so each final must state the mode it
-  // wants batched. batch_axis() picks exactly what the old depth-0 heuristic
-  // picked, so this reproduces the behaviour these assertions were written for.
-  for (auto* nd : {&n_out, &n_in}) {
-    auto const ax = sequant::batch_axis(*nd, accept_aux);
-    REQUIRE(ax.has_value());
-    (*nd)->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  }
-
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
-      accept_aux, sequant::make_no_scope_guard{}, is_volatile_t));
-
-  auto const res_out =
-      evaluate(n_out, tgt_out, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(cache.alive(n_in.left()));  // inner layer built and stored
-
-  auto const res_in =
-      evaluate(n_in, tgt_in, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res_out, ref_out));
-  REQUIRE(equal_tarrays<Loose>(res_in, ref_in));
-
-  // layer 1 (F_in over x_1, 3 batches): g,h,p once per batch; layer 2 (F_out
-  // over x_2): F_in SEEDED (g,h,p untouched), r,q sliced once per batch.
-  // Probes: +1 r (trigger, x_2-carrying leaf), +1 g (F_in candidacy, x_1
-  // leaf). If seeding failed and F_in were re-derived per batch, g/h/p
-  // would be 6+.
-  CHECK(n_yield[L"g"] == 4);
-  CHECK(n_yield[L"h"] == 3);
-  CHECK(n_yield[L"p"] == 3);
-  CHECK(n_yield[L"r"] == 4);
-  CHECK(n_yield[L"q"] == 3);
-  CHECK(n_yield[L"t"] == 2);
-}
-
 TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   // Exactness gate: two batchable modes annotated at DIFFERENT nodes
   // of one tree must batch by nesting -- the outer node slices mode A at the
@@ -4007,7 +5319,7 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   // applies per mode.
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
@@ -4015,7 +5327,7 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   // occ single-tiled (4); aux multi-tiled (12 in tiles of 4 -> 3 tiles) so both
   // batch modes slice into 3 batches each and depth-2 nesting genuinely
   // engages.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 4, 12};
   yield_.set_max_tile(4);
 
   // Root (outer) contracts the aux mode x_1; the inner product (u*v) contracts
@@ -4118,13 +5430,13 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   // (max_depth stayed 1).
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
   // occ single-tiled (4); aux multi-tiled (12 in tiles of 4 -> 3 tiles).
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 4, 12};
   yield_.set_max_tile(4);
 
   // ONE product contracting i_1 (occ) plus BOTH aux modes x_1 and x_2; each
@@ -4225,8 +5537,7 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   CHECK(state.live.empty());
 }
 
-TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
-          "[eval]") {
+TEST_CASE("batched-hoist-loop-invariant", "[eval]") {
   // Hoisting gate: a network batched over an OUTER mode (x_1) whose
   // subtree contains an intermediate INVARIANT to that mode (I2 = a*b contracts
   // x_2 and carries no x_1) must build the invariant ONCE at its emitted scope
@@ -4236,14 +5547,14 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   // real cache and the scope chain serves it to every x_1 batch body.
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
   // occ single-tiled (4); aux multi-tiled (12 in tiles of 4 -> 3 tiles), so
   // x_1 slices into 3 batches.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 4, 12};
   yield_.set_max_tile(4);
 
   // R = (((g{i_1;i_2;x_2} * h{i_1;i_3;x_2}) * w{i_2;i_5;x_1}) *
@@ -4367,8 +5678,10 @@ TEST_CASE("a conjugation-bearing invariant survives the hoist-slot store",
     std::vector<std::complex<double>> out;
     for (auto it = arr.begin(); it != arr.end(); ++it) {
       auto const& outer = it->get();
+      // an arena inner tile has no iterators: walk its contiguous data
       for (auto const& inner : outer)
-        for (auto const& el : inner) out.push_back(el);
+        for (std::size_t e = 0; e < inner.size(); ++e)
+          out.push_back(inner.data()[e]);
     }
     return out;
   };
@@ -4483,10 +5796,7 @@ TEST_CASE("a conjugation-bearing invariant survives the hoist-slot store",
   REQUIRE(err / scale < 1e-12);
 }
 
-TEST_CASE(
-    "eval_batched_custom_evaluator hoists to an intermediate contracted-mode "
-    "level",
-    "[eval]") {
+TEST_CASE("batched-hoist-intermediate-level", "[eval]") {
   // The runtime residency is sliced_modes(),
   // the all-batched-modes cross-occurrence meet -- which carries a node's
   // enclosing CONTRACTED (aux) modes directly, since a node variant to an outer
@@ -4519,7 +5829,7 @@ TEST_CASE(
   //        (R is the OUTER trigger).
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
@@ -4527,7 +5837,7 @@ TEST_CASE(
   // occ/virt single-tiled (4); aux multi-tiled (12 in tiles of 4 -> 3 blocks)
   // so both the outer (x_1) and inner (x_2) loops genuinely partition into
   // more than one block each.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 4, 12};
   yield_.set_max_tile(4);
 
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
@@ -4661,17 +5971,22 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   // mechanism under test is mode-agnostic -- occ vs aux matters only at the
   // DP/cost level (covered by the [dryrun-occ-*] gates). Same rationale as
   // "eval_forest_over_external_occ nests intra-term aux batching".
+  //
+  // The scatter destination starts with an all-zero shape (see
+  // make_ta_array_ops), so this also checks that the scattered tiles land in
+  // it.
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
   // virtual single-tiled (4); aux x multi-tiled (12 in tiles of 4 -> 3 tiles)
   // so the external mode genuinely partitions into > 1 block.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
-                                                    /*nvirt=*/4, /*naux=*/12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4,
+                                                     /*naux=*/12};
   yield_.set_max_tile(4);
 
   // A flat, fully binary tree whose result carries aux x_1 as a pure external:
@@ -4765,10 +6080,171 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   }
 }
 
-TEST_CASE(
-    "batched external-carrying intermediate hoists to its seed home; the "
-    "result stays exact via slice-on-use (no demotion veto)",
-    "[eval][batched-external]") {
+TEST_CASE("ta_array_ops_sparse_zeros_hold_no_tiles",
+          "[eval][batched-external]") {
+  // A sparse flat scatter destination, and its slice to an enclosing batch, are
+  // zero by shape rather than by zero-filled tiles: nothing is allocated before
+  // the scatter writes.
+  using TArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4, /*naux=*/12};
+  yield_.set_max_tile(4);
+  auto const aops = yield_.array_ops();
+
+  auto const count_nonzero_tiles = [](TArrayD const& arr) {
+    std::size_t n = 0;
+    for (std::size_t ord = 0; ord != arr.trange().tiles_range().volume(); ++ord)
+      if (!arr.is_zero(ord)) ++n;
+    return n;
+  };
+
+  auto const zeros =
+      aops.make_zeros({sequant::Index{L"i_1"}, sequant::Index{L"x_1"}});
+  auto const& full = zeros->get<TArrayD>();
+  CHECK(full.trange().dim(0).extent() == 4);
+  CHECK(full.trange().dim(1).extent() == 12);
+  CHECK(count_nonzero_tiles(full) == 0);
+  CHECK(TA::norm2(full) == 0.0);
+
+  auto const sliced = zeros->slice_mode(1, 4, 8);
+  auto const& sl = sliced->get<TArrayD>();
+  CHECK(sl.trange().dim(1).elements_range().first == 4);
+  CHECK(sl.trange().dim(1).elements_range().second == 8);
+  CHECK(count_nonzero_tiles(sl) == 0);
+
+  // A scatter write adds exactly the written tile to the shape.
+  TArrayD src(world, full.trange());
+  src.fill_random();
+  world.gop.fence();
+  auto const src_res =
+      sequant::eval_result<sequant::ResultTensorTA<TArrayD>>(src);
+  auto const blk = src_res->slice_mode(1, 4, 8);
+  zeros->write_into_slice(*blk, 1, 4, 8);
+  CHECK(count_nonzero_tiles(full) == 1);
+  CHECK(full.shape().nnz() == 1);
+  CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<TArrayD>())));
+}
+
+TEST_CASE("ta_array_ops_sparse_tot_zeros_hold_no_tiles",
+          "[eval][batched-external]") {
+  // The nested counterpart of ta_array_ops_sparse_zeros_hold_no_tiles. The
+  // slice of the zero destination goes through slice_array_over_mode's
+  // empty-inner branch, which must not allocate either.
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+  using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4, /*naux=*/12};
+  yield_.set_max_tile(4);
+  auto const aops = yield_.array_ops<ToTArray>();
+
+  auto const count_nonzero_tiles = [](ToTArray const& arr) {
+    std::size_t n = 0;
+    for (std::size_t ord = 0; ord != arr.trange().tiles_range().volume(); ++ord)
+      if (!arr.is_zero(ord)) ++n;
+    return n;
+  };
+
+  // outer (i_1, x_1); a_1<i_1> is an inner mode
+  auto const zeros =
+      aops.make_zeros({sequant::Index{L"i_1"}, sequant::Index{L"x_1"},
+                       sequant::Index(L"a_1", {L"i_1"})});
+  REQUIRE(zeros->is<ResultToT>());
+  auto const& full = zeros->get<ToTArray>();
+  CHECK(full.trange().rank() == 2);
+  CHECK(full.trange().dim(1).extent() == 12);
+  CHECK(count_nonzero_tiles(full) == 0);
+
+  auto const sliced = zeros->slice_mode(1, 4, 8);
+  auto const& sl = sliced->get<ToTArray>();
+  CHECK(sl.trange().dim(1).elements_range().first == 4);
+  CHECK(sl.trange().dim(1).elements_range().second == 8);
+  CHECK(count_nonzero_tiles(sl) == 0);
+
+  // A scatter write adds exactly the written tile to the shape.
+  ToTArray src(world, full.trange());
+  for (auto it = src.begin(); it != src.end(); ++it)
+    if (src.is_local(it.index()))
+      *it = random_tensor_of_tensor<double>(it.make_range(), TA::Range{4});
+  world.gop.fence();
+  auto const src_res = sequant::eval_result<ResultToT>(src);
+  auto const blk = src_res->slice_mode(1, 4, 8);
+  zeros->write_into_slice(*blk, 1, 4, 8);
+  CHECK(count_nonzero_tiles(full) == 1);
+  CHECK(full.shape().nnz() == 1);
+  CHECK(sequant::detail::tot_inner_rank(full) == 1);
+  CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<ToTArray>())));
+}
+
+TEST_CASE("ta_array_ops_zeros_dense", "[eval][batched-external]") {
+  // A dense array has no shape to express an empty destination with, so
+  // make_zeros must allocate every tile, zero-filled (flat) or with empty
+  // inner tensors (nested). (A sparse array never takes this path: TiledArray
+  // keeps the SparseShape threshold positive, so its zero shape holds no
+  // tiles.)
+  using TArrayD = TA::TArrayD;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::DensePolicy>;
+  using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
+                                                    /*nvirt=*/4, /*naux=*/12};
+  yield_.set_max_tile(4);
+  auto const aops = yield_.array_ops<ToTArray>();
+
+  auto const all_tiles_nonzero = [](auto const& arr) {
+    for (std::size_t ord = 0; ord != arr.trange().tiles_range().volume(); ++ord)
+      if (arr.is_zero(ord)) return false;
+    return true;
+  };
+
+  SECTION("flat") {
+    auto const zeros =
+        aops.make_zeros({sequant::Index{L"i_1"}, sequant::Index{L"x_1"}});
+    REQUIRE(zeros->is<sequant::ResultTensorTA<TArrayD>>());
+    auto const& full = zeros->get<TArrayD>();
+    CHECK(all_tiles_nonzero(full));
+    CHECK(TA::norm2(full) == 0.0);
+
+    TArrayD src(world, full.trange());
+    src.fill_random();
+    world.gop.fence();
+    auto const blk =
+        sequant::eval_result<sequant::ResultTensorTA<TArrayD>>(src)->slice_mode(
+            1, 4, 8);
+    zeros->write_into_slice(*blk, 1, 4, 8);
+    CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<TArrayD>())));
+  }
+
+  SECTION("nested") {
+    auto const zeros =
+        aops.make_zeros({sequant::Index{L"i_1"}, sequant::Index{L"x_1"},
+                         sequant::Index(L"a_1", {L"i_1"})});
+    REQUIRE(zeros->is<ResultToT>());
+    auto const& full = zeros->get<ToTArray>();
+    CHECK(all_tiles_nonzero(full));
+    CHECK(sequant::detail::tot_inner_rank(full) == 0);
+
+    // slice_array_over_mode's empty-inner branch takes the same path
+    auto const sliced = zeros->slice_mode(1, 4, 8);
+    auto const& sl = sliced->get<ToTArray>();
+    CHECK(all_tiles_nonzero(sl));
+    CHECK(sequant::detail::tot_inner_rank(sl) == 0);
+
+    ToTArray src(world, full.trange());
+    for (auto it = src.begin(); it != src.end(); ++it)
+      if (src.is_local(it.index()))
+        *it = random_tensor_of_tensor<double>(it.make_range(), TA::Range{4});
+    world.gop.fence();
+    auto const blk = sequant::eval_result<ResultToT>(src)->slice_mode(1, 4, 8);
+    zeros->write_into_slice(*blk, 1, 4, 8);
+    CHECK(sequant::detail::tot_inner_rank(full) == 1);
+    CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<ToTArray>())));
+  }
+}
+
+TEST_CASE("batched-external-hoist-slice-on-use", "[eval][batched-external]") {
   // This test used to pin the `has_demoted_external`
   // demotion veto: in an external SCATTER over a mode e, a DESCENDANT
   // intermediate M that itself CARRIES e free onto its result (an External
@@ -4806,15 +6282,15 @@ TEST_CASE(
   // term/root cache (built once, regardless of e-blocks).
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
   // virtual single-tiled (4); aux x multi-tiled (12 in tiles of 4 -> 3 tiles)
   // so the external mode genuinely partitions into > 1 block.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
-                                                    /*nvirt=*/4, /*naux=*/12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4, /*naux=*/12};
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
@@ -4937,8 +6413,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("batched cached intermediate is sliced to the batch block on use",
-          "[eval][slice-on-use]") {
+TEST_CASE("batched-cached-slice-on-use", "[eval][slice-on-use]") {
   // Slice-on-use RED/GREEN witness for the LOAD-BEARING fix. A shared
   // intermediate M that carries an external mode e can be cached FULL at an
   // OUTER scope (correct where it is used unbatched / peak-acceptable there)
@@ -4957,7 +6432,7 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
   // batch_context of one x_1 block. Evaluating R on the inner cache fetches M
   // from the outer scope (hops == 1) and MUST slice it to the block.
   using sequant::evaluate;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
   using hasher_t = sequant::TreeNodeHasher<node_t>;
@@ -4965,8 +6440,8 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
 
   auto& world = TA::get_default_world();
   // virtual single-tiled (4); aux x multi-tiled (12 in tiles of 4 -> 3 tiles).
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
-                                                    /*nvirt=*/4, /*naux=*/12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4, /*naux=*/12};
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
@@ -5102,8 +6577,8 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   using sequant::Index;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
-                                                    /*nvirt=*/4, /*naux=*/12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4, /*naux=*/12};
   yield_.set_max_tile(4);
 
   // P = g*h carries the aux external x_1 (the External mode); the volatile
@@ -5192,7 +6667,7 @@ TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
   using sequant::eval_result;
   using sequant::ResultTensorOfTensorTA;
   using sequant::slice_array_over_mode;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using ResultToT = ResultTensorOfTensorTA<ToTArray>;
   auto& world = TA::get_default_world();
 
@@ -5205,18 +6680,15 @@ TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
   auto build = [&world, inner_r](TA::TiledRange const& otr,
                                  bool zero) -> ToTArray {
     auto tile_fn = [inner_r, zero](TA::Range const& orng) {
-      TA::Tensor<TA::Tensor<double>> t{orng};
-      std::size_t o = 0;
-      for (auto const& coord : orng) {
-        auto& inner = t[o++];
-        inner = TA::Tensor<double>{inner_r};
-        double base = 0.0;
-        if (!zero)
-          for (auto c : coord) base = base * 37.0 + static_cast<double>(c + 1);
-        std::size_t k = 0;
-        for (auto& x : inner) x = zero ? 0.0 : base * 100.0 + (++k);
-      }
-      return t;
+      return make_tot_tile<double>(
+          orng, [&](std::size_t) { return inner_r; },
+          [&](std::size_t o, std::size_t k) {
+            if (zero) return 0.0;
+            double base = 0.0;
+            for (auto c : orng.idx(o))
+              base = base * 37.0 + static_cast<double>(c + 1);
+            return base * 100.0 + static_cast<double>(k + 1);
+          });
     };
     ToTArray arr{world, otr};
     for (auto it = arr.begin(); it != arr.end(); ++it)
@@ -5284,19 +6756,24 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   // plain PAO leg alongside composite proto legs, or a leaf that does not carry
   // the occ at all): locating the occ returns nullopt there instead of
   // asserting.
+  //
+  // The scatter destination starts with an all-zero shape (see
+  // make_ta_array_ops), so this also checks that the scattered tiles land in
+  // it.
   using sequant::evaluate;
   using sequant::Index;
   using sequant::index_position;
   using sequant::make_batched_custom_evaluator;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
   // occupied multi-tiled (12 in tiles of 4 -> 3 tiles) so the proto occ mode
   // genuinely partitions into > 1 block; virtual/pao single-tiled.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
-                                                    /*nvirt=*/4, /*naux=*/8};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/12,
+                                                     /*nvirt=*/4,
+                                                     /*naux=*/8};
   yield_.set_max_tile(4);
 
   // g is a flat (mu~) operand carrying NO occ; the two C legs are composite
@@ -5391,7 +6868,7 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   };
 
   auto cache = cache_t::empty();
-  auto aops = yield_.array_ops<decltype(yield_)::array_tot_type>();
+  auto aops = yield_.template array_ops<ToTArray>();
   cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield_, [](Index const&) -> std::size_t { return 4; }, accept_occ, spy,
@@ -5437,7 +6914,7 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
   // external).
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
@@ -5445,8 +6922,8 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
   // occupied multi-tiled (12 in tiles of 4 -> 3 tiles) so the Hadamard
   // external i_3 genuinely partitions into > 1 block; virtual single-tiled
   // (4).
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
-                                                    /*nvirt=*/4};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/12,
+                                                     /*nvirt=*/4};
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
@@ -5549,7 +7026,7 @@ TEST_CASE("batched_eval_external_nested_contracted",
   // batched_eval_external_axis_scatter) the ResultExpr LHS pins x_1 free.
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
@@ -5557,7 +7034,7 @@ TEST_CASE("batched_eval_external_nested_contracted",
   // occ/virt single-tiled (4, unused as batch modes here); aux multi-tiled
   // (12 in tiles of 4 -> 3 tiles) so both x_1 (outer, External) and x_2
   // (inner, Contracted) partition into > 1 block.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 4, 12};
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
@@ -5655,10 +7132,97 @@ TEST_CASE("batched_eval_external_nested_contracted",
   CHECK(std::count(guard_calls.begin(), guard_calls.end(), 2u) == 3);
 }
 
-TEST_CASE(
-    "eval_batched_custom_evaluator nested scope guards compose "
-    "multiplicatively",
-    "[eval]") {
+TEST_CASE("batched_eval_contracted_nested_external",
+          "[eval][batched-external][forest_descent]") {
+  // Issue #762: the mirror of batched_eval_external_nested_contracted -- a
+  // Contracted loop on the ROOT with an External scatter on an INNER node
+  // that also carries the root's loop mode. Every inner partial is sliced to
+  // the root's current block, so the inner scatter destination must be too.
+  //
+  // inner = u{i_1;i_2;x_1,x_2} * v{i_2;i_3}: contracts i_2, leaving x_1 and
+  // x_2 free on the inner node. root = inner * p{i_3;i_4;x_1,x_2}: contracts
+  // i_3 and both aux modes. One aux mode is the root's Contracted loop; the
+  // other is the inner node's External loop, opened inside it.
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TArrayD = TA::TSpArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // aux multi-tiled (12 in tiles of 4 -> 3 tiles), so both loops partition
+  // on tile boundaries other than 0
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 4, 12};
+  yield_.set_max_tile(4);
+
+  auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
+      L"R{i_1;i_4} = ((u{i_1;i_2;x_1,x_2} * v{i_2;i_3})"
+      L" * p{i_3;i_4;x_1,x_2})");
+  auto node = eval_node(res_expr);  // mutable: batch modes stamped below
+  std::string const target = node->annot();
+
+  auto const aux_space =
+      sequant::get_default_context().index_basis_registry()->retrieve_space(
+          L"x");
+  auto accept_aux = [aux_space](sequant::Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  // the inner node is the non-leaf child of the root
+  REQUIRE_FALSE(node.leaf());
+  node_t& inner = node.left().leaf() ? node.right() : node.left();
+  REQUIRE_FALSE(inner.leaf());
+
+  // the two aux modes, as the inner node carries them; the root carries
+  // neither
+  sequant::container::svector<sequant::Index> aux;
+  for (auto const& ix : inner->canon_indices())
+    if (accept_aux(ix)) aux.push_back(ix);
+  REQUIRE(aux.size() == 2);
+  sequant::Index const outer_axis = aux[0];  // root, Contracted
+  sequant::Index const inner_axis = aux[1];  // inner node, External
+  REQUIRE_FALSE(sequant::index_position(node, outer_axis).has_value());
+  REQUIRE_FALSE(sequant::index_position(node, inner_axis).has_value());
+
+  node->set_node_slice_mask({{outer_axis, sequant::BatchModeType::Contracted}});
+  inner->set_node_slice_mask({{outer_axis, sequant::BatchModeType::Contracted},
+                              {inner_axis, sequant::BatchModeType::External}});
+
+  // Reference: plain unbatched evaluation.
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+  REQUIRE(TA::norm2(ref) > 0.0);
+
+  // outer -> target 4 over extent 12 = 3 blocks; inner -> target 8 = 2
+  // blocks, [0,8) and [8,12)
+  auto target_batch_size =
+      [outer_axis](sequant::Index const& ix) -> std::size_t {
+    return ix == outer_axis ? std::size_t{4} : std::size_t{8};
+  };
+  std::vector<std::size_t> guard_calls;
+  auto spy = [&guard_calls](std::size_t n) {
+    guard_calls.push_back(n);
+    return sequant::no_scope_guard{};
+  };
+
+  auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
+  cache.set_custom_evaluator(make_batched_custom_evaluator(
+      yield_, target_batch_size, accept_aux, spy, sequant::never_volatile{}));
+  auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+
+  TArrayD diff;
+  diff("i,j") = ref("i,j") - res("i,j");
+  REQUIRE(TA::norm2(diff) < 1e-10);
+
+  // the root fires once over the outer mode (3 blocks) and, per outer block,
+  // the inner node scatters over its mode (2 blocks): {3, 2, 2, 2}
+  REQUIRE(guard_calls.size() == 4);
+  CHECK(guard_calls.front() == 3u);
+  CHECK(std::count(guard_calls.begin(), guard_calls.end(), 2u) == 3);
+}
+
+TEST_CASE("batched-nested-scope-guards", "[eval]") {
   // Prove that screening relaxation composes over nested batch
   // levels. The re-entrant inner evaluator is built by threading
   // make_scope_guard (along with accept/is_volatile/persistent_only/
@@ -5674,19 +7238,19 @@ TEST_CASE(
   // significant over the full product of batch modes must not be screened
   // away in an individual (outer-cell, inner-cell) cell."
   //
-  // This test cannot exercise REAL block-sparse screening -- the TA eval
-  // tests here use dense TensorD, which has no SparseShape to relax. Instead
-  // it proves the STRUCTURAL composition: a custom ScopeGuardFactory whose
-  // RAII guard records, on construction/destruction, the batch count it was
-  // built with against a shared "currently alive" stack. If both guards are
-  // ever alive at once with the stack holding {outer_n, inner_n}, that is
-  // exactly the multiplicative-composition invariant a real backend guard
-  // would exploit. Numeric validation against an actual screening threshold
-  // is left to an end-to-end MPQC run, where a real
-  // TiledArray-SparseShape-backed guard exists to relax.
+  // This test does not exercise REAL block-sparse screening -- every tile of
+  // its yields is nonzero, so there is nothing to screen. Instead it proves the
+  // STRUCTURAL composition: a custom ScopeGuardFactory whose RAII guard
+  // records, on construction/destruction, the batch count it was built with
+  // against a shared "currently alive" stack. If both guards are ever alive at
+  // once with the stack holding {outer_n, inner_n}, that is exactly the
+  // multiplicative-composition invariant a real backend guard would exploit.
+  // Numeric validation against an actual screening threshold is left to an
+  // end-to-end MPQC run, where a real TiledArray-SparseShape-backed guard
+  // exists to relax.
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
@@ -5694,7 +7258,7 @@ TEST_CASE(
   // Same depth-2 nesting shape as the "nests inner mode" test above: occ
   // single-tiled (4), aux multi-tiled (12 in tiles of 4 -> 3 tiles) so both
   // batch modes realize 3 batches each.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 4, 12};
   yield_.set_max_tile(4);
 
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
@@ -5798,19 +7362,20 @@ TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
   using sequant::make_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
   // Multi-tile unoccupied space so batching actually engages (3 tiles of <=4).
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 12};
   yield_.set_max_tile(4);
 
   // Contracts a1,a2 (unoccupied) -> batch mode is an unoccupied index (3
   // tiles). The subtree contains a "t" leaf, which the policy marks volatile.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto const node = eval_node(expr);
 
@@ -5898,8 +7463,7 @@ TEST_CASE("shape_spike_tot_general_product", "[shape-spike]") {
   // Contraction: outer i_3, inner a_4.  Fused outer (Hadamard): i_1, i_2.
   // Result outer: (i_2, i_1), each with 2 tiles -> 4 outer tiles total.
 
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
 
@@ -5979,7 +7543,7 @@ TEST_CASE("shape_spike_tot_general_product", "[shape-spike]") {
     auto const& idx = it.index();
     REQUIRE_FALSE(C0.is_zero(idx));
 
-    auto const& outer0 = C0.find(idx).get();  // TA::Tensor<TA::Tensor<double>>
+    auto const& outer0 = C0.find(idx).get();  // tot_tile_t<double>
     auto const& outer1 = it->get();
     REQUIRE(outer0.range() == outer1.range());
 
@@ -6009,8 +7573,7 @@ TEST_CASE("shape_spike_T_times_ToT_general_product", "[shape-spike]") {
   // ToT).  Result outer (i_1, i_2), each with 2 tiles -> 4 outer tiles.
 
   using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
 
@@ -6125,8 +7688,7 @@ TEST_CASE("shape_spike_ToT_inner_contraction_to_flat_T", "[shape-spike]") {
   // Outer i_1,i_2 are Hadamard (survive); result outer (i_1,i_2) -> 2x2 tiles.
 
   using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
 
@@ -6356,7 +7918,8 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
   // a1<i1,i2>,a2<i1,i2> that fully contract (inner), leaving bare i1,i2.
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
       L"D{i1,i2} = "
-      L"R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}");
+      L"R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const node = eval_node(res_expr);
   // Confirm this really is the denest (DeNest::True) path.
   REQUIRE(node.left()->tot());
@@ -6367,7 +7930,7 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
   auto const ref = evaluate(node, target, yield)->get<FlatArray>();
   TA::TiledRange const res_tr = ref.trange();
 
-  SECTION("real shape on the denest result: zeroed tile + survivors match") {
+  SECTION("denest-real-shape") {
     TAEvalContext ctx;
     ctx.result_shape_provider =
         [](sequant::FullBinaryNode<sequant::EvalExprTA> const&,
@@ -6561,7 +8124,7 @@ TEST_CASE("ta_tot_kconjugation_end_to_end", "[eval]") {
 // per-node external opens, not a fixture. This is the only case in which the
 // External stamps are produced by the optimizer rather than hand-written.
 // Compares the batched result against the plain unbatched reference (ground
-// truth). Hidden ([.]) diagnostic.
+// truth).
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -6625,25 +8188,25 @@ void dump_annotations(sequant::FullBinaryNode<sequant::EvalExprTA> const& n,
 }  // namespace
 
 TEST_CASE("dp_external_placement_correctness",
-          "[.][eval][batched-external][node-placement]") {
+          "[eval][batched-external][node-placement]") {
   using namespace sequant;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = FullBinaryNode<EvalExprTA>;
   using cache_t = CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
 
-  auto isr = get_default_context().index_basis_registry();
-  auto occ = isr->retrieve_space(L"i");
-  auto virt = isr->retrieve_space(L"a");
-  auto aux = isr->retrieve_space(L"x");
+  auto ibr = get_default_context().index_basis_registry();
+  auto occ = ibr->retrieve_space(L"i");
+  auto virt = ibr->retrieve_space(L"a");
+  auto aux = ibr->retrieve_space(L"x");
 
   // Actual arrays: occ multi-tiled (40 in tiles of 4 -> 10 blocks) so the
   // external occ mode partitions into > 1 batch, and large vs virt/aux (4) so
   // an i_2-carrying intermediate (~i*i) is the peak and slicing i_2 lowers it,
   // forcing the DP to open i_2's external loop.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
-                                                    /*nvirt=*/4, /*naux=*/4};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/12,
+                                                     /*nvirt=*/4, /*naux=*/4};
   yield_.set_max_tile(4);
 
   // Term with an external occ spectator (i_2, free on the result and carried on
@@ -6697,6 +8260,7 @@ TEST_CASE("dp_external_placement_correctness",
     opts.batch_policy.batch_target_size = bts;
     opts.batch_policy.batch_spectator_indices = true;
     opts.batch_policy.peak_threshold = 1.0e3;  // tiny budget => force external
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
     opts.term_batch_axes = axes_map;
 
     auto optimized = optimize(expr, opts);
@@ -6731,8 +8295,6 @@ TEST_CASE("dp_external_placement_correctness",
 
     std::cerr << "\n=== DP-opened external loops ===\n";
     dump_annotations(ta_node);
-    std::cerr << "SCHEDULE_IR_JSON "
-              << sequant::eval::schedule_ir_json(ta_node, "dp") << "\n";
 
     auto accept = opts.batch_policy.is_batchable_index();
     auto cache = cache_t::empty();
@@ -6781,9 +8343,7 @@ TEST_CASE("dp_external_placement_correctness",
 // every value canonicalized through an odd permutation comes back with the
 // wrong sign. Real TA data is required -- the DryRun backend carries no
 // numbers and cannot witness a sign.
-TEST_CASE(
-    "evaluate_ordered_schedule applies a canonicalization phase exactly once",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-canon-phase-once", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -6791,11 +8351,11 @@ TEST_CASE(
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(4);
 
   // g is ANTISYMMETRIC and written with its two bra indices out of canonical
@@ -6871,10 +8431,7 @@ TEST_CASE(
 // permutes each root first, which allocates a fresh buffer. Real TA data is
 // required -- the DryRun backend carries no numbers and cannot witness a
 // double-counted addend.
-TEST_CASE(
-    "evaluate_ordered_schedule: a root result never aliases the persistent "
-    "store",
-    "[eval][ordered]") {
+TEST_CASE("ordered-root-no-alias", "[eval][ordered]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -6882,11 +8439,11 @@ TEST_CASE(
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
-  using TA::TArrayD;
+  using TArrayD = TA::TSpArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(4);
 
   // Two INDEPENDENT roots over the same externals {i_1,i_2}. Nothing here is
@@ -6985,6 +8542,79 @@ TEST_CASE(
          << rel);
     CHECK(rel < 1e-12);
   }
+}
+
+TEST_CASE("eval_trace_charges_a_lazy_view_zero_bytes", "[eval][view][trace]") {
+  // The eval trace's `alloc` column is "what the op allocated" -- the column
+  // every memory post-mortem of a CCk iteration is read off. A leaf transform
+  // that returns a LAZY VIEW (a pending phase/conj/relabel on the cache's
+  // buffer) allocates nothing, so it must report alloc=0B while `result`
+  // still carries the value's logical size. Driven on a nested-tile (ToT)
+  // leaf, whose transform used to materialize a real copy.
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  size_t const nocc = 2, nvirt = 3;
+  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
+                                                                 nvirt};
+  // over a real basis the star decodes into a retrieval-time {conj} view of
+  // the bare array; over a complex basis it names an array of its own
+  auto real_basis = sequant::tests::scoped_real_basis();
+
+  // a non-Hermitian tensor of indefinite parity keeps its star (a Hermitian
+  // one's is consumed into the bundle exchange over a real basis)
+  auto const canonical =
+      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-N-S-N");
+  auto conj_side = canonical->clone();
+  (void)conj_side->as<Tensor>().kconjugate();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const node = binarize<EvalExprTA>(conj_side);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node.leaf());
+  REQUIRE_FALSE(node->canon_transform().trivial());
+
+  auto& lg = Logger::instance();
+  struct Guard {
+    decltype(lg.eval)& eval;
+    std::size_t level;
+    std::ostream* stream;
+    ~Guard() {
+      eval.level = level;
+      eval.stream = stream;
+    }
+  } guard{lg.eval, lg.eval.level, lg.eval.stream};
+  std::ostringstream trace;
+  lg.eval.level = 1;
+  lg.eval.stream = &trace;
+
+  auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
+  auto const res = evaluate<Trace::On>(node, node->annot(), yield, cache);
+  REQUIRE(res);
+  lg.eval.stream = guard.stream;
+  lg.eval.level = guard.level;
+
+  // every transform line must be charged 0 allocated bytes -- including the
+  // second application on the cache store path, whose transform composes to
+  // the identity and so leaves an alias with nothing pending
+  std::string line;
+  std::size_t seen = 0;
+  for (std::istringstream in{trace.str()}; std::getline(in, line);) {
+    if (line.find("MultByPhase") == std::string::npos) continue;
+    ++seen;
+    INFO("transform line: " << line);
+    REQUIRE(line.find("alloc=0B") != std::string::npos);
+  }
+  REQUIRE(seen >= 1);
+  for (std::istringstream in{trace.str()}; std::getline(in, line);)
+    if (line.find("MultByPhase") != std::string::npos) break;
+  REQUIRE(line.find("MultByPhase") != std::string::npos);
+  INFO("trace line: " << line);
+  // alloc=0B -- the view allocated nothing ...
+  REQUIRE(line.find("alloc=0B") != std::string::npos);
+  // ... and result= measures it at 0 while its parent is still held (the
+  // storage is counted once, on the holder; see measured_size_in_bytes)
+  auto const rpos = line.find("result=");
+  REQUIRE(rpos != std::string::npos);
+  REQUIRE(line.compare(rpos, 9, "result=0B") == 0);
 }
 
 TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
@@ -7312,5 +8942,1617 @@ TEST_CASE("result_transform_view_ta", "[eval][conj-transform][view]") {
     ZArray ref2 = TA::einsum(Rc("i,a"), S("i,a"), "i,a");
     world.gop.fence();
     REQUIRE(norm_diff(got->get<ZArray>(), ref2, "i,a") < 1e-12);
+  }
+}
+
+// The nested-tile counterpart of result_transform_view_ta: apply_transform /
+// mult_by_phase / permute on a ResultTensorOfTensorTA return a view sharing
+// the array with a pending {phase, conj, outer+inner relabel}. A consumer
+// that is a TA expression (sum, nested contraction, scale) folds the pending
+// transform into the expression -- conj(A) * B contracts without a conj
+// copy of A (TA conj on nested-tile contractions); einsum consumers fold the
+// relabel and carry the phase on the result's view, materializing only a
+// pending conj (einsum takes plain tensor expressions only).
+TEST_CASE("result_transform_view_tot_ta", "[eval][conj-transform][view][tot]") {
+  using sequant::CanonTransform;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultScalar;
+  using Z = std::complex<double>;
+  using ZArray = TA::DistArray<TA::Tensor<Z>>;
+  // the nested tile the random helper builds (an arena inner tile)
+  using ZToT = TA::DistArray<tot_tile_t<Z>>;
+  using ResultZ = sequant::ResultTensorTA<ZArray>;
+  using ResultZToT = sequant::ResultTensorOfTensorTA<ZToT>;
+  auto& world = TA::get_default_world();
+
+  // |<d,d>|^1/2 of the difference d = x - y (a nested-tile norm())
+  auto norm_diff = [&](auto const& x, auto const& y, std::string const& a) {
+    std::decay_t<decltype(x)> d;
+    d(a) = x(a) - y(a);
+    world.gop.fence();
+    Z const dd = d(a).dot(d(a)).get();
+    return std::sqrt(std::abs(dd));
+  };
+
+  TA::TiledRange const otr{{0, 2, 4}, {0, 2, 4}};
+  TA::Range const irng(std::array<std::size_t, 2>{3, 3});
+  auto build = [&](TA::TiledRange const& tr) {
+    ZToT arr{world, tr};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = random_tensor_of_tensor<Z>(it.make_range(), irng);
+    world.gop.fence();
+    return arr;
+  };
+  ZToT const R = build(otr), S = build(otr);
+  ZArray F(world, otr);
+  F.fill_random();
+  world.gop.fence();
+  ResultPtr res = eval_result<ResultZToT>(R);
+  ResultPtr other = eval_result<ResultZToT>(S);
+  ResultPtr flat = eval_result<ResultZ>(F);
+
+  SECTION("view: shares the array, get<> materializes on demand") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto got = res->apply_transform(
+        CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+    REQUIRE(got->as<ResultZToT>().is_view());
+    ZToT ref;
+    ref("j,i;b,a") = Z(-1.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "j,i;b,a") < 1e-12);
+    REQUIRE(!got->as<ResultZToT>().is_view());  // materialized by get<>
+  }
+  SECTION("conj view feeds a nested contraction lazily (ToT * ToT -> ToT)") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v =
+        res->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    // C(i,k;a,c) = -conj(R)(i,j;a,b) * S(k,j;c,b): outer j and inner b
+    // contracted, TA's expression engine folds the conj
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"k,j;c,b"},
+                                 std::string{"i,k;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZToT ref;
+    ref("i,k;a,c") = Z(-1.0, 0.0) * R("i,j;a,b").conj() * S("k,j;c,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,k;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());  // the operand was not copied
+  }
+  SECTION("conj view feeds an outer-Hadamard nested product lazily") {
+    // the CSV pair product: outer pair indices fused (Hadamard), inner
+    // contraction -- TA's einsum delegates this shape to the expression
+    // engine itself (pure outer Hadamard), so the conj folds there too
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v =
+        res->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"i,j;b,c"},
+                                 std::string{"i,j;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZToT Rc;
+    Rc("i,j;a,b") = Z(-1.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    ZToT ref = TA::einsum(Rc("i,j;a,b"), S("i,j;b,c"), "i,j;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,j;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());  // no conj copy was made
+  }
+  SECTION("relabeled + phased view feeds the product (Hadamard outer) lazily") {
+    // a relabel and a phase fold into the product's expression; nothing is
+    // materialized and the result is a plain value
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto v = res->apply_transform(CanonTransform{.phase = -1}, ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    std::array<std::any, 3> pann{std::string{"j,i;b,a"}, std::string{"j,i;b,c"},
+                                 std::string{"j,i;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    REQUIRE(!got->as<ResultZToT>().is_view());  // the phase went in
+    ZToT ref = TA::einsum(R("i,j;a,b"), S("j,i;b,c"), "j,i;a,c");
+    ZToT nref;
+    nref("j,i;a,c") = Z(-1.0, 0.0) * ref("j,i;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), nref, "j,i;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+  }
+  SECTION("conj view into a general product stays a view") {
+    // outer Hadamard i mixed with a contracted j and an external k: the
+    // expression engine's general product takes the conjugation as is
+    TA::TiledRange const otr3{{0, 2, 4}, {0, 2, 4}, {0, 2, 4}};
+    ZToT const T3 = build(otr3);
+    ResultPtr third = eval_result<ResultZToT>(T3);
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"},
+                                 std::string{"i,j,k;b,c"},
+                                 std::string{"i,k;a,c"}};
+    auto got = v->prod(*third, pann, sequant::DeNest::False);
+    ZToT Rc;
+    Rc("i,j;a,b") = R("i,j;a,b").conj();
+    world.gop.fence();
+    ZToT ref = TA::einsum(Rc("i,j;a,b"), T3("i,j,k;b,c"), "i,k;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,k;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());  // never materialized
+  }
+  SECTION("both operands conj: the flattening product takes both as is") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    auto w =
+        other->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j"}};
+    auto got = v->prod(*w, pann, sequant::DeNest::True);
+    REQUIRE(!got->as<ResultZ>().is_view());  // computed outright
+    REQUIRE(v->as<ResultZToT>().is_view());
+    REQUIRE(w->as<ResultZToT>().is_view());
+    ZToT Rc, Sc;
+    Rc("i,j;a,b") = R("i,j;a,b").conj();
+    Sc("i,j;a,b") = Z(-1.0, 0.0) * S("i,j;a,b").conj();
+    world.gop.fence();
+    ZArray ref =
+        TA::einsum<TA::DeNest::True>(Rc("i,j;a,b"), Sc("i,j;a,b"), "i,j");
+    world.gop.fence();
+    ZArray rd;
+    rd("i,j") = got->get<ZArray>()("i,j") - ref("i,j");
+    world.gop.fence();
+    REQUIRE(rd("i,j").norm().get() < 1e-12);
+  }
+  SECTION("ToT * T with a phased view: the phase folds into the product") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->mult_by_phase(-1);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"j,k"},
+                                 std::string{"i,k;a,b"}};
+    auto got = v->prod(*flat, pann, sequant::DeNest::False);
+    REQUIRE(!got->as<ResultZToT>().is_view());
+    REQUIRE(v->as<ResultZToT>().is_view());  // the operand stays a view
+    ZToT ref = TA::einsum(R("i,j;a,b"), F("j,k"), "i,k;a,b");
+    ZToT nref;
+    nref("i,k;a,b") = Z(-1.0, 0.0) * ref("i,k;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), nref, "i,k;a,b") < 1e-12);
+  }
+  SECTION("dot with conj views") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = other->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> dann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{}};
+    auto d = res->prod(*v, dann, sequant::DeNest::False);
+    ZToT Sc;
+    Sc("i,j;a,b") = S("i,j;a,b").conj();
+    world.gop.fence();
+    Z const dref = TA::dot(R("i,j;a,b"), Sc("i,j;a,b"));
+    REQUIRE(std::abs(d->get<Z>() - dref) < 1e-12);
+  }
+  SECTION("sum, add_inplace, permute and phase compose on views") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> sann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j;a,b"}};
+    auto s = v->sum(*other, sann);
+    ZToT ref;
+    ref("i,j;a,b") = R("i,j;a,b").conj() + S("i,j;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(s->get<ZToT>(), ref, "i,j;a,b") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    // add_inplace into a view materializes the target, adds the other lazily
+    auto w = res->apply_transform(CanonTransform{.conj = true}, ann);
+    w->add_inplace(*v);
+    ZToT ref2;
+    ref2("i,j;a,b") = Z(2.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(w->get<ZToT>(), ref2, "i,j;a,b") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    // permute of a view stays a view; phase and a second conj compose
+    std::array<std::any, 2> pann{std::string{"i,j;a,b"},
+                                 std::string{"j,i;a,b"}};
+    auto pv = v->permute(pann);
+    REQUIRE(pv->as<ResultZToT>().is_view());
+    auto pvm = pv->mult_by_phase(-1);
+    REQUIRE(pvm->as<ResultZToT>().is_view());
+    auto pvc =
+        pvm->apply_transform(CanonTransform{.conj = true},
+                             {std::string{"j,i;a,b"}, std::string{"j,i;b,a"}});
+    REQUIRE(pvc->as<ResultZToT>().is_view());
+    ZToT ref3;
+    ref3("j,i;b,a") = Z(-1.0, 0.0) * R("i,j;a,b");  // conj twice
+    world.gop.fence();
+    REQUIRE(norm_diff(pvc->get<ZToT>(), ref3, "j,i;b,a") < 1e-12);
+  }
+  SECTION("views of a zero ToT (all-empty inner tiles) materialize") {
+    // the initial amplitude leaf: every inner tile empty (tot_inner_rank 0)
+    ZToT zero{world, otr};
+    for (auto it = zero.begin(); it != zero.end(); ++it)
+      if (zero.is_local(it.index()))
+        *it = typename ZToT::value_type{it.make_range()};
+    world.gop.fence();
+    REQUIRE(sequant::detail::tot_inner_rank(zero) == 0);
+    ResultPtr z = eval_result<ResultZToT>(zero);
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto v = z->apply_transform(
+        CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    REQUIRE_NOTHROW(v->get<ZToT>());
+    auto const& m = v->get<ZToT>();
+    REQUIRE(m.trange().rank() == 2);
+    REQUIRE(sequant::detail::tot_inner_rank(m) == 0);
+    // materialized into a private array: adding into it leaves the source
+    // (the cache's canonical zero) untouched
+    v->add_inplace(*other);
+    REQUIRE(sequant::detail::tot_inner_rank(zero) == 0);
+    REQUIRE(norm_diff(v->get<ZToT>(), S, "i,j;a,b") < 1e-12);
+    // a phase-only view of the zero and a sum with it
+    auto pz = z->mult_by_phase(-1);
+    std::array<std::any, 3> sann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j;a,b"}};
+    auto sm = pz->sum(*other, sann);
+    REQUIRE(norm_diff(sm->get<ZToT>(), S, "i,j;a,b") < 1e-12);
+  }
+  SECTION("a relabeled view still slices and clones correctly") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;a,b"}};
+    auto v = res->permute(ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    auto c = v->clone();
+    ZToT ref;
+    ref("j,i;a,b") = R("i,j;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(c->get<ZToT>(), ref, "j,i;a,b") < 1e-12);
+    // slice_mode(0, [0,2)) of the relabeled view == tiles [0,1) of ref's j
+    auto sl = v->slice_mode(0, 0, 2);
+    auto const& sla = sl->get<ZToT>();
+    REQUIRE(sla.trange().dim(0).extent() == 2);
+    ZToT refsl;
+    refsl("j,i;a,b") = ref("j,i;a,b").block({0, 0}, {1, 2});
+    world.gop.fence();
+    REQUIRE(norm_diff(sla, refsl, "j,i;a,b") < 1e-12);
+  }
+}
+
+// A flat TiledArray result may stand for a pending view of another result's
+// array (detail::ArrayView): a batch slice, a mode permutation, a conjugation,
+// a scaling by a constant. The view shares the parent's tiles until a consumer
+// needs an array. These tests pin the contract: a view is an alias (no bytes
+// of its own) until get<>() materializes it; the expression consumers (the
+// products, dot, sums, accumulation, the scatter) take the view as is and
+// leave it an alias; the array consumers (einsum, clone) materialize it
+// exactly; writes into a view never reach the parent.
+
+// The tiles a consuming TiledArray expression receives from a view: what
+// with_expr() hands over, evaluated through its own engine in the view's
+// stored mode order (so no permutation is applied), each local lazy tile
+// converted as a product or a sum would convert it. Returns the evaluator's
+// TiledRange and the (ordinal, tile) pairs of this rank's tiles.
+template <typename ResultT>
+auto view_consumer_tiles(ResultT const& r, std::string const& annot) {
+  return r.with_expr(annot, [&](auto&& expr) {
+    using Expr = std::decay_t<decltype(expr)>;
+    typename TA::expressions::ExprTrait<Expr>::engine_type engine(expr);
+    engine.init(TA::get_default_world(), {},
+                TA::expressions::BipartiteIndexList(expr.annotation()));
+    auto dist_eval = engine.make_dist_eval();
+    dist_eval.eval();
+    using Tile = typename decltype(dist_eval)::eval_type;
+    std::vector<std::pair<std::size_t, Tile>> tiles;
+    for (auto ord : *dist_eval.pmap())
+      tiles.emplace_back(ord, static_cast<Tile>(dist_eval.get(ord).get()));
+    dist_eval.wait();
+    return std::make_pair(dist_eval.trange(), std::move(tiles));
+  });
+}
+
+// true iff every tile of \p tiles (from view_consumer_tiles) that the parent
+// array \p parent holds on this rank IS the parent's tile (same buffer); the
+// view's tile (ordinal in \p view_trange) maps to the parent's at + \p lo
+// (tile coordinates). A tile the parent holds elsewhere is a fetched copy by
+// construction and is not inspected.
+template <typename ArrayT, typename Tiles>
+bool consumer_reads_parent_tiles(ArrayT const& parent,
+                                 TA::TiledRange const& view_trange,
+                                 Tiles const& tiles,
+                                 std::vector<std::size_t> const& lo) {
+  std::size_t checked = 0;
+  for (auto const& [ord, tile] : tiles) {
+    auto idx = view_trange.tiles_range().idx(ord);
+    for (std::size_t d = 0; d < idx.size(); ++d) idx[d] += lo[d];
+    if (!parent.is_local(idx)) continue;
+    auto const parent_tile = parent.find_local(idx).get();
+    if (static_cast<void const*>(tile.data()) !=
+        static_cast<void const*>(parent_tile.data()))
+      return false;
+    ++checked;
+  }
+  // every rank holds some tiles of an array this small with no zero tiles
+  return checked > 0;
+}
+
+TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
+  using sequant::DeNest;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultScalar;
+  using sequant::ResultTensorTA;
+  using TArrayD = TA::TSpArrayD;
+  using TArrayZ = TA::TSpArrayZ;
+  using ResultD = ResultTensorTA<TArrayD>;
+  using ResultZ = ResultTensorTA<TArrayZ>;
+  using Bounds = std::vector<std::size_t>;
+
+  auto& world = TA::get_default_world();
+  auto annot3 = [](std::string l, std::string r, std::string c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto annot2 = [](std::string pre, std::string post) {
+    return std::array<std::any, 2>{std::move(pre), std::move(post)};
+  };
+  sequant::CanonTransform conj_t;  // the adjoint: a conjugating relabel
+  conj_t.conj = true;
+  // the eager slice: tiles [lo, hi) of every mode, element coordinates kept
+  auto eager_block = [](auto const& arr, std::string const& ann, Bounds lo,
+                        Bounds hi) {
+    std::decay_t<decltype(arr)> out;
+    out(ann) = arr(ann).block(lo, hi, TA::preserve_lobound);
+    return out;
+  };
+
+  // A(a,b,c): tiles 3 x 4 x 2; B(c,d): tiles 2 x 2
+  TA::TiledRange const trA{{0, 3, 6, 9}, {0, 2, 4, 6, 8}, {0, 5, 10}};
+  TA::TiledRange const trB{{0, 5, 10}, {0, 4, 7}};
+  TArrayD A(world, trA), B(world, trB);
+  A.fill_random();
+  B.fill_random();
+  world.gop.fence();
+  auto rA = eval_result<ResultD>(A);
+  auto rB = eval_result<ResultD>(B);
+
+  SECTION("a batch slice is an alias until its value is asked for") {
+    // mode 1, elements [2, 6) = tiles 1..2
+    auto s = rA->slice_mode(1, 2, 6);
+    REQUIRE(s->is_buffer_alias());
+    REQUIRE(s->size_in_bytes() == 0);  // untraced: nothing is measured
+    // measured 0 while the parent is held: the storage is counted once, on
+    // the holder (see measured_size_in_bytes)
+    REQUIRE(s->measured_size_in_bytes() == 0);
+    auto const exp = eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2});
+    // the layout it reports is the slice's, without materializing
+    std::ostringstream os;
+    os << exp.trange();
+    REQUIRE(s->trange_annot() == os.str());
+    REQUIRE(s->is_buffer_alias());
+    // the value is the eager slice; asking for it materializes once
+    REQUIRE(equal_tarrays(s->get<TArrayD>(), exp, "a,b,c"));
+    REQUIRE_FALSE(s->is_buffer_alias());
+    REQUIRE(s->measured_size_in_bytes() > 0);
+    // A is untouched
+    REQUIRE(A.trange() == trA);
+  }
+
+  SECTION("the consumer of a view reads the parent's tiles in place") {
+    // what a product or a sum receives from a view is the parent's own tile,
+    // not a copy: TiledArray hands the tiles of a const array's block that
+    // keeps the array's element coordinates through, and with_expr() hands
+    // the parent over as a const array
+    {
+      // a slice: mode 1, tiles 1..2
+      auto s = rA->slice_mode(1, 2, 6);
+      auto const [tr, tiles] = view_consumer_tiles(s->as<ResultD>(), "a,b,c");
+      REQUIRE(consumer_reads_parent_tiles(A, tr, tiles, {0, 1, 0}));
+      REQUIRE(s->is_buffer_alias());
+    }
+    {
+      // a slice of a slice: mode 1 tiles 1..2, then mode 0 tile 2
+      auto ss = rA->slice_mode(1, 2, 6)->slice_mode(0, 6, 9);
+      auto const [tr, tiles] = view_consumer_tiles(ss->as<ResultD>(), "a,b,c");
+      REQUIRE(consumer_reads_parent_tiles(A, tr, tiles, {2, 1, 0}));
+    }
+    {
+      // a permuted slice: the permutation only relabels the parent's modes,
+      // so the tiles are still the parent's
+      auto ps = rA->slice_mode(1, 2, 6)->permute(annot2("a,b,c", "c,a,b"));
+      auto const [tr, tiles] = view_consumer_tiles(ps->as<ResultD>(), "c,a,b");
+      REQUIRE(consumer_reads_parent_tiles(A, tr, tiles, {0, 1, 0}));
+    }
+    {
+      // a whole-array view (a permutation without a slice) too
+      auto pv = rA->permute(annot2("a,b,c", "b,a,c"));
+      auto const [tr, tiles] = view_consumer_tiles(pv->as<ResultD>(), "b,a,c");
+      REQUIRE(consumer_reads_parent_tiles(A, tr, tiles, {0, 0, 0}));
+    }
+    {
+      // a conjugated view of a complex array computes its tiles: a copy
+      TArrayZ Z(world, trA);
+      Z.fill_random();
+      world.gop.fence();
+      auto rZ = eval_result<ResultZ>(Z);
+      auto cz = rZ->slice_mode(1, 2, 6)->apply_transform(
+          sequant::CanonTransform{.conj = true}, annot2("a,b,c", "a,b,c"));
+      auto const [tr, tiles] = view_consumer_tiles(cz->as<ResultZ>(), "a,b,c");
+      REQUIRE_FALSE(consumer_reads_parent_tiles(Z, tr, tiles, {0, 1, 0}));
+    }
+  }
+
+  SECTION("a product takes a sliced operand as is") {
+    // batch the contracted index c: slices of A (mode 2) and B (mode 0)
+    // over the tile [5, 10)
+    auto sA = rA->slice_mode(2, 5, 10);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto prod = sA->prod(*sB, annot3("a,b,c", "c,d", "a,b,d"), DeNest::False);
+    // neither operand was materialized
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sB->is_buffer_alias());
+    REQUIRE_FALSE(prod->is_buffer_alias());
+    TArrayD exp;
+    exp("a,b,d") = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c") *
+                   eager_block(B, "c,d", {1, 0}, {2, 2})("c,d");
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "a,b,d"));
+
+    // the batches add up to the full contraction
+    auto s0A = rA->slice_mode(2, 0, 5);
+    auto s0B = rB->slice_mode(0, 0, 5);
+    auto p0 = s0A->prod(*s0B, annot3("a,b,c", "c,d", "a,b,d"), DeNest::False);
+    p0->add_inplace(*prod);
+    TArrayD full;
+    full("a,b,d") = A("a,b,c") * B("c,d");
+    REQUIRE(equal_tarrays(p0->get<TArrayD>(), full, "a,b,d"));
+  }
+
+  SECTION("a product with a Hadamard index takes the views as is") {
+    // H(a,c): a appears on both operands and the result (a general product,
+    // which the expression layer evaluates natively)
+    TArrayD H(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5, 10}});
+    H.fill_random();
+    world.gop.fence();
+    auto rH = eval_result<ResultD>(H);
+    auto sA = rA->slice_mode(2, 5, 10);
+    auto sH = rH->slice_mode(1, 5, 10);
+    auto prod = sA->prod(*sH, annot3("a,b,c", "a,c", "a,b"), DeNest::False);
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sH->is_buffer_alias());
+    auto exp =
+        TA::einsum(eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c"),
+                   eager_block(H, "a,c", {0, 1}, {3, 2})("a,c"), "a,b");
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "a,b"));
+  }
+
+  SECTION("a slice of a slice") {
+    auto s = rA->slice_mode(1, 2, 6);
+    auto ss = s->slice_mode(2, 5, 10);
+    REQUIRE(ss->is_buffer_alias());
+    REQUIRE(s->is_buffer_alias());
+    auto const exp = eager_block(A, "a,b,c", {0, 1, 1}, {3, 3, 2});
+    REQUIRE(equal_tarrays(ss->get<TArrayD>(), exp, "a,b,c"));
+    // narrowing the already sliced mode
+    auto sn = s->slice_mode(1, 4, 6);
+    REQUIRE(equal_tarrays(sn->get<TArrayD>(),
+                          eager_block(A, "a,b,c", {0, 2, 0}, {3, 3, 2}),
+                          "a,b,c"));
+    // slicing a view further never materializes it
+    REQUIRE(s->is_buffer_alias());
+    // a slice of a materialized result is an alias of that result
+    REQUIRE(equal_tarrays(s->get<TArrayD>(),
+                          eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2}),
+                          "a,b,c"));
+    REQUIRE_FALSE(s->is_buffer_alias());
+    auto sm = s->slice_mode(2, 0, 5);
+    REQUIRE(sm->is_buffer_alias());
+    REQUIRE(equal_tarrays(sm->get<TArrayD>(),
+                          eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 1}),
+                          "a,b,c"));
+  }
+
+  SECTION("a permutation is lazy and composes with a slice") {
+    auto p = rA->permute(annot2("a,b,c", "c,a,b"));
+    REQUIRE(p->is_buffer_alias());
+    TArrayD expP;
+    expP("c,a,b") = A("a,b,c");
+    std::ostringstream os;
+    os << expP.trange();
+    REQUIRE(p->trange_annot() == os.str());
+    // slicing the permuted view's mode 0 (= c of A)
+    auto ps = p->slice_mode(0, 5, 10);
+    REQUIRE(ps->is_buffer_alias());
+    REQUIRE(p->is_buffer_alias());
+    TArrayD expPS;
+    expPS("c,a,b") = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c");
+    REQUIRE(equal_tarrays(ps->get<TArrayD>(), expPS, "c,a,b"));
+    // the permuted slice as a product operand, relabelled once more
+    auto ps2 = p->slice_mode(0, 5, 10);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto prod = ps2->prod(*sB, annot3("c,a,b", "c,d", "b,a,d"), DeNest::False);
+    REQUIRE(ps2->is_buffer_alias());
+    TArrayD exp;
+    exp("b,a,d") = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c") *
+                   eager_block(B, "c,d", {1, 0}, {2, 2})("c,d");
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "b,a,d"));
+    // a permutation of a permutation
+    auto pp = p->permute(annot2("c,a,b", "b,c,a"));
+    REQUIRE(pp->is_buffer_alias());
+    TArrayD expPP;
+    expPP("b,c,a") = A("a,b,c");
+    REQUIRE(equal_tarrays(pp->get<TArrayD>(), expPP, "b,c,a"));
+    // the identity permutation is an alias too, and copies before a write:
+    // accumulating into it leaves A alone
+    auto const A0 = TA::clone(A);
+    auto id = rA->permute(annot2("a,b,c", "a,b,c"));
+    REQUIRE(id->is_buffer_alias());
+    id->add_inplace(*eval_result<ResultD>(TA::clone(A)));
+    REQUIRE_FALSE(id->is_buffer_alias());
+    TArrayD twice;
+    twice("a,b,c") = 2.0 * A0("a,b,c");
+    REQUIRE(equal_tarrays(id->get<TArrayD>(), twice, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+    REQUIRE(p->is_buffer_alias());
+  }
+
+  SECTION("the adjoint conjugates lazily") {
+    TArrayZ Z(world, TA::TiledRange{{0, 3, 6}, {0, 5, 10}});
+    TArrayZ W(world, TA::TiledRange{{0, 5, 10}, {0, 4}});
+    Z.fill_random();
+    W.fill_random();
+    world.gop.fence();
+    auto rZ = eval_result<ResultZ>(Z);
+    auto rW = eval_result<ResultZ>(W);
+    auto adj = rZ->apply_transform(conj_t, annot2("i,a", "a,i"));
+    REQUIRE(adj->is_buffer_alias());
+    TArrayZ expAdj;
+    expAdj("a,i") = Z("i,a").conj();
+    // consumed by a product: Z^dagger(a,i) W(a,j) -> (i,j), nothing
+    // materialized
+    auto prod = adj->prod(*rW, annot3("a,i", "a,j", "i,j"), DeNest::False);
+    REQUIRE(adj->is_buffer_alias());
+    TArrayZ exp;
+    exp("i,j") = expAdj("a,i") * W("a,j");
+    REQUIRE(equal_tarrays(prod->get<TArrayZ>(), exp, "i,j"));
+    // a slice of the adjoint: mode 0 (= a) tile [5, 10)
+    auto as = adj->slice_mode(0, 5, 10);
+    REQUIRE(as->is_buffer_alias());
+    TArrayZ expAS;
+    expAS("a,i") = eager_block(Z, "i,a", {0, 1}, {2, 2})("i,a").conj();
+    REQUIRE(equal_tarrays(as->get<TArrayZ>(), expAS, "a,i"));
+    // the adjoint of the adjoint is a (trivial) view of the array
+    auto adj2 = adj->apply_transform(conj_t, annot2("a,i", "i,a"));
+    REQUIRE(adj2->is_buffer_alias());
+    REQUIRE(equal_tarrays(adj2->get<TArrayZ>(), Z, "i,a"));
+    REQUIRE_FALSE(adj2->is_buffer_alias());
+    // and the value of the adjoint itself
+    REQUIRE(equal_tarrays(adj->get<TArrayZ>(), expAdj, "a,i"));
+  }
+
+  SECTION("sum, scaling, dot and norm take views as is") {
+    auto s1 = rA->slice_mode(2, 5, 10);
+    auto s2 = rA->slice_mode(2, 5, 10);
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    auto sum = s1->sum(*s2, annot3("a,b,c", "a,b,c", "c,b,a"));
+    REQUIRE(s1->is_buffer_alias());
+    REQUIRE(s2->is_buffer_alias());
+    TArrayD expSum;
+    expSum("c,b,a") = blk("a,b,c") + blk("a,b,c");
+    REQUIRE(equal_tarrays(sum->get<TArrayD>(), expSum, "c,b,a"));
+    TArrayD unusedSum;
+    unusedSum("a,b,c") = blk("a,b,c") + blk("a,b,c");
+    expSum = unusedSum;
+
+    auto scaled = s1->prod(*eval_result<ResultScalar<double>>(2.5),
+                           annot3("a,b,c", "", "c,b,a"), DeNest::False);
+    REQUIRE(s1->is_buffer_alias());
+    TArrayD expScaled;
+    expScaled("c,b,a") = 2.5 * blk("a,b,c");
+    REQUIRE(equal_tarrays(scaled->get<TArrayD>(), expScaled, "c,b,a"));
+
+    auto dot = s1->prod(*s2, annot3("a,b,c", "a,b,c", ""), DeNest::False);
+    REQUIRE(s1->is_buffer_alias());
+    double const expDot = TA::dot(blk("a,b,c"), blk("a,b,c"));
+    REQUIRE(dot->get<double>() == Catch::Approx(expDot));
+
+    REQUIRE(s1->norm2() == Catch::Approx(TA::norm2(blk)));
+    REQUIRE(s1->is_buffer_alias());
+  }
+
+  SECTION("writes into a view never reach the parent") {
+    auto const A0 = TA::clone(A);
+    // accumulate into a slice: the slice becomes its own array
+    auto s = rA->slice_mode(2, 5, 10);
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    auto other = eval_result<ResultD>(TA::clone(blk));
+    s->add_inplace(*other);
+    REQUIRE_FALSE(s->is_buffer_alias());
+    TArrayD exp2;
+    exp2("a,b,c") = 2.0 * blk("a,b,c");
+    REQUIRE(equal_tarrays(s->get<TArrayD>(), exp2, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+    // accumulating a view INTO a held value folds the view in
+    auto held = eval_result<ResultD>(TA::clone(blk));
+    held->add_inplace(*rA->slice_mode(2, 5, 10));
+    REQUIRE(equal_tarrays(held->get<TArrayD>(), exp2, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+
+    // the scatter: a view as the block, and a view as the destination
+    TArrayD Zr(world, trA);
+    Zr.fill(0.0);
+    world.gop.fence();
+    auto dest = eval_result<ResultD>(Zr);
+    dest->write_into_slice(*rA->slice_mode(2, 5, 10), 2, 5, 10);
+    TArrayD expZ;
+    expZ("a,b,c") = Zr("a,b,c");
+    expZ("a,b,c").block({0, 0, 1}, {3, 4, 2}, TA::preserve_lobound) =
+        blk("a,b,c");
+    REQUIRE(equal_tarrays(dest->get<TArrayD>(), expZ, "a,b,c"));
+    auto destView = rA->slice_mode(1, 2, 6);  // a view as a destination
+    destView->write_into_slice(*rA->slice_mode(1, 2, 6)->slice_mode(2, 5, 10),
+                               2, 5, 10);
+    REQUIRE_FALSE(destView->is_buffer_alias());
+    REQUIRE(equal_tarrays(destView->get<TArrayD>(),
+                          eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2}),
+                          "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+  }
+
+  SECTION("clone of a view is a fresh array with the view applied") {
+    auto s = rA->slice_mode(2, 5, 10);
+    auto c = s->clone();
+    REQUIRE(s->is_buffer_alias());
+    REQUIRE_FALSE(c->is_buffer_alias());
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    REQUIRE(equal_tarrays(c->get<TArrayD>(), blk, "a,b,c"));
+    // independent storage
+    c->add_inplace(*eval_result<ResultD>(TA::clone(blk)));
+    REQUIRE(equal_tarrays(s->get<TArrayD>(), blk, "a,b,c"));
+  }
+
+  SECTION("nested-array slices are views too") {
+    using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+    using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
+    // T(i,c;x,y) nested over tiles 2 x 2, inner 3 x 2
+    TA::TiledRange const trT{{0, 2, 4}, {0, 5, 10}};
+    TA::Range const inner({3, 2});
+    ToTArray T(world, trT);
+    for (auto it = T.begin(); it != T.end(); ++it)
+      if (T.is_local(it.index()))
+        *it = world.taskq.add(
+            [inner](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, inner);
+            },
+            it.make_range());
+    world.gop.fence();
+    auto const T0 = TA::clone(T);
+    auto rT = eval_result<ResultToT>(T);
+    auto const eager = sequant::slice_array_over_mode(T, 1, 1, 2);
+
+    // the slice is an alias, reports the slice's layout, materializes once
+    auto sT = rT->slice_mode(1, 5, 10);
+    REQUIRE(sT->is_buffer_alias());
+    REQUIRE(sT->size_in_bytes() == 0);
+    std::ostringstream os;
+    os << eager.trange();
+    REQUIRE(sT->trange_annot() == os.str());
+    REQUIRE(equal_tarrays(sT->get<ToTArray>(), eager, "i,c;x,y"));
+    REQUIRE_FALSE(sT->is_buffer_alias());
+
+    // ToT * flat with both operands sliced on the contracted index: neither
+    // is materialized; the batches add up to the full product
+    auto sT1 = rT->slice_mode(1, 5, 10);
+    auto sB1 = rB->slice_mode(0, 5, 10);
+    auto p1 =
+        sT1->prod(*sB1, annot3("i,c;x,y", "c,d", "i,d;x,y"), DeNest::False);
+    REQUIRE(sT1->is_buffer_alias());
+    REQUIRE(sB1->is_buffer_alias());
+    ToTArray exp1;
+    exp1("i,d;x,y") =
+        eager("i,c;x,y") * eager_block(B, "c,d", {1, 0}, {2, 2})("c,d");
+    REQUIRE(equal_tarrays(p1->get<ToTArray>(), exp1, "i,d;x,y"));
+    auto p0 = rT->slice_mode(1, 0, 5)->prod(*rB->slice_mode(0, 0, 5),
+                                            annot3("i,c;x,y", "c,d", "i,d;x,y"),
+                                            DeNest::False);
+    p0->add_inplace(*p1);
+    ToTArray full;
+    full("i,d;x,y") = T("i,c;x,y") * B("c,d");
+    REQUIRE(equal_tarrays(p0->get<ToTArray>(), full, "i,d;x,y"));
+
+    // a nested view as the operand of an accumulation, and as the block of
+    // a scatter; neither reaches T
+    auto acc = eval_result<ResultToT>(TA::clone(eager));
+    acc->add_inplace(*rT->slice_mode(1, 5, 10));
+    ToTArray twice;
+    twice("i,c;x,y") = 2.0 * eager("i,c;x,y");
+    REQUIRE(equal_tarrays(acc->get<ToTArray>(), twice, "i,c;x,y"));
+    auto dest = eval_result<ResultToT>(TA::clone(T));
+    dest->write_into_slice(*acc, 1, 5, 10);
+    ToTArray expDest;
+    expDest("i,c;x,y") = T("i,c;x,y");
+    expDest("i,c;x,y").block({0, 1}, {2, 2}, TA::preserve_lobound) =
+        twice("i,c;x,y");
+    REQUIRE(equal_tarrays(dest->get<ToTArray>(), expDest, "i,c;x,y"));
+    // scattering INTO a view materializes it; T is untouched throughout
+    auto destView = rT->slice_mode(0, 0, 4);
+    REQUIRE(destView->is_buffer_alias());
+    destView->write_into_slice(*acc, 1, 5, 10);
+    REQUIRE_FALSE(destView->is_buffer_alias());
+    REQUIRE(equal_tarrays(destView->get<ToTArray>(), expDest, "i,c;x,y"));
+    REQUIRE(equal_tarrays(T, T0, "i,c;x,y"));
+
+    // a flat view (permuted and sliced) as the operand of a nested product
+    auto pB = rB->permute(annot2("c,d", "d,c"))->slice_mode(1, 5, 10);
+    auto p2 = rT->slice_mode(1, 5, 10)->prod(
+        *pB, annot3("i,c;x,y", "d,c", "i,d;x,y"), DeNest::False);
+    REQUIRE(pB->is_buffer_alias());
+    REQUIRE(equal_tarrays(p2->get<ToTArray>(), exp1, "i,d;x,y"));
+  }
+
+  SECTION("a permutation or an adjoint of a slice is a view") {
+    auto ps = rA->slice_mode(1, 2, 6)->permute(annot2("a,b,c", "c,a,b"));
+    REQUIRE(ps->is_buffer_alias());
+    TArrayD exp;
+    exp("c,a,b") = eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2})("a,b,c");
+    REQUIRE(equal_tarrays(ps->get<TArrayD>(), exp, "c,a,b"));
+
+    TArrayZ Z(world, TA::TiledRange{{0, 3, 6}, {0, 5, 10}});
+    Z.fill_random();
+    world.gop.fence();
+    auto rZ = eval_result<ResultZ>(Z);
+    auto as =
+        rZ->slice_mode(1, 5, 10)->apply_transform(conj_t, annot2("i,a", "a,i"));
+    REQUIRE(as->is_buffer_alias());
+    TArrayZ expZ;
+    expZ("a,i") = eager_block(Z, "i,a", {0, 1}, {2, 2})("i,a").conj();
+    REQUIRE(equal_tarrays(as->get<TArrayZ>(), expZ, "a,i"));
+  }
+
+  SECTION("the array consumers of a view leave the parent alone") {
+    auto const A0 = TA::clone(A);
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    // a phase: folded into the scaling, the view stays a view
+    auto const vNeg = rA->slice_mode(2, 5, 10);
+    auto neg = vNeg->mult_by_phase(-1);
+    REQUIRE(vNeg->is_buffer_alias());
+    TArrayD expNeg;
+    expNeg("a,b,c") = -1.0 * blk("a,b,c");
+    REQUIRE(equal_tarrays(neg->get<TArrayD>(), expNeg, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+    // the symmetrizer (i <-> j with a <-> b): the same as on the
+    // materialized slice; both members of a swapped pair are cut alike
+    TArrayD M(world,
+              TA::TiledRange{{0, 3, 6}, {0, 3, 6}, {0, 2, 4}, {0, 2, 4}});
+    M.fill_random();
+    world.gop.fence();
+    auto rM = eval_result<ResultD>(M);
+    auto symView = rM->slice_mode(0, 3, 6)->slice_mode(1, 3, 6)->symmetrize();
+    auto symEager = eval_result<ResultD>(
+                        eager_block(M, "i,j,a,b", {1, 1, 0, 0}, {2, 2, 2, 2}))
+                        ->symmetrize();
+    REQUIRE(equal_tarrays(symView->get<TArrayD>(), symEager->get<TArrayD>(),
+                          "i,j,a,b"));
+  }
+
+  SECTION("a spectator mode with a nonzero element lobound keeps it") {
+    // the modes of A2 and B2 start at element 4 (a frozen-core offset)
+    TArrayD A2(world, TA::TiledRange{{4, 6, 8}, {0, 5, 10}});
+    TArrayD B2(world, TA::TiledRange{{4, 6, 8}, {0, 4}});
+    A2.fill_random();
+    B2.fill_random();
+    world.gop.fence();
+    auto rA2 = eval_result<ResultD>(A2);
+    auto rB2 = eval_result<ResultD>(B2);
+    auto s = rA2->slice_mode(1, 5, 10);
+    auto const blk = eager_block(A2, "a,b", {0, 1}, {2, 2});
+    auto const& sv = s->as<ResultD>();
+    REQUIRE(sv.logical_trange() == blk.trange());
+    REQUIRE(sv.logical_trange().elements_range().lobound()[0] == 4);
+    auto prod = s->prod(*rB2, annot3("a,b", "a,c", "b,c"), DeNest::False);
+    REQUIRE(s->is_buffer_alias());
+    TArrayD exp;
+    exp("b,c") = blk("a,b") * B2("a,c");
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "b,c"));
+    // and through a permutation of the view
+    auto pp = s->permute(annot2("a,b", "b,a"));
+    REQUIRE(pp->as<ResultD>().logical_trange().elements_range().lobound()[1] ==
+            4);
+    TArrayD expP;
+    expP("b,a") = blk("a,b");
+    REQUIRE(equal_tarrays(pp->get<TArrayD>(), expP, "b,a"));
+  }
+
+  SECTION("scaling by a constant is a pending view") {
+    auto const A0 = TA::clone(A);
+    auto c = eval_result<ResultScalar<double>>(2.5);
+    auto scaled = rA->prod(*c, annot3("a,b,c", "", "a,b,c"), DeNest::False);
+    REQUIRE(scaled->is_buffer_alias());
+    // a view of a held parent measures 0: its storage is counted on the holder
+    REQUIRE(scaled->measured_size_in_bytes() == 0);
+    REQUIRE(rA->measured_size_in_bytes() > 0);
+    REQUIRE(scaled->as<ResultD>().logical_trange() == trA);
+    // the scalar on the left (ResultScalar::prod forwards to the tensor)
+    auto scaledL = c->prod(*rA, annot3("", "a,b,c", "a,b,c"), DeNest::False);
+    REQUIRE(scaledL->is_buffer_alias());
+    // the phase is a view as well, and the factors compose
+    auto neg = scaled->mult_by_phase(-1);
+    REQUIRE(neg->is_buffer_alias());
+    REQUIRE(scaled->is_buffer_alias());
+    TArrayD exp;
+    exp("a,b,c") = 2.5 * A("a,b,c");
+    REQUIRE(equal_tarrays(scaled->get<TArrayD>(), exp, "a,b,c"));
+    REQUIRE_FALSE(scaled->is_buffer_alias());
+    REQUIRE(equal_tarrays(scaledL->get<TArrayD>(), exp, "a,b,c"));
+    TArrayD expNeg;
+    expNeg("a,b,c") = -2.5 * A("a,b,c");
+    REQUIRE(equal_tarrays(neg->get<TArrayD>(), expNeg, "a,b,c"));
+    // the product annotation relabels the result: a permuted scaled view
+    auto sp = rA->prod(*c, annot3("a,b,c", "", "c,a,b"), DeNest::False);
+    REQUIRE(sp->is_buffer_alias());
+    TArrayD expP;
+    expP("c,a,b") = 2.5 * A("a,b,c");
+    REQUIRE(equal_tarrays(sp->get<TArrayD>(), expP, "c,a,b"));
+    // the factor survives a slice and a permutation of the scaled view
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    auto ss = rA->prod(*c, annot3("a,b,c", "", "a,b,c"), DeNest::False)
+                  ->slice_mode(2, 5, 10)
+                  ->permute(annot2("a,b,c", "c,a,b"));
+    REQUIRE(ss->is_buffer_alias());
+    TArrayD expSS;
+    expSS("c,a,b") = 2.5 * blk("a,b,c");
+    REQUIRE(equal_tarrays(ss->get<TArrayD>(), expSS, "c,a,b"));
+    // and a scaling of a slice composes with its phase
+    auto sc = rA->slice_mode(2, 5, 10)->mult_by_phase(-1)->prod(
+        *c, annot3("a,b,c", "", "a,b,c"), DeNest::False);
+    REQUIRE(sc->is_buffer_alias());
+    TArrayD expSC;
+    expSC("a,b,c") = -2.5 * blk("a,b,c");
+    REQUIRE(equal_tarrays(sc->get<TArrayD>(), expSC, "a,b,c"));
+    // a scaled view of a held value is a view of that value
+    auto held = eval_result<ResultD>(TA::clone(blk));
+    auto hs = held->prod(*c, annot3("a,b,c", "", "a,b,c"), DeNest::False);
+    REQUIRE(hs->is_buffer_alias());
+    REQUIRE_FALSE(held->is_buffer_alias());
+    TArrayD expHS;
+    expHS("a,b,c") = 2.5 * blk("a,b,c");
+    REQUIRE(equal_tarrays(hs->get<TArrayD>(), expHS, "a,b,c"));
+    REQUIRE(equal_tarrays(held->get<TArrayD>(), blk, "a,b,c"));
+    // the parent is untouched throughout
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+    // a view that is the only holder of its parent's tiles owns their bytes:
+    // a phase applied to a value nobody else kept
+    auto const bytes =
+        eval_result<ResultD>(TA::clone(A))->measured_size_in_bytes();
+    REQUIRE(bytes > 0);
+    auto sole = eval_result<ResultD>(TA::clone(A))->mult_by_phase(-1);
+    REQUIRE(sole->is_buffer_alias());
+    REQUIRE(sole->measured_size_in_bytes() == bytes);
+    // while a view of a parent held elsewhere measures 0: the storage is
+    // counted once, on the holder (the tracer charges the view no allocation
+    // through is_buffer_alias() either way)
+    REQUIRE(rA->mult_by_phase(-1)->measured_size_in_bytes() == 0);
+  }
+
+  SECTION("the consumers of a scaled view fold the factor in") {
+    auto const A0 = TA::clone(A);
+    auto c2 = eval_result<ResultScalar<double>>(2.0);
+    auto c3 = eval_result<ResultScalar<double>>(-3.0);
+    auto scale = [&](ResultPtr const& r, std::string const& ann,
+                     ResultPtr const& c) {
+      return r->prod(*c, annot3(ann, "", ann), DeNest::False);
+    };
+    auto const blkA = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    auto const blkB = eager_block(B, "c,d", {1, 0}, {2, 2});
+    auto sA = scale(rA->slice_mode(2, 5, 10), "a,b,c", c2);
+    auto sB = scale(rB->slice_mode(0, 5, 10), "c,d", c3);
+    // a contraction, both operands scaled
+    auto prod = sA->prod(*sB, annot3("a,b,c", "c,d", "a,b,d"), DeNest::False);
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sB->is_buffer_alias());
+    REQUIRE_FALSE(prod->is_buffer_alias());
+    TArrayD exp;
+    exp("a,b,d") = -6.0 * (blkA("a,b,c") * blkB("c,d"));
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "a,b,d"));
+    // a product with a Hadamard index
+    TArrayD H(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5, 10}});
+    H.fill_random();
+    world.gop.fence();
+    auto sH = scale(eval_result<ResultD>(H)->slice_mode(1, 5, 10), "a,c", c3);
+    auto hprod = sA->prod(*sH, annot3("a,b,c", "a,c", "a,b"), DeNest::False);
+    REQUIRE(sH->is_buffer_alias());
+    TArrayD expH;
+    expH("a,b") =
+        -6.0 * TA::einsum(blkA("a,b,c"),
+                          eager_block(H, "a,c", {0, 1}, {3, 2})("a,c"),
+                          "a,b")("a,b");
+    REQUIRE(equal_tarrays(hprod->get<TArrayD>(), expH, "a,b"));
+    // a dot product
+    auto sA3 = scale(rA->slice_mode(2, 5, 10), "a,b,c", c3);
+    auto dot = sA->prod(*sA3, annot3("a,b,c", "a,b,c", ""), DeNest::False);
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sA3->is_buffer_alias());
+    REQUIRE(dot->get<double>() ==
+            Catch::Approx(-6.0 * TA::dot(blkA("a,b,c"), blkA("a,b,c"))));
+    // a sum, relabelled
+    auto sum = sA->sum(*sA3, annot3("a,b,c", "a,b,c", "c,b,a"));
+    REQUIRE(sA->is_buffer_alias());
+    TArrayD expSum;
+    expSum("c,b,a") = -1.0 * blkA("a,b,c");
+    REQUIRE(equal_tarrays(sum->get<TArrayD>(), expSum, "c,b,a"));
+    // an accumulation into a held value
+    auto held = eval_result<ResultD>(TA::clone(blkA));
+    held->add_inplace(*sA);
+    REQUIRE(sA->is_buffer_alias());
+    TArrayD exp3;
+    exp3("a,b,c") = 3.0 * blkA("a,b,c");
+    REQUIRE(equal_tarrays(held->get<TArrayD>(), exp3, "a,b,c"));
+    // the norm
+    REQUIRE(sA->norm2() == Catch::Approx(2.0 * TA::norm2(blkA)));
+    REQUIRE(sA->is_buffer_alias());
+    // the scatter of a scaled view
+    TArrayD Zr(world, trA);
+    Zr.fill(0.0);
+    world.gop.fence();
+    auto dest = eval_result<ResultD>(TA::clone(Zr));
+    dest->write_into_slice(*sA, 2, 5, 10);
+    REQUIRE(sA->is_buffer_alias());
+    TArrayD expZ;
+    expZ("a,b,c") = Zr("a,b,c");
+    expZ("a,b,c").block({0, 0, 1}, {3, 4, 2}, TA::preserve_lobound) =
+        2.0 * blkA("a,b,c");
+    REQUIRE(equal_tarrays(dest->get<TArrayD>(), expZ, "a,b,c"));
+    // the clone
+    auto cl = sA->clone();
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE_FALSE(cl->is_buffer_alias());
+    TArrayD expCl;
+    expCl("a,b,c") = 2.0 * blkA("a,b,c");
+    REQUIRE(equal_tarrays(cl->get<TArrayD>(), expCl, "a,b,c"));
+    // writes into a scaled view never reach the parent
+    auto sv = scale(rA, "a,b,c", c2);
+    sv->add_inplace(*eval_result<ResultD>(TA::clone(A)));
+    REQUIRE_FALSE(sv->is_buffer_alias());
+    TArrayD expSV;
+    expSV("a,b,c") = 3.0 * A("a,b,c");
+    REQUIRE(equal_tarrays(sv->get<TArrayD>(), expSV, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+  }
+
+  SECTION("the adjoint of a scaled complex view conjugates the factor") {
+    using Cplx = std::complex<double>;
+    TArrayZ Z(world, TA::TiledRange{{0, 3, 6}, {0, 5, 10}});
+    TArrayZ W(world, TA::TiledRange{{0, 5, 10}, {0, 4}});
+    Z.fill_random();
+    W.fill_random();
+    world.gop.fence();
+    auto rZ = eval_result<ResultZ>(Z);
+    auto rW = eval_result<ResultZ>(W);
+    Cplx const c{1.0, 2.0};
+    auto rc = eval_result<ResultScalar<Cplx>>(c);
+    auto cz = rZ->prod(*rc, annot3("i,a", "", "i,a"), DeNest::False);
+    REQUIRE(cz->is_buffer_alias());
+    REQUIRE(cz->norm2() == Catch::Approx(std::abs(c) * TA::norm2(Z)));
+    // (c Z)^dagger = conj(c) Z^dagger
+    auto adj = cz->apply_transform(
+        sequant::CanonTransform{.conj = true, .braket_swap = true},
+        annot2("i,a", "a,i"));
+    REQUIRE(adj->is_buffer_alias());
+    REQUIRE(cz->is_buffer_alias());
+    TArrayZ expAdj;
+    expAdj("a,i") = std::conj(c) * Z("i,a").conj();
+    // consumed by a product: nothing materialized
+    auto prod = adj->prod(*rW, annot3("a,i", "a,j", "i,j"), DeNest::False);
+    REQUIRE(adj->is_buffer_alias());
+    TArrayZ expP;
+    expP("i,j") = expAdj("a,i") * W("a,j");
+    REQUIRE(equal_tarrays(prod->get<TArrayZ>(), expP, "i,j"));
+    REQUIRE(equal_tarrays(adj->get<TArrayZ>(), expAdj, "a,i"));
+    // scaling after the adjoint: c Z^dagger, the factor as given
+    auto adjc =
+        rZ->apply_transform(
+              sequant::CanonTransform{.conj = true, .braket_swap = true},
+              annot2("i,a", "a,i"))
+            ->prod(*rc, annot3("a,i", "", "a,i"), DeNest::False);
+    REQUIRE(adjc->is_buffer_alias());
+    TArrayZ expAdjC;
+    expAdjC("a,i") = c * Z("i,a").conj();
+    REQUIRE(equal_tarrays(adjc->get<TArrayZ>(), expAdjC, "a,i"));
+    // the adjoint of the adjoint of a scaled view is the scaled view
+    auto adj2 =
+        cz->apply_transform(
+              sequant::CanonTransform{.conj = true, .braket_swap = true},
+              annot2("i,a", "a,i"))
+            ->apply_transform(
+                sequant::CanonTransform{.conj = true, .braket_swap = true},
+                annot2("a,i", "i,a"));
+    REQUIRE(adj2->is_buffer_alias());
+    TArrayZ expZ;
+    expZ("i,a") = c * Z("i,a");
+    REQUIRE(equal_tarrays(adj2->get<TArrayZ>(), expZ, "i,a"));
+    // a complex phase folds into the scaled conjugated view
+    auto negAdj =
+        cz->apply_transform(
+              sequant::CanonTransform{.conj = true, .braket_swap = true},
+              annot2("i,a", "a,i"))
+            ->mult_by_phase(-1);
+    REQUIRE(negAdj->is_buffer_alias());
+    TArrayZ expNeg;
+    expNeg("a,i") = -std::conj(c) * Z("i,a").conj();
+    REQUIRE(equal_tarrays(negAdj->get<TArrayZ>(), expNeg, "a,i"));
+    // the materialized scaled view itself
+    REQUIRE(equal_tarrays(cz->get<TArrayZ>(), expZ, "i,a"));
+    REQUIRE_FALSE(cz->is_buffer_alias());
+  }
+
+  SECTION("block-sparse arrays: the view keeps the shape") {
+    using SpArray = TA::TSpArrayD;
+    using ResultS = ResultTensorTA<SpArray>;
+    SpArray SA = TA::to_sparse(A);
+    SpArray SB = TA::to_sparse(B);
+    auto rSA = eval_result<ResultS>(SA);
+    auto rSB = eval_result<ResultS>(SB);
+    auto sA = rSA->slice_mode(2, 5, 10);
+    auto sB = rSB->slice_mode(0, 5, 10);
+    REQUIRE(sA->is_buffer_alias());
+    auto prod = sA->prod(*sB, annot3("a,b,c", "c,d", "a,b,d"), DeNest::False);
+    REQUIRE(sA->is_buffer_alias());
+    SpArray exp;
+    exp("a,b,d") = eager_block(SA, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c") *
+                   eager_block(SB, "c,d", {1, 0}, {2, 2})("c,d");
+    REQUIRE(equal_tarrays(prod->get<SpArray>(), exp, "a,b,d"));
+    // the view's value is the sparse block
+    auto const blk = eager_block(SA, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    REQUIRE(equal_tarrays(sA->get<SpArray>(), blk, "a,b,c"));
+    // scatter of a view into a sparse destination
+    auto dest = eval_result<ResultS>(TA::to_sparse(A));
+    SpArray twice;
+    twice("a,b,c") = 2.0 * SA("a,b,c");
+    dest->write_into_slice(*eval_result<ResultS>(twice)->slice_mode(2, 5, 10),
+                           2, 5, 10);
+    SpArray expD;
+    expD("a,b,c") = SA("a,b,c");
+    expD("a,b,c").block({0, 0, 1}, {3, 4, 2}, TA::preserve_lobound) =
+        eager_block(twice, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c");
+    REQUIRE(equal_tarrays(dest->get<SpArray>(), expD, "a,b,c"));
+  }
+}
+
+// The nested-array result's views: a block over the outer modes, consumed
+// by every nested product (nested x flat, nested x nested, the inner
+// contraction that flattens, the dot), by sums, scaling, accumulation and
+// the scatter.
+TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
+  using sequant::DeNest;
+  using sequant::eval_result;
+  using sequant::ResultScalar;
+  using sequant::ResultTensorOfTensorTA;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+  using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+  auto& world = TA::get_default_world();
+  auto annot3 = [](std::string l, std::string r, std::string c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto annot2 = [](std::string pre, std::string post) {
+    return std::array<std::any, 2>{std::move(pre), std::move(post)};
+  };
+  sequant::CanonTransform conj_t;  // the adjoint: a conjugating relabel
+  conj_t.conj = true;
+  // outer tiles 2 x 2, the same for every array
+  TA::TiledRange const tr{{0, 2, 4}, {0, 5, 10}};
+  auto make_tot = [&](TA::Range const& inner, TA::TiledRange const& outer) {
+    ToTArray t(world, outer);
+    for (auto it = t.begin(); it != t.end(); ++it)
+      if (t.is_local(it.index()))
+        *it = world.taskq.add(
+            [inner](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, inner);
+            },
+            it.make_range());
+    world.gop.fence();
+    return t;
+  };
+  // L(i,j;a,b) inner 3 x 2, R(i,j;b,c) inner 2 x 4
+  auto const L = make_tot(TA::Range({3, 2}), tr);
+  auto const R = make_tot(TA::Range({2, 4}), tr);
+  auto const L0 = TA::clone(L);
+  auto rL = eval_result<ResultToT>(L);
+  auto rR = eval_result<ResultToT>(R);
+  // the eager slices over j = elements [5, 10) (tile 1)
+  auto const Le = sequant::slice_array_over_mode(L, 1, 1, 2);
+  auto const Re = sequant::slice_array_over_mode(R, 1, 1, 2);
+  auto sL = [&] { return rL->slice_mode(1, 5, 10); };
+  auto sR = [&] { return rR->slice_mode(1, 5, 10); };
+
+  SECTION("the consumer of a nested view reads the parent's tiles in place") {
+    {
+      auto const [tr, tiles] =
+          view_consumer_tiles(sL()->as<ResultToT>(), "i,j;a,b");
+      REQUIRE(consumer_reads_parent_tiles(L, tr, tiles, {0, 1}));
+    }
+    {
+      auto ss = sL()->slice_mode(0, 2, 4);
+      auto const [tr, tiles] =
+          view_consumer_tiles(ss->as<ResultToT>(), "i,j;a,b");
+      REQUIRE(consumer_reads_parent_tiles(L, tr, tiles, {1, 1}));
+    }
+  }
+
+  SECTION("a slice of a slice, and the clone") {
+    auto ss = sL()->slice_mode(0, 2, 4);
+    REQUIRE(ss->is_buffer_alias());
+    auto const exp = sequant::slice_array_over_mode(Le, 0, 1, 2);
+    REQUIRE(equal_tarrays(ss->get<ToTArray>(), exp, "i,j;a,b"));
+    auto v = sL();
+    auto c = v->clone();
+    REQUIRE(v->is_buffer_alias());
+    REQUIRE_FALSE(c->is_buffer_alias());
+    REQUIRE(equal_tarrays(c->get<ToTArray>(), Le, "i,j;a,b"));
+    c->add_inplace(*sL());
+    REQUIRE(equal_tarrays(v->get<ToTArray>(), Le, "i,j;a,b"));
+    REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+  }
+
+  SECTION("nested x nested products take the views as is") {
+    // outer Hadamard, inner contraction over b -> (i,j;a,c)
+    auto l = sL();
+    auto r = sR();
+    auto p =
+        l->prod(*r, annot3("i,j;a,b", "i,j;b,c", "i,j;a,c"), DeNest::False);
+    REQUIRE(l->is_buffer_alias());
+    REQUIRE(r->is_buffer_alias());
+    auto const exp = TA::einsum(Le("i,j;a,b"), Re("i,j;b,c"), "i,j;a,c");
+    REQUIRE(equal_tarrays(p->get<ToTArray>(), exp, "i,j;a,c"));
+    // the result wants its inner modes in the other order
+    auto p2 = sL()->prod(*sR(), annot3("i,j;a,b", "i,j;b,c", "i,j;c,a"),
+                         DeNest::False);
+    auto const exp2 = TA::einsum(Le("i,j;a,b"), Re("i,j;b,c"), "i,j;c,a");
+    REQUIRE(equal_tarrays(p2->get<ToTArray>(), exp2, "i,j;c,a"));
+    // the inner contraction that flattens: (i,j;a,b) . (i,j;a,b) -> (i,j)
+    auto l3 = sL();
+    auto d = l3->prod(*sL(), annot3("i,j;a,b", "i,j;a,b", "i,j"), DeNest::True);
+    REQUIRE(l3->is_buffer_alias());
+    auto const expD =
+        TA::einsum<TA::DeNest::True>(Le("i,j;a,b"), Le("i,j;a,b"), "i,j");
+    REQUIRE(equal_tarrays(d->get<TA::TSpArrayD>(), expD, "i,j"));
+    // the dot
+    auto l4 = sL();
+    auto dot = l4->prod(*sL(), annot3("i,j;a,b", "i,j;a,b", ""), DeNest::False);
+    REQUIRE(l4->is_buffer_alias());
+    REQUIRE(dot->get<double>() ==
+            Catch::Approx(TA::dot(Le("i,j;a,b"), Le("i,j;a,b"))));
+  }
+
+  SECTION("sum, scaling, permutation and adjoint of nested views") {
+    auto l = sL();
+    auto sum = l->sum(*sL(), annot3("i,j;a,b", "i,j;a,b", "i,j;a,b"));
+    REQUIRE(l->is_buffer_alias());
+    ToTArray twice;
+    twice("i,j;a,b") = 2.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(sum->get<ToTArray>(), twice, "i,j;a,b"));
+
+    auto scaled = l->prod(*eval_result<ResultScalar<double>>(2.0),
+                          annot3("i,j;a,b", "", "j,i;a,b"), DeNest::False);
+    REQUIRE(l->is_buffer_alias());
+    ToTArray expS;
+    expS("j,i;a,b") = twice("i,j;a,b");
+    REQUIRE(equal_tarrays(scaled->get<ToTArray>(), expS, "j,i;a,b"));
+
+    auto perm = l->permute(annot2("i,j;a,b", "j,i;b,a"));
+    REQUIRE(l->is_buffer_alias());
+    ToTArray expP;
+    expP("j,i;b,a") = Le("i,j;a,b");
+    REQUIRE(equal_tarrays(perm->get<ToTArray>(), expP, "j,i;b,a"));
+
+    auto adj = l->apply_transform(conj_t, annot2("i,j;a,b", "j,i;b,a"));
+    REQUIRE(equal_tarrays(adj->get<ToTArray>(), expP, "j,i;b,a"));
+
+    auto const vNeg = sL();
+    auto neg = vNeg->mult_by_phase(-1);
+    REQUIRE(vNeg->is_buffer_alias());
+    ToTArray expN;
+    expN("i,j;a,b") = -1.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(neg->get<ToTArray>(), expN, "i,j;a,b"));
+    REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+
+    // the symmetrizer (i <-> j with a <-> b): as on the eager slice of a
+    // square array, both outer modes cut alike
+    auto const S =
+        make_tot(TA::Range({2, 2}), TA::TiledRange{{0, 2, 4}, {0, 2, 4}});
+    auto rS = eval_result<ResultToT>(S);
+    auto symV = rS->slice_mode(0, 2, 4)->slice_mode(1, 2, 4)->symmetrize();
+    auto const Se = sequant::slice_array_over_mode(
+        sequant::slice_array_over_mode(S, 0, 1, 2), 1, 1, 2);
+    auto symE = eval_result<ResultToT>(TA::clone(Se))->symmetrize();
+    REQUIRE(
+        equal_tarrays(symV->get<ToTArray>(), symE->get<ToTArray>(), "i,j;a,b"));
+  }
+
+  SECTION("scaling a nested view is a pending view") {
+    auto c = eval_result<ResultScalar<double>>(2.0);
+    auto scale = [&](sequant::ResultPtr const& r, std::string const& ann,
+                     sequant::ResultPtr const& c) {
+      return r->prod(*c, annot3(ann, "", ann), DeNest::False);
+    };
+    auto l = sL();
+    auto scaled = scale(l, "i,j;a,b", c);
+    REQUIRE(scaled->is_buffer_alias());
+    REQUIRE(scaled->measured_size_in_bytes() == l->measured_size_in_bytes());
+    REQUIRE(l->is_buffer_alias());
+    auto neg = scaled->mult_by_phase(-1);
+    REQUIRE(neg->is_buffer_alias());
+    ToTArray twice;
+    twice("i,j;a,b") = 2.0 * Le("i,j;a,b");
+    REQUIRE(scaled->norm2() ==
+            Catch::Approx(std::sqrt(TA::squared_norm(twice).get())));
+    REQUIRE(scaled->is_buffer_alias());
+    REQUIRE(equal_tarrays(scaled->get<ToTArray>(), twice, "i,j;a,b"));
+    REQUIRE_FALSE(scaled->is_buffer_alias());
+    ToTArray expN;
+    expN("i,j;a,b") = -2.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(neg->get<ToTArray>(), expN, "i,j;a,b"));
+    // a slice of a scaled whole-array view keeps the factor
+    auto ws = scale(rL, "i,j;a,b", c)->slice_mode(1, 5, 10);
+    REQUIRE(ws->is_buffer_alias());
+    REQUIRE(equal_tarrays(ws->get<ToTArray>(), twice, "i,j;a,b"));
+    // a scaling that relabels is applied, as the permutation is
+    auto sp = scale(sL(), "i,j;a,b", c);
+    auto spp = sL()->prod(*c, annot3("i,j;a,b", "", "j,i;a,b"), DeNest::False);
+    ToTArray expPP;
+    expPP("j,i;a,b") = twice("i,j;a,b");
+    REQUIRE(equal_tarrays(spp->get<ToTArray>(), expPP, "j,i;a,b"));
+    // the consumers fold the factor in: nested x nested (outer Hadamard,
+    // inner contraction), the flattening inner contraction, the dot, the
+    // sum, the accumulation, the scatter
+    auto r = scale(sR(), "i,j;b,c", eval_result<ResultScalar<double>>(-3.0));
+    auto p =
+        sp->prod(*r, annot3("i,j;a,b", "i,j;b,c", "i,j;a,c"), DeNest::False);
+    REQUIRE(sp->is_buffer_alias());
+    REQUIRE(r->is_buffer_alias());
+    ToTArray expP;
+    expP("i,j;a,c") =
+        -6.0 * TA::einsum(Le("i,j;a,b"), Re("i,j;b,c"), "i,j;a,c")("i,j;a,c");
+    REQUIRE(equal_tarrays(p->get<ToTArray>(), expP, "i,j;a,c"));
+    auto d = sp->prod(*scale(sL(), "i,j;a,b", c),
+                      annot3("i,j;a,b", "i,j;a,b", "i,j"), DeNest::True);
+    REQUIRE(sp->is_buffer_alias());
+    TA::TSpArrayD expD;
+    expD("i,j") = 4.0 * TA::einsum<TA::DeNest::True>(
+                            Le("i,j;a,b"), Le("i,j;a,b"), "i,j")("i,j");
+    REQUIRE(equal_tarrays(d->get<TA::TSpArrayD>(), expD, "i,j"));
+    auto dot = sp->prod(*scale(sL(), "i,j;a,b", c),
+                        annot3("i,j;a,b", "i,j;a,b", ""), DeNest::False);
+    REQUIRE(dot->get<double>() ==
+            Catch::Approx(4.0 * TA::dot(Le("i,j;a,b"), Le("i,j;a,b"))));
+    auto sum = sp->sum(*scale(sL(), "i,j;a,b", c),
+                       annot3("i,j;a,b", "i,j;a,b", "i,j;a,b"));
+    ToTArray four;
+    four("i,j;a,b") = 4.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(sum->get<ToTArray>(), four, "i,j;a,b"));
+    auto acc = eval_result<ResultToT>(TA::clone(Le));
+    acc->add_inplace(*sp);
+    REQUIRE(sp->is_buffer_alias());
+    ToTArray three;
+    three("i,j;a,b") = 3.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(acc->get<ToTArray>(), three, "i,j;a,b"));
+    auto dest = eval_result<ResultToT>(TA::clone(L));
+    dest->write_into_slice(*sp, 1, 5, 10);
+    REQUIRE(sp->is_buffer_alias());
+    ToTArray expDest;
+    expDest("i,j;a,b") = L("i,j;a,b");
+    expDest("i,j;a,b").block({0, 1}, {2, 2}, TA::preserve_lobound) =
+        twice("i,j;a,b");
+    REQUIRE(equal_tarrays(dest->get<ToTArray>(), expDest, "i,j;a,b"));
+    // the permutation and the adjoint apply the factor
+    auto perm = sp->permute(annot2("i,j;a,b", "j,i;b,a"));
+    auto adj = sp->apply_transform(
+        sequant::CanonTransform{.conj = true, .braket_swap = true},
+        annot2("i,j;a,b", "j,i;b,a"));
+    REQUIRE(sp->is_buffer_alias());
+    ToTArray expPerm;
+    expPerm("j,i;b,a") = twice("i,j;a,b");
+    REQUIRE(equal_tarrays(perm->get<ToTArray>(), expPerm, "j,i;b,a"));
+    REQUIRE(equal_tarrays(adj->get<ToTArray>(), expPerm, "j,i;b,a"));
+    // writes into a scaled view never reach the parent
+    auto sv = scale(rL, "i,j;a,b", c);
+    sv->add_inplace(*eval_result<ResultToT>(TA::clone(L)));
+    REQUIRE_FALSE(sv->is_buffer_alias());
+    ToTArray expSV;
+    expSV("i,j;a,b") = 3.0 * L("i,j;a,b");
+    REQUIRE(equal_tarrays(sv->get<ToTArray>(), expSV, "i,j;a,b"));
+    REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+    // a view that is the only holder of its parent's tiles owns their bytes,
+    // and not while the parent is held elsewhere
+    auto const bytes =
+        eval_result<ResultToT>(TA::clone(L))->measured_size_in_bytes();
+    REQUIRE(bytes > 0);
+    auto sole = eval_result<ResultToT>(TA::clone(L))->mult_by_phase(-1);
+    REQUIRE(sole->is_buffer_alias());
+    REQUIRE(sole->measured_size_in_bytes() == bytes);
+    REQUIRE(rL->mult_by_phase(-1)->measured_size_in_bytes() == 0);
+  }
+
+  SECTION("the norm and the tile diff of a nested view read it in place") {
+    auto const v = sL();
+    REQUIRE(v->norm2() == Catch::Approx(std::sqrt(TA::squared_norm(Le).get())));
+    // a view of a slice of the same parent: the same tiles
+    auto const v2 = sL();
+    REQUIRE(v->tile_diff(*v2).find("only_this=0 only_other=0") !=
+            std::string::npos);
+    REQUIRE(v->is_buffer_alias());
+    REQUIRE(v2->is_buffer_alias());
+  }
+
+  SECTION("a nested view as the block of a scatter") {
+    ToTArray twiceFull;
+    twiceFull("i,j;a,b") = 2.0 * L("i,j;a,b");
+    auto dest = eval_result<ResultToT>(TA::clone(L));
+    auto blockView = eval_result<ResultToT>(twiceFull)->slice_mode(1, 5, 10);
+    dest->write_into_slice(*blockView, 1, 5, 10);
+    REQUIRE(blockView->is_buffer_alias());
+    ToTArray exp;
+    exp("i,j;a,b") = L("i,j;a,b");
+    exp("i,j;a,b").block({0, 1}, {2, 2}, TA::preserve_lobound) =
+        sequant::slice_array_over_mode(twiceFull, 1, 1, 2)("i,j;a,b");
+    REQUIRE(equal_tarrays(dest->get<ToTArray>(), exp, "i,j;a,b"));
+    REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+  }
+
+  SECTION("a view of an all-empty nested array is zero over the slice") {
+    ToTArray E(world, tr);
+    for (auto it = E.begin(); it != E.end(); ++it)
+      if (E.is_local(it.index())) *it = tot_tile_t<double>(it.make_range());
+    world.gop.fence();
+    auto rE = eval_result<ResultToT>(E);
+    auto v = rE->slice_mode(1, 5, 10);
+    REQUIRE(v->is_buffer_alias());
+    REQUIRE(v->trange_annot() == sL()->trange_annot());
+    auto const& val = v->get<ToTArray>();
+    REQUIRE(val.trange() == Le.trange());
+    REQUIRE(sequant::detail::tot_inner_rank(val) == 0);
+  }
+}
+
+// The result-shape-constrained product (apply_shaped_product, the product
+// the evaluator emits when a result-shape provider is set) takes views as
+// is, for every operand kind it supports.
+TEST_CASE("ta_lazy_views_shaped", "[eval][ta][lazy]") {
+  using sequant::eval_result;
+  using sequant::ResultScalar;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::ResultTensorTA;
+  using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+  using ResultF = ResultTensorTA<FlatArray>;
+  using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+  auto& world = TA::get_default_world();
+  auto annot3 = [](std::string l, std::string r, std::string c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto full_shape = [](TA::TiledRange const& tr) {
+    return TA::SparseShape<float>(TA::Tensor<float>(tr.tiles_range(), 1.0f),
+                                  tr);
+  };
+  auto make_tot = [&](TA::Range const& inner, TA::TiledRange const& outer) {
+    ToTArray t(world, outer, full_shape(outer));
+    for (auto it = t.begin(); it != t.end(); ++it)
+      if (t.is_local(it.index()))
+        *it = world.taskq.add(
+            [inner](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, inner);
+            },
+            it.make_range());
+    world.gop.fence();
+    return t;
+  };
+  auto shaped = [&](sequant::Result const& l, sequant::Result const& r,
+                    std::array<std::any, 3> const& annot, bool de_nest) {
+    auto const tr =
+        sequant::result_outer_trange_from_results<double, TA::SparsePolicy>(
+            l, r, annot);
+    // a shape that drops the result's first outer tile
+    TA::Tensor<float> norms{tr.tiles_range(), 1.0f};
+    norms[0] = 0.0f;
+    return sequant::apply_shaped_product<double, TA::SparsePolicy>(
+        l, r, annot, TA::SparseShape<float>(norms, tr), de_nest);
+  };
+
+  // the flat operands
+  TA::TSpArrayD Ad(world,
+                   TA::TiledRange{{0, 3, 6, 9}, {0, 2, 4, 6, 8}, {0, 5, 10}});
+  TA::TSpArrayD Bd(world, TA::TiledRange{{0, 5, 10}, {0, 4, 7}});
+  Ad.fill_random();
+  Bd.fill_random();
+  world.gop.fence();
+  FlatArray const A = TA::to_sparse(Ad);
+  FlatArray const B = TA::to_sparse(Bd);
+  auto rA = eval_result<ResultF>(A);
+  auto rB = eval_result<ResultF>(B);
+  auto const Ae = sequant::slice_array_over_mode(A, 2, 1, 2);
+  auto const Be = sequant::slice_array_over_mode(B, 0, 1, 2);
+  // the nested operands: T(i,c;x,y) over c, L(i,j;a,b) and R(i,j;b,c) over
+  // j
+  TA::TiledRange const trT{{0, 2, 4}, {0, 5, 10}};
+  auto const T = make_tot(TA::Range({3, 2}), trT);
+  auto const L = make_tot(TA::Range({3, 2}), trT);
+  auto const R = make_tot(TA::Range({2, 4}), trT);
+  auto rT = eval_result<ResultToT>(T);
+  auto rL = eval_result<ResultToT>(L);
+  auto rR = eval_result<ResultToT>(R);
+  auto const Te = sequant::slice_array_over_mode(T, 1, 1, 2);
+  auto const Le = sequant::slice_array_over_mode(L, 1, 1, 2);
+  auto const Re = sequant::slice_array_over_mode(R, 1, 1, 2);
+
+  SECTION("flat x flat") {
+    auto sA = rA->slice_mode(2, 5, 10);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto const an = annot3("a,b,c", "c,d", "a,b,d");
+    auto p = shaped(*sA, *sB, an, false);
+    REQUIRE(p);
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sB->is_buffer_alias());
+    auto e =
+        shaped(*eval_result<ResultF>(Ae), *eval_result<ResultF>(Be), an, false);
+    REQUIRE(p->get<FlatArray>().is_zero(0));
+    REQUIRE(equal_tarrays(p->get<FlatArray>(), e->get<FlatArray>(), "a,b,d"));
+  }
+
+  SECTION("nested x flat, both orders") {
+    auto sT = rT->slice_mode(1, 5, 10);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto const an = annot3("i,c;x,y", "c,d", "i,d;x,y");
+    auto p = shaped(*sT, *sB, an, false);
+    REQUIRE(p);
+    REQUIRE(sT->is_buffer_alias());
+    REQUIRE(sB->is_buffer_alias());
+    auto e = shaped(*eval_result<ResultToT>(Te), *eval_result<ResultF>(Be), an,
+                    false);
+    REQUIRE(p->get<ToTArray>().is_zero(0));
+    REQUIRE(equal_tarrays(p->get<ToTArray>(), e->get<ToTArray>(), "i,d;x,y"));
+    auto const an2 = annot3("c,d", "i,c;x,y", "i,d;x,y");
+    auto p2 = shaped(*sB, *sT, an2, false);
+    REQUIRE(p2);
+    REQUIRE(sT->is_buffer_alias());
+    REQUIRE(equal_tarrays(p2->get<ToTArray>(), e->get<ToTArray>(), "i,d;x,y"));
+    // scaled operands: the nested operand's factor is put on the flat one
+    auto c2 = eval_result<ResultScalar<double>>(2.0);
+    auto c3 = eval_result<ResultScalar<double>>(-3.0);
+    auto scT =
+        sT->prod(*c2, annot3("i,c;x,y", "", "i,c;x,y"), sequant::DeNest::False);
+    auto scB = sB->prod(*c3, annot3("c,d", "", "c,d"), sequant::DeNest::False);
+    REQUIRE(scT->is_buffer_alias());
+    REQUIRE(scB->is_buffer_alias());
+    auto ps = shaped(*scT, *scB, an, false);
+    REQUIRE(ps);
+    ToTArray e6;
+    e6("i,d;x,y") = -6.0 * e->get<ToTArray>()("i,d;x,y");
+    REQUIRE(equal_tarrays(ps->get<ToTArray>(), e6, "i,d;x,y"));
+    auto ps2 = shaped(*scB, *scT, an2, false);
+    REQUIRE(ps2);
+    REQUIRE(equal_tarrays(ps2->get<ToTArray>(), e6, "i,d;x,y"));
+    // the unshaped product takes the same operands
+    auto pp = scT->prod(*scB, an, sequant::DeNest::False);
+    auto eu = eval_result<ResultToT>(Te)->prod(*eval_result<ResultF>(Be), an,
+                                               sequant::DeNest::False);
+    ToTArray eu6;
+    eu6("i,d;x,y") = -6.0 * eu->get<ToTArray>()("i,d;x,y");
+    REQUIRE(equal_tarrays(pp->get<ToTArray>(), eu6, "i,d;x,y"));
+    // a zero factor
+    auto zT =
+        sT->prod(*eval_result<ResultScalar<double>>(0.0),
+                 annot3("i,c;x,y", "", "i,c;x,y"), sequant::DeNest::False);
+    REQUIRE(zT->is_buffer_alias());
+    REQUIRE(zT->norm2() == 0.0);
+    auto pz = shaped(*zT, *sB, an, false);
+    REQUIRE(pz);
+    REQUIRE(pz->norm2() == 0.0);
+    auto zB = sB->prod(*eval_result<ResultScalar<double>>(0.0),
+                       annot3("c,d", "", "c,d"), sequant::DeNest::False);
+    REQUIRE(zB->norm2() == 0.0);
+    REQUIRE(zB->get<FlatArray>().trange() == Be.trange());
+  }
+
+  SECTION("nested x nested, nested and flattened results") {
+    auto sL = rL->slice_mode(1, 5, 10);
+    auto sR = rR->slice_mode(1, 5, 10);
+    auto const an = annot3("i,j;a,b", "i,j;b,c", "i,j;a,c");
+    auto p = shaped(*sL, *sR, an, false);
+    REQUIRE(p);
+    REQUIRE(sL->is_buffer_alias());
+    REQUIRE(sR->is_buffer_alias());
+    auto e = shaped(*eval_result<ResultToT>(Le), *eval_result<ResultToT>(Re),
+                    an, false);
+    REQUIRE(p->get<ToTArray>().is_zero(0));
+    REQUIRE(equal_tarrays(p->get<ToTArray>(), e->get<ToTArray>(), "i,j;a,c"));
+
+    auto sL2 = rL->slice_mode(1, 5, 10);
+    auto const anD = annot3("i,j;a,b", "i,j;a,b", "i,j");
+    auto d = shaped(*sL2, *rL->slice_mode(1, 5, 10), anD, true);
+    REQUIRE(d);
+    REQUIRE(sL2->is_buffer_alias());
+    auto eD = shaped(*eval_result<ResultToT>(Le), *eval_result<ResultToT>(Le),
+                     anD, true);
+    REQUIRE(d->get<FlatArray>().is_zero(0));
+    REQUIRE(equal_tarrays(d->get<FlatArray>(), eD->get<FlatArray>(), "i,j"));
+  }
+}
+
+TEST_CASE("ta_lazy_view_cell_bytes_balance", "[eval][ta][lazy]") {
+  // A pending view is charged 0 bytes when a cell stores it; a reader that
+  // asks for its value materializes it in place. Releasing the cell must give
+  // back what was charged, or live_bytes underflows.
+  using ResultD = sequant::ResultTensorTA<TA::TSpArrayD>;
+  auto& world = TA::get_default_world();
+  TA::TSpArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6}});
+  arr.fill(1.0);
+  world.gop.fence();
+  auto const view = sequant::eval_result<ResultD>(arr)->slice_mode(0, 0, 2);
+  REQUIRE(view->is_buffer_alias());
+
+  sequant::eval::CellTable t;
+  sequant::eval::TableCell cell;
+  cell.value_id = 0;
+  cell.production.kind = sequant::eval::ProductionKind::Build;
+  t.cells.push_back(cell);
+  sequant::eval::CellRegistry reg(t, {});
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 1;  // size_in_bytes() is 0 untraced
+  reg.set(0, view);
+  CHECK(reg.live_bytes() == 0);
+  auto const r = reg.read(0);
+  CHECK(r->get<TA::TSpArrayD>().trange().dim(0).extent() == 2);
+  CHECK_FALSE(r->is_buffer_alias());
+  CHECK(r->size_in_bytes() > 0);
+  CHECK(reg.take(0) == r);
+  CHECK(reg.live_bytes() == 0);
+  logger.eval.level = prev_level;
+}
+
+// Roots that are results in their own right -- residuals of different
+// ranks, an energy -- come back one each, in the forest's order, each what
+// evaluating it alone gives; the summed entry refuses them.
+TEST_CASE("evaluate_each_ta", "[eval]") {
+  using namespace sequant;
+  using Catch::Matchers::ContainsSubstring;
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+  auto const aops = yield_.array_ops();
+
+  auto root_of = [](std::wstring_view equation) {
+    return binarize<EvalExprTA>(deserialize<ResultExpr>(equation));
+  };
+  using Node = EvalNode<EvalExprTA>;
+  std::vector<Node> const forest{
+      root_of(L"S{a_1;i_1}:N-N-N = f{a_1;a_2}:N-N-N * t{a_2;i_1}:N-N-N"),
+      root_of(L"D{a_1,a_2;i_1,i_2}:N-N-N = g{a_1,a_2;a_3,a_4}:N-N-N * "
+              L"t{a_3,a_4;i_1,i_2}:N-N-N"),
+      root_of(L"E = f{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N")};
+  std::vector<std::string> const annots{"0,1", "0,1,2,3", ""};
+
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    BatchPolicy policy;
+    policy.scheduler = scheduler;
+
+    auto cache = CacheManager<Node>::empty();
+    cache.set_array_ops(&aops);
+    auto const results = evaluate_each(forest, policy, yield_, cache);
+    REQUIRE(results.size() == forest.size());
+
+    for (std::size_t i = 0; i != forest.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(results[i]);
+      auto const alone = evaluate(forest[i], yield_);
+      if (forest[i]->is_scalar()) {
+        CHECK(results[i]->get<double>() == Catch::Approx(alone->get<double>()));
+        continue;
+      }
+      auto const& got = results[i]->get<TA::TSpArrayD>();
+      auto const& ref = alone->get<TA::TSpArrayD>();
+      REQUIRE(got.trange() == ref.trange());
+      TA::TSpArrayD diff;
+      diff(annots[i]) = got(annots[i]) - ref(annots[i]);
+      CHECK(TA::norm2(diff) == Catch::Approx(0).margin(1e-12));
+      CHECK(TA::norm2(ref) > 0);
+    }
+
+    auto summed_cache = CacheManager<Node>::empty();
+    summed_cache.set_array_ops(&aops);
+    REQUIRE_THROWS_WITH(
+        evaluate(forest, policy, std::string{}, yield_, summed_cache),
+        ContainsSubstring("evaluate_each"));
   }
 }

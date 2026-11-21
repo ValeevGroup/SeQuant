@@ -19,6 +19,19 @@ class Index;
 class Tensor;
 class Expr;
 
+namespace opt::schedule {
+class PinSession;
+class RecordSession;
+}  // namespace opt::schedule
+
+namespace opt {
+
+/// \return whether \p e is a tensor factor of a product the single-term
+///         optimizer contracts: a Tensor or a TensorPower
+bool is_tensor_factor(Expr const& e);
+
+}  // namespace opt
+
 /// Objective function to minimize in single-term and top-level optimize
 /// routines. The `Dense*` models assume dense tensors:
 /// - `DenseFLOPs` (the default) counts floating-point operations, the metric
@@ -110,6 +123,10 @@ struct CSEOptions {
 struct RooflineParams {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// Machine balance beta = 8*F/B in FLOPs per element of traffic. 0 = off.
+  /// Calibrated in 8-byte (real double) elements, as is \c fast_mem_elems: a
+  /// complex network is priced with twice the traffic width and four real
+  /// flops per multiply-add (see opt::detail::FieldCostFactors), so one
+  /// calibration serves both fields.
   double machine_balance = 0.0;
   /// Capacity M of the binding fast memory level, in elements (e.g. LLC/8).
   double fast_mem_elems = 0.0;
@@ -198,6 +215,13 @@ struct CostParams {
   /// When true, only persistent (volatile-leaf-free) subnetworks are batched;
   /// threaded from BatchPolicy::persistent_only. Batched objectives only.
   bool batch_persistent_only = false;
+  /// Holding operands outside their consumer's loop, and the memory space of
+  /// the large ones; threaded from BatchPolicy::hold. Batched objectives only.
+  HoldPolicy hold = {};
+  /// Threaded from BatchPolicy::infeasible_peak_slack.
+  double infeasible_peak_slack = std::numeric_limits<double>::infinity();
+  /// Threaded from BatchPolicy::infeasible_is_error.
+  bool infeasible_is_error = true;
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public
@@ -335,6 +359,32 @@ struct OptimizeOptions {
   /// variable \c SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING force-disables pruning
   /// regardless of this flag.)
   bool prune_outer_products = true;
+
+  /// Optional schedule pin (see opt/schedule_pin.hpp). When non-null, each
+  /// summand is canonicalized, keyed, and rebuilt from the session's record
+  /// for that key instead of being optimized (the single-term DP never runs);
+  /// a summand with no record is left unoptimized and the miss is recorded in
+  /// the session. Not owned.
+  ///
+  /// \warning Who calls \c PinSession::finish() (which throws on any miss,
+  ///          duplicate or unused record):
+  ///   - a top-level Sum: optimize_result calls it, and emits the summands in
+  ///     document order, bypassing \ref reorder;
+  ///   - a top-level Product, Tensor or Constant (per-summand callers): the
+  ///     caller must call \c finish() once the whole root is done; otherwise
+  ///     misses go unreported.
+  ///
+  /// \warning A session is single-use: it counts every record it hands out,
+  ///          and once finished it refuses further use with an exception that
+  ///          says so. Use a fresh PinSession per run, and reset this pointer
+  ///          (and \ref recording) to null when the same OptimizeOptions
+  ///          object is reused for another call.
+  opt::schedule::PinSession* pinned = nullptr;
+
+  /// Optional schedule recording (see opt/schedule_pin.hpp). When non-null,
+  /// each summand is optimized on its canonicalized clone and its record is
+  /// added to the session, keyed by the optimized summand's pointer. Not owned.
+  opt::schedule::RecordSession* recording = nullptr;
 };
 
 }  // namespace sequant

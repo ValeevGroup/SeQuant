@@ -12,6 +12,8 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/equal.hpp>
@@ -145,7 +147,18 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
       return std::pair{std::move(tn), canon_factor};
     };
     using TN = TensorNetwork;
-    auto [tn, canon_factor] = make_canonical_tn(static_cast<TN *>(nullptr));
+    auto [tn, canon_factor] = [&] {
+      try {
+        return make_canonical_tn(static_cast<TN *>(nullptr));
+      } catch (Exception const &ex) {
+        // name the product: a tensor-network assertion (e.g. a dummy meeting
+        // two bra or two ket slots of rigid tensors) says nothing about which
+        // term produced it
+        throw Exception(std::string(ex.what()) +
+                        " -- while canonicalizing the product " +
+                        toUtf8(this->to_latex()));
+      }
+    }();
 
     const auto &tensors = tn.tensors();
     using std::size;
@@ -313,14 +326,11 @@ Product::type_id_type Product::type_id() const {
 ExprPtr Product::clone() const { return ex<Product>(this->deep_copy()); }
 
 Product Product::deep_copy() const {
-  auto cloned_factors =
-      factors() | ranges::views::transform([](const ExprPtr &ptr) {
-        return ptr ? ptr->clone() : nullptr;
-      });
   Product result(this->scalar(), ExprPtrList{});
-  ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
-    result.append(1, std::move(cloned_factor), Flatten::No);
-  });
+  // append() clones each factor; Flatten::No preserves nested products.
+  for (const auto &factor : factors()) {
+    result.append(1, factor, Flatten::No);
+  }
   result.copy_canonical_mark(*this);
   return result;
 }
@@ -428,6 +438,25 @@ bool Product::static_equal(const Expr &that) const {
       return false;
   } else
     return false;
+}
+
+std::weak_ordering Product::static_lexicographic_compare(
+    const Expr &that, const LexicographicCompareOptions &opts) const {
+  const auto &that_cast = static_cast<const Product &>(that);
+  if (auto cmp = std::lexicographical_compare_three_way(
+          factors_.begin(), factors_.end(), that_cast.factors_.begin(),
+          that_cast.factors_.end(),
+          [&opts](const ExprPtr &a, const ExprPtr &b) {
+            return a->lexicographic_compare(*b, opts);
+          });
+      cmp != 0)
+    return cmp;
+  if (auto cmp = std::compare_weak_order_fallback(scalar_.real(),
+                                                  that_cast.scalar_.real());
+      cmp != 0)
+    return cmp;
+  return std::compare_weak_order_fallback(scalar_.imag(),
+                                          that_cast.scalar_.imag());
 }
 
 CProduct::CProduct(const Product &other) : Product(other) {}

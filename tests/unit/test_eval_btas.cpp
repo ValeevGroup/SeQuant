@@ -2,10 +2,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/btas/array_ops.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
@@ -80,23 +82,29 @@ class rand_tensor_yield {
   rand_tensor_yield(size_t noccupied, size_t nvirtual)
       : nocc_{noccupied}, nvirt_{nvirtual} {}
 
+  /// Serve \p r for every occurrence of tensor \p tnsr (by tensor_to_key);
+  /// \p r must be in the tensor's slot layout.
+  void set_leaf(sequant::Tensor const& tnsr, sequant::ResultPtr r) {
+    label_to_tnsr_.insert_or_assign(tensor_to_key(tnsr), std::move(r));
+  }
+
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto isr = sequant::get_default_context().index_basis_registry();
+    auto ibr = sequant::get_default_context().index_basis_registry();
 
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
-                       [&isr](auto const& idx) {
-                         return idx.space() == isr->retrieve_space(L"i") ||
-                                idx.space() == isr->retrieve_space(L"a");
+                       [&ibr](auto const& idx) {
+                         return idx.space() == ibr->retrieve_space(L"i") ||
+                                idx.space() == ibr->retrieve_space(L"a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
-        tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
-          return idx.space() == isr->retrieve_space(L"i") ? nocc_ : nvirt_;
+        tnsr.const_braket_indices() | transform([this, &ibr](auto const& idx) {
+          return idx.space() == ibr->retrieve_space(L"i") ? nocc_ : nvirt_;
         }) |
         ranges::to_vector};
 
@@ -113,6 +121,17 @@ class rand_tensor_yield {
       }
     });
     return result;
+  }
+
+  /// array ops sizing the occupied and the virtual space as this yield's
+  /// tensors
+  [[nodiscard]] sequant::BackendArrayOps array_ops() const {
+    auto ibr = sequant::get_default_context().index_basis_registry();
+    auto const bk = [&ibr](wchar_t const* l) {
+      return std::wstring(ibr->retrieve_space(l).base_key());
+    };
+    return sequant::make_btas_array_ops<Tensor_t>(
+        {{bk(L"i"), nocc_}, {bk(L"a"), nvirt_}});
   }
 
   sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
@@ -184,10 +203,10 @@ class aux_rand_tensor_yield {
   }
 
   size_t extent(sequant::Index const& idx) const {
-    auto isr = sequant::get_default_context().index_basis_registry();
-    if (idx.space() == isr->retrieve_space(L"i")) return nocc_;
-    if (idx.space() == isr->retrieve_space(L"a")) return nvirt_;
-    if (idx.space() == isr->retrieve_space(L"z")) return nz_;
+    auto ibr = sequant::get_default_context().index_basis_registry();
+    if (idx.space() == ibr->retrieve_space(L"i")) return nocc_;
+    if (idx.space() == ibr->retrieve_space(L"a")) return nvirt_;
+    if (idx.space() == ibr->retrieve_space(L"z")) return nz_;
     SEQUANT_ASSERT(false && "aux_rand_tensor_yield: unsupported IndexSpace");
     return 0;
   }
@@ -547,7 +566,8 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
                                100 * std::numeric_limits<double>::epsilon()));
 
     // high-rank residuals: cleanup applies:
-    // result = identity - (1/ket_rank!) * sum_of_ket_permutations
+    // result = 5/6 * identity - 1/6 * sum of the other ket permutations
+    // (the idempotent NNS projector row)
     auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
     auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
     auto eval2 = eval_biorthogonal_nns_project(expr2, tidx2);
@@ -556,6 +576,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     BTensorD man2{r2.range()};
     man2.fill(0);
     man2 = r2;
+    btas::scal(5.0 / 6.0, man2);
 
     BTensorD perm_sum{r2.range()};
     perm_sum.fill(0);
@@ -566,7 +587,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     perm_sum += BTensorD{permute(r2, {0, 1, 2, 5, 3, 4})};
     perm_sum += BTensorD{permute(r2, {0, 1, 2, 5, 4, 3})};
 
-    btas::scal(1.0 / 5.0, perm_sum);
+    btas::scal(1.0 / 6.0, perm_sum);
     man2 -= perm_sum;
     REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
 
@@ -1408,6 +1429,326 @@ TEST_CASE("eval_ordered_conj_node_is_converted_whole_btas",
   }
 }
 
+TEST_CASE("eval_tensor_power_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // the harness fills tensors with values in [0, 1], so every exponent applies
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+  auto const target = tidxs(D->as<Tensor>());
+
+  auto eval_at = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), target, yield_)->get<BTensorD>();
+  };
+  // every element of got == f(element of ref), in lockstep (same layout)
+  auto check_elementwise = [](BTensorD const& got, BTensorD const& ref,
+                              auto const& f) {
+    REQUIRE(got.range() == ref.range());
+    auto g = got.begin();
+    for (auto r = ref.begin(); r != ref.end(); ++r, ++g)
+      CHECK(*g == Catch::Approx(f(*r)).margin(1e-12));
+  };
+
+  auto node = eval_node(pow(D, rational{-1}));
+  REQUIRE(node->op_type() == EvalOp::Power);
+  auto const src = yield_(node.left()->as_tensor())->get<BTensorD>();
+  auto const d = eval_at(D);
+
+  check_elementwise(eval_at(pow(D, rational{-1})), d,
+                    [](double x) { return 1 / x; });
+  check_elementwise(eval_at(pow(D, rational{0})), d,
+                    [](double) { return 1.0; });
+  check_elementwise(eval_at(pow(D, rational{2})), d,
+                    [](double x) { return x * x; });
+  check_elementwise(eval_at(pow(D, rational{1, 2})), d,
+                    [](double x) { return std::sqrt(x); });
+
+  // ℓ = M ⊙ D^-1, a Hadamard product
+  auto const m = eval_at(M);
+  ResultExpr ell(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm}),
+                 M * pow(D, rational{-1}));
+  auto const got_ell =
+      evaluate(binarize<EvalExprBTAS>(ell), target, yield_)->get<BTensorD>();
+  {
+    BTensorD expected = m;
+    auto di = d.begin();
+    for (auto& x : expected) x /= *di++;
+    check_elementwise(got_ell, expected, [](double x) { return x; });
+  }
+
+  // E = L · (M ⊙ D^-1): every index appears on three tensors
+  {
+    auto ctx = get_default_context();
+    ctx.set(AssertStrictBraKetSymmetry::No);
+    auto _ = set_scoped_default_context(ctx);
+    auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    ResultExpr E(Variable(L"E"), L * M * pow(D, rational{-1}));
+    auto const got_E =
+        evaluate(binarize<EvalExprBTAS>(E), container::svector<long>{}, yield_)
+            ->get<double>();
+    auto const l = eval_at(L);
+    double expected = 0;
+    auto mi = m.begin();
+    auto di = d.begin();
+    for (auto li = l.begin(); li != l.end(); ++li, ++mi, ++di)
+      expected += *li * *mi / *di;
+    CHECK(got_E == Catch::Approx(expected).margin(1e-10));
+  }
+
+  // M ⊙ D^-1 + D^-1, with D^-1 as either summand, evaluates correctly and
+  // leaves the cached D untouched
+  for (bool const power_first : {false, true}) {
+    auto const hadamard = M * pow(D, rational{-1});
+    auto const power = pow(D, rational{-1});
+    ResultExpr sum(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          TensorSymmetries{.perm = Symmetry::Nonsymm}),
+                   power_first ? power + hadamard : hadamard + power);
+    auto const got_sum =
+        evaluate(binarize<EvalExprBTAS>(sum), target, yield_)->get<BTensorD>();
+    BTensorD expected = m;
+    auto di = d.begin();
+    for (auto& x : expected) {
+      x = (x + 1) / *di;
+      ++di;
+    }
+    check_elementwise(got_sum, expected, [](double x) { return x; });
+    check_elementwise(yield_(node.left()->as_tensor())->get<BTensorD>(), src,
+                      [](double x) { return x; });
+  }
+
+  // an antisymmetric base spelled out of canonical order: its leaf
+  // canonicalizes with phase -1 and the power node carries that phase raised
+  // to the exponent; in the base's own layout pow(A, e) is the element-wise
+  // power of A as A evaluates there. A single uncached evaluation converts no
+  // node phase (a phase only reorients a cached value for another
+  // occurrence), so this pins the layout, not the phase arithmetic.
+  {
+    auto A = ex<Tensor>(L"A", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    REQUIRE(eval_node(pow(A, rational{2})).left()->canon_phase() == -1);
+    REQUIRE(eval_node(pow(A, rational{2}))->canon_phase() == 1);
+    REQUIRE(eval_node(pow(A, rational{-1}))->canon_phase() == -1);
+    auto const a_target = tidxs(A->as<Tensor>());
+    auto const at_a = [&](ExprPtr const& expr) {
+      return evaluate(eval_node(expr), a_target, yield_)->get<BTensorD>();
+    };
+    auto const a = at_a(A);
+    check_elementwise(at_a(pow(A, rational{2})), a,
+                      [](double x) { return x * x; });
+    check_elementwise(at_a(pow(A, rational{-1})), a,
+                      [](double x) { return 1 / x; });
+  }
+}
+
+TEST_CASE("eval_broadcast_sum_btas", "[eval_btas][broadcast]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto const aops = yield_.array_ops();
+  auto eval_aops = [&](auto const& node, auto const& layout) {
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, layout, yield_, cache);
+  };
+
+  auto eps_a = [](wchar_t const* a) { return ex<Tensor>(L"ε", bra{}, ket{a}); };
+  auto eps_i = [](wchar_t const* i) { return ex<Tensor>(L"ε", bra{i}, ket{}); };
+  // every ket-ε occurrence shares one yielded array by key, likewise every
+  // bra-ε occurrence
+  auto const ea = yield_(eps_a(L"a_1")->as<Tensor>())->get<BTensorD>();
+  auto const ei = yield_(eps_i(L"i_1")->as<Tensor>())->get<BTensorD>();
+  REQUIRE(ea.size() == nvirt);
+  REQUIRE(ei.size() == nocc);
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  Tensor const head(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  ResultExpr res(head,
+                 eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
+  auto const got =
+      eval_aops(binarize<EvalExprBTAS>(res), tidxs(head))->get<BTensorD>();
+  REQUIRE(got.range() == btas::Range{nocc, nocc, nvirt, nvirt});
+  for (std::size_t i1 = 0; i1 < nocc; ++i1)
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+        for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+          CHECK(got(i1, i2, a1, a2) ==
+                Catch::Approx(ea(a1) + ea(a2) - ei(i1) - ei(i2)).margin(1e-12));
+
+  // distinct leaves and a nonsymmetric head: the expected tensor changes under
+  // any mode swap, so this pins the result layout
+  {
+    auto const e1 = ex<Tensor>(L"ε1", bra{}, ket{L"a_1"});
+    auto const e2 = ex<Tensor>(L"ε2", bra{}, ket{L"a_2"});
+    auto const e3 = ex<Tensor>(L"ε3", bra{L"i_1"}, ket{});
+    auto const e4 = ex<Tensor>(L"ε4", bra{L"i_2"}, ket{});
+    auto vec = [&](ExprPtr const& e) {
+      return yield_(e->as<Tensor>())->get<BTensorD>();
+    };
+    auto const v1 = vec(e1), v2 = vec(e2), v3 = vec(e3), v4 = vec(e4);
+    const TensorSymmetries nsym{.perm = Symmetry::Nonsymm,
+                                .braket = BraKetSymmetry::Nonsymm,
+                                .column = ColumnSymmetry::Nonsymm};
+    Tensor const nhead(L"D'", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, nsym);
+    ResultExpr nres(nhead, e1 + e2 - e3 - e4);
+    auto const ngot =
+        eval_aops(binarize<EvalExprBTAS>(nres), tidxs(nhead))->get<BTensorD>();
+    REQUIRE(ngot.range() == btas::Range{nocc, nocc, nvirt, nvirt});
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            CHECK(
+                ngot(i1, i2, a1, a2) ==
+                Catch::Approx(v1(a1) + v2(a2) - v3(i1) - v4(i2)).margin(1e-12));
+  }
+
+  // a constant summand is broadcast over every head mode
+  {
+    Tensor const chead(L"D", bra{L"i_1"}, ket{L"a_1"});
+    ResultExpr cres(
+        chead, eps_a(L"a_1") - eps_i(L"i_1") + ex<Constant>(rational{3, 2}));
+    auto const cnode = binarize<EvalExprBTAS>(cres);
+    REQUIRE(cnode.right()->is_broadcast());
+    REQUIRE(cnode.right().left()->is_constant());
+    auto const cgot = eval_aops(cnode, tidxs(chead))->get<BTensorD>();
+    REQUIRE(cgot.range() == btas::Range{nocc, nvirt});
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+        CHECK(cgot(i1, a1) ==
+              Catch::Approx(ea(a1) - ei(i1) + 1.5).margin(1e-12));
+  }
+}
+
+TEST_CASE("eval_inlined_system_btas", "[eval_btas][inline]") {
+  using namespace sequant;
+  namespace tp = sequant::tests::tensor_power;
+  namespace data = tp::data;
+  using BTensorD = btas::Tensor<double>;
+  using System = container::svector<ResultExpr>;
+  using Flags = container::svector<bool>;
+
+  // three occupied orbitals: with two, an antisymmetric pair leaves E{i_2;i_3}
+  // diagonal
+  const size_t nocc = 3, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto const aops = yield_.array_ops();
+  auto eval_aops = [&](auto const& node, auto const& layout) {
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, layout, yield_, cache);
+  };
+  // serves f(slot ordinals of \p tnsr) for every occurrence of the leaf
+  // \p tnsr, in either orientation: a leaf node of a bra-ket symmetric tensor
+  // may hold either
+  auto pin = [&](ExprPtr const& tnsr, auto f) {
+    Tensor const& t = tnsr->as<Tensor>();
+    auto const nb = t.bra_rank();
+    auto pin_as = [&](Tensor const& as, bool swapped) {
+      std::vector<std::size_t> extents;
+      for (Index const& ix : as.const_braket_indices())
+        extents.push_back(ix.space().base_key() == L"i" ? nocc : nvirt);
+      BTensorD arr{btas::Range{extents}};
+      auto it = arr.begin();
+      for (auto const& idx : arr.range()) {
+        std::vector<std::size_t> x(idx.begin(), idx.end());
+        if (swapped) std::rotate(x.begin(), x.end() - nb, x.end());
+        *it++ = f(x);
+      }
+      yield_.set_leaf(as, eval_result<ResultTensorBTAS<BTensorD>>(arr));
+    };
+    pin_as(t, false);
+    pin_as(Tensor(t.label(), bra(t.ket()), ket(t.bra()), aux(t.aux()),
+                  TensorSymmetries{.perm = t.symmetry(),
+                                   .braket = t.braket_symmetry(),
+                                   .column = t.column_symmetry()}),
+           true);
+  };
+  using Ordinals = std::vector<std::size_t>;
+  pin(tp::antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+      [](Ordinals const& x) { return data::M(x[0], x[1], x[2], x[3]); });
+  pin(tp::contractor(),
+      [](Ordinals const& x) { return data::L(x[0], x[1], x[2], x[3]); });
+
+  auto const e_layout = tidxs(tp::head(L"E"));
+  // the value of the one root of a system
+  auto eval_system = [&](System const& sys) {
+    auto const res = binarize<EvalExprBTAS>(sys);
+    REQUIRE(res.roots().size() == 1);
+    return eval_aops(res.roots()[0].get(), e_layout)->get<BTensorD>();
+  };
+  // E{i_2;i_3} of consumer_E()
+  auto check_E = [&](BTensorD const& got) {
+    REQUIRE(got.range() == btas::Range{nocc, nocc});
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      for (std::size_t i3 = 0; i3 < nocc; ++i3)
+        CHECK(got(i2, i3) == Catch::Approx(data::contract_with_ell(
+                                               data::L, i3, i2, nocc, nvirt))
+                                 .margin(1e-12));
+  };
+
+  SECTION("inlined E equals the driver-chained E and the direct form") {
+    pin(tp::power_base(),
+        [](Ordinals const& x) { return data::D(x[0], x[1], x[2], x[3]); });
+    System const sys{tp::ell_definition(), tp::consumer_E()};
+    REQUIRE(binarize(sys).consumed == Flags{true, false});
+    auto const inlined = eval_system(sys);
+    check_E(inlined);
+
+    // ℓ evaluated by itself, then served as the leaf E reads, in either
+    // orientation (see pin)
+    for (Tensor const& use :
+         {tp::relabelled(tp::ell_definition().result_as_tensor(),
+                         bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+          tp::relabelled(tp::ell_definition().result_as_tensor(),
+                         bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"})})
+      yield_.set_leaf(use,
+                      evaluate(binarize<EvalExprBTAS>(tp::ell_definition()),
+                               tidxs(use), yield_));
+    auto same = [&inlined](BTensorD const& got) {
+      REQUIRE(got.range() == inlined.range());
+      auto g = got.begin();
+      for (auto r = inlined.begin(); r != inlined.end(); ++r, ++g)
+        CHECK(*g == Catch::Approx(*r).margin(1e-12));
+    };
+    same(evaluate(binarize<EvalExprBTAS>(tp::consumer_E()), e_layout, yield_)
+             ->get<BTensorD>());
+    // the direct form contracts L with M and D in one network, which the
+    // strict bra-ket rule rejects
+    auto _ = set_scoped_default_context(tp::lax_braket_context());
+    same(evaluate(binarize<EvalExprBTAS>(tp::hadamard_power_term()), e_layout,
+                  yield_)
+             ->get<BTensorD>());
+  }
+
+  SECTION("three levels: ε into D into ℓ into E") {
+    pin(ex<Tensor>(L"ε", bra{}, ket{L"a_1"}),
+        [](Ordinals const& x) { return data::eps_virt(x[0]); });
+    pin(ex<Tensor>(L"ε", bra{L"i_1"}, ket{}),
+        [](Ordinals const& x) { return data::eps_occ(x[0]); });
+    System const sys{tp::D_broadcast(), tp::ell_definition(), tp::consumer_E()};
+    REQUIRE(binarize(sys).consumed == Flags{true, true, false});
+    check_E(eval_system(sys));
+  }
+}
+
 // A product that contracts every index of both operands is a bilinear dot,
 // sum_k L[k] R[k], with no conjugation: SeQuant spells a conjugated operand
 // explicitly (an adjointed or K-conjugated state, lowered to a leaf whose
@@ -1456,7 +1797,7 @@ TEST_CASE("eval_dot_complex_btas", "[eval_btas]") {
     CHECK(got.imag() == Catch::Approx(ref.imag()).margin(1e-12));
   }
 
-  SECTION("full contraction of the non-batch indices: L[k,x] R[k,x] -> C[x]") {
+  SECTION("batch-full-contraction") {
     auto L = make({nk, nx}, 0.7), R = make({nk, nx}, 1.3);
     auto res = prod(L, R, annots({k, x}, {k, x}, {x}));
     REQUIRE(res->is<ResultTensorBTAS<BTensorC>>());
@@ -1490,11 +1831,11 @@ TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
 
   // register the OBS AO space (μ) and the batching space (z) on top of the
   // standard single-reference spaces
-  auto isr = mbpt::make_sr_spaces();
-  mbpt::add_ao_basis(isr, mbpt::Spin::any);  // μ (OBS AO)
-  mbpt::add_batching_spaces(isr);            // z (batching)
+  auto ibr = mbpt::make_sr_spaces();
+  mbpt::add_ao_basis(ibr, mbpt::Spin::any);  // μ (OBS AO)
+  mbpt::add_batching_spaces(ibr);            // z (batching)
   auto ctx_resetter =
-      set_scoped_default_context(Context{get_default_context()}.set(isr));
+      set_scoped_default_context(Context{get_default_context()}.set(ibr));
 
   const std::wstring e_a_expr =
       L"E{;;z1} = w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
@@ -1612,9 +1953,7 @@ TEST_CASE("btas_batched_contract", "[eval_btas][hyperindex]") {
         CHECK(C(ib, ix) == Catch::Approx(L(ix) * R(ib, ix)));
   }
 
-  SECTION(
-      "result axis order differs from [batch,rest]: L[a,x] R[b,x] -> "
-      "C[x,a,b]") {
+  SECTION("batch-result-axis-order") {
     auto L = make({na, nx}), R = make({nb, nx});
     auto C = prod(L, R, annots({a, x}, {b, x}, {x, a, b}));
     REQUIRE(C.rank() == 3);
@@ -1638,10 +1977,10 @@ TEST_CASE("eval_btas_batched_over_aux", "[eval_btas][hyperindex]") {
   using namespace sequant;
   using BTensorD = btas::Tensor<double>;
 
-  auto isr = mbpt::make_sr_spaces();
-  mbpt::add_batching_spaces(isr);  // z
+  auto ibr = mbpt::make_sr_spaces();
+  mbpt::add_batching_spaces(ibr);  // z
   auto ctx_resetter =
-      set_scoped_default_context(Context{get_default_context()}.set(isr));
+      set_scoped_default_context(Context{get_default_context()}.set(ibr));
 
   // Nonsymm so bra<->ket orientation is never folded by canonicalization: the
   // leaf identities (hence the yielder cache keys) stay put.

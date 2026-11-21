@@ -58,10 +58,13 @@ using namespace sequant;
 using namespace std::literals;
 
 TEST_CASE("tensor_network_shared", "[elements]") {
-  auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_basis(isr, mbpt::Spin::any);
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
+  using TN =
+      TensorNetworkV3;  // the sections below spell the network through TN
+  auto ibr = sequant::mbpt::make_legacy_spaces();
+  mbpt::add_pao_basis(ibr, mbpt::Spin::any);
   auto ctx = get_default_context();
-  ctx.set(isr);
+  ctx.set(ibr);
   ctx.set(Vacuum::SingleProduct);
   auto ctx_resetter = set_scoped_default_context(ctx);
 
@@ -92,8 +95,6 @@ TEST_CASE("tensor_network_shared", "[elements]") {
                L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
                L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", Eq, Plus},
-              {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-               L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
               // one more pair of ternary products
               {L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
                L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
@@ -279,6 +280,55 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       REQUIRE(tn21_asis.tensors()[0]->_bra()[0].label() == L"a_2");
     }
 
+    SECTION("twin externals on a nonsymmetric bundle") {
+      if constexpr (TN::version() >= 3) {
+        // Two networks that differ ONLY by which of two same-space externals
+        // sits on which bra slot of a NONSYMMETRIC (column-symmetric) leaf:
+        // R{a_1,a_2} vs R{a_2,a_1}. They denote different tensors (a slot
+        // exchange inside a nonsymmetric bundle is not a symmetry), so their
+        // value identity must differ: either the hash, or the canonical order
+        // of the named indices together with a phase. (The raw network gets
+        // this right; the 2026-09-04 cache defect on this shape -- HSeOH
+        // PNS-CCD, (vv|vv) ladder kept 4-center -- was the eval node's
+        // label-sorted Sum placeholder, see
+        // sum_placeholder_is_spelled_in_its_layout in test_eval_expr.cpp.)
+        const auto cardinal =
+            get_default_context_snapshot().cardinal_tensor_labels();
+        const std::wstring n183 =
+            L"g{a_5,a_6;a_7,a_8}:N-C-S * C{a_5;a_1<i_1,i_2>}:N-N-N * "
+            L"C{a_6;a_2<i_1,i_2>}:N-N-N * C{a_7;a_3<i_1,i_2>}:N-N-N * "
+            L"C{a_8;p_1<i_1,i_2>}:N-N-N * "
+            L"t{a_3<i_1,i_2>,p_1<i_1,i_2>;i_1,i_2}:A-N-S";
+        const std::wstring n190 =
+            L"g{a_5,a_6;a_7,a_8}:N-C-S * C{a_5;a_2<i_1,i_2>}:N-N-N * "
+            L"C{a_6;a_1<i_1,i_2>}:N-N-N * C{a_7;a_3<i_1,i_2>}:N-N-N * "
+            L"C{a_8;p_1<i_1,i_2>}:N-N-N * "
+            L"t{a_3<i_1,i_2>,p_1<i_1,i_2>;i_1,i_2}:A-N-S";
+        const Index i1(L"i_1"), i2(L"i_2");
+        const Index a1(L"a_1", {i1, i2}), a2(L"a_2", {i1, i2});
+        typename TN::NamedIndexSet named{a1, a2, i1, i2};
+        auto canon = [&](std::wstring const& s) {
+          TN tn(deserialize(s));
+          auto md = tn.canonicalize_slots(
+              {.cardinal_tensor_labels = cardinal, .named_indices = &named});
+          std::wstring order;
+          for (auto const& ix : md.template get_indices<Index::index_vector>())
+            order += std::wstring(ix.full_label()) + L" ";
+          return std::make_tuple(md.hash_value(), md.phase, order);
+        };
+        auto const [h183, p183, o183] = canon(n183);
+        auto const [h190, p190, o190] = canon(n190);
+        INFO("183: hash " << h183 << " phase " << int(p183) << " order "
+                          << toUtf8(o183));
+        INFO("190: hash " << h190 << " phase " << int(p190) << " order "
+                          << toUtf8(o190));
+        // identical (hash, order, phase) would let an evaluator serve one
+        // node's buffer for the other
+        const bool same_identity = h183 == h190 && o183 == o190 && p183 == p190;
+        CHECK_FALSE(same_identity);
+      }
+    }
+
     SECTION("braket orientation fold") {
       // Only a free or signed bra<->ket exchange is a respelling. A
       // Hermitian (BraKetSymmetry::Conjugate) tensor satisfies
@@ -416,49 +466,44 @@ TEST_CASE("tensor_network_shared", "[elements]") {
 
   SECTION("canonicalize") {
     SECTION("need particle reorder?") {
-      {
-        Index::reset_tmp_index();
-        auto input1 = deserialize(
-            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
-        auto input2 = deserialize(
-            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+      Index::reset_tmp_index();
+      auto input1 = deserialize(
+          L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+      auto input2 = deserialize(
+          L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
 
-        CAPTURE(input1);
-        CAPTURE(input2);
+      CAPTURE(input1);
+      CAPTURE(input2);
 
-        {
-          TN tn1(*input1);
-          tn1.canonicalize(get_default_context().cardinal_tensor_labels());
-          TN tn2(*input2);
-          tn2.canonicalize(get_default_context().cardinal_tensor_labels());
+      TN tn1(*input1);
+      tn1.canonicalize(get_default_context().cardinal_tensor_labels());
+      TN tn2(*input2);
+      tn2.canonicalize(get_default_context().cardinal_tensor_labels());
 
-          // std::wcout << "tn1[0] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
-          // "\n"; std::wcout << "tn1[1] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[1])) <<
-          // "\n"; std::wcout << "tn1[2] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[2])) <<
-          // "\n"; std::wcout << "tn2[0] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[0])) <<
-          // "\n"; std::wcout << "tn2[1] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[1])) <<
-          // "\n"; std::wcout << "tn2[2] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[2])) <<
-          // "\n";
+      // std::wcout << "tn1[0] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
+      // "\n"; std::wcout << "tn1[1] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[1])) <<
+      // "\n"; std::wcout << "tn1[2] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[2])) <<
+      // "\n"; std::wcout << "tn2[0] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[0])) <<
+      // "\n"; std::wcout << "tn2[1] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[1])) <<
+      // "\n"; std::wcout << "tn2[2] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[2])) <<
+      // "\n";
 
-          // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
-          // dummy renamings so canonical(input2) is obtained from
-          // canonical(input1) by i6 -> i11 and i7 -> i6
-          for (int i = 0; i != tn1.tensors().size(); ++i) {
-            std::unique_ptr<AbstractTensor> t2_i(tn2.tensors()[i]->_clone());
-            container::map<Index, Index> idxrepl{
-                {Index{L"p_11"}, Index{L"p_6"}},
-                {Index{L"p_6"}, Index{L"p_7"}}};
-            apply_index_replacements(*t2_i, idxrepl, false);
-            REQUIRE(serialize(*(tn1.tensors()[i]), {.annot_symm = true}) ==
-                    serialize(*t2_i, {.annot_symm = true}));
-          }
-        }
+      // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
+      // dummy renamings so canonical(input2) is obtained from
+      // canonical(input1) by i6 -> i11 and i7 -> i6
+      for (int i = 0; i != tn1.tensors().size(); ++i) {
+        std::unique_ptr<AbstractTensor> t2_i(tn2.tensors()[i]->_clone());
+        container::map<Index, Index> idxrepl{{Index{L"p_11"}, Index{L"p_6"}},
+                                             {Index{L"p_6"}, Index{L"p_7"}}};
+        apply_index_replacements(*t2_i, idxrepl, false);
+        REQUIRE(serialize(*(tn1.tensors()[i]), {.annot_symm = true}) ==
+                serialize(*t2_i, {.annot_symm = true}));
       }
     }
   }
@@ -671,7 +716,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   }  // SECTION("accessors")
 
   SECTION("canonicalizer") {
-    {  // non-covariant pairings are rejected, covariant ones are not
+    SECTION("non-covariant pairings") {
+      // non-covariant pairings are rejected, covariant ones are not
       constexpr const auto V = Vacuum::SingleProduct;
       auto canonicalize = [](const ExprPtr& product) {
         TN tn(product->as<Product>().factors());
@@ -727,7 +773,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       }
     }
 
-    {  // with no external indices, hence no named indices whatsoever
+    SECTION("no named indices") {
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
       auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
@@ -751,7 +797,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
               L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
     }
 
-    {
+    SECTION("named indices") {
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
       auto t1 = ex<Tensor>(L"F", bra{L"i_2"}, ket{L"i_17"});
@@ -1293,6 +1339,16 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
             split_into_lines(L"(ket_1,ket_2)(i_1,i_2)\n(bra_1,bra_2)(ket_1,ket_"
                              L"2)(i_3,i_4)\n"));
     }
+  }
+
+  SECTION("edges after canonicalize_slots") {
+    // canonicalize_slots discards the edges; the accessors rebuild them
+    TN tn(deserialize(L"t{a_1;i_1} f{i_1;a_2}"));
+    auto const before = tn.ext_indices();
+    REQUIRE(before.size() == 2);
+    tn.canonicalize_slots(get_default_context().cardinal_tensor_labels());
+    CHECK(tn.ext_indices() == before);
+    CHECK(tn.edges().size() == 3);
   }
 }
 

@@ -21,11 +21,25 @@ namespace eval {
 
 namespace detail {
 
+/// Flips every Kramers-flavoured label of \p loops to its partner in place
+/// (deep: the pair labels inside a composite follow). The operand of an
+/// \c EvalOp::KramersFlip node is binarized from the flipped spelling, so the
+/// loops opened above the flip reach it under their flipped labels; under the
+/// Kramers-blind loop fusion (\c loop_space_key) a flipped label names the
+/// same loop. A label without a partner (the DF auxiliary index) is its own
+/// image; without a registry nothing is flipped.
+inline void kramers_flip_loop_labels(container::svector<Index>& loops) {
+  auto const isr = get_default_context().index_basis_registry();
+  if (!isr) return;
+  for (auto& ix : loops) ix = kramers_flipped_deep(ix, *isr);
+}
+
 /// Intersect \p acc in place with \p other by \c Index identity (operator==):
 /// keep only elements of \p acc that also appear in \p other, preserving
 /// \p acc's order. Used to accumulate the cross-occurrence meet.
 inline void lifetime_mask_intersect_in_place(
-    container::svector<Index>& acc, container::svector<Index> const& other) {
+    container::svector<Index>& acc,
+    container::svector_base<Index> const& other) {
   container::svector<Index> keep;
   for (auto const& ix : acc)
     if (std::find(other.begin(), other.end(), ix) != other.end())
@@ -121,7 +135,9 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
       lifetime_mask_intersect_in_place(it->second, node_modes);
       occ.push_back({&n, &it->second});
     }
-    stack.push_back({&n.right(), acc});
+    if (!n->is_unary_op()) stack.push_back({&n.right(), acc});  // no sentinel
+    // a KramersFlip's operand carries the enclosing loops' flipped labels
+    if (n->op_type() == EvalOp::KramersFlip) kramers_flip_loop_labels(acc);
     stack.push_back({&n.left(), std::move(acc)});
   };
   for (auto const& tree : forest) {
@@ -250,6 +266,9 @@ void stamp_occurrence_homes(R const& forest) {
   std::vector<Frame> stack;
   auto const walk_node = [&](Node const& n, container::svector<Index> acc) {
     if (n.leaf()) return;
+    // a node produced at the root scope starts from an empty nest: the loops
+    // of its ancestors enclose neither it nor its subtree
+    if (n->root_scope()) acc.clear();
     for (auto const& [ix, kind] : n->batch_loops_opened_here())
       acc.push_back(ix);
     auto const slots = eval::detail::slot_modes_of(n);
@@ -258,7 +277,10 @@ void stamp_occurrence_homes(R const& forest) {
       if (std::find(slots.begin(), slots.end(), m) != slots.end())
         home.push_back(m);
     const_cast<Data&>(*n).set_occurrence_home(std::move(home));
-    stack.push_back({&n.right(), acc});
+    if (!n->is_unary_op()) stack.push_back({&n.right(), acc});  // no sentinel
+    // a KramersFlip's operand carries the enclosing loops' flipped labels
+    if (n->op_type() == EvalOp::KramersFlip)
+      eval::detail::kramers_flip_loop_labels(acc);
     stack.push_back({&n.left(), std::move(acc)});
   };
   for (auto const& tree : forest) {
@@ -326,7 +348,9 @@ std::pair<std::size_t, bool> value_key_impl(Node const& n) {
     std::size_t h = value_key(nd->hash_value(), std::move(pos));
     if (!nd.leaf()) {
       auto [lk, ls] = below;  // the left child, already folded by this loop
-      auto [rk, rs] = value_key_impl(nd.right());
+      // a unary op's right child is the Constant(1) sentinel, not an operand
+      auto [rk, rs] = nd->is_unary_op() ? std::pair<std::size_t, bool>{}
+                                        : value_key_impl(nd.right());
       if (ls || rs) {
         sliced = true;
         // A Product (contraction) is commutative and the binarizer may emit the

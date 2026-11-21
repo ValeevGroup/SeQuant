@@ -20,6 +20,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/nodiscard.hpp>
 #include <SeQuant/core/utility/scope.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -40,6 +41,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -83,59 +85,40 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   Index::reset_tmp_index();
 
   SECTION("Op contractions") {
-    REQUIRE(FWickTheorem::can_contract(fann(L"i_1"), fcre(L"i_2"),
-                                       Vacuum::Physical));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fcre(L"i_2"),
-                                        Vacuum::Physical));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fann(L"i_2"),
-                                        Vacuum::Physical));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fann(L"i_2"),
-                                        Vacuum::Physical));
-
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(FWickTheorem::can_contract(fcre(L"i_1"), fann(L"i_2"),
-                                       Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fann(L"i_2"),
-                                        Vacuum::SingleProduct));
-
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fcre(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fcre(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fann(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fann(L"a_2"),
-                                        Vacuum::SingleProduct));
-
-    REQUIRE(!FWickTheorem::can_contract(fann(L"a_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fann(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"a_1"), fann(L"i_2"),
-                                        Vacuum::SingleProduct));
-
-    REQUIRE(FWickTheorem::can_contract(fann(L"a_1"), fcre(L"a_2"),
-                                       Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fcre(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fann(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"a_1"), fann(L"a_2"),
-                                        Vacuum::SingleProduct));
-
-    REQUIRE(!FWickTheorem::can_contract(fann(L"p_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"p_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(FWickTheorem::can_contract(fcre(L"p_1"), fann(L"i_2"),
-                                       Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"p_1"), fann(L"i_2"),
-                                        Vacuum::SingleProduct));
+    // {vacuum, first, second, can contract}
+    const std::vector<std::tuple<Vacuum, decltype(fann(L"i_1")),
+                                 decltype(fann(L"i_1")), bool>>
+        fermion_contractions{
+            {Vacuum::Physical, fann(L"i_1"), fcre(L"i_2"), true},
+            {Vacuum::Physical, fcre(L"i_1"), fcre(L"i_2"), false},
+            {Vacuum::Physical, fcre(L"i_1"), fann(L"i_2"), false},
+            {Vacuum::Physical, fann(L"i_1"), fann(L"i_2"), false},
+            {Vacuum::SingleProduct, fann(L"i_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"i_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"i_1"), fann(L"i_2"), true},
+            {Vacuum::SingleProduct, fann(L"i_1"), fann(L"i_2"), false},
+            {Vacuum::SingleProduct, fann(L"i_1"), fcre(L"a_2"), false},
+            {Vacuum::SingleProduct, fcre(L"i_1"), fcre(L"a_2"), false},
+            {Vacuum::SingleProduct, fcre(L"i_1"), fann(L"a_2"), false},
+            {Vacuum::SingleProduct, fann(L"i_1"), fann(L"a_2"), false},
+            {Vacuum::SingleProduct, fann(L"a_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"a_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"a_1"), fann(L"i_2"), false},
+            {Vacuum::SingleProduct, fann(L"a_1"), fann(L"i_2"), false},
+            {Vacuum::SingleProduct, fann(L"a_1"), fcre(L"a_2"), true},
+            {Vacuum::SingleProduct, fcre(L"a_1"), fcre(L"a_2"), false},
+            {Vacuum::SingleProduct, fcre(L"a_1"), fann(L"a_2"), false},
+            {Vacuum::SingleProduct, fann(L"a_1"), fann(L"a_2"), false},
+            {Vacuum::SingleProduct, fann(L"p_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"p_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"p_1"), fann(L"i_2"), true},
+            {Vacuum::SingleProduct, fann(L"p_1"), fann(L"i_2"), false},
+        };
+    for (const auto& [vacuum, first, second, expected] : fermion_contractions) {
+      CAPTURE(static_cast<int>(vacuum), toUtf8(first.index().label()),
+              toUtf8(second.index().label()));
+      REQUIRE(FWickTheorem::can_contract(first, second, vacuum) == expected);
+    }
 
     REQUIRE(BWickTheorem::can_contract(bann(L"i_1"), bcre(L"i_2"),
                                        Vacuum::Physical));
@@ -153,32 +136,32 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       ctx.set(mbpt::make_mr_spaces());
       ctx.set(Vacuum::MultiProduct);
       auto ctx_resetter = set_scoped_default_context(ctx);
-      const auto isr = ctx.index_basis_registry();
+      const auto ibr = ctx.index_basis_registry();
       const auto MP = Vacuum::MultiProduct;
 
       // core behaves as in SingleProduct
-      REQUIRE(is_pure_qpannihilator(fcre(L"i_1"), MP, isr));
-      REQUIRE(!is_qpcreator(fcre(L"i_1"), MP, isr));
-      REQUIRE(is_pure_qpcreator(fann(L"i_1"), MP, isr));
-      REQUIRE(!is_qpannihilator(fann(L"i_1"), MP, isr));
+      REQUIRE(is_pure_qpannihilator(fcre(L"i_1"), MP, ibr));
+      REQUIRE(!is_qpcreator(fcre(L"i_1"), MP, ibr));
+      REQUIRE(is_pure_qpcreator(fann(L"i_1"), MP, ibr));
+      REQUIRE(!is_qpannihilator(fann(L"i_1"), MP, ibr));
       // virtual behaves as in SingleProduct
-      REQUIRE(is_pure_qpcreator(fcre(L"a_1"), MP, isr));
-      REQUIRE(!is_qpannihilator(fcre(L"a_1"), MP, isr));
-      REQUIRE(is_pure_qpannihilator(fann(L"a_1"), MP, isr));
-      REQUIRE(!is_qpcreator(fann(L"a_1"), MP, isr));
+      REQUIRE(is_pure_qpcreator(fcre(L"a_1"), MP, ibr));
+      REQUIRE(!is_qpannihilator(fcre(L"a_1"), MP, ibr));
+      REQUIRE(is_pure_qpannihilator(fann(L"a_1"), MP, ibr));
+      REQUIRE(!is_qpcreator(fann(L"a_1"), MP, ibr));
       // active is both
-      REQUIRE(is_pure_qpcreator(fcre(L"u_1"), MP, isr));
-      REQUIRE(is_pure_qpannihilator(fcre(L"u_1"), MP, isr));
-      REQUIRE(is_pure_qpcreator(fann(L"u_1"), MP, isr));
-      REQUIRE(is_pure_qpannihilator(fann(L"u_1"), MP, isr));
+      REQUIRE(is_pure_qpcreator(fcre(L"u_1"), MP, ibr));
+      REQUIRE(is_pure_qpannihilator(fcre(L"u_1"), MP, ibr));
+      REQUIRE(is_pure_qpcreator(fann(L"u_1"), MP, ibr));
+      REQUIRE(is_pure_qpannihilator(fann(L"u_1"), MP, ibr));
       // general p: both, but not pure
-      REQUIRE(is_qpcreator(fcre(L"p_1"), MP, isr));
-      REQUIRE(!is_pure_qpcreator(fcre(L"p_1"), MP, isr));
+      REQUIRE(is_qpcreator(fcre(L"p_1"), MP, ibr));
+      REQUIRE(!is_pure_qpcreator(fcre(L"p_1"), MP, ibr));
       const auto p_qns = fcre(L"p_1").index().space().qns();
-      REQUIRE(qpcreator_space(fcre(L"p_1"), MP, isr) ==
-              isr->vacuum_unoccupied_space(p_qns));
-      REQUIRE(qpannihilator_space(fcre(L"p_1"), MP, isr) ==
-              isr->reference_occupied_space(p_qns));
+      REQUIRE(qpcreator_space(fcre(L"p_1"), MP, ibr) ==
+              ibr->vacuum_unoccupied_space(p_qns));
+      REQUIRE(qpannihilator_space(fcre(L"p_1"), MP, ibr) ==
+              ibr->reference_occupied_space(p_qns));
 
       // contractions: only cre·ann over R and ann·cre over U
       REQUIRE(FWickTheorem::can_contract(fcre(L"i_1"), fann(L"i_2"), MP));
@@ -1128,22 +1111,6 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 
 #endif
 
-#if 0
-    // impossible: 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body ^ 4-body
-    {
-      auto opseq =
-          ex<FNOperatorSeq>(FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}), ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
-                         FNOperator(cre({L"p_11", L"p_12", L"p_13", L"p_14"}), ann({L"p_15", L"p_16", L"p_17", L"p_18"})),
-                         FNOperator(cre({L"p_21", L"p_22", L"p_23", L"p_24"}), ann({L"p_25", L"p_26", L"p_27", L"p_28"})),
-                         FNOperator(cre({L"p_31", L"p_32", L"p_33", L"p_34"}), ann({L"p_35", L"p_36", L"p_37", L"p_38"})),
-                         FNOperator(cre({L"p_41", L"p_42", L"p_43", L"p_44"}), ann({L"p_45", L"p_46", L"p_47", L"p_48"})),
-                         FNOperator(cre({L"p_51", L"p_52", L"p_53", L"p_54"}), ann({L"p_55", L"p_56", L"p_57", L"p_58"}))
-                        );
-      auto wick = FWickTheorem{opseq};
-      auto result = wick.compute(true);
-    }
-#endif
-
     // the context may name an index that appears twice; it is then external,
     // so use_topology may not treat the operators carrying it as equivalent
     {
@@ -1389,7 +1356,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   // is the only occurrence of a dummy index it is the sum over it, i.e. the
   // extent of its space, and stands
   SECTION("self-delta on a dummy index") {
-    const auto& isr = get_default_context().index_basis_registry();
+    const auto& ibr = get_default_context().index_basis_registry();
     auto self_deltas = [](const ExprPtr& expr) {
       container::svector<Tensor> result;
       expr->visit(
@@ -1413,7 +1380,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(!result->is<Constant>());
     auto deltas = self_deltas(result);
     REQUIRE(deltas.size() == 1);
-    REQUIRE(isr->is_pure_unoccupied(deltas[0].bra()[0].space()));
+    REQUIRE(ibr->is_pure_unoccupied(deltas[0].bra()[0].space()));
 
     // the occupation of a named orbital is 1
     auto occupation = ex<FNOperator>(cre({L"i_1"}), ann({})) *
@@ -1428,7 +1395,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     result = FWickTheorem{occupation}.compute();
     deltas = self_deltas(result);
     REQUIRE(deltas.size() == 1);
-    REQUIRE(isr->is_pure_occupied(deltas[0].bra()[0].space()));
+    REQUIRE(ibr->is_pure_occupied(deltas[0].bra()[0].space()));
 
     // a dummy bound by a tensor: the trace of f over the unoccupied orbitals,
     // with no delta left
@@ -1440,7 +1407,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     const auto f_indices = get_used_indices_with_counts(result);
     REQUIRE(f_indices.size() == 1);
     REQUIRE(f_indices.begin()->second.nonproto() == 2);
-    REQUIRE(isr->is_pure_unoccupied(f_indices.begin()->first.space()));
+    REQUIRE(ibr->is_pure_unoccupied(f_indices.begin()->first.space()));
 
     // a dummy bound only as a protoindex: the occupation is 1 for each i_1
     // that t's indices depend on, with no delta left

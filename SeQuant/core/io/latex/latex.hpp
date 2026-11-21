@@ -20,6 +20,7 @@
 namespace sequant {
 class ExprPtr;
 class Power;
+class TensorPower;
 class ResultExpr;
 }  // namespace sequant
 
@@ -109,6 +110,8 @@ std::wstring to_string(const std::complex<T>& t) {
 std::wstring to_string(const rational& num);
 
 std::wstring to_string(const Power& power);
+
+std::wstring to_string(const TensorPower& power);
 
 std::wstring to_string(const ResultExpr& expr);
 

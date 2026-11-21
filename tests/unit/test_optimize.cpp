@@ -7,6 +7,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
@@ -18,16 +19,23 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
+#include <range/v3/algorithm/contains.hpp>
+
 #include <algorithm>
+#include <array>
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <limits>
 #include <memory>
+#include <set>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -564,6 +572,50 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(*seq == *par);
     }
 
+    SECTION("parallel optimize of summands sharing a nested Sum factor") {
+      // Summands that hold ONE bracket object (the flavor bracket a CSV
+      // transform wraps around a projected leaf can be reused across the
+      // terms it appears in) are optimized on parallel threads, and the
+      // bracket itself is optimized too (opt_mixed_product). Index and Expr
+      // memoize labels and hashes lazily in mutable members, so the shared
+      // object must not be touched from several threads: optimize() works on
+      // a private clone of every summand. Cache-cold terms are built afresh
+      // for every run and the parallel result must equal the sequential one.
+      auto const nthreads_save = num_threads();
+      struct ThreadGuard {
+        int n;
+        ~ThreadGuard() { set_num_threads(n); }
+      } guard{nthreads_save};
+
+      auto make = []() {
+        auto bracket = deserialize(
+            L"g{i_3,i_4;a_3<i_1,i_2>,a_4<i_1,i_2>} "
+            L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_4} "
+            L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}"
+            L" + f{i_3,i_4;a_3<i_1,i_2>,a_4<i_1,i_2>} "
+            L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_4} "
+            L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}",
+            {.def_perm_symm = Symmetry::Nonsymm});
+        auto lambda = deserialize(L"λ{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}",
+                                  {.def_perm_symm = Symmetry::Nonsymm});
+        std::vector<ExprPtr> terms;
+        for (int k = 0; k < 32; ++k)
+          terms.push_back(ex<Product>(ExprPtrList{lambda, bracket}));
+        return ex<Sum>(terms.begin(), terms.end());
+      };
+
+      // composite (proto-indexed) indices need an inner extent model
+      auto const opts = OptimizeOptions{
+          .inner_pow = [](Index const&, std::size_t) { return 8.0; }};
+      for (int rep = 0; rep < 8; ++rep) {
+        set_num_threads(1);
+        auto const seq = optimize(make(), opts);
+        set_num_threads(8);
+        auto const par = optimize(make(), opts);
+        REQUIRE(*seq == *par);
+      }
+    }
+
     SECTION("subset_footprints") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
@@ -590,27 +642,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(S[0b11] == 64.0);
     }
 
-    SECTION("DensePeakSize DP matches brute-force oracle") {
-      using namespace sequant;
-      auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.basis().extent();
-      };
-      // A 4-tensor chain whose intermediates differ in size by contraction
-      // order.
-      auto t0 = deserialize(L"g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t1 = deserialize(L"g{a1;a2}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t2 = deserialize(L"g{a2;a3}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t3 = deserialize(L"g{a3;i2}", {.def_perm_symm = Symmetry::Nonsymm});
-      TensorNetwork net{std::vector<ExprPtr>{t0, t1, t2, t3}};
-      container::svector<Index> targets;  // i1,i2 left open
-      auto S = opt::detail::subset_footprints(net, targets, idxsz);
-      double oracle =
-          brute_force_min_peak(std::vector<double>(S.begin(), S.end()), 4);
-      double dp = opt::detail::peak_cost(net, targets, idxsz);
-      REQUIRE(dp == oracle);
-    }
-
-    SECTION("DensePeakSize matches oracle over a battery of small networks") {
+    SECTION("peak-dp-oracle-battery") {
       using namespace sequant;
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
@@ -702,7 +734,7 @@ TEST_CASE("optimize", "[optimize]") {
       // (0b0001..0b1000).
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
 
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
@@ -729,15 +761,13 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(tables[size_t{1} << f1bit][0b01] < tables[0b00][0b01]);
     }
 
-    SECTION(
-        "DensePeakSizeBatched all-sliced corner equals peak_cost with "
-        "sliced extents") {
+    SECTION("batched-all-sliced-corner") {
       using namespace sequant;
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
@@ -787,7 +817,7 @@ TEST_CASE("optimize", "[optimize]") {
       using namespace sequant;
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
@@ -834,15 +864,13 @@ TEST_CASE("optimize", "[optimize]") {
       }
     }
 
-    SECTION(
-        "DensePeakSizeBatched reconstruction achieves the optimum "
-        "(numeric)") {
+    SECTION("batched-reconstruction") {
       using namespace sequant;
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
@@ -877,7 +905,7 @@ TEST_CASE("optimize", "[optimize]") {
       // product over the 3 leaves.
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto expr = deserialize(L"g{a1;i1;F1} * g{a2;i1;F1} * g{a2;i2;F2}",
                               {.def_perm_symm = Symmetry::Nonsymm});
       OptimizeOptions opts;
@@ -921,7 +949,7 @@ TEST_CASE("optimize", "[optimize]") {
       // index has label L"F_1" (not L"F1").
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
@@ -1143,7 +1171,10 @@ TEST_CASE("optimize", "[optimize]") {
                    L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
                    L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
              }) {
-          CAPTURE(inputs);
+          std::string described;
+          for (const auto& input : inputs)
+            described += sequant::toUtf8(input) + "\n";
+          CAPTURE(described);
 
           std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
           const std::vector<ResultExpr> expected = parse_expected(outputs);
@@ -1190,7 +1221,10 @@ TEST_CASE("optimize", "[optimize]") {
                  L"R = CSE1{;;i1,i2} C{i2;i1} + "
                  L"CSE1{;;i3,i4} D{i4;i3}"}},
            }) {
-        CAPTURE(inputs);
+        std::string described;
+        for (const auto& input : inputs)
+          described += sequant::toUtf8(input) + "\n";
+        CAPTURE(described);
 
         std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
         const std::vector<ResultExpr> expected = parse_expected(outputs);
@@ -1198,6 +1232,153 @@ TEST_CASE("optimize", "[optimize]") {
         opt::eliminate_common_subexpressions(expressions, binarizer, opts);
 
         REQUIRE(collect_as_expr(expressions) == expected);
+      }
+    }
+
+    SECTION("TensorPower") {
+      // M ⊙ pow(D,-1) shares i_1 between two bra slots
+      auto knob_ctx = get_default_context();
+      knob_ctx.set(AssertStrictBraKetSymmetry::No);
+      auto knob_resetter = set_scoped_default_context(knob_ctx);
+
+      std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(
+          std::vector<std::wstring>{L"R1 = (M{i1,i2;a1,a2} "
+                                    L"D{i1,i2;a1,a2}^(-1)) L{a1,a2;i1,i2}",
+                                    L"R2 = K{a1,a2;i1,i2} (M{i1,i2;a1,a2} "
+                                    L"D{i1,i2;a1,a2}^(-1))"});
+      opt::eliminate_common_subexpressions(
+          expressions, binarizer,
+          {.filter_predicate = opt::min_usage_filter<EvalNode<EvalExpr>>(2)});
+      auto const actual = collect_as_expr(expressions);
+      REQUIRE(actual.size() == 3);
+      auto const& def = actual[0];
+      REQUIRE(def.label() == L"CSE1");
+      REQUIRE(def.expression()->is<Product>());
+      auto const& factors = def.expression()->as<Product>().factors();
+      REQUIRE(factors.size() == 2);
+      std::size_t n_powers = 0;
+      for (auto const& f : factors) {
+        if (f->is<TensorPower>()) {
+          ++n_powers;
+          REQUIRE(f->as<TensorPower>().exponent() == rational{-1});
+          REQUIRE(f->as<TensorPower>().base_tensor()._label() == L"D");
+        } else {
+          REQUIRE(f->is<Tensor>());
+          REQUIRE(f->as<Tensor>().label() == L"M");
+        }
+      }
+      REQUIRE(n_powers == 1);
+      for (std::size_t r : {1, 2}) {
+        CAPTURE(r);
+        std::size_t uses = 0;
+        actual[r].expression()->visit(
+            [&uses](ExprPtr const& x) {
+              uses += x->is<Tensor>() && x->as<Tensor>().label() == L"CSE1";
+              REQUIRE(!x->is<TensorPower>());
+            },
+            /* atoms_only = */ true);
+        REQUIRE(uses == 1);
+      }
+    }
+    SECTION("persistent subexpressions") {
+      using Node = EvalNode<EvalExpr>;
+
+      std::vector<Node> expressions = parse_inputs(
+          std::vector<std::wstring>{L"R1 = (A{i1;i2} B{i2;i3}) C{i3;i1}",
+                                    L"R2 = (A{i1;i2} B{i2;i3}) D{i3;i1}",
+                                    L"R3 = (E{i1;i2} C{i2;i3}) D{i3;i1}"});
+
+      const std::vector<std::size_t> definitions =
+          opt::extract_persistent_subexpressions(
+              expressions,
+              std::function<bool(const Node&)>([](const Node& leaf) {
+                return leaf->is_tensor() &&
+                       (leaf->as_tensor().label() == L"C" ||
+                        leaf->as_tensor().label() == L"D");
+              }),
+              binarizer,
+              std::function<std::string(const Node&, std::size_t)>(
+                  [](const Node&, std::size_t counter) {
+                    return "P" + std::to_string(counter);
+                  }));
+
+      // Every use of the persistent subtree is replaced by the intermediate
+      REQUIRE(definitions == std::vector<std::size_t>{0});
+      REQUIRE(expressions.size() == 4);
+      REQUIRE(collect_as_expr(expressions) ==
+              parse_expected(std::vector<std::wstring>{
+                  L"P1{;;i1,i3} = A{i1;i2} B{i2;i3}",
+                  L"R1 = P1{;;i1,i3} C{i3;i1}", L"R2 = P1{;;i1,i3} D{i3;i1}",
+                  L"R3 = (E{i1;i2} C{i2;i3}) D{i3;i1}"}));
+    }
+    SECTION("batched") {
+      const std::vector<std::wstring> inputs = {
+          L"R1 = (A{i1;i2} B{i2;i3}) C{i3;i1}",
+          L"R2 = (A{i1;i2} B{i2;i3}) D{i3;i1}"};
+      const std::vector<Index> batch = {Index(L"i5")};
+
+      SECTION("identical batch indices share subexpressions") {
+        std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+        const std::vector<std::optional<std::vector<Index>>> batch_indices = {
+            batch, batch};
+
+        const opt::BatchedCSEResult result =
+            opt::eliminate_common_subexpressions_batched(
+                expressions, batch_indices, binarizer);
+
+        REQUIRE(result.cse_positions.size() == 1);
+        REQUIRE(expressions.size() == 3);
+        REQUIRE(result.partitions ==
+                std::vector<std::pair<std::size_t, std::size_t>>{{0, 3}});
+        REQUIRE(result.batch_indices.size() == 1);
+        REQUIRE(result.batch_indices.front() == batch);
+      }
+
+      SECTION("different batch indices are processed separately") {
+        std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+        const std::vector<std::optional<std::vector<Index>>> batch_indices = {
+            batch, std::vector<Index>{}};
+
+        const opt::BatchedCSEResult result =
+            opt::eliminate_common_subexpressions_batched(
+                expressions, batch_indices, binarizer);
+
+        REQUIRE(result.cse_positions.empty());
+        REQUIRE(expressions.size() == 2);
+        REQUIRE(
+            result.partitions ==
+            std::vector<std::pair<std::size_t, std::size_t>>{{0, 1}, {1, 2}});
+      }
+
+      SECTION("trees without well-defined batch indices stay on their own") {
+        std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+        const std::vector<std::optional<std::vector<Index>>> batch_indices = {
+            std::nullopt, std::nullopt};
+
+        const opt::BatchedCSEResult result =
+            opt::eliminate_common_subexpressions_batched(
+                expressions, batch_indices, binarizer);
+
+        REQUIRE(result.cse_positions.empty());
+        REQUIRE(
+            result.partitions ==
+            std::vector<std::pair<std::size_t, std::size_t>>{{0, 1}, {1, 2}});
+        REQUIRE(result.batch_indices ==
+                std::vector<std::vector<Index>>{{}, {}});
+      }
+
+      SECTION("batch_priority_less") {
+        const std::vector<EvalNode<EvalExpr>> expressions =
+            parse_inputs(std::vector<std::wstring>{L"R1{i1;i2} = A{i1;i2}",
+                                                   L"R2{i1;i5} = B{i1;i5}"});
+
+        // Trees with more (high priority) batch indices come later
+        REQUIRE(
+            opt::batch_priority_less(expressions[0], expressions[1], batch));
+        REQUIRE_FALSE(
+            opt::batch_priority_less(expressions[1], expressions[0], batch));
+        REQUIRE_FALSE(
+            opt::batch_priority_less(expressions[0], expressions[0], batch));
       }
     }
   }
@@ -1509,6 +1690,25 @@ std::wstring render_tree(sequant::ExprPtr const& e) {
   }
   return L"?";
 }
+
+// True iff every `t` leaf is contracted directly with a `C` leaf, i.e. each
+// OSV/PNO transform C·t is formed before anything else touches it.
+bool every_t_meets_its_transform_first(sequant::ExprPtr const& e) {
+  using namespace sequant;
+  if (!e->is<Product>()) return true;
+  auto const& factors = e->as<Product>().factors();
+  for (auto const& f : factors) {
+    if (f->is<Tensor>() && f->as<Tensor>().label() == L"t") {
+      for (auto const& other : factors)
+        if (other != f &&
+            !(other->is<Tensor>() && other->as<Tensor>().label() == L"C"))
+          return false;
+    } else if (!every_t_meets_its_transform_first(f)) {
+      return false;
+    }
+  }
+  return true;
+}
 }  // namespace
 
 // Role-based batchability (domain-generic): the caller supplies two space sets
@@ -1520,9 +1720,7 @@ std::wstring render_tree(sequant::ExprPtr const& e) {
 // batchable_mode_list admits both as CANDIDATES (a mode's role is not known
 // there) and build_context's role filter keeps i_1 but drops i_2 -- so the
 // contracted occurrences of an external-only space never enter the 2^m search.
-TEST_CASE(
-    "batchable roles: external-only space keeps external, drops contracted",
-    "[optimize][batch]") {
+TEST_CASE("batch-roles-external-only", "[optimize][batch]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -1588,13 +1786,12 @@ TEST_CASE(
 // Equivalently: leaving a contracted mode in the contracted predicate (the
 // pre-migration routing) DOES slice it (control, > 0); moving it to the
 // external role does NOT (fix, == 0).
-TEST_CASE("role filter: contracted mode sliced only in the contracted role",
-          "[optimize][role-filter]") {
+TEST_CASE("role-filter-contracted", "[optimize][role-filter]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 8ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 8}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
@@ -1656,13 +1853,12 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
 // default-decline the mode is dropped (n_F == 0). The RED run also proves the
 // assertion is non-vacuous: the mode is a genuine batchable-space mode that the
 // fallback DID admit.
-TEST_CASE("role filter: external mode needs the external role, not a fallback",
-          "[optimize][role-filter]") {
+TEST_CASE("role-filter-external", "[optimize][role-filter]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 8ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 8}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
@@ -1720,6 +1916,8 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
         prod, idxsz, /*subnet_cse=*/false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << name << L":  " << render_tree(res) << L"\n";
+    CAPTURE(sequant::toUtf8(name), sequant::toUtf8(render_tree(res)));
+    CHECK(every_t_meets_its_transform_first(res));
   };
   // Omitting inner_pow on a term with composite (CSV/PNO) indices used to
   // silently size the composite `a` at its full uocc extent (40), inverting
@@ -1745,6 +1943,96 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
                               ObjectiveFunction::DensePeakSize>{},
        L"Peak ", ip);
   std::wcout << L"\n";
+}
+
+// The integer index-extent hook (has_index_extent) is a contract on
+// proto-FREE indices: a CSV/PNO composite is sized by inner_pow alone, and no
+// cost model may ask the hook for a composite's extent (a backend has nothing
+// meaningful to answer -- a composite's size is a power mean times an
+// occupancy, not an integer). Witness: an idxsz that THROWS on any composite
+// must drive every objective, unbatched and batched, to completion on a
+// composite-bearing term; and a composite-bearing term without inner_pow is
+// refused by the batched model exactly as by the unbatched ones.
+TEST_CASE("integer extent hook is never asked for a composite",
+          "[optimize][osv][extent-contract]") {
+  using namespace sequant;
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  mbpt::add_df_spaces(reg);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 56}, {L"a", 12}, {L"μ", 602}, {L"Κ", 1652}}) {
+    reg->extent(k, v);
+  }
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+  std::size_t composite_asks = 0;
+  auto idxsz = [&composite_asks](Index const& ix) -> std::size_t {
+    if (ix.has_proto_indices()) {
+      ++composite_asks;
+      throw std::logic_error("integer extent asked for a composite");
+    }
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+  };
+  auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
+  auto prod =
+      deserialize(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}")
+          ->as<Product>();
+
+  // unbatched objectives (AdditiveModel / PeakModel)
+  for (auto obj :
+       {ObjectiveFunction::DenseFLOPs, ObjectiveFunction::DenseSize,
+        ObjectiveFunction::DensePeakSize, ObjectiveFunction::DenseTimeSpace}) {
+    auto run = [&](auto tag) {
+      return opt::single_term_opt<decltype(tag)::value>(
+          prod, idxsz, /*subnet_cse=*/false,
+          CostParams{.volatile_weight = 1.0, .inner_pow = ip});
+    };
+    ExprPtr res;
+    switch (obj) {
+      case ObjectiveFunction::DenseFLOPs:
+        res = run(std::integral_constant<ObjectiveFunction,
+                                         ObjectiveFunction::DenseFLOPs>{});
+        break;
+      case ObjectiveFunction::DenseSize:
+        res = run(std::integral_constant<ObjectiveFunction,
+                                         ObjectiveFunction::DenseSize>{});
+        break;
+      case ObjectiveFunction::DensePeakSize:
+        res = run(std::integral_constant<ObjectiveFunction,
+                                         ObjectiveFunction::DensePeakSize>{});
+        break;
+      default:
+        res = run(std::integral_constant<ObjectiveFunction,
+                                         ObjectiveFunction::DenseTimeSpace>{});
+    }
+    CHECK(res);
+  }
+  CHECK(composite_asks == 0);
+
+  // batched (PeakBatchedModel): slice Κ under a finite budget
+  auto batched = CostParams{
+      .volatile_weight = 1.0,
+      .peak_threshold = 1e6,
+      .is_batchable_contracted_index =
+          [](Index const& ix) { return ix.basis().base_key() == L"Κ"; },
+      .batch_target_size = [](Index const&) -> std::size_t { return 100; },
+      .inner_pow = ip};
+  auto res_b = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+      prod, idxsz, /*subnet_cse=*/false, batched);
+  CHECK(res_b);
+  CHECK(composite_asks == 0);
+
+  // and the batched model refuses a composite-bearing term with no inner_pow,
+  // instead of falling back to the integer hook
+  auto no_ip = batched;
+  no_ip.inner_pow = {};
+  CHECK_THROWS_AS(opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+                      prod, idxsz, /*subnet_cse=*/false, no_ip),
+                  sequant::Exception);
+  CHECK(composite_asks == 0);
 }
 
 TEST_CASE("OSV early-contraction reproducer (full term #1)",
@@ -1790,12 +2078,14 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
         prod, idxsz, false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << L"FLOPs:        " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
         prod, idxsz, false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << L"PeakSize:     " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
@@ -1805,6 +2095,7 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
                    .batch_target_size = bts,
                    .inner_pow = ip});
     std::wcout << L"PeakBatched:  " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   std::wcout << L"\n  >>> looking for (C{a_4<i_1>;μ̃_1216} * t{a_4<i_1>;i_1}) "
                 L"contracted EARLY <<<\n\n";
@@ -2054,6 +2345,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
                      .volatile_weight = 100.0,
                      .footprint_weight = 0.0};
   po_cost.peak_threshold = 1.0;  // near-zero => infeasible => min-peak fallback
+  po_cost.infeasible_is_error = false;  // may be over budget
   po_cost.is_batchable_contracted_index = is_batch;
   po_cost.batch_target_size = bts;
   po_cost.inner_pow = ip;
@@ -2063,149 +2355,6 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
              opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
                  prod, idxsz, false, po_cost));
   CHECK(pbat_po >= osv_outer_product);  // gate restored -> OSV deferred again
-}
-
-// C60 PNO-CCSD residual "member 2": the batched intermediate that OOMs (~185 GB
-// materialized) is the double-proto I(i_1,i_2,i_3,Κ; a_3<i_2,i_3>,
-// a_1<i_1,i_2>).
-//   flat product:  g{i_3;i_1;Κ} · C{a_1<i_1,i_2>;μ̃} · g{μ̃;μ̃;Κ} ·
-//   C{μ̃;a_3<i_2,i_3>}
-// Two 2-occ PNO composites sharing i_2, no t amplitude. This probe answers:
-//  (1) does STO form the double-proto intermediate, and under which objective;
-//  (2) how does the (block-sparse) cost model size it (max_imed);
-//  (3) do the rejected brackets avoid it, i.e. does a cheaper schedule exist?
-TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
-  using namespace sequant;
-  auto reg = std::make_shared<IndexBasisRegistry>(
-      *get_default_context().index_basis_registry());
-  mbpt::add_df_spaces(reg);
-  mbpt::add_ao_basis(reg, mbpt::Spin::any);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
-  // C60 cc-pVDZ-F12-ish extents: active occ 120, PNO domain 42, PAO 1800,
-  // DF aux 6000 (sliced to batch 30 by the batched objective).
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 120}, {L"a", 42}, {L"μ", 1800}, {L"Κ", 6000}}) {
-    reg->extent(k, v);
-  }
-  auto aux_space = reg->retrieve_space(L"Κ");
-  auto ctx_resetter =
-      set_scoped_default_context(get_default_context_snapshot().set(reg));
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
-  };
-  // constant PNO domain 42 => all power means equal, neutralizing the
-  // RMS-vs-mean magnitude question; here we test STRUCTURE (which tree, is the
-  // double-proto avoidable), not the heavy-tail correction.
-  auto ip = [](Index const&, std::size_t) -> double { return 42.0; };
-  auto is_batch = [aux_space](Index const& ix) {
-    return ix.space() == aux_space;
-  };
-  std::function<std::size_t(Index const&)> bts = [](Index const&) {
-    return std::size_t{30};
-  };
-
-  auto prod = deserialize(
-                  L"g{i_3;i_1;Κ_1} C{a_1<i_1,i_2>;μ̃_1} "
-                  L"g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_2,i_3>}")
-                  ->as<Product>();
-
-  auto fp = opt::detail::footprint_counter(
-      idxsz, std::function<double(Index const&, std::size_t)>(ip));
-
-  std::function<std::vector<Index>(ExprPtr const&, double&)> freeix =
-      [&](ExprPtr const& e, double& mx) -> std::vector<Index> {
-    if (e->is<Tensor>()) {
-      std::vector<Index> v;
-      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
-        v.push_back(ix);
-      return v;
-    }
-    std::map<std::wstring, std::pair<int, Index>> cnt;
-    for (auto const& fct : e->as<Product>().factors())
-      for (auto const& ix : freeix(fct, mx)) {
-        auto k = std::wstring(ix.full_label());
-        cnt[k].first++;
-        cnt[k].second = ix;
-      }
-    std::vector<Index> result;
-    for (auto const& [k, v] : cnt)
-      if (v.first == 1) result.push_back(v.second);
-    double here = fp(result);
-    if (here > mx) mx = here;
-    return result;
-  };
-  struct TP {
-    double peak, leafsum, S;
-  };
-  std::function<TP(ExprPtr const&)> tree_peak = [&](ExprPtr const& e) -> TP {
-    if (e->is<Tensor>()) {
-      std::vector<Index> v;
-      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
-        v.push_back(ix);
-      double s = fp(v);
-      return TP{s, s, s};
-    }
-    auto const& facs = e->as<Product>().factors();
-    TP L = tree_peak(facs[0]);
-    TP R = tree_peak(facs[1]);
-    double dummy = 0.0;
-    double Snode = fp(freeix(e, dummy));
-    double both = L.S + R.S + Snode;
-    double lfirst = std::max({R.leafsum + L.peak, L.S + R.peak, both});
-    double rfirst = std::max({L.leafsum + R.peak, R.S + L.peak, both});
-    return TP{std::min(lfirst, rfirst), L.leafsum + R.leafsum, Snode};
-  };
-  auto report = [&](std::wstring name, ExprPtr res) {
-    double mx = 0.0;
-    freeix(res, mx);
-    double tpk = tree_peak(res).peak;
-    std::wcout << name << L"  max_imed(elems)=" << (long long)mx
-               << L"  recurrence_PEAK(elems)=" << (long long)tpk << L"\n      "
-               << render_tree(res) << L"\n";
-  };
-
-  std::wcout
-      << L"\n=== C60 MEMBER-2 (i=120, a=42, μ̃=1800, Κ=6000, batch=30) ===\n";
-  report(L"FLOPs:       ",
-         opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
-  report(L"PeakSize:    ",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
-  report(L"PeakBatched: ",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0,
-                        .is_batchable_contracted_index = is_batch,
-                        .batch_target_size = bts,
-                        .inner_pow = ip}));
-  // Experiment: make PAO (μ̃) batchable TOO (batch 100). Prediction: STO
-  // switches away from the double-proto to a g·g-first tree whose worst
-  // intermediate carries μ̃ and is now sliceable.
-  auto mu_basis = reg->retrieve(L"μ̃");
-  auto is_batch2 = [aux_space, mu_basis](Index const& ix) {
-    return ix.space() == aux_space || ix.basis() == mu_basis;
-  };
-  std::function<std::size_t(Index const&)> bts2 = [aux_space](Index const& ix) {
-    return ix.space() == aux_space ? std::size_t{30} : std::size_t{100};
-  };
-  report(L"PeakBatched(+μ̃):",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0,
-                        .is_batchable_contracted_index = is_batch2,
-                        .batch_target_size = bts2,
-                        .inner_pow = ip}));
-  // Reference: the double-proto intermediate as the model sizes it, dense at
-  // d=42 (== the block-sparse upper bound), with Κ at one batch of 30:
-  //   i^3 * Κ_batch * a * a  elements.
-  std::wcout << L"double-proto imed (i^3*Κbatch*a^2) elems = "
-             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42) << L"  (="
-             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42 * 8)
-             << L" B dense)\n\n";
 }
 
 TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
@@ -2375,6 +2524,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
                    .volatile_weight = 100.0,
                    .footprint_weight = 0.0};
   tight.peak_threshold = 1.0;
+  tight.infeasible_is_error = false;  // may be over budget
   tight.is_batchable_contracted_index = is_batch;
   tight.batch_target_size = bts;
   tight.inner_pow = ip;
@@ -2559,6 +2709,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
                     .roofline = {},
                     .accumulation_factor = lambda};
     cost.peak_threshold = 1.0;
+    cost.infeasible_is_error = false;  // may be over budget
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
     cost.inner_pow = ip;
@@ -2607,6 +2758,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
                     .roofline = {},
                     .accumulation_factor = 0.0};
     cost.peak_threshold = 1.0;
+    cost.infeasible_is_error = false;  // may be over budget
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
     cost.inner_pow = ip;
@@ -2635,10 +2787,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
 // K_b. A near-zero peak_threshold instead makes every point infeasible,
 // triggering the min-peak fallback, which reproduces the old (peak-driven)
 // answer.
-TEST_CASE(
-    "threshold gates batching: default (+inf) picks min-flops regardless of "
-    "K_b; near-zero threshold falls back to min-peak",
-    "[optimize][threshold]") {
+TEST_CASE("peak-threshold-gating", "[optimize][threshold]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -2713,6 +2862,7 @@ TEST_CASE(
                     .volatile_weight = 100.0,
                     .footprint_weight = 0.0};
     cost.peak_threshold = peak_threshold;
+    cost.infeasible_is_error = false;  // may be over budget
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
     cost.inner_pow = ip;
@@ -2749,6 +2899,7 @@ TEST_CASE(
                     .volatile_weight = 100.0,
                     .footprint_weight = 0.0};
     cost.peak_threshold = peak_threshold;
+    cost.infeasible_is_error = false;  // may be over budget
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
     cost.inner_pow = ip;
@@ -2762,90 +2913,6 @@ TEST_CASE(
   CHECK(integral_at_perf(/*Kb=*/2, /*peak_threshold(bytes)=*/1.0));
 }
 
-// Validate that the batched DP's accumulation_factor charge is
-// priced correctly under NESTED accumulation -- i.e. more than one batchable
-// index, contracted at *different* nodes of the binarized tree -- and that
-// the ctx.m <= 1 restriction that used to guard accumulation_factor != 0 can
-// be lifted. Network: T0=g{i;a;K}, T1=g{mu1;mu2;K}, T2=f{mu1;a2},
-// T3=f{mu2;a3}. T1 is a hub carrying K, mu1 AND mu2 simultaneously; K is
-// contracted between T0/T1, mu1 between T1/T2, mu2 between T1/T3 -- three
-// distinct batchable Index instances (K, mu1, mu2) spanning the aux (Κ) and
-// PAO (μ̃) spaces, forcing the DP to slice more than one mode, at more than
-// one node, to reach its minimum-peak schedule.
-// HIDDEN ([.]): the batched DP peak cost (peak_cost_batched) diverges from its
-// independent memory-simulation oracle on this fixture (dp==dp_K_only, and the
-// dp==oracle gate fails) -- a real batched-DP cost-model regression to fix in a
-// focused DP pass, not a stale expectation. Hidden until then.
-TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
-          "[.][optimize][batched-accum][blocked-dp-cost-model]") {
-  using namespace sequant;
-  // SKIP (not just the [.] tag above):
-  // peak_cost_batched/reconstructed_batched_peak never expose a finite
-  // peak_threshold, so PeakBatchedModel::relax's revert-to-no-batching gate
-  // disables slicing unconditionally here, making dp/dp_K_only/dp_mu_only
-  // degenerate to the same unbatched value below. [.] alone only excludes this
-  // from a bare/no-argument run; an explicit tag filter (e.g. "[optimize]")
-  // still executes -- and fails -- it. See the tracking issue for the proposed
-  // fix.
-  SKIP(
-      "blocked-dp-cost-model: peak_cost_batched/reconstructed_batched_peak "
-      "have no finite peak_threshold, so batching never engages here");
-  auto reg = std::make_shared<IndexBasisRegistry>(
-      *get_default_context().index_basis_registry());
-  mbpt::add_df_spaces(reg);
-  mbpt::add_ao_basis(reg, mbpt::Spin::any);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 20}, {L"a", 20}, {L"μ", 200}, {L"Κ", 300}}) {
-    reg->extent(k, v);
-  }
-  auto aux = reg->retrieve_space(L"Κ");
-  auto pao = reg->retrieve(L"μ̃");
-  auto ctx_resetter =
-      set_scoped_default_context(get_default_context_snapshot().set(reg));
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
-  };
-  auto is_batch = [aux, pao](Index const& ix) {
-    return ix.space() == aux || ix.basis() == pao;
-  };
-  auto is_batch_K = [aux](Index const& ix) { return ix.space() == aux; };
-  auto is_batch_mu = [pao](Index const& ix) { return ix.basis() == pao; };
-  std::function<std::size_t(Index const&)> bts = [](Index const&) {
-    return std::size_t{10};
-  };
-  std::function<bool(Tensor const&)> novol = {};
-  // Two batchable contracted indices K and mu-tilde, contracted at different
-  // nodes (nested accumulation).
-  auto prod = deserialize(
-                  L"g{i_1;a_1;Κ_1} g{μ̃_1;μ̃_2;Κ_1} f{μ̃_1;a_2} "
-                  L"f{μ̃_2;a_3}")
-                  ->as<Product>();
-  TensorNetwork net(prod.factors());
-  container::svector<Index> tidxs{};
-  double const acc = 1.0;
-  double const dp = opt::detail::peak_cost_batched(net, tidxs, idxsz, is_batch,
-                                                   bts, novol, acc);
-  double const oracle = opt::detail::reconstructed_batched_peak(
-      net, tidxs, idxsz, is_batch, bts, novol, acc);
-  // The correctness gate: the DP's max/+ recurrence for the accumulation
-  // charge must agree with the independent memory-simulation oracle even
-  // when more than one batchable index is sliced along the chosen tree.
-  CHECK(dp == Catch::Approx(oracle));
-
-  // Confirm the identity is not vacuous: the chosen 2-mode schedule must
-  // actually be lower-peak than slicing either mode alone, proving the DP
-  // engaged (and nested) both K and mu-tilde rather than degenerating to a
-  // single-mode schedule.
-  double const dp_K_only = opt::detail::peak_cost_batched(
-      net, tidxs, idxsz, is_batch_K, bts, novol, acc);
-  double const dp_mu_only = opt::detail::peak_cost_batched(
-      net, tidxs, idxsz, is_batch_mu, bts, novol, acc);
-  CHECK(dp < dp_K_only);
-  CHECK(dp < dp_mu_only);
-}
-
 // Ordered-key gate: on the Carr != 0 network, {s,t} carries the aux F_2 but not
 // F_1. A set-keyed cell could only charge F_1's recompute (rf=4 => 1600)
 // because it cannot express "F_1 inner". The ordered cells hold the
@@ -2857,9 +2924,10 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto is_batchable = [](Index const& ix) {
     return ix.basis().base_key() == L"F";
   };
@@ -2904,7 +2972,7 @@ TEST_CASE("ordered cells exclude external modes", "[optimize][ext-place]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
@@ -2952,12 +3020,17 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   auto ctx_copy = get_default_context_snapshot();
   {
     IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
-    reg.add(L"F", IndexSpace::Type{0b10000}, 100ul);
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
     reg.extent(L"a", 3ul);
+    // the costs and peaks below count one real number per element and one
+    // flop per multiply-add: the spaces are real (the default field, complex,
+    // is priced at two reals per element and four flops per multiply-add)
+    reg.field(L"F", Field::Real).field(L"a", Field::Real);
     ctx_copy.set(std::move(reg));
   }
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto is_batchable = [](Index const& ix) {
     return ix.basis().base_key() == L"F";
   };
@@ -3009,6 +3082,322 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   CHECK(ext_on >= 1u);
   // The point: external placement fired inside the DP and cut the peak.
   CHECK(peak_on < peak_off);
+}
+
+// HoldPolicy: an amplitude-independent intermediate that carries the mode its
+// consumer slices is, without holding, produced inside the consumer's loop
+// and so again on every evaluation. With holding the search may produce it
+// once at the root scope and let the consumer read slices of it; the node is
+// then stamped NodeBatchAnnotation::root_scope.
+TEST_CASE("the DP holds a persistent operand outside its consumer's loop",
+          "[optimize][batch][hold]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_copy = get_default_context_snapshot();
+  {
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent(L"a", 3ul);
+    // the costs and peaks below count one real number per element and one
+    // flop per multiply-add: the spaces are real (the default field, complex,
+    // is priced at two reals per element and four flops per multiply-add)
+    reg.field(L"F", Field::Real).field(L"a", Field::Real);
+    ctx_copy.set(std::move(reg));
+  }
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
+  auto is_F = [](Index const& ix) { return ix.basis().base_key() == L"F"; };
+  auto batch_fn = [](Index const&) -> std::size_t { return 1; };
+  // g and h do not change between evaluations, t does; F is carried to the
+  // result, so a loop over it is an external one
+  std::vector<ExprPtr> ts;
+  for (auto s : {L"g{F1;a1}", L"h{a1;a2}", L"t{a2;a3,a4}"})
+    ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+  TensorNetwork net{ts};
+  container::svector<Index> targets;  // F1, a3, a4 occur once
+
+  struct Outcome {
+    double peak_bytes = 0, cost = 0;
+    std::size_t n_root_scope = 0, n_opens = 0;
+  };
+  auto run = [&](bool hold, double slow_min_bytes, double move_cost = 0.0) {
+    o::PeakBatchedModel model{idxsz, batch_fn, {}};
+    model.is_batchable_contracted_index = is_F;
+    model.is_batchable_external_index = is_F;
+    model.batch_spectator_indices = true;
+    model.charge_batch_recompute = true;
+    model.perf_first = true;
+    model.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+    model.volatile_weight = 20.0;
+    // below the unsliced peak: F has to be sliced
+    model.peak_threshold = 9000.0;
+    model.hold.enabled = hold;
+    model.hold.slow_min_bytes = slow_min_bytes;
+    model.hold.slow.read_cost = model.hold.slow.write_cost = move_cost;
+    auto ctx = model.build_context(net, targets);
+    auto st = o::solve_single_term(model, net, targets, ctx);
+    Outcome out;
+    auto emitted = model.reconstruct_batched_modes(ctx, st, &out.peak_bytes);
+    for (auto const& ann : emitted.second) {
+      if (ann.root_scope) ++out.n_root_scope;
+      out.n_opens += ann.opened_here.size();
+    }
+    out.cost =
+        st[(std::size_t{1} << ctx.nt) - 1][0][model.select_root(ctx, st)].flops;
+    return out;
+  };
+
+  auto const off = run(false, 0.0);
+  auto const on_slow = run(true, 0.0);  // every held value in the slow space
+  auto const on_ram =  // held values stay in memory, against the budget
+      run(true, std::numeric_limits<double>::infinity());
+  // moving an element to or from the slow space costs 10
+  auto const on_priced = run(true, 0.0, 10.0);
+
+  // not held: g*h would sit in the F loop and be produced on every
+  // evaluation, 20 * (100*3*3) + 20 * (100*3*3*3) = 72000, so h*t goes first:
+  // 20 * 3^4 + 20 * (100*3*3*3) = 55620
+  CHECK(off.n_root_scope == 0u);
+  CHECK(off.cost == Catch::Approx(55620.0));
+  // held: g*h is produced once, 100*3*3 + 20 * (100*3*3*3) = 54900
+  CHECK(on_slow.n_root_scope == 1u);
+  CHECK(on_slow.cost == Catch::Approx(54900.0));
+  CHECK(on_slow.peak_bytes <= 9000.0);
+  // held in memory the 2400 B of g*h count against the budget, on top of the
+  // result the loop scatters into: not worth it
+  CHECK(on_ram.n_root_scope == 0u);
+  CHECK(on_ram.cost == Catch::Approx(off.cost));
+  // one write and a read per evaluation of the 300 held elements cost far
+  // more than the 720 saved; what remains priced is the write of the 900
+  // elements of the result, itself assembled in the slow space on every
+  // evaluation: 55620 + 20 * 10 * 900
+  CHECK(on_priced.n_root_scope == 0u);
+  CHECK(on_priced.cost == Catch::Approx(235620.0));
+}
+
+// BatchPolicy::infeasible_peak_slack: a term none of whose schedules fits the
+// budget takes, by default, its cheapest schedule whatever the peak; with a
+// finite slack, the cheapest among those close to its smallest peak.
+TEST_CASE("an over-budget term stays near its smallest peak when asked to",
+          "[optimize][batch][threshold]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_copy = get_default_context_snapshot();
+  {
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent(L"a", 3ul);
+    // the costs and peaks below count one real number per element and one
+    // flop per multiply-add: the spaces are real (the default field, complex,
+    // is priced at two reals per element and four flops per multiply-add)
+    reg.field(L"F", Field::Real).field(L"a", Field::Real);
+    ctx_copy.set(std::move(reg));
+  }
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
+  auto is_F = [](Index const& ix) { return ix.basis().base_key() == L"F"; };
+  auto batch_fn = [](Index const&) -> std::size_t { return 1; };
+  // F is summed between g*h and t; slicing it costs a rebuild of g*h per
+  // evaluation, so the unsliced schedule is the cheaper one
+  std::vector<ExprPtr> ts;
+  for (auto s : {L"g{F1;a1}", L"h{a1;a2}", L"t{a2;F1}"})
+    ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+  TensorNetwork net{ts};
+  container::svector<Index> targets;
+
+  auto run = [&](double slack) {
+    o::PeakBatchedModel model{idxsz, batch_fn, {}};
+    model.is_batchable_contracted_index = is_F;
+    model.charge_batch_recompute = true;
+    model.perf_first = true;
+    model.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+    model.volatile_weight = 20.0;
+    model.peak_threshold = 1.0;  // nothing fits
+    model.infeasible_peak_slack = slack;
+    auto ctx = model.build_context(net, targets);
+    auto st = o::solve_single_term(model, net, targets, ctx);
+    auto const& rootf = st[(std::size_t{1} << ctx.nt) - 1][0];
+    double min_peak = std::numeric_limits<double>::max(),
+           min_flops = std::numeric_limits<double>::max();
+    for (auto const& pt : rootf) {
+      min_peak = std::min(min_peak, pt.peak);
+      min_flops = std::min(min_flops, pt.flops);
+    }
+    auto const& chosen = rootf[model.select_root(ctx, st)];
+    return std::array<double, 4>{chosen.peak, chosen.flops, min_peak,
+                                 min_flops};
+  };
+
+  auto const [peak_any, flops_any, min_peak, min_flops] =
+      run(std::numeric_limits<double>::infinity());
+  // the frontier trades peak for cost, or the test says nothing
+  REQUIRE(peak_any > 1.25 * min_peak);
+  // default: the cheapest schedule, whatever its peak
+  CHECK(flops_any == min_flops);
+
+  auto const [peak_near, flops_near, mp, mf] = run(0.25);
+  CHECK(mp == min_peak);
+  CHECK(peak_near <= 1.25 * min_peak);
+  CHECK(flops_near > min_flops);
+  // no slack at all: the smallest peak
+  CHECK(run(0.0)[0] == min_peak);
+}
+
+// BatchPolicy::infeasible_is_error (default on): a term none of whose
+// schedules fits the budget is an error, reported once for the whole sum with
+// the smallest budget every term fits; a budget at that value is accepted.
+TEST_CASE("an unmet peak budget is an error unless asked otherwise",
+          "[optimize][batch][threshold]") {
+  using namespace sequant;
+  auto ctx_copy = get_default_context_snapshot();
+  {
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent(L"a", 3ul);
+    // the costs and peaks below count one real number per element and one
+    // flop per multiply-add: the spaces are real (the default field, complex,
+    // is priced at two reals per element and four flops per multiply-add)
+    reg.field(L"F", Field::Real).field(L"a", Field::Real);
+    ctx_copy.set(std::move(reg));
+  }
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
+  auto is_F = [](Index const& ix) { return ix.basis().base_key() == L"F"; };
+
+  // two terms; the second is small and has nothing to batch
+  auto expr = deserialize(
+      L"g{F1;a1} h{a1;a2} t{a2;F1} + "
+      L"g{a3;a1} h{a1;a2} t{a2;a3}",
+      {.def_perm_symm = Symmetry::Nonsymm});
+  REQUIRE(expr->is<Sum>());
+
+  auto run = [&](double budget, bool is_error) {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+      return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+    };
+    opts.batch_policy.is_batchable_contracted_index = is_F;
+    opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 1;
+    };
+    opts.batch_policy.peak_threshold = budget;
+    opts.batch_policy.infeasible_is_error = is_error;
+    opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
+      return t.label() == L"t";
+    };
+    opts.volatile_weight = 20.0;
+    return optimize(expr, opts);
+  };
+
+  // the default is on
+  CHECK(BatchPolicy{}.infeasible_is_error);
+  double need = 0;
+  try {
+    run(1.0, true);
+    FAIL("a 1-byte budget was accepted");
+  } catch (PeakBudgetInfeasible const& e) {
+    CHECK(e.budget_bytes == 1.0);
+    need = e.min_peak_bytes;
+    CHECK(need > 1.0);
+    // both terms are over a 1-byte budget and both are named
+    CHECK(std::string(e.what()).find("2 of 2 terms") != std::string::npos);
+  }
+  // asked otherwise: scheduled over budget
+  CHECK(run(1.0, false));
+  // the reported budget is one every term fits ...
+  CHECK(run(need, true));
+  // ... and it is the smallest such
+  CHECK_THROWS_AS(run(need * 0.999, true), PeakBudgetInfeasible);
+}
+
+// The held operand's stamp reaches the evaluation tree, and its home is
+// outside its consumer's loop: the schedule maker then produces it at the
+// root scope.
+TEST_CASE("a held operand is homed outside its consumer's loop",
+          "[optimize][batch][hold]") {
+  using namespace sequant;
+  auto ctx_copy = get_default_context_snapshot();
+  {
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent(L"a", 3ul);
+    // the costs and peaks below count one real number per element and one
+    // flop per multiply-add: the spaces are real (the default field, complex,
+    // is priced at two reals per element and four flops per multiply-add)
+    reg.field(L"F", Field::Real).field(L"a", Field::Real);
+    ctx_copy.set(std::move(reg));
+  }
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
+  auto is_F = [](Index const& ix) { return ix.basis().base_key() == L"F"; };
+
+  // the network of the test above
+  auto expr = deserialize(L"g{F1;a1} h{a1;a2} t{a2;a3,a4}",
+                          {.def_perm_symm = Symmetry::Nonsymm});
+
+  auto tree = [&](bool hold) {
+    auto axes_map = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+      return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+    };
+    opts.batch_policy.is_batchable_external_index = is_F;
+    opts.batch_policy.batch_spectator_indices = true;
+    opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 1;
+    };
+    opts.batch_policy.peak_threshold = 9000.0;
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
+    opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
+      return t.label() == L"t";
+    };
+    opts.batch_policy.hold.enabled = hold;
+    opts.batch_policy.hold.slow_min_bytes = 0.0;
+    opts.volatile_weight = 20.0;
+    opts.term_batch_axes = axes_map;
+    auto optimized = optimize(expr, opts);
+    REQUIRE(optimized);
+    auto it = axes_map->find(optimized.get());
+    REQUIRE(it != axes_map->end());
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(optimized, {}, bopts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    std::vector<EvalNode<EvalExpr>> forest{node};
+    stamp_occurrence_homes(forest);
+    return forest;
+  };
+
+  // counts the nodes produced at the root scope, and those of them whose
+  // home is empty
+  auto count = [](auto const& forest) {
+    std::pair<std::size_t, std::size_t> n{0, 0};
+    forest.front().visit_internal([&](auto const& x) {
+      if (!x->root_scope()) return;
+      ++n.first;
+      if (x->occurrence_home().empty()) ++n.second;
+    });
+    return n;
+  };
+  // some node opens the loop over F either way
+  auto opens_F = [](auto const& forest) {
+    bool opens = false;
+    forest.front().visit_internal([&](auto const& x) {
+      if (!x->batch_loops_opened_here().empty()) opens = true;
+    });
+    return opens;
+  };
+
+  auto const off = tree(false);
+  CHECK(opens_F(off));
+  CHECK(count(off) == std::pair<std::size_t, std::size_t>{0, 0});
+
+  auto const on = tree(true);
+  CHECK(opens_F(on));
+  // g*h carries F, the mode its consumer's loop slices, yet its home is empty
+  CHECK(count(on) == std::pair<std::size_t, std::size_t>{1, 1});
 }
 
 // peak_threshold must GATE contracted (aux) batching under perf-first: a
@@ -3139,6 +3528,7 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   opts.batch_policy.is_batchable_contracted_index = is_batch;
   opts.batch_policy.batch_target_size = bts;
   opts.batch_policy.peak_threshold = 1.0;  // tiny budget => force batching
+  opts.batch_policy.infeasible_is_error = false;  // may be over budget
   opts.term_batch_axes = axes_map;
 
   auto optimized = optimize(expr, opts);
@@ -3178,13 +3568,63 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   CHECK(aux_found);
 }
 
+// optimize_impl's NoReorder branch moves new_sum into the final Sum and then
+// re-keys the per-summand batch annotations onto it: the lookups must read the
+// final Sum, not the moved-from one, or a NoReorder Sum silently loses every
+// annotation.
+TEST_CASE("NoReorder Sum re-keys batch annotations onto the final Sum",
+          "[optimize][annotate]") {
+  using namespace sequant;
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}})
+    reg->extent(k, v);
+  auto aux = reg->retrieve_space(L"Κ");
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+
+  // two 4-tensor summands: 3 contraction nodes each, one annotation per node
+  auto expr = deserialize(
+      L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4} + "
+      L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} h{i_1;i_3} h{i_2;i_4}");
+  REQUIRE(expr->is<Sum>());
+  REQUIRE(expr->as<Sum>().size() == 2);
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.reorder = ReorderSum::NoReorder;
+  opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+  };
+  opts.batch_policy.is_batchable_contracted_index = [aux](Index const& ix) {
+    return ix.space() == aux;
+  };
+  opts.batch_policy.batch_target_size = [](Index const&) {
+    return std::size_t{20};
+  };
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(expr, opts);
+  REQUIRE(optimized->is<Sum>());
+  REQUIRE(optimized->as<Sum>().size() == 2);
+  // the per-summand entries are folded into one entry under the final Sum
+  REQUIRE(axes_map->size() == 1);
+  auto it = axes_map->find(optimized.get());
+  REQUIRE(it != axes_map->end());
+  CHECK(it->second.size() == 6);
+}
+
 // Loop-open vs sliced-mask: binarize() must apply
 // NodeBatchAnnotation::opened_here onto EvalExpr::batch_loops_opened_here(),
 // independently of node_slice_mask() (axes). Hand-build node_batch_axes so the
 // single contraction node's opened_here carries one External mode while a leaf
 // stays empty -- isolates the binarize wiring from the DP emit.
-TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
-          "[optimize][annotate][loop-open]") {
+TEST_CASE("binarize-loops-opened-here", "[optimize][annotate][loop-open]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -3276,201 +3716,6 @@ TEST_CASE("binarize marks accumulation Sum nodes in-place", "[binarize]") {
   REQUIRE(node2->accumulate_in_place());
 }
 
-// reconstruct_batched_modes must emit BatchModeType::External entries
-// for a genuine external (external, never-contracted) mode at every node whose
-// subset carries it, gated by BatchPolicy::batch_spectator_indices (without
-// which an external bit never enters a DP cell, so no loop is opened and
-// nothing is stamped). i_1 lives only
-// on the first tensor of a 4-tensor chain -- a genuine external
-// that is never contracted anywhere, so is_external_mode(i_1) holds
-// regardless of the chosen factorization -- while Kappa_1 (the DF aux shared
-// by the first two tensors) is a genuine CONTRACTED mode, never an external.
-// Distinguishes the two kinds even though both get admitted into
-// ctx.batchable_modes.
-// HIDDEN ([.]): the DP no longer emits a per-node External occ annotation on
-// this network (node_with_external / found_co_carrying come up empty) -- a
-// real batched-DP annotation-emission change to adjudicate in a focused DP
-// pass. Hidden until then.
-TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
-          "[.][optimize][batch][blocked-dp-cost-model]") {
-  using namespace sequant;
-  // SKIP (not just the [.] tag above): the DP's Pareto frontier treats "which
-  // mode is sliced" as fungible, so the external i_1 candidate is
-  // domination-pruned by a co-existing, peak-cheaper contracted (Kappa)
-  // candidate at the same nsl tier -- no per-node External annotation ever
-  // survives to be stamped. [.] alone only excludes this from a bare/
-  // no-argument run; an explicit tag filter (e.g. "[optimize]") still
-  // executes -- and fails -- it. See the tracking issue for details.
-  SKIP(
-      "blocked-dp-cost-model: external-mode batching candidates are "
-      "Pareto-dominated by contracted-mode ones, so no per-node External "
-      "annotation is ever emitted here");
-  auto reg = std::make_shared<IndexBasisRegistry>(
-      *get_default_context().index_basis_registry());
-  mbpt::add_df_spaces(reg);
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
-    reg->extent(k, v);
-  auto aux_space = reg->retrieve_space(L"Κ");
-  auto occ_space = reg->retrieve_space(L"i");
-  auto ctx_resetter =
-      set_scoped_default_context(get_default_context_snapshot().set(reg));
-
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
-  };
-
-  // Chain network T1-T2-T3-T4: T1--(a_1,Kappa_1)--T2--(a_2)--T3--(a_4)--T4.
-  // i_1 (on T1 only) and a_5 (on T4 only) are the root-external indices.
-  auto expr =
-      deserialize(L"g{i_1;a_1;Κ_1} g{a_1;a_2;Κ_1} f{a_2;a_4} h{a_4;a_5}");
-
-  auto axes_map = std::make_shared<std::unordered_map<
-      Expr const*, container::vector<NodeBatchAnnotation>>>();
-
-  OptimizeOptions opts;
-  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.reorder = ReorderSum::NoReorder;
-  opts.idx_to_extent = idxsz;
-  opts.batch_policy.is_batchable_contracted_index =
-      [aux_space](Index const& ix) { return ix.space() == aux_space; };
-  opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
-    return 20;
-  };
-  // The external mode is admitted in the EXTERNAL role: this space is batchable
-  // where it is open on the term root, not where it is contracted. (Previously
-  // such modes were auto-admitted by an occupancy-specific special case in
-  // batchable_mode_list; batchability is now role-based and caller-declared.)
-  opts.batch_policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
-  };
-  opts.batch_policy.batch_spectator_indices = true;
-  opts.term_batch_axes = axes_map;
-
-  // Determine this term's actual perf-first root peak (bytes) directly, via
-  // the same PeakBatchedModel construction single_term.hpp's
-  // DenseTimeSpaceBatched arm uses (idxsz, is_batchable_index,
-  // batch_target_size, perf_first=true), so peak_threshold values below and
-  // above it can be chosen without hardcoding a magic number tied to the
-  // extents above. peak_threshold is NOT a factorization gate under
-  // perf_first (see PeakBatchedModel::select_root), so this value does not
-  // depend on which threshold the model below is eventually given.
-  namespace o = sequant::opt::detail;
-  container::svector<ExprPtr> tensors;
-  for (auto const& f : expr->as<Product>().factors())
-    if (f->is<Tensor>()) tensors.push_back(f);
-  TensorNetwork const net{tensors};
-  o::PeakBatchedModel<decltype(idxsz)> peek_model{
-      idxsz, opts.batch_policy.batch_target_size, /*is_volatile_leaf=*/{}};
-  peek_model.is_batchable_contracted_index =
-      opts.batch_policy.is_batchable_contracted_index;
-  peek_model.perf_first = true;
-  // Same role split as the optimize() path, so the peeked root peak (and hence
-  // the threshold derived from it) is computed over the same mode set.
-  peek_model.is_batchable_external_index =
-      opts.batch_policy.is_batchable_external_index;
-  container::svector<Index> const tidxs{};
-  auto pctx = peek_model.build_context(net, tidxs);
-  auto pst = o::solve_single_term(peek_model, net, tidxs, pctx);
-  std::size_t const proot = (std::size_t{1} << pctx.nt) - 1;
-  int const pbest = peek_model.select_root(pctx, pst);
-  REQUIRE(pbest >= 0);
-  double const root_peak_bytes =
-      pst[proot][0][pbest].peak * peek_model.numeric_size;
-  REQUIRE(root_peak_bytes > 0.0);
-
-  // Assertion 1: peak_threshold strictly BELOW the term's actual peak =>
-  // gate (iv) holds => External entries ARE emitted. (For this small chain no
-  // batched schedule fits root_peak/2 either -- the peak shrinks less than 2x
-  // under Kappa slicing -- so select_root's perf-first ceiling falls back to
-  // the unbatched min-flops schedule here, same as before the ceiling existed;
-  // the ceiling ENGAGING is covered by select_root_perf_first_ceiling below.)
-  opts.batch_policy.peak_threshold = root_peak_bytes / 2.0;
-
-  auto optimized = optimize(expr, opts);
-  REQUIRE(optimized);
-
-  auto it = axes_map->find(optimized.get());
-  REQUIRE(it != axes_map->end());
-  auto const& node_axes = it->second;
-  REQUIRE(!node_axes.empty());
-
-  bool node_with_external = false;
-  bool node_without_external = false;
-  for (auto const& modes : node_axes) {
-    bool has_i1_external = false;
-    for (auto const& entry : modes.axes) {
-      // Kappa (a genuine contracted DF aux, never an external) must never be
-      // tagged External.
-      if (entry.first.space() == aux_space)
-        CHECK(entry.second == BatchModeType::Contracted);
-      if (entry.first.space() == occ_space &&
-          entry.second == BatchModeType::External)
-        has_i1_external = true;
-    }
-    if (has_i1_external)
-      node_with_external = true;
-    else
-      node_without_external = true;
-  }
-  CHECK(node_with_external);
-  CHECK(node_without_external);
-
-  // Assertion 1b: the build lambda in cost_model.hpp pushes External entries
-  // before Contracted ones, so a node that co-carries the opened external i_1
-  // AND the contracted Κ_1 must realize the External axis before the
-  // Contracted axis in `ann.axes`. Guard with found_co_carrying so the
-  // compare cannot pass vacuously.
-  bool found_co_carrying = false;
-  for (auto const& modes : node_axes) {
-    int first_ext = -1, first_con = -1;
-    for (int p = 0; p < static_cast<int>(modes.axes.size()); ++p) {
-      auto const& entry = modes.axes[static_cast<std::size_t>(p)];
-      if (entry.second == BatchModeType::External && first_ext < 0)
-        first_ext = p;
-      if (entry.second == BatchModeType::Contracted && first_con < 0)
-        first_con = p;
-    }
-    if (first_ext >= 0 && first_con >= 0) {
-      found_co_carrying = true;
-      CHECK(first_ext < first_con);
-    }
-  }
-  REQUIRE(found_co_carrying);
-
-  // Assertion 2: peak_threshold = +infinity (the term never "needs" batching
-  // under any budget) with batch_spectator_indices still true => the
-  // unseeded-peak-over-threshold gate fails => ZERO External entries
-  // anywhere. Before this gate, reconstruct_batched_modes emitted
-  // External regardless of peak_threshold, so this assertion fails without the
-  // fix and passes with it.
-  axes_map->clear();
-  opts.batch_policy.peak_threshold = std::numeric_limits<double>::infinity();
-  auto optimized_inf = optimize(expr, opts);
-  REQUIRE(optimized_inf);
-  auto it_inf = axes_map->find(optimized_inf.get());
-  REQUIRE(it_inf != axes_map->end());
-  for (auto const& modes : it_inf->second)
-    for (auto const& entry : modes.axes)
-      CHECK(entry.second != BatchModeType::External);
-
-  // Assertion 3: with the external gate off (batch_spectator_indices=false)
-  // -- threshold restored below the actual peak so only the flag is under
-  // test -- the default optimize() path stays byte-identical: no External
-  // entries anywhere (existing [optimize] tests are its witness).
-  axes_map->clear();
-  opts.batch_policy.peak_threshold = root_peak_bytes / 2.0;
-  opts.batch_policy.batch_spectator_indices = false;
-  auto optimized_off = optimize(expr, opts);
-  REQUIRE(optimized_off);
-  auto it_off = axes_map->find(optimized_off.get());
-  REQUIRE(it_off != axes_map->end());
-  for (auto const& modes : it_off->second)
-    for (auto const& entry : modes.axes)
-      CHECK(entry.second != BatchModeType::External);
-}
-
 // select_root under perf_first (DenseTimeSpaceBatched) treats peak_threshold
 // as a CEILING: with a finite budget it picks the fewest-flops schedule whose
 // peak fits, so a term is batched only when its unbatched (min-flops) schedule
@@ -3495,6 +3740,7 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
   auto aux_space = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto idxsz = [](Index const& ix) -> std::size_t {
     return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
@@ -3891,8 +4137,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   REQUIRE(composite_inner_checked);
 }
 
-TEST_CASE("outer-product pruning: large connected term optimizes quickly",
-          "[optimize][pruning]") {
+TEST_CASE("prune-large-connected", "[optimize][pruning]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -3918,8 +4163,7 @@ TEST_CASE("outer-product pruning: large connected term optimizes quickly",
   CHECK(out);
 }
 
-TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
-          "[optimize][pruning]") {
+TEST_CASE("prune-multi-component", "[optimize][pruning]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
@@ -3975,14 +4219,13 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
 // a DIFFERENT reason -- i is EXTERNAL (free on the root, contracted nowhere),
 // so it never enters any aprime and hence never enters B on the emit walk,
 // which starts at B=0. Print the per-node charge and let the numbers decide.
-TEST_CASE("loop-tree recompute charge prices the middle gap",
-          "[.][loop-tree]") {
+TEST_CASE("loop-tree recompute charge prices the middle gap", "[loop-tree]") {
   using namespace sequant;
   // Scoped context: these TEST_CASEs are file-scope, so adding F to the
   // default context's registry would make them collide on the second add.
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4013,8 +4256,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   model.is_batchable_contracted_index = is_batchable;
   // The batchable mode occurs EXTERNALLY here (open on the term root); admit it
   // in the external role explicitly. Byte-identical to the old external->
-  // contracted fallback, which has been removed; this hidden [.][loop-tree]
-  // test relied on it.
+  // contracted fallback, which has been removed; this test relied on it.
   model.is_batchable_external_index = is_batchable;
   model.charge_batch_recompute = true;
   // The external mode's loop is a nestable DP cell mode only under spectator
@@ -4121,7 +4363,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   }
 }
 
-// RED gate for the free-hoist charge.
+// Gate for the free-hoist charge.
 //
 // The free-hoist / I2 shape: a subset that carries NO batchable mode, sitting
 // inside an enclosing loop over a CONTRACTED batchable mode. Such a node is
@@ -4129,21 +4371,16 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
 // it above the loop is FREE -- unchanged footprint, computed once. The correct
 // recompute factor is rf = 1.
 //
-// Today's charge (cost_model.hpp ~909-913) is order-blind: it bills
-// nBatch(x) for EVERY x in `esc = B & ~open_modes[n]`, with no notion of where
-// the node sits relative to those loops. So it over-charges this node by
-// nBatch(F). The Carr == 0 case is the worst over-charge.
-//
 // Asserted directly on the DP cell st[n][B] rather than on an emitted schedule,
 // so the test pins the CHARGE and does not depend on which tree the DP happens
 // to select.
-TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
+TEST_CASE("loop-tree charge must not bill a free hoist", "[loop-tree]") {
   using namespace sequant;
   // Scoped context: these TEST_CASEs are file-scope, so adding F to the
   // default context's registry would make them collide on the second add.
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4191,150 +4428,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
 
   // {s,t} carries no batchable mode, so slicing F_1 cannot shrink it and it can
   // be built once above the F_1 loop at unchanged footprint. rf must be 1.
-  CHECK(inside == outside);  // FAILS today: inside == nBatch(F_1) * outside
-}
-
-// reconstruct_batched_modes must emit, per contraction node, its
-// effective use count (effective_count) alongside the batch axes, on the
-// order-aware path. The oracle is the formula evaluated straight from
-// the Context at each node's (n, B): effective count = the product of
-// nbatches over the escaped-outer set. We re-walk the SAME chosen
-// back-pointer tree the emit walks and cross-check every emitted node, so the
-// assertion is independent of which factorization the DP happens to select.
-TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
-  using namespace sequant;
-  auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.basis().extent();
-  };
-  // Both F1 and F2 are batchable and contracted (nestable) => two ordered
-  // enclosing modes.
-  auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
-  };
-  auto batch_fn = [](Index const&) -> std::size_t {
-    return 1;  // batch tile 1 => nbatches == extent (4) > 1
-  };
-
-  // slot index (in ctx.batchable_modes) of a batchable Index, by full label.
-  auto slot_of = [](auto const& ctx, Index const& ix) -> int {
-    for (std::size_t k = 0; k < ctx.m; ++k)
-      if (ctx.batchable_modes[k].full_label() == ix.full_label())
-        return static_cast<int>(k);
-    return -1;
-  };
-
-  // Re-walk the chosen back-pointer tree in the emit's left-first post-order,
-  // recording (n, B) per contraction node so node_nb[j] pairs with the j-th
-  // emitted annotation.
-  auto walk_nb = [](auto const& ctx, auto const& st, int best) {
-    container::vector<std::pair<std::size_t, std::size_t>> node_nb;
-    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
-    std::function<void(std::size_t, std::size_t, int)> go =
-        [&](std::size_t n, std::size_t B, int idx) {
-          if (std::popcount(n) == 1) return;
-          auto const& r = st[n][B][idx];
-          std::size_t const C = ctx.descend(B, r.aprime);
-          std::size_t const fs = r.lp_first ? r.lp : r.rp;
-          int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
-          std::size_t const ss = r.lp_first ? r.rp : r.lp;
-          int const si = r.lp_first ? r.rp_idx : r.lp_idx;
-          go(fs, C, fi);
-          go(ss, C, si);
-          node_nb.push_back({n, B});
-        };
-    go(root, 0, best);
-    return node_nb;
-  };
-
-  // ---- Assertion 1: nested chain -- cross-check every emitted node ---------
-  {
-    std::vector<ExprPtr> ts;
-    for (auto s : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
-      ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
-    TensorNetwork net{ts};
-    container::svector<Index> targets;
-
-    opt::detail::PeakBatchedModel model{idxsz, batch_fn, {}};
-
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    REQUIRE(ctx.m == 2u);
-
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    int const best = model.select_root(ctx, st);
-    REQUIRE(best >= 0);
-    auto const node_nb = walk_nb(ctx, st, best);
-
-    auto const emitted = model.reconstruct_batched_modes(ctx, st);
-    REQUIRE(emitted.second.size() == node_nb.size());
-    REQUIRE(!emitted.second.empty());
-
-    for (std::size_t j = 0; j < emitted.second.size(); ++j) {
-      auto const& ann = emitted.second[j];
-      auto const [n, B] = node_nb[j];
-
-      // Expected effective_count = prod nbatches over the escaped-outer set.
-      std::size_t const esc = ctx.escaped_outer(B, ctx.open_modes[n]);
-      double rf = 1.0;
-      for (std::size_t k = 0; k < ctx.m; ++k)
-        if (esc & (std::size_t{1} << k)) rf *= ctx.nbatches[k];
-      CHECK(ann.effective_count == static_cast<std::size_t>(std::llround(rf)));
-
-      // Contracted axes emitted in ascending batchable-slot order (descend).
-      int last = -1;
-      for (auto const& [ix, knd] : ann.axes)
-        if (knd == BatchModeType::Contracted) {
-          int const slot = slot_of(ctx, ix);
-          CHECK(slot > last);
-          last = slot;
-        }
-    }
-
-    // The term root carries no enclosing batched mode (its cell is the empty
-    // sequence), so it has unit use count.
-    CHECK(emitted.second.back().effective_count == 1u);
-  }
-
-  // ---- Assertion 2: a node contracting two batched modes emits them in ----
-  // ---- ascending batched-slot order (matches descend). -------------------
-  {
-    std::vector<ExprPtr> ts;
-    for (auto s : {L"x{a1;F1,F2}", L"y{F1,F2;a2}", L"z{a2;a3}"})
-      ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
-    TensorNetwork net{ts};
-    container::svector<Index> targets;
-
-    opt::detail::PeakBatchedModel model{idxsz, batch_fn, {}};
-
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    REQUIRE(ctx.m == 2u);
-
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    auto const emitted = model.reconstruct_batched_modes(ctx, st);
-
-    bool saw_two_mode = false;
-    for (auto const& ann : emitted.second) {
-      int last = -1, n_con = 0;
-      for (auto const& [ix, knd] : ann.axes)
-        if (knd == BatchModeType::Contracted) {
-          int const slot = slot_of(ctx, ix);
-          CHECK(slot > last);  // strictly ascending slot order
-          last = slot;
-          ++n_con;
-        }
-      if (n_con >= 2) saw_two_mode = true;
-    }
-    // x.y contracts BOTH F1 and F2 at one node.
-    CHECK(saw_two_mode);
-  }
+  CHECK(inside == outside);
 }
 
 // D1 fix (ii) gate (emit External BEFORE Contracted at co-carrying nodes). A
@@ -4354,9 +4448,7 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
 // peak_threshold forcing over budget the external modes are adopted/stamped
 // there. RED pre-fix: `axes` is [Contracted a1, External i...] (contracted
 // pushed first). GREEN post-fix: [External i..., Contracted a1].
-TEST_CASE(
-    "loop-tree emit: External axis precedes Contracted at co-carrying node",
-    "[.][loop-tree]") {
+TEST_CASE("loop-tree-axis-order", "[loop-tree]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   auto reg =
@@ -4427,61 +4519,6 @@ TEST_CASE(
   REQUIRE(found_co_carrying);
 }
 
-// PROBE (not a gate): the resident-scan peak. When {s,t} is free-hoisted above
-// the F_1 loop (the ordered cells' free hoist), it is RESIDENT across that
-// loop, so its
-// footprint should appear in the peak of everything evaluated inside -- the
-// top-node peak under B={F_1}. A3a adds no peak term, so today the hoist looks
-// free on peak. Measure the cells before writing the resident-scan RED gate.
-TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
-          "[.][loop-tree-peak]") {
-  using namespace sequant;
-  auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.basis().extent();
-  };
-  auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
-  };
-  auto batch_fn = [](Index const&) -> std::size_t { return 1; };
-
-  std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;a1}", L"s{a1;a2}", L"t{a2;a3}"})
-    ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
-  TensorNetwork net{ts};
-  container::svector<Index> targets;
-
-  std::size_t const top = 0b1111, st_set = 0b1100;
-
-  auto min_peak = [](auto const& frontier) {
-    double m = std::numeric_limits<double>::max();
-    for (auto const& fp : frontier) m = std::min(m, fp.peak);
-    return m;
-  };
-
-  {
-    opt::detail::PeakBatchedModel model{idxsz, batch_fn, {}};
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    // DP cells are ORDERED sequences, not sliced-set bitmasks: resolve the
-    // "F_1 alone is open" cell by descending from the empty sequence rather
-    // than indexing by the bit.
-    REQUIRE(ctx.m == 1u);
-    std::size_t const f1_cell = ctx.descend(0, std::size_t{1});
-    REQUIRE(f1_cell != std::numeric_limits<std::size_t>::max());
-    std::wcerr << L"[loop-tree-peak] sz{s,t}=" << ctx.sz(st_set, 0)
-               << L"  top.peak[cell=()]=" << min_peak(st[top][0])
-               << L"  top.peak[cell=(F_1)]=" << min_peak(st[top][f1_cell])
-               << L"\n";
-  }
-}
-
 // The Carr != 0 order-dependent case. A node that carries one batched
 // contracted mode (F_2) and not another (F_1) must be charged by the ORDER: if
 // F_1's loop is OUTER to F_2's the node is legitimately recomputed per F_1
@@ -4490,11 +4527,11 @@ TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
 // be wrong -- the representability defect the ordered cells fix. Prints every
 // cell and asserts the two orderings of {F_1,F_2} do NOT price {s,t} alike.
 TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
-          "[.][loop-tree-order]") {
+          "[loop-tree-order]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4551,58 +4588,6 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
   CHECK(lo < hi);
 }
 
-// PROBE (not a gate): resident-scan peak on the nested Carr != 0 network. Reads
-// the top-node peak per B to see whether an enclosing accumulator (the F_1
-// contraction's result, resident during the F_2 loop and vice versa) is
-// counted.
-TEST_CASE("loop-tree probe: resident-scan peak, nested",
-          "[.][loop-tree-peak-nested]") {
-  using namespace sequant;
-  auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000},
-                        1000ul));  // large: dominates peak
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-
-  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
-  auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
-  };
-
-  std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
-    ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
-  TensorNetwork net{ts};
-  container::svector<Index> targets;
-
-  auto min_peak = [](auto const& frontier) {
-    double m = std::numeric_limits<double>::max();
-    for (auto const& fp : frontier) m = std::min(m, fp.peak);
-    return m;
-  };
-
-  // batch F to tiles of 1 so nbatches == extent; large F so slicing it
-  // dominates
-  auto batch1 = [](Index const&) -> std::size_t { return 1; };
-  {
-    opt::detail::PeakBatchedModel model{idxsz, batch1, {}};
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    std::size_t const top = (std::size_t{1} << ctx.nt) - 1;
-    std::wcerr << L"[peak-nested] m=" << ctx.m << L"  sz{s,t}[cell=()]="
-               << ctx.sz(0b1100, 0) << L"  sz{g,h}[cell=()]="
-               << ctx.sz(0b0011, 0);
-    // Cells are ordered sequences; print the cell id with its union so the
-    // label stays meaningful (a bare bitmask index would not be a cell).
-    for (std::size_t cell = 0; cell < ctx.nCells; ++cell)
-      std::wcerr << L"  top.peak[cell=" << cell << L" union="
-                 << ctx.cell_union(cell) << L"]=" << min_peak(st[top][cell]);
-    std::wcerr << L"\n";
-  }
-}
-
 // The two batchability building-block predicates + their
 // derived "any role" accessors. BatchPolicy / CostParams / PeakBatchedModel
 // each expose is_batchable_contracted_index and is_batchable_external_index as
@@ -4644,7 +4629,7 @@ TEST_CASE("batchability role-split building-block predicates",
     CHECK_FALSE(u2(i));
   }
 
-  SECTION("PeakBatchedModel::is_batchable(ix) == OR of both building blocks") {
+  SECTION("batched-model-is-batchable") {
     auto idxsz = [](Index const& ix) -> std::size_t {
       return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
     };
@@ -4670,6 +4655,122 @@ TEST_CASE("batchability role-split building-block predicates",
     CHECK(cost.is_batchable_external_index(i));
     CHECK(cost.batch_target_size(a) == 8u);
   }
+}
+
+TEST_CASE("Nested product brackets: batch annotations align with binarize",
+          "[optimize][annotate][nested-product]") {
+  using namespace sequant;
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+    reg->extent(k, v);
+  }
+  auto aux = reg->retrieve_space(L"Κ");
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+  };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{20};
+  };
+  using AxesMap =
+      std::unordered_map<Expr const*, container::vector<NodeBatchAnnotation>>;
+  auto make_opts = [&](std::shared_ptr<AxesMap> const& axes_map) {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = is_batch;
+    opts.batch_policy.batch_target_size = bts;
+    opts.batch_policy.peak_threshold = 1.0;         // force batching
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
+    opts.term_batch_axes = axes_map;
+    return opts;
+  };
+
+  // Two projection brackets, each a NESTED Product (Flatten::No, opaque to the
+  // outer contraction order) that keeps the aux index OPEN on its result,
+  // contracted over that aux index between the two placeholders, next to a
+  // third (flat) factor so the outer level is a genuine DP (a bare two-factor
+  // product has one realization and is never sliced):
+  //   [ (g{a1;a2;K1} C{a1;i1}) C{a2;i2} ] * [ (g{a3;a4;K1} C{a3;i3}) C{a4;i4} ]
+  //   * f{i_4;i_5}
+  // opt_mixed_product optimizes each bracket on its own (K1 is external
+  // there, so it is never a batch mode inside) and the outer DP contracts K1
+  // between the two placeholders. binarize builds the brackets' inner
+  // contraction nodes BEFORE the outer ones (left-first post-order), so the
+  // annotation list keyed on the optimized term must carry one entry per
+  // inner node too, or the outer contracted-K1 mark lands on an inner node
+  // whose result still carries K1 (runtime: per-batch partials of unequal
+  // extent are then accumulated, TA trange mismatch).
+  auto bracket = [](wchar_t const* g, wchar_t const* c1, wchar_t const* c2) {
+    auto inner = ex<Product>(Product{
+        1, ExprPtrList{deserialize(g), deserialize(c1)}, Product::Flatten::No});
+    return ex<Product>(
+        Product{1, ExprPtrList{inner, deserialize(c2)}, Product::Flatten::No});
+  };
+  auto b1 = bracket(L"g{a_1;a_2;Κ_1}", L"C{a_1;i_1}", L"C{a_2;i_2}");
+  auto b2 = bracket(L"g{a_3;a_4;Κ_1}", L"C{a_3;i_3}", L"C{a_4;i_4}");
+  auto term =
+      ex<Product>(Product{1, ExprPtrList{b1, b2, deserialize(L"f{i_4;i_5}")},
+                          Product::Flatten::No});
+
+  auto axes_map = std::make_shared<AxesMap>();
+  auto optimized = optimize(term, make_opts(axes_map));
+  REQUIRE(optimized);
+  auto it = axes_map->find(optimized.get());
+  REQUIRE(it != axes_map->end());
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = it->second;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  auto carries_aux = [&aux](EvalExpr const& e) {
+    if (!e.is_tensor()) return false;
+    auto const& t = e.as_tensor();
+    for (auto const& ix : t.aux())
+      if (ix.space() == aux) return true;
+    for (auto const& ix : t.bra())
+      if (ix.space() == aux) return true;
+    for (auto const& ix : t.ket())
+      if (ix.space() == aux) return true;
+    return false;
+  };
+  auto has_aux_con = [&aux](EvalExpr const& e) {
+    for (auto const& [ix, kind] : e.node_slice_mask())
+      if (ix.space() == aux && kind == BatchModeType::Contracted) return true;
+    return false;
+  };
+  // the two brackets contribute 2 contraction nodes each, the outer level two
+  std::size_t n_dp = 0;
+  std::size_t n_aux_con = 0;
+  bool aux_con_on_aux_carrier = false;
+  bool aux_con_inside_bracket = false;
+  node.visit([&](auto const& n) {
+    if (n.leaf() || n->op_type() != EvalOp::Product) return;
+    ++n_dp;
+    if (has_aux_con(*n)) {
+      ++n_aux_con;
+      if (carries_aux(*n)) aux_con_on_aux_carrier = true;
+      // a bracket-internal node has a bracket's g leaf as a descendant AND a
+      // K1-carrying result (K1 is external inside a bracket)
+      if (carries_aux(*n)) aux_con_inside_bracket = true;
+    }
+  });
+  REQUIRE(n_dp == 6);
+  REQUIRE(it->second.size() == n_dp);
+  // exactly one outer node contracts K1: it is the ONLY node that may slice
+  // it, and it is never a bracket-internal node (whose result carries K1)
+  REQUIRE(n_aux_con == 1);
+  REQUIRE_FALSE(aux_con_on_aux_carrier);
+  REQUIRE_FALSE(aux_con_inside_bracket);
 }
 
 TEST_CASE("optimize sees through Re/Im wrappers", "[optimize]") {
@@ -4767,5 +4868,490 @@ TEST_CASE("Re-wrapped product factor is optimized like the bare product",
       if (f->is<ImagPart>()) found = f->as<ImagPart>().inner();
     REQUIRE(found);
     REQUIRE(*found == *ref);
+  }
+}
+
+// T20 (round 2): the Re/Im-wrapped summand must also be BATCH-annotated like
+// the bare product: the optimizer records the inner product's per-node batch
+// axes under the summand pointer the caller keys on, and binarize consumes
+// them on the inner contraction nodes (shared node counter) -- for the
+// wrapper-at-root and scalar-siblings shapes the fold emits.
+TEST_CASE("Re-wrapped summand batch-annotates its inner product",
+          "[optimize][annotate][re_im]") {
+  using namespace sequant;
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+    reg->extent(k, v);
+  }
+  auto aux = reg->retrieve_space(L"Κ");
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+  };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{20};
+  };
+  using AxesMap =
+      std::unordered_map<Expr const*, container::vector<NodeBatchAnnotation>>;
+  auto make_opts = [&](std::shared_ptr<AxesMap> const& axes_map) {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = is_batch;
+    opts.batch_policy.batch_target_size = bts;
+    opts.batch_policy.peak_threshold = 1.0;         // force batching
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
+    opts.term_batch_axes = axes_map;
+    return opts;
+  };
+  // scalar-valued: a Re/Im wrapper over a tensor-valued expression is refused
+  // where its eval node is built
+  auto bare =
+      deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;a_1} f{i_2;a_2}");
+  auto ref_map = std::make_shared<AxesMap>();
+  auto ref = optimize(bare, make_opts(ref_map));
+  auto ref_it = ref_map->find(ref.get());
+  REQUIRE(ref_it != ref_map->end());
+  REQUIRE(!ref_it->second.empty());
+  auto const n_ref = ref_it->second.size();
+
+  auto check = [&](ExprPtr const& summand, const char* what) {
+    INFO(what);
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized = optimize(summand, make_opts(axes_map));
+    REQUIRE(optimized);
+    auto it = axes_map->find(optimized.get());
+    REQUIRE(it != axes_map->end());
+    REQUIRE(it->second.size() == n_ref);
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(optimized, {}, bopts);  // asserts the counter matches
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    bool aux_found = false;
+    std::size_t n_re = 0;
+    node.visit([&](auto const& n) {
+      if (n->op_type() == EvalOp::RealPart) ++n_re;
+      for (auto const& entry : n->node_slice_mask())
+        if (entry.first.space() == aux) aux_found = true;
+    });
+    REQUIRE(n_re == 1);
+    REQUIRE(aux_found);
+  };
+  check(real_part(bare->clone()), "bare Re[A] summand");
+  check(ex<Constant>(2) * real_part(bare->clone()), "2 Re[A] summand");
+  {
+    // a Sum of two such summands: optimize() re-keys the per-summand
+    // annotations onto the whole Sum, in summand order (one entry per
+    // contraction node, both wrappers' inner nodes included)
+    auto sum = ex<Constant>(2) * real_part(bare->clone()) +
+               ex<Constant>(2) * real_part(bare->clone());
+    auto axes_map = std::make_shared<AxesMap>();
+    auto sopts = make_opts(axes_map);
+    sopts.reorder = ReorderSum::NoReorder;
+    auto optimized = optimize(sum, sopts);
+    REQUIRE(optimized->is<Sum>());
+    REQUIRE(optimized->as<Sum>().size() == 2);
+    auto it = axes_map->find(optimized.get());
+    REQUIRE(it != axes_map->end());
+    REQUIRE(it->second.size() == 2 * n_ref);
+  }
+  // a wrapper next to a TENSOR sibling keeps the opaque treatment (no inner
+  // entries, private counter) -- and binarize must not throw on it
+  {
+    auto mixed = deserialize(L"f{i_5;i_5}") * real_part(bare->clone());
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized = optimize(mixed, make_opts(axes_map));
+    auto it = axes_map->find(optimized.get());
+    BinarizationOptions bopts;
+    if (it != axes_map->end()) bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_NOTHROW(binarize(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+}
+
+TEST_CASE("field cost factors", "[optimize][roofline]") {
+  using namespace sequant;
+  using sequant::opt::detail::field_cost_factors;
+  using sequant::opt::detail::roofline_op_cost;
+  using sequant::opt::detail::tensors_field;
+
+  // A real element is the unit: one real per element and one real
+  // multiply-add per counted multiply-add. A complex element stores two reals
+  // and a complex multiply-add is four real ones (what zgemm executes).
+  CHECK(field_cost_factors(Field::Real).elem_mult == 1.0);
+  CHECK(field_cost_factors(Field::Real).flop_factor == 1.0);
+  CHECK(field_cost_factors(Field::Complex).elem_mult == 2.0);
+  CHECK(field_cost_factors(Field::Complex).flop_factor == 4.0);
+
+  SECTION("roofline_op_cost scales flops and traffic by the field") {
+    // machine_balance == 0: pure flops, scaled by the flop factor only.
+    CHECK(roofline_op_cost(100, 10, 0, 0, 3, 1) == 100);
+    CHECK(roofline_op_cost(100, 10, 0, 0, 3, 1, 4.0, 2.0) == 400);
+    // machine_balance is calibrated per 8-byte element: complex traffic is
+    // twice as wide (elem_scale 2) while its flops count four times.
+    CHECK(roofline_op_cost(100, 10, 200, 0, 3, 1) == 2000);  // 200 * 10
+    CHECK(roofline_op_cost(100, 10, 200, 0, 3, 1, 4.0, 2.0) ==
+          4000);  // max(400, 200 * 20)
+    // Finite-cache re-read bound: the fast memory holds half as many complex
+    // elements and each element it moves is twice as wide.
+    // real: Q = max(1, 100 / sqrt(100 / 1)) = 10 -> 1000 * 10
+    CHECK(roofline_op_cost(100, 1, 1000, 100, 1, 1) == Catch::Approx(1e4));
+    // complex: Q = max(2, 2 * 100 / sqrt(50 / 1)) -> 1000 * 200 / sqrt(50)
+    CHECK(roofline_op_cost(100, 1, 1000, 100, 1, 1, 4.0, 2.0) ==
+          Catch::Approx(1000.0 * 200.0 / std::sqrt(50.0)));
+  }
+
+  SECTION("tensors_field is the OR of the tensors' base fields") {
+    // The default registry is complex.
+    auto const prod = deserialize(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    CHECK(tensors_field(prod->as<Product>().factors()) == Field::Complex);
+    CHECK(tensors_field(std::vector<ExprPtr>{}) == Field::Real);
+
+    // A real-orbital computation marks every space real.
+    auto resetter = scoped_real_field_context();
+    auto const real_prod = deserialize(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    CHECK(tensors_field(real_prod->as<Product>().factors()) == Field::Real);
+  }
+}
+
+TEST_CASE("optimize-tensor-power-factors", "[optimize][tensor-power]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  // L·M·pow(D,-1) has i_1 in two bra slots (M's and D's)
+  auto ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  const TensorSymmetries asym{.perm = Symmetry::Antisymm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, asym);
+  auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, asym);
+  auto const Dinv = pow(D, rational{-1});
+  REQUIRE(Dinv->is<TensorPower>());
+
+  auto count_powers = [&Dinv](ExprPtr const& e) {
+    std::size_t n = 0;
+    e->visit(
+        [&](ExprPtr const& x) {
+          if (x->is<TensorPower>()) {
+            REQUIRE(*x == *Dinv);
+            ++n;
+          }
+        },
+        /* atoms_only = */ true);
+    return n;
+  };
+
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"i" ? 10 : 100;
+  };
+
+  // batched objective: one annotation per contraction node, which binarize
+  // checks against the nodes it emits
+  auto batched_opts = [&idxsz]() {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = [](Index const& ix) {
+      return ix.space().base_key() == L"a";
+    };
+    opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 10;
+    };
+    opts.batch_policy.peak_threshold = 1e5;
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    return opts;
+  };
+
+  auto binarize_annotated = [](ResultExpr const& res,
+                               OptimizeOptions const& opts) {
+    BinarizationOptions bopts;
+    if (opts.term_batch_axes)
+      if (auto it = opts.term_batch_axes->find(res.expression().get());
+          it != opts.term_batch_axes->end())
+        bopts.node_batch_axes = it->second;
+    return binarize(res, bopts);
+  };
+
+  SECTION("three factors") {
+    auto const term = L * M * Dinv;
+    OptimizeOptions subnet_opts;
+    subnet_opts.CSE.subnet = true;
+    for (auto const& opts : {OptimizeOptions{}, batched_opts(), subnet_opts}) {
+      auto const optimized = optimize_result(term, opts).expr;
+      REQUIRE(optimized->is<Product>());
+      REQUIRE(count_powers(optimized) == 1);
+      REQUIRE_NOTHROW(
+          binarize_annotated(ResultExpr{Variable{L"E"}, optimized}, opts));
+    }
+  }
+
+  SECTION("an element-wise product is unchanged up to factor order") {
+    auto const term = M * Dinv;
+    for (auto const& opts : {OptimizeOptions{}, batched_opts()}) {
+      auto const optimized = optimize(term, opts);
+      REQUIRE(optimized->is<Product>());
+      REQUIRE(optimized->size() == 2);
+      REQUIRE(count_powers(optimized) == 1);
+      REQUIRE(ranges::any_of(*optimized,
+                             [&M](ExprPtr const& f) { return *f == *M; }));
+      REQUIRE_NOTHROW(binarize_annotated(
+          ResultExpr{Tensor{L"ell", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}},
+                     optimized},
+          opts));
+    }
+  }
+}
+
+TEST_CASE("single-term-tensor-power-base", "[optimize][tensor-power]") {
+  using namespace sequant;
+  auto ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  auto t = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm});
+  };
+  auto power_vertex = [](TensorNetwork const& net) {
+    std::size_t i = 0;
+    for (auto&& v : net.tensors()) {
+      if (dynamic_cast<TensorPower const*>(v.get())) return i;
+      ++i;
+    }
+    FAIL("no TensorPower vertex");
+    return i;
+  };
+
+  SECTION("volatility mask") {
+    TensorNetwork net{std::vector<ExprPtr>{
+        t(L"M{i_1;a_1}"), pow(t(L"D{i_1;a_1}"), rational{-1})}};
+    auto const p = power_vertex(net);
+    auto const mask = opt::detail::leaf_volatile_mask(
+        net, [](Tensor const& x) { return x.label() == L"D"; });
+    REQUIRE(mask == (std::size_t{1} << p));
+    REQUIRE(opt::detail::leaf_volatile_mask(net, [](Tensor const& x) {
+              return x.label() == L"M";
+            }) == (std::size_t{1} << (1 - p)));
+  }
+
+  SECTION("subnet CSE tells M·D from M·pow(D,-1)") {
+    // subsets {M_1, D_1} and {M_2, D_2 or pow(D_2,-1)} have the same shape
+    auto meta_ids = [&t](ExprPtr d2) {
+      std::vector<ExprPtr> ts{t(L"M{i_1;a_1}"), t(L"D{a_1;i_2}"),
+                              t(L"M{i_3;a_2}"), std::move(d2)};
+      TensorNetwork net{ts};
+      // vertex of each input factor, by the target index only it carries
+      std::vector<std::size_t> pos;
+      for (auto lbl : {L"i_1", L"i_2", L"i_3", L"i_4"}) {
+        std::size_t i = 0;
+        for (auto&& v : net.tensors()) {
+          if (ranges::contains(slots(*v), Index{lbl})) break;
+          ++i;
+        }
+        REQUIRE(i < ts.size());
+        pos.push_back(i);
+      }
+      container::svector<Index> targets{Index{L"i_1"}, Index{L"i_2"},
+                                        Index{L"i_3"}, Index{L"i_4"}};
+      container::vector<opt::detail::OptRes> results(std::size_t{1}
+                                                     << ts.size());
+      container::vector<char> connected(results.size(), 1);
+      opt::detail::init_results(net, targets, results, &connected);
+      auto md = opt::detail::build_subnet_metadata(net, results, connected);
+      auto bits = [&pos](std::size_t a, std::size_t b) {
+        return (std::size_t{1} << pos[a]) | (std::size_t{1} << pos[b]);
+      };
+      return std::pair{md.meta_ids[bits(0, 1)], md.meta_ids[bits(2, 3)]};
+    };
+    auto [md_plain, md_plain2] = meta_ids(t(L"D{a_2;i_4}"));
+    REQUIRE(md_plain == md_plain2);  // control: equal subnets share an id
+    auto [md_d, md_pow] = meta_ids(pow(t(L"D{a_2;i_4}"), rational{-1}));
+    REQUIRE(md_d != md_pow);
+  }
+}
+
+TEST_CASE("optimize-broadcast-sum-symbolic", "[optimize][broadcast]") {
+  using namespace sequant;
+  ResultExpr res = deserialize<ResultExpr>(
+      L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}");
+  const Tensor head = res.result_as_tensor();
+  const ExprPtr rhs = res.expression().clone();
+  optimize(res);
+  REQUIRE(res.result_as_tensor() == head);
+
+  // the summands stay the ε leaves, which binarize broadcasts
+  std::size_t n_eps = 0;
+  res.expression()->visit(
+      [&](ExprPtr const& x) {
+        REQUIRE(x->is<Tensor>());
+        REQUIRE(x->as<Tensor>().label() == L"ε");
+        ++n_eps;
+      },
+      /* atoms_only = */ true);
+  REQUIRE(n_eps == 4);
+  REQUIRE(res.expression()->size() == rhs->size());
+
+  std::optional<FullBinaryNode<EvalExpr>> tree;
+  REQUIRE_NOTHROW(tree.emplace(binarize(res)));
+  std::size_t n_bcast = 0;
+  tree->visit([&](const auto& node) {
+    if (!node.leaf() && node->is_broadcast()) ++n_bcast;
+  });
+  REQUIRE(n_bcast == 4);
+}
+
+// an index held only as a proto of a composite contracted inside a subset
+// stays open if the rest of the term carries it, as a slot or as a proto
+TEST_CASE("CSV protos of contracted composites stay open", "[optimize][csv]") {
+  using namespace sequant;
+  // A B contracts a_1<i_1,i_2> and i_2; C D contracts i_1 and p_1
+  auto prod =
+      deserialize(
+          L"A{a_1<i_1,i_2>;i_2} B{i_2;a_1<i_1,i_2>} C{i_1;p_1} D{p_1;i_1}")
+          ->as<Product>();
+  container::svector<container::svector<Index>> slots;
+  for (auto&& f : prod.factors())
+    slots.emplace_back(f->as<Tensor>().const_braketaux_indices() |
+                       ranges::to<container::svector<Index>>);
+  auto const open = subset_target_indices(slots, container::svector<Index>{});
+  using IndexSet = std::decay_t<decltype(open)>::value_type;
+  enum : std::size_t { A = 1, B = 2, C = 4, D = 8 };
+  Index const i1(L"i_1"), i2(L"i_2");
+  Index const a1 = prod.factor(0)->as<Tensor>().bra()[0];  // a_1<i_1,i_2>
+  // A B: i_1 lives only in the contracted a_1<i_1,i_2>, yet C D needs it;
+  // i_2 is consumed inside A B and stays summed
+  CHECK(open[A | B] == IndexSet{i1});
+  // C D contracts i_1, but A B still carries it as a proto of a_1
+  CHECK(open[C | D] == IndexSet{i1});
+  // the protos of an open composite are open outer modes themselves
+  CHECK(open[A] == IndexSet({a1, i1, i2}));
+  CHECK(open[A | B | C | D].empty());
+}
+
+// an index carried only as a protoindex is external, and single_term_opt
+// declares it: here that decides the schedule
+TEST_CASE("pure protoindex is declared external", "[optimize][csv]") {
+  using namespace sequant;
+  // i_1 is a protoindex of a_1 and never a slot; A D contract a_1<i_1>
+  auto prod =
+      deserialize(L"A{a_1<i_1>;p_1} B{p_1;p_2} C{p_2;p_3} D{p_3;a_1<i_1>}",
+                  {.def_perm_symm = Symmetry::Nonsymm})
+          ->as<Product>();
+  std::vector<ExprPtr> ts(prod.factors().begin(), prod.factors().end());
+  TensorNetwork net{ts};
+  Index const i1(L"i_1");
+  REQUIRE(net.ext_indices() == IndexSet{i1});
+
+  container::svector<container::svector<Index>> slots;
+  for (auto&& f : ts)
+    slots.emplace_back(f->as<Tensor>().const_braketaux_indices() |
+                       ranges::to<container::svector<Index>>);
+  container::svector<Index> const none;
+  CHECK_FALSE(subset_target_indices(slots, none).back().contains(i1));
+  CHECK(subset_target_indices(slots, net.ext_indices()).back().contains(i1));
+
+  // extents under which pricing i_1 changes the optimum
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    auto const key = ix.basis().base_key();
+    if (key == L"i" || key == L"a") return 10;
+    return 10 + static_cast<std::size_t>(ix.label().back() - L'0');
+  };
+  std::function<double(Index const&, std::size_t)> const inner_pow =
+      [](Index const&, std::size_t) { return 10.; };
+  opt::detail::PeakModel model{idxsz, inner_pow};
+  auto const summed = opt::detail::run_single_term_opt(model, net, none);
+  auto const open =
+      opt::detail::run_single_term_opt(model, net, net.ext_indices());
+  REQUIRE(summed != open);
+  CostParams cost;
+  cost.inner_pow = inner_pow;
+  CHECK(opt::detail::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
+            net, idxsz, false, cost) == open);
+}
+
+TEST_CASE("optimize keys batch annotations on live nodes only",
+          "[optimize][annotate][term_batch_axes]") {
+  // opt_mixed_product optimizes each non-tensor factor (a nested Product or
+  // Sum bracket) on its own, which keys that factor's annotations on the
+  // optimized factor, splices them into the enclosing term's list, and puts
+  // a CLONE of the factor back into the term. The optimized factor itself is
+  // freed on return, so an entry left under its address is a dangling key: a
+  // later node allocated at that address (e.g. a summand that records no
+  // entry of its own) would pick up the stale annotations. Every key left in
+  // the map must therefore be a node of the optimized expression.
+  using namespace sequant;
+  using AxesMap =
+      std::unordered_map<Expr const*, container::vector<NodeBatchAnnotation>>;
+  auto live_nodes = [](ExprPtr const& root) {
+    std::set<Expr const*> nodes{root.get()};
+    root->visit([&nodes](ExprPtr const& n) { nodes.insert(n.get()); },
+                /* atoms_only = */ false);
+    return nodes;
+  };
+  auto check_keys_live = [&](AxesMap const& axes_map, ExprPtr const& result) {
+    auto const live = live_nodes(result);
+    std::size_t n_dangling = 0;
+    for (auto const& [key, axes] : axes_map)
+      if (!live.contains(key)) ++n_dangling;
+    INFO("keys: " << axes_map.size());
+    CHECK(n_dangling == 0);
+  };
+  auto des = [](wchar_t const* s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm});
+  };
+
+  SECTION("nested Product brackets") {
+    auto bracket = [&](wchar_t const* g, wchar_t const* c1, wchar_t const* c2) {
+      auto inner = ex<Product>(
+          Product{1, ExprPtrList{des(g), des(c1)}, Product::Flatten::No});
+      return ex<Product>(
+          Product{1, ExprPtrList{inner, des(c2)}, Product::Flatten::No});
+    };
+    auto term = ex<Product>(Product{
+        1,
+        ExprPtrList{bracket(L"g{a_1;a_2}", L"C{a_1;i_1}", L"C{a_2;i_2}"),
+                    bracket(L"g{a_3;a_4}", L"C{a_3;i_3}", L"C{a_4;i_4}"),
+                    des(L"f{i_2;i_3}")},
+        Product::Flatten::No});
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized =
+        optimize(term, OptimizeOptions{.term_batch_axes = axes_map});
+    REQUIRE(optimized);
+    REQUIRE(axes_map->contains(optimized.get()));
+    check_keys_live(*axes_map, optimized);
+  }
+
+  SECTION("a Sum bracket inside a summand of a Sum") {
+    auto bracket =
+        des(L"g{a_1,a_2;a_3,a_4} t{a_3,a_4;i_3,i_4} + "
+            L"f{a_1;a_3} t{a_3,a_2;i_3,i_4}");
+    auto mixed =
+        ex<Product>(Product{1, ExprPtrList{des(L"λ{i_1,i_2;a_1,a_2}"), bracket},
+                            Product::Flatten::No});
+    auto sum = ex<Sum>(ExprPtrList{mixed, des(L"x{i_1,i_2;i_3,i_4}")});
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized =
+        optimize(sum, OptimizeOptions{.term_batch_axes = axes_map});
+    REQUIRE(optimized);
+    REQUIRE(axes_map->contains(optimized.get()));
+    check_keys_live(*axes_map, optimized);
   }
 }

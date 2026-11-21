@@ -11,10 +11,12 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sequant::util::extint {
 
-class CSEStep : public OneByOneProcessingStep<ExportTreeData> {
+class CSEStep : public OneByOneProcessingStep<ExportTreeData, true,
+                                              InputAccess::WorkingCopy> {
  public:
   std::string kind() const override;
 
@@ -28,12 +30,13 @@ class CSEStep : public OneByOneProcessingStep<ExportTreeData> {
  protected:
   std::size_t process(std::string_view id_prefix, std::size_t id_start,
                       ExecutionContext &ctx,
-                      const ExportTreeData &data) override;
+                      WorkingCopy<ExportTreeData> &input) override;
 
   bool alias_unchanged_inputs() const override;
 
  private:
-  bool merge_inputs_ = false;
+  bool merge_all_ = false;
+  std::vector<std::vector<std::string>> merge_groups_;
   std::size_t min_usage_ = 2;
 };
 

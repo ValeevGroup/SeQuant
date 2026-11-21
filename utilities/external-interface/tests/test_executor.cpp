@@ -2,11 +2,18 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "executor.hpp"
+#include "processing_step.hpp"
+#include "processing_step_factory.hpp"
 #include "test_extint.hpp"
 
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <nlohmann/json.hpp>
+
+#include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 using namespace sequant;
 using namespace sequant::util::extint;
@@ -122,5 +129,134 @@ TEST_CASE("Executor step identity", "[extint]") {
                               {{"kind", "canonicalize"}, {"inputs", "in"}},
                               {{"kind", "validate"}, {"inputs", "in"}}});
     REQUIRE_NOTHROW(exec.execute(steps));
+  }
+}
+
+TEST_CASE("Executor releases data only after its last use", "[extint]") {
+  test_support::ScopedStreamSilencer silence;
+  Executor exec;
+
+  SECTION("non-adjacent use") {
+    json steps = json::array({read_step(),
+                              {{"kind", "sort"}, {"inputs", "in"}},
+                              {{"kind", "canonicalize"}, {"inputs", "in"}},
+                              {{"kind", "validate"}, {"inputs", "in[0]"}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+  }
+
+  SECTION("auto-generated step IDs") {
+    json steps =
+        json::array({read_step(),
+                     {{"kind", "sort"}, {"inputs", "in"}},
+                     {{"kind", "canonicalize"}, {"inputs", "in"}},
+                     {{"kind", "validate"}, {"inputs", "step1.sort"}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+  }
+
+  SECTION("inputs aliased by a later step") {
+    // c2 leaves its (already canonical) input in place and merely aliases it
+    json steps =
+        json::array({read_step(),
+                     {{"id", "c1"}, {"kind", "canonicalize"}, {"inputs", "in"}},
+                     {{"id", "c2"}, {"kind", "canonicalize"}, {"inputs", "c1"}},
+                     {{"kind", "validate"}, {"inputs", "c2"}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+  }
+
+  SECTION("IDs referenced in options") {
+    json steps = json::array(
+        {read_step(),
+         {{"id", "t1"}, {"kind", "to_export_tree"}, {"inputs", "in"}},
+         {{"id", "t2"}, {"kind", "to_export_tree"}, {"inputs", "in"}},
+         {{"kind", "dependencies"},
+          {"inputs", "t2"},
+          {"options", {{"deps", {{"t2", "t1"}}}}}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+  }
+
+  SECTION("all data is released at the end") {
+    json steps = json::array({read_step(),
+                              {{"id", "s"}, {"kind", "sort"}, {"inputs", "in"}},
+                              {{"kind", "validate"}, {"inputs", "s"}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+
+    // IDs remain known but their data is gone
+    REQUIRE(exec.context().has_data("in.0"));
+    REQUIRE(exec.context().has_data("s"));
+    REQUIRE_THROWS_WITH(
+        exec.context().get_data("s"),
+        Catch::Matchers::ContainsSubstring("has already been released"));
+    REQUIRE_THROWS_AS(exec.context().get_data("in"), Exception);
+  }
+
+  SECTION("each execution starts from scratch") {
+    REQUIRE_NOTHROW(exec.execute(json::array({read_step()})));
+    REQUIRE_NOTHROW(exec.execute(json::array({read_step()})));
+    REQUIRE_THROWS_WITH(
+        exec.execute(json::array({{{"kind", "validate"}, {"inputs", "in"}}})),
+        Catch::Matchers::ContainsSubstring("No data available for ID 'in'"));
+  }
+
+  SECTION("invalid references report the step") {
+    json steps =
+        json::array({read_step(),
+                     {{"id", "v"}, {"kind", "validate"}, {"inputs", "in[0-"}}});
+    REQUIRE_THROWS_WITH(exec.execute(steps),
+                        Catch::Matchers::ContainsSubstring(
+                            "Invalid reference in step 'v' (validate)"));
+  }
+}
+
+namespace {
+// Records for every run of a "probe" step whether the data of its input is
+// needed later
+std::vector<bool> probe_results;
+
+struct Probe final : ProcessingStep {
+  std::string kind() const override { return "probe"; }
+  bool accepts_options() const override { return false; }
+  bool requires_options() const override { return false; }
+  void set_options(const json &) override {}
+
+  std::size_t run(std::string_view, ExecutionContext &ctx,
+                  const std::vector<std::string_view> &inputs) override {
+    for (const auto &current : ctx.get_data(inputs.front())) {
+      probe_results.push_back(ctx.is_needed_later(current));
+    }
+    return 0;
+  }
+};
+
+const bool probe_registered = ProcessingStepFactory::instance().register_class(
+    "probe", []() { return std::make_unique<Probe>(); });
+}  // namespace
+
+TEST_CASE("Executor tells steps whether their inputs are needed later",
+          "[extint]") {
+  test_support::ScopedStreamSilencer silence;
+  REQUIRE(probe_registered);
+  probe_results.clear();
+
+  Executor exec;
+
+  SECTION("later reference") {
+    exec.execute(json::array({read_step(),
+                              {{"kind", "probe"}, {"inputs", "in"}},
+                              {{"kind", "validate"}, {"inputs", "in"}}}));
+    REQUIRE(probe_results == std::vector<bool>{true});
+  }
+
+  SECTION("no later reference") {
+    exec.execute(
+        json::array({read_step(), {{"kind", "probe"}, {"inputs", "in"}}}));
+    REQUIRE(probe_results == std::vector<bool>{false});
+  }
+
+  SECTION("data is needed through a later reference to an alias") {
+    exec.execute(json::array({read_step(),
+                              {{"id", "p"}, {"kind", "sort"}, {"inputs", "in"}},
+                              {{"kind", "probe"}, {"inputs", "p"}},
+                              {{"kind", "validate"}, {"inputs", "p"}}}));
+    REQUIRE(probe_results == std::vector<bool>{true});
   }
 }

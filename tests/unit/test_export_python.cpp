@@ -18,6 +18,7 @@
 #include <unsupported/Eigen/CXX11/Tensor>
 
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -1097,6 +1098,226 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     }
   }
 
+  SECTION("Validation: Element-wise tensor power") {
+    // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+    // over the (default) complex basis no trait derives
+    [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+    std::filesystem::path temp_dir =
+        make_unique_temp_dir("sequant_test_tensor_power");
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    const Eigen::Index nocc = 3;
+    const Eigen::Index nvirt = 4;
+
+    // the fractional exponent needs a positive base to stay real
+    auto positive = [](Eigen::Tensor<double, 2> t) {
+      Eigen::Tensor<double, 2> result = t.abs() + 1.0;
+      return result;
+    };
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+
+    const double tolerance = 1e-10;
+
+    // Hadamard product with an inverse, R[i,a] = 2 f[i,a] / D[i,a], and the
+    // bare scaled inverse, R[i,a] = 2 / D[i,a]
+    for (const bool with_f : {true, false}) {
+      CAPTURE(with_f);
+      auto f_tensor = random_tensor<double, 2>({nocc, nvirt}, 3000);
+      auto D_tensor = positive(random_tensor<double, 2>({nocc, nvirt}, 3100));
+
+      Eigen::Tensor<double, 2> R_expected = 2.0 * D_tensor.inverse();
+      if (with_f) R_expected = R_expected * f_tensor;
+
+      auto result_expr = deserialize<ResultExpr>(
+          with_f ? L"R{i_1;a_1} = 2 f{i_1;a_1} D{i_1;a_1}:S-S-S^(-1)"
+                 : L"R{i_1;a_1} = 2 D{i_1;a_1}:S-S-S^(-1)");
+
+      NumPyEinsumGenerator generator;
+      std::string f_name =
+          generator.represent(Tensor(L"f", bra{L"i_1"}, ket{L"a_1"}), ctx);
+      std::string D_name =
+          generator.represent(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}), ctx);
+      // D's braket symmetry lets the export load it as D[a_1,i_1]
+      std::string D_t_name =
+          generator.represent(Tensor(L"D", bra{L"a_1"}, ket{L"i_1"}), ctx);
+      std::string R_name =
+          generator.represent(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}), ctx);
+
+      if (with_f) {
+        write_eigen_tensor_to_numpy(temp_dir.string() + "/" + f_name + ".npy",
+                                    f_tensor);
+      }
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" + D_name + ".npy",
+                                  D_tensor);
+      Eigen::Tensor<double, 2> D_t_tensor =
+          D_tensor.shuffle(Eigen::array<int, 2>{1, 0});
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" + D_t_name + ".npy",
+                                  D_t_tensor);
+
+      export_expression(to_export_tree(result_expr), generator, ctx);
+
+      REQUIRE(
+          run_python_code(generator.get_generated_code(), temp_dir.string()));
+
+      auto R_actual = read_eigen_tensor_from_numpy<double, 2>(
+          temp_dir.string() + "/" + R_name + ".npy");
+
+      REQUIRE(R_actual.dimensions()[0] == nocc);
+      REQUIRE(R_actual.dimensions()[1] == nvirt);
+      for (Eigen::Index i = 0; i < nocc; ++i) {
+        for (Eigen::Index a = 0; a < nvirt; ++a) {
+          REQUIRE(std::abs(R_actual(i, a) - R_expected(i, a)) < tolerance);
+        }
+      }
+    }
+
+    // Square root: I[i1,i2,a1,a2] = D[i1,i2,a1,a2]^(1/2)
+    {
+      // D's permutational symmetry S makes its data symmetric under i1<->i2
+      // and, separately, under a1<->a2
+      auto D_raw = random_tensor<double, 4>({nocc, nocc, nvirt, nvirt}, 3200);
+      Eigen::Tensor<double, 4> D_tensor(nocc, nocc, nvirt, nvirt);
+      for (Eigen::Index i1 = 0; i1 < nocc; ++i1)
+        for (Eigen::Index i2 = 0; i2 < nocc; ++i2)
+          for (Eigen::Index a1 = 0; a1 < nvirt; ++a1)
+            for (Eigen::Index a2 = 0; a2 < nvirt; ++a2)
+              D_tensor(i1, i2, a1, a2) = std::abs(D_raw(i1, i2, a1, a2)) +
+                                         std::abs(D_raw(i2, i1, a1, a2)) +
+                                         std::abs(D_raw(i1, i2, a2, a1)) +
+                                         std::abs(D_raw(i2, i1, a2, a1)) + 1.0;
+
+      auto result_expr = deserialize<ResultExpr>(
+          L"I{i_1,i_2;a_1,a_2} = D{i_1,i_2;a_1,a_2}:S-S-S^(1/2)");
+
+      NumPyEinsumGenerator generator;
+      std::string D_name = generator.represent(
+          Tensor(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}), ctx);
+      // D's braket symmetry lets the export load it as D[a_1,a_2,i_1,i_2]
+      std::string D_t_name = generator.represent(
+          Tensor(L"D", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}), ctx);
+      std::string I_name = generator.represent(
+          Tensor(L"I", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}), ctx);
+
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" + D_name + ".npy",
+                                  D_tensor);
+      Eigen::Tensor<double, 4> D_t_tensor =
+          D_tensor.shuffle(Eigen::array<int, 4>{2, 3, 0, 1});
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" + D_t_name + ".npy",
+                                  D_t_tensor);
+
+      export_expression(to_export_tree(result_expr), generator, ctx);
+
+      REQUIRE(
+          run_python_code(generator.get_generated_code(), temp_dir.string()));
+
+      auto I_actual = read_eigen_tensor_from_numpy<double, 4>(
+          temp_dir.string() + "/" + I_name + ".npy");
+
+      REQUIRE(I_actual.dimensions()[0] == nocc);
+      REQUIRE(I_actual.dimensions()[1] == nocc);
+      REQUIRE(I_actual.dimensions()[2] == nvirt);
+      REQUIRE(I_actual.dimensions()[3] == nvirt);
+      for (Eigen::Index i1 = 0; i1 < nocc; ++i1)
+        for (Eigen::Index i2 = 0; i2 < nocc; ++i2)
+          for (Eigen::Index a1 = 0; a1 < nvirt; ++a1)
+            for (Eigen::Index a2 = 0; a2 < nvirt; ++a2)
+              REQUIRE(std::abs(I_actual(i1, i2, a1, a2) -
+                               std::sqrt(D_tensor(i1, i2, a1, a2))) <
+                      tolerance);
+    }
+  }
+
+  SECTION("Validation: Broadcast sum") {
+    std::filesystem::path temp_dir =
+        make_unique_temp_dir("sequant_test_broadcast_sum");
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    const Eigen::Index nocc = 3;
+    const Eigen::Index nvirt = 4;
+    const double tolerance = 1e-10;
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+
+    auto write = [&](const Tensor &t, const auto &data) {
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" +
+                                      NumPyEinsumGenerator{}.represent(t, ctx) +
+                                      ".npy",
+                                  data);
+    };
+
+    // D[i,a] = e_v[a] - e_o[i] - E, a scalar summand among them
+    {
+      auto eo = random_tensor<double, 1>({nocc}, 4000);
+      auto ev = random_tensor<double, 1>({nvirt}, 4100);
+      Eigen::Tensor<double, 0> E;
+      E() = 0.375;
+      write(Tensor(L"e", bra{L"i_1"}, ket{}), eo);
+      write(Tensor(L"e", bra{}, ket{L"a_1"}), ev);
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/E.npy", E);
+
+      NumPyEinsumGenerator generator;
+      export_expression(to_export_tree(deserialize<ResultExpr>(
+                            L"D{i_1;a_1} = e{;a_1} - e{i_1;} - E")),
+                        generator, ctx);
+      REQUIRE(
+          run_python_code(generator.get_generated_code(), temp_dir.string()));
+
+      auto D = read_eigen_tensor_from_numpy<double, 2>(
+          temp_dir.string() + "/" +
+          generator.represent(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}), ctx) +
+          ".npy");
+      REQUIRE(D.dimensions()[0] == nocc);
+      REQUIRE(D.dimensions()[1] == nvirt);
+      for (Eigen::Index i = 0; i < nocc; ++i)
+        for (Eigen::Index a = 0; a < nvirt; ++a)
+          REQUIRE(std::abs(D(i, a) - (ev(a) - eo(i) - E())) < tolerance);
+    }
+
+    // D[i1,i2,a] = g[a,i2] + f[i1,a]: a transposed operand, and a new mode
+    // between two carried ones
+    {
+      auto g = random_tensor<double, 2>({nvirt, nocc}, 4200);
+      auto f = random_tensor<double, 2>({nocc, nvirt}, 4300);
+      write(Tensor(L"g", bra{L"a_1"}, ket{L"i_2"}), g);
+      write(Tensor(L"f", bra{L"i_1"}, ket{L"a_1"}), f);
+
+      NumPyEinsumGenerator generator;
+      export_expression(to_export_tree(deserialize<ResultExpr>(
+                            L"D{i_1,i_2;a_1} = g{a_1;i_2} + f{i_1;a_1}")),
+                        generator, ctx);
+      REQUIRE(
+          run_python_code(generator.get_generated_code(), temp_dir.string()));
+
+      auto D = read_eigen_tensor_from_numpy<double, 3>(
+          temp_dir.string() + "/" +
+          generator.represent(Tensor(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1"}),
+                              ctx) +
+          ".npy");
+      REQUIRE(D.dimensions()[0] == nocc);
+      REQUIRE(D.dimensions()[1] == nocc);
+      REQUIRE(D.dimensions()[2] == nvirt);
+      for (Eigen::Index i1 = 0; i1 < nocc; ++i1)
+        for (Eigen::Index i2 = 0; i2 < nocc; ++i2)
+          for (Eigen::Index a = 0; a < nvirt; ++a)
+            REQUIRE(std::abs(D(i1, i2, a) - (g(a, i2) + f(i1, a))) < tolerance);
+    }
+  }
+
   SECTION("Validation: RowMajor memory layout") {
     // Test that RowMajor (C order) layout produces numerically correct results
     std::filesystem::path temp_dir =
@@ -1272,8 +1493,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
-    // Subsection 1: Column-major (default) write and read
-    {
+    SECTION("column-major-roundtrip") {
+      // Column-major (default) write and read
       // Default Eigen::Tensor is column-major
       Eigen::Tensor<double, 2> tensor_col(3, 4);
       for (int i = 0; i < 3; ++i) {
@@ -1300,8 +1521,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       }
     }
 
-    // Subsection 2: Row-major write and read
-    {
+    SECTION("row-major-roundtrip") {
+      // Row-major write and read
       // Explicitly create row-major tensor
       Eigen::Tensor<double, 2, Eigen::RowMajor> tensor_row(3, 4);
       for (int i = 0; i < 3; ++i) {
@@ -1329,8 +1550,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       }
     }
 
-    // Subsection 3: Verify layout mismatch detection with explicit RowMajor
-    {
+    SECTION("layout-mismatch-throws") {
+      // Verify layout mismatch detection with explicit RowMajor
       // Create a column-major tensor and write it
       Eigen::Tensor<double, 2> tensor_col(2, 3);  // default is column-major
       tensor_col.setConstant(42.0);
@@ -1346,8 +1567,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
           Catch::Matchers::ContainsSubstring("Layout mismatch"));
     }
 
-    // Subsection 4: Default Options accepts any layout
-    {
+    SECTION("default-options-any-layout") {
+      // Default Options accepts any layout
       // Write a row-major file using external means (simulate numpy output)
       Eigen::Tensor<double, 2, Eigen::RowMajor> tensor_row(2, 3);
       for (int i = 0; i < 2; ++i) {
@@ -1369,8 +1590,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       REQUIRE(tensor_read.dimensions()[1] == 3);
     }
 
-    // Subsection 5: Scalar (rank-0) tensors
-    {
+    SECTION("rank-0-scalar") {
+      // Scalar (rank-0) tensors
       Eigen::Tensor<double, 0> scalar_tensor;
       scalar_tensor() = 3.14159;
 
@@ -1382,8 +1603,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       REQUIRE(std::abs(scalar_read() - 3.14159) < 1e-10);
     }
 
-    // Subsection 6: Higher rank tensors
-    {
+    SECTION("rank-4-float") {
+      // Higher rank tensors
       Eigen::Tensor<float, 4> tensor4d(2, 3, 4, 5);
       tensor4d.setRandom();
 

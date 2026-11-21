@@ -1,4 +1,5 @@
 #include "executor.hpp"
+#include "json_include.hpp"
 #include "processing.hpp"
 #include "template_expansion.hpp"
 #include "utils.hpp"
@@ -10,6 +11,7 @@
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
+#include <SeQuant/core/export/stack_checker.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -189,10 +191,14 @@ struct ExportOptions {
   std::size_t max_batched = std::numeric_limits<std::size_t>::max();
 };
 
-ExportNode<> prepareForExport(const ResultExpr &result,
+ExportNode<> prepareForExport(ResultExpr &result,
                               const ItfGenerator<ItfExportContext> &generator,
                               ItfExportContext &ctx,
                               const ExportOptions &opts) {
+  // use an order that does not depend on the hashing algorithm, to make the
+  // generated code reproducible
+  sort_expr(result);
+
   ExportNode<> tree = to_export_tree(result);
 
   if (result.produces_tensor()) {
@@ -290,7 +296,9 @@ void generateITF(const json &blocks, std::string_view out_file,
   context.set_index_id_offset(1);
 
   ItfGenerator<ItfExportContext> itfgen;
-  GenerationOptimizer<ItfGenerator<ItfExportContext>> generator(itfgen);
+  // ITF only supports stack-like memory allocations
+  StackCheckingGenerator<ItfGenerator<ItfExportContext>> checked(itfgen);
+  GenerationOptimizer<decltype(checked)> generator(checked);
 
   container::svector<ExpressionGroup<>> groups;
   groups.reserve(blocks.size());
@@ -413,7 +421,7 @@ void generateITF(const json &blocks, std::string_view out_file,
             return false;
           }();
 
-          if (needsSymmetrization(current.expression())) {
+          if (has_symmetrizer(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
                 pop_tensor(current.expression(), reserved::symm_label());
             SEQUANT_ASSERT(symmetrizer.has_value());
@@ -448,7 +456,7 @@ void generateITF(const json &blocks, std::string_view out_file,
       }
 
       for (const Tensor &current : tensorsToSymmetrize) {
-        ExprPtr symmetrization = generateResultSymmetrization(
+        ExprPtr symmetrization = result_symmetrization(
             current, std::wstring(current.label()) + L"u");
 
         ResultExpr symmetrizedResult(current, std::move(symmetrization));
@@ -572,7 +580,7 @@ void generateITF(const json &blocks, std::string_view out_file,
                         current_block.at("name").get<std::string>());
   }
 
-  export_groups(groups, generator, context);
+  export_groups(std::move(groups), generator, context);
   std::string itfCode = generator.get_generated_code();
 
   std::ofstream output(out_file.data());
@@ -617,8 +625,8 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
     std::wstring label = toUtf16(current.at("label").get<std::string>());
     Field field =
         current.value("real_valued", false) ? Field::Real : Field::Complex;
-    registry.add(label, type, size, field,
-                 IndexSpace::QuantumNumbers{mbpt::Spin::any});
+    registry.add(label, type,
+                 {.dimension = size, .qns = mbpt::Spin::any, .field = field});
 
     spdlog::debug("Registered index '{}' with size {}", toUtf8(label), size);
 
@@ -730,11 +738,7 @@ int main(int argc, char **argv) {
   IndexSpaceMeta spaceMeta;
 
   try {
-    std::ifstream in(driver);
-    json driver_info;
-    driver_info =
-        json::parse(in, /*callback*/ nullptr, /*allow_exceptions*/ true,
-                    /*skip_comments*/ true);
+    const json driver_info = util::extint::load_json_with_includes(driver);
 
     util::extint::process(driver_info, spaceMeta);
   } catch (const std::exception &e) {
