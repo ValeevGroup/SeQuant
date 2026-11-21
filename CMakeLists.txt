@@ -608,6 +608,12 @@ set(SeQuant_export_src
         SeQuant/core/export/utils.cpp
 )
 
+# Symbolic differentiation sources (depends on symb only)
+set(SeQuant_deriv_src
+        SeQuant/core/deriv/deriv.cpp
+        SeQuant/core/deriv/deriv.hpp
+)
+
 # TiledArray backend sources; each explicit instantiation of a Result class
 # needs GBs of compiler memory, so they are kept out of unity batches
 set(SeQuant_eval_ta_inst_src
@@ -828,6 +834,12 @@ sequant_add_library(export ${SeQuant_export_src})
 target_link_libraries(SeQuant-export PUBLIC SeQuant-optimize SeQuant-eval SeQuant-symb)
 
 ##########################
+# SeQuant-deriv: symbolic differentiation (depends on symb only)
+##########################
+sequant_add_library(deriv ${SeQuant_deriv_src})
+target_link_libraries(SeQuant-deriv PUBLIC SeQuant-symb)
+
+##########################
 # SeQuant-core: version info, links symb + export
 ##########################
 sequant_add_library(core ${SeQuant_core_src})
@@ -852,7 +864,7 @@ endif()
 ##########################
 # All SeQuant modules (used for install, IWYU, etc.)
 ##########################
-set(SEQUANT_MODULES SeQuant-bliss SeQuant-symb SeQuant-eval SeQuant-optimize SeQuant-export SeQuant-core SeQuant-mbpt SeQuant)
+set(SEQUANT_MODULES SeQuant-bliss SeQuant-symb SeQuant-eval SeQuant-optimize SeQuant-export SeQuant-deriv SeQuant-core SeQuant-mbpt SeQuant)
 # a backend module is installed and exported only with its backend, else it is build-tree only
 set(SEQUANT_BUILD_LOCAL_MODULES)
 foreach (_backend IN LISTS _sequant_known_backends)

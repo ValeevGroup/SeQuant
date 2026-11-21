@@ -323,15 +323,17 @@ them all. Ordered from the bottom up, each row depends only on rows above it:
 | target | sources | depends on |
 |---|---|---|
 | `SeQuant-bliss` | `SeQuant/external/bliss` | — |
-| `SeQuant-symb` | `SeQuant/core/` except `eval`, `optimize`, `export` | bliss (privately) |
+| `SeQuant-symb` | `SeQuant/core/` except `eval`, `optimize`, `export`, `deriv` | bliss (privately) |
+| `SeQuant-deriv` | `SeQuant/core/deriv` | symb |
 | `SeQuant-eval` | `SeQuant/core/eval` | symb, bliss (privately) |
 | `SeQuant-optimize` | `SeQuant/core/optimize` | eval, symb, bliss |
 | `SeQuant-export` | `SeQuant/core/export` | optimize, eval, symb |
-| `SeQuant-core` | `SeQuant/version.cpp` only; umbrella for the four above | symb, eval, optimize, export |
+| `SeQuant-core` | `SeQuant/version.cpp` only; umbrella for symb, eval, optimize, export | symb, eval, optimize, export |
 | `SeQuant-mbpt` | `SeQuant/domain/mbpt` | core, optimize |
 
 Note that "core" is both the source directory (`SeQuant/core/`, which feeds
-`symb`, `eval`, `optimize` and `export`) and the small umbrella target. Backend
+`symb`, `deriv`, `eval`, `optimize` and `export`) and the small umbrella
+target, which links all of those but `deriv`. Backend
 targets `SeQuant-eval-{ta,btas,tapp}` sit on top of `eval` and are consumed as
 `SeQuant::eval::ta` etc. A row may include headers only from rows above it;
 an include from a row further down is a back-edge.
