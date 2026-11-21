@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
+#include "judge.hpp"
 
 #include <string_view>
 
@@ -62,4 +63,150 @@ TEST_CASE("deriv/rules/scalars", "[deriv][rules]") {
                EquivalentTo(L"12 x y"));
   REQUIRE_THAT(sequant::deriv::diff(T(L"x^(3) y^(2)"), {}),
                EquivalentTo(L"x^(3) y^(2)"));
+}
+
+TEST_CASE("deriv/rules/tensors", "[deriv][rules]") {
+  using sequant::deriv::test::check_rule;
+  const auto diff = [](const ExprPtr& E, const ExprPtr& x) {
+    return sequant::deriv::diff(E, {x});
+  };
+  auto T = [](std::wstring_view s) { return deserialize(s); };
+  const auto R = [](std::wstring_view f, std::wstring_view x,
+                    std::wstring_view expected) { check_rule(f, x, expected); };
+
+  // a contracted leaf: the rest of the term under x's names
+  R(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N", L"t{a_2;i_2}:N-N-N",
+    L"f{i_2;a_2}:N-N-N");
+  // a leaf by itself: both slots are external, the Kronecker deltas stay
+  R(L"t{a_1;i_1}:N-N-N", L"t{a_2;i_2}:N-N-N",
+    L"δ{a_1;a_2}:N-S-S δ{i_2;i_1}:N-S-S");
+  // the product rule
+  R(L"1/2 g{i_1,i_2;a_1,a_2}:N-N-N t{a_1;i_1}:N-N-N t{a_2;i_2}:N-N-N",
+    L"t{a_3;i_3}:N-N-N",
+    L"1/2 g{i_3,i_2;a_3,a_2}:N-N-N t{a_2;i_2}:N-N-N + "
+    L"1/2 g{i_1,i_3;a_1,a_3}:N-N-N t{a_1;i_1}:N-N-N");
+  // index names: x spelled with names E sums over
+  R(L"g{i_1,i_2;a_1,a_2}:N-N-N t{a_1;i_1}:N-N-N t{a_2;i_2}:N-N-N",
+    L"t{a_1;i_1}:N-N-N",
+    L"g{i_1,i_3;a_1,a_3}:N-N-N t{a_3;i_3}:N-N-N + "
+    L"g{i_3,i_1;a_3,a_1}:N-N-N t{a_3;i_3}:N-N-N");
+  // ... and E holds the names make_tmp_index mints next
+  {
+    const auto occupied = Index(L"i_1").basis();
+    Index::reset_tmp_index();
+    const auto i_a = Index::make_tmp_index(occupied);
+    const auto i_b = Index::make_tmp_index(occupied);
+    const auto loop = [](const Index& i) {
+      return ex<Tensor>(L"C", bra{i}, ket{}) * ex<Tensor>(L"Q", bra{}, ket{i});
+    };
+    Index::reset_tmp_index();
+    check_rule(T(L"w{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N") * loop(i_a) * loop(i_b),
+               T(L"t{a_1;i_1}:N-N-N"),
+               T(L"w{i_1;a_1}:N-N-N") * loop(i_a) * loop(i_b));
+  }
+  // another block of the same symbol is a constant
+  R(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + w{a_1;i_1}:N-N-N t{i_1;a_1}:N-N-N",
+    L"t{a_2;i_2}:N-N-N", L"f{i_2;a_2}:N-N-N");
+  // a leaf of the same symbol with other ranks is another object, whatever
+  // symmetries it declares
+  R(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
+    L"1/4 g{i_1,i_2;a_1,a_2}:A-N-S t{a_1,a_2;i_1,i_2}:A-N-S",
+    L"t{a_3;i_3}:N-N-N", L"f{i_3;a_3}:N-N-N");
+  // E does not hold x
+  REQUIRE(diff(T(L"f{i_1;a_1}:N-N-N u{a_1;i_1}:N-N-N"), T(L"t{a_2;i_2}:N-N-N"))
+              ->is_zero());
+  // E with its own Â: its external indices are not renamed
+  R(L"Â{i_1;a_1}:A-N-S v{a_1,i_2;i_1,a_2}:N-N-N t{a_2;i_2}:N-N-N",
+    L"t{a_3;i_3}:N-N-N", L"Â{i_1;a_1}:A-N-S v{a_1,i_3;i_1,a_3}:N-N-N");
+  // trace: a leaf that holds one index in two slots
+  R(L"h{p_1;p_1}:N-N-N", L"h{p_2;p_3}:N-N-N", L"δ{p_3;p_2}:N-S-S");
+  // ... by a variable whose slots run over disjoint spaces: no element of it
+  // is on the diagonal
+  R(L"h{p_1;p_1}:N-N-N", L"h{i_3;a_4}:N-N-N", L"0");
+  // a free index that appears only as a protoindex is external: it keeps its
+  // name
+  R(L"w{;a_5<i_2>}:N-N-N v{a_5<i_2>;}:N-N-N f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N",
+    L"t{a_3;i_3}:N-N-N",
+    L"w{;a_5<i_2>}:N-N-N v{a_5<i_2>;}:N-N-N f{i_3;a_3}:N-N-N");
+  // unexpanded input
+  check_rule((T(L"f{i_1;a_1}:N-N-N") + T(L"w{i_1;a_1}:N-N-N")) *
+                 T(L"t{a_1;i_1}:N-N-N"),
+             T(L"t{a_2;i_2}:N-N-N"), T(L"f{i_2;a_2}:N-N-N + w{i_2;a_2}:N-N-N"));
+  // a scalar factor passes through
+  R(L"x^(2) f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N", L"t{a_2;i_2}:N-N-N",
+    L"x^(2) f{i_2;a_2}:N-N-N");
+  // an aux slot
+  check_rule(ex<Tensor>(L"B", bra{Index(L"a_1")}, ket{Index(L"i_1")},
+                        aux{Index(L"p_1")}) *
+                 ex<Tensor>(L"C", bra{Index(L"i_1")}, ket{Index(L"a_1")},
+                            aux{Index(L"p_1")}),
+             ex<Tensor>(L"B", bra{Index(L"a_2")}, ket{Index(L"i_2")},
+                        aux{Index(L"p_2")}),
+             ex<Tensor>(L"C", bra{Index(L"i_2")}, ket{Index(L"a_2")},
+                        aux{Index(L"p_2")}));
+  // protoindices that are the variable's own slots
+  R(L"f{i_1;a_1<i_1>}:N-N-N t{a_1<i_1>;i_1}:N-N-N", L"t{a_2<i_2>;i_2}:N-N-N",
+    L"f{i_2;a_2<i_2>}:N-N-N");
+  // a leaf and x on different pairs: Kronecker deltas on every label, never an
+  // overlap
+  check_rule(T(L"t{a_1<i_1>;i_1}:N-N-N"), T(L"t{a_2<i_2>;i_2}:N-N-N"),
+             make_kronecker(Index(L"a_1", {L"i_1"}), Index(L"a_2", {L"i_2"})) *
+                 make_kronecker(Index(L"i_2"), Index(L"i_1")));
+  // labels that are not slots: a per-pair rotation; its pair has no order, so
+  // both orders appear
+  R(L"u{;i_1,i_2}:N-N-N M{a_3<i_1,i_2>;a_1<i_1,i_2>}:N-N-N "
+    L"k{a_1<i_1,i_2>;a_3<i_1,i_2>}:N-N-N v{i_1,i_2;}:N-N-N",
+    L"k{a_2<i_5,i_6>;a_4<i_5,i_6>}:N-N-N",
+    L"u{;i_5,i_6}:N-N-N M{a_4<i_5,i_6>;a_2<i_5,i_6>}:N-N-N v{i_5,i_6;}:N-N-N + "
+    L"u{;i_6,i_5}:N-N-N M{a_4<i_5,i_6>;a_2<i_5,i_6>}:N-N-N v{i_6,i_5;}:N-N-N");
+  // a single label: one term
+  R(L"u{;i_1}:N-N-N M{a_3<i_1>;a_1<i_1>}:N-N-N k{a_1<i_1>;a_3<i_1>}:N-N-N "
+    L"v{i_1;}:N-N-N",
+    L"k{a_2<i_5>;a_4<i_5>}:N-N-N",
+    L"u{;i_5}:N-N-N M{a_4<i_5>;a_2<i_5>}:N-N-N v{i_5;}:N-N-N");
+  // overlapping spaces: the leaf runs over the union space, the variable over
+  // a block: renamed
+  R(L"W{i_1;p_1}:N-N-N k{p_1;i_1}:N-N-N", L"k{a_2;i_2}:N-N-N",
+    L"W{i_2;a_2}:N-N-N");
+  // the reverse: the leaf's summed indices run over less than the variable's,
+  // so the deltas stay
+  R(L"W{i_1;a_1}:N-N-N k{a_1;i_1}:N-N-N", L"k{p_2;p_3}:N-N-N",
+    L"δ{a_1;p_2}:N-S-S δ{p_3;i_1}:N-S-S W{i_1;a_1}:N-N-N");
+  // a block of a pair density from amplitudes over the full space
+  R(L"v{p_3;a_1}:N-N-N u{a_1,p_1;i_1,i_2}:N-N-N w{i_1,i_2;p_3,p_1}:N-N-N",
+    L"u{p_5,p_6;i_5,i_6}:N-N-N",
+    L"δ{a_1;p_5}:N-S-S v{p_3;a_1}:N-N-N w{i_5,i_6;p_3,p_6}:N-N-N");
+  // the derivative by the adjoint spelling (complex field: t and t⁺ are
+  // independent)
+  R(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N",
+    L"t{a_2;i_2}:N-N-N", L"f{i_2;a_2}:N-N-N");
+  R(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N",
+    L"t⁺{i_2;a_2}:N-N-N", L"w{a_2;i_2}:N-N-N");
+  // a Kronecker delta follows a rename that a later label of the leaf decides
+  R(L"h{a_1;a_1}:N-N-N", L"h{p_2;a_3}:N-N-N", L"δ{a_3;p_2}:N-S-S");
+  R(L"W{i_1;a_1<i_1>}:N-N-N k{a_1<i_1>;i_1}:N-N-N", L"k{e_2<i_2>;i_2}:N-N-N",
+    L"W{i_2;a_1<i_2>}:N-N-N δ{a_1<i_2>;e_2<i_2>}:N-S-S");
+  const auto R_nonzero = [&](std::wstring_view f, std::wstring_view x) {
+    check_rule(f, x, L"");
+    REQUIRE_FALSE(diff(T(f), T(x))->is_zero());
+  };
+  R_nonzero(
+      L"u{;i_1}:N-N-N W{;a_1<i_1>}:N-N-N k{a_1<i_1>;}:N-N-N "
+      L"v{i_1;}:N-N-N",
+      L"k{e_2<i_2>;}:N-N-N");
+  R_nonzero(
+      L"u{;i_1,i_2}:N-N-N M{a_3<i_1,i_2>;a_1<i_1,i_2>}:N-N-N "
+      L"k{a_1<i_1,i_2>;a_3<i_1,i_2>}:N-N-N v{i_1,i_2;}:N-N-N",
+      L"k{e_2<i_5,i_6>;a_4<i_5,i_6>}:N-N-N");
+  R_nonzero(L"W{;i_1}:N-N-N h{a_1<i_1>;a_1<i_1>}:N-N-N V{i_1;}:N-N-N",
+            L"h{e_2<i_2>;a_3<i_2>}:N-N-N");
+  // two slots with different pair labels: the orders are taken per list
+  R_nonzero(
+      L"Y{;i_3,i_4}:N-N-N W{a_3<i_3>;a_4<i_4>}:N-N-N "
+      L"s{a_4<i_4>;a_3<i_3>}:N-N-N Z{i_3,i_4;}:N-N-N",
+      L"s{a_5<i_5>;a_6<i_6>}:N-N-N");
+  R_nonzero(
+      L"u{;i_1,i_2,i_3,i_4}:N-N-N M{a_3<i_3,i_4>;a_1<i_1,i_2>}:N-N-N "
+      L"k{a_1<i_1,i_2>;a_3<i_3,i_4>}:N-N-N v{i_1,i_2,i_3,i_4;}:N-N-N",
+      L"k{a_2<i_5,i_6>;a_4<i_7,i_8>}:N-N-N");
 }

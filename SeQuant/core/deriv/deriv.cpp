@@ -1,17 +1,29 @@
 #include <SeQuant/core/deriv/deriv.hpp>
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <numeric>
+#include <string>
 #include <tuple>
 #include <utility>
 
@@ -32,6 +44,13 @@ ExprPtr scalar_rule(const ExprPtr& f, const ExprPtr& y) {
   if (power.conjugated()) lowered->as<Power>().conjugate();
   Power::flatten(lowered);
   return ex<Product>(power.exponent(), ExprPtrList{lowered});
+}
+
+/// @return whether @p f is a symmetrizer (Â or Ŝ)
+bool is_symmetrizer(const ExprPtr& f) {
+  if (!f->is<Tensor>()) return false;
+  const auto label = f->as<Tensor>().label();
+  return label == reserved::antisymm_label() || label == reserved::symm_label();
 }
 
 /// @return the scalar and the factors of @p term , a term of an expanded
@@ -62,37 +81,226 @@ container::svector<ExprPtr> terms_of(const ExprPtr& E) {
   return {summands.begin(), summands.end()};
 }
 
-/// a term of an expanded expression: its scalar and its factors
-using Term = std::tuple<Constant::scalar_type, container::svector<ExprPtr>>;
+/// the external indices of a term of the function of diff(): those not in
+/// exactly two slots of the factors other than Â and Ŝ, and the protoindices
+/// of those
+container::set<Index> externals_of(const container::svector<ExprPtr>& factors) {
+  container::map<Index, std::int64_t> slots;
+  for (const auto& f : factors) {
+    if (is_symmetrizer(f)) continue;
+    for (const auto& [i, count] : get_used_indices_with_counts(*f))
+      slots[i] += count.nonproto();
+  }
+  container::set<Index> result;
+  for (const auto& [i, n] : slots) {
+    if (n >= 2) continue;
+    result.insert(i);
+    for (const auto& p : i.proto_indices()) result.insert(p);
+  }
+  return result;
+}
+
+/// a term of an expanded expression: its scalar, its factors and its external
+/// indices
+using Term = std::tuple<Constant::scalar_type, container::svector<ExprPtr>,
+                        container::set<Index>>;
 
 /// the terms of the expanded @p E
 container::svector<Term> split_terms(const ExprPtr& E) {
   container::svector<Term> result;
   for (const auto& term : terms_of(E)) {
     auto [scalar, factors] = split(term);
-    result.emplace_back(scalar, std::move(factors));
+    auto externals = externals_of(factors);
+    result.emplace_back(scalar, std::move(factors), std::move(externals));
   }
   return result;
 }
 
+/// renames the summed indices of each of @p terms that are named like an
+/// index of @p x to temporary ones named unlike any index of x and of the term
+void rename_apart(container::svector<Term>& terms, const ExprPtr& x) {
+  container::set<std::wstring> in_x;
+  for (const auto& i : get_used_indices(x)) in_x.emplace(i.label());
+  for (auto& [scalar, factors, externals] : terms) {
+    container::set<Index> used;
+    for (const auto& f : factors) {
+      const auto in_f = get_used_indices(f);
+      used.insert(in_f.begin(), in_f.end());
+    }
+    auto taken = in_x;
+    for (const auto& i : used) taken.emplace(i.label());
+    const auto temporary = [&taken](const Index& i) {
+      Index result;
+      do
+        result = i.has_proto_indices()
+                     ? Index::make_tmp_index(i.basis(), i.proto_indices(),
+                                             i.symmetric_proto_indices())
+                     : Index::make_tmp_index(i.basis());
+      while (taken.contains(std::wstring(result.label())));
+      return result;
+    };
+    container::map<Index, Index> fresh;
+    for (const auto& i : used)
+      if (!externals.contains(i) && in_x.contains(std::wstring(i.label())))
+        fresh.emplace(i, temporary(i));
+    if (fresh.empty()) continue;
+    const auto renames = replace_proto_indices_of_images(fresh);
+    for (auto& f : factors) f = transform_expr(f, renames);
+  }
+}
+
+/// the position of @p p among the slots of @p t , or -1 if it is not a slot
+std::ptrdiff_t slot_of(const Tensor& t, const Index& p) {
+  const auto slots = t.slots();
+  const auto it = std::ranges::find(slots, p);
+  return it == slots.end() ? -1 : it - slots.begin();
+}
+
+/// the position of the first slot of @p t that carries the protoindices
+/// @p list
+std::size_t first_with(const Tensor& t, const Index::index_vector& list) {
+  const auto slots = t.slots();
+  return std::ranges::find(slots, list, &Index::proto_indices) - slots.begin();
+}
+
+/// ∂ leaf / ∂ y for a leaf of a term, as what it does to the rest of the term
+struct Elementary {
+  /// summed labels of the leaf -> labels of y
+  container::map<Index, Index> renames;
+  /// make_kronecker factors that stay
+  container::svector<ExprPtr> deltas;
+};
+
+/// whether the spaces of @p l and @p r overlap
+bool overlap(const Index& l, const Index& r) {
+  const auto registry = get_default_index_basis_registry();
+  SEQUANT_ASSERT(registry);
+  return registry->valid_intersection(l.space(), r.space());
+}
+
+/// whether the slot @p l of a leaf can hold the slot @p y_l of the variable: a
+/// basis that is no other instance of y_l's, a space that overlaps y_l's and
+/// as many protoindices
+bool meets(const Index& l, const Index& y_l) {
+  return !different_instances(l.basis(), y_l.basis()) && overlap(l, y_l) &&
+         l.proto_indices().size() == y_l.proto_indices().size();
+}
+
+/// whether @p f , as it is written, is a leaf of the block of the spelling
+/// @p y : the label and ranks of y, and in each slot a slot that meets() y's
+bool leaf_of(const ExprPtr& f, const Tensor& y) {
+  if (!f->is<Tensor>()) return false;
+  const auto& t = f->as<Tensor>();
+  return t.label() == y.label() && t.bra_rank() == y.bra_rank() &&
+         t.ket_rank() == y.ket_rank() && t.aux_rank() == y.aux_rank() &&
+         std::ranges::equal(t.slots(), y.slots(), meets);
+}
+
+/// the derivative of @p leaf by @p y : the Kronecker delta of each label of
+/// @p leaf (slot index, protoindex) with that of @p y , contracted away where
+/// the label is summed (not in @p externals ) and runs over all of y's
+/// @return one Elementary per choice of an order of each distinct protoindex
+/// list of y that is not its slots (one, unless such a list has two or more
+/// labels), but none that has a Kronecker delta between disjoint spaces, which
+/// is zero. @p leaf is a leaf of y's block (leaf_of())
+container::svector<Elementary> elementary(
+    const Tensor& leaf, const Tensor& y,
+    const container::set<Index>& externals) {
+  // (leaf label, y label, is it a bra slot)
+  container::svector<std::tuple<Index, Index, bool>> pairs;
+  const auto add_slots = [&](const auto& ls, const auto& ys, bool bra) {
+    for (std::size_t k = 0; k != ls.size(); ++k)
+      pairs.emplace_back(ls[k], ys[k], bra);
+  };
+  add_slots(leaf.bra(), y.bra(), true);
+  add_slots(leaf.ket(), y.ket(), false);
+  add_slots(leaf.aux(), y.aux(), false);
+
+  // per distinct protoindex list of y that is not y's slots: the leaf's list
+  // at its first slot, y's list, and the range of the list in both
+  container::svector<Index> free, y_free;
+  container::svector<std::pair<std::size_t, std::size_t>> lists;
+  for (std::size_t k = 0; k != pairs.size(); ++k) {
+    const auto& [l, y_l, bra] = pairs[k];
+    const auto& Q = y_l.proto_indices();
+    if (Q.empty() || first_with(y, Q) != k || slot_of(y, Q.front()) >= 0)
+      continue;
+    lists.emplace_back(free.size(), free.size() + Q.size());
+    free.insert(free.end(), l.proto_indices().begin(), l.proto_indices().end());
+    y_free.insert(y_free.end(), Q.begin(), Q.end());
+  }
+
+  container::svector<Elementary> result;
+  container::svector<std::size_t> order(y_free.size());
+  std::iota(order.begin(), order.end(), std::size_t{0});
+  // the next order of the first list that has one; the lists before it start
+  // over
+  const auto next = [&order](const auto& list) {
+    return std::ranges::next_permutation(order.begin() + list.first,
+                                         order.begin() + list.second)
+        .found;
+  };
+  do {
+    Elementary r;
+    bool zero = false;
+    // every rename first, so that each delta is spelled under all of them
+    const auto rename = [&](const Index& l, const Index& y_l) {
+      if (l != y_l && !externals.contains(l) &&
+          includes(l.basis(), y_l.basis()) && !r.renames.contains(l))
+        r.renames.emplace(l, y_l);
+    };
+    const auto delta = [&](const Index& l, const Index& y_l, bool bra) {
+      auto renamed = l;
+      renamed.transform(r.renames);
+      if (renamed == y_l) return;
+      zero = zero || !overlap(renamed, y_l);
+      r.deltas.push_back(bra ? make_kronecker(renamed, y_l)
+                             : make_kronecker(y_l, renamed));
+    };
+    for (const auto& [l, y_l, bra] : pairs) rename(l, y_l);
+    for (std::size_t k = 0; k != free.size(); ++k)
+      rename(free[k], y_free[order[k]]);
+    for (const auto& [l, y_l, bra] : pairs) delta(l, y_l, bra);
+    for (std::size_t k = 0; k != free.size(); ++k)
+      delta(free[k], y_free[order[k]], true);
+    if (!zero) result.push_back(std::move(r));
+  } while (std::ranges::any_of(lists, next));
+  return result;
+}
+
 /// D_y(E): the product rule over the factors of each of the @p terms of E,
-/// with the scalar rule for a scalar @p y
+/// with elementary() for a leaf of y's label and the scalar rule for a scalar
+/// @p y
 ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y) {
   container::vector<ExprPtr> result;
-  for (const auto& [scalar, factors] : terms) {
-    const auto product = [&](std::size_t skip) {
+  for (const auto& [scalar, factors, externals] : terms) {
+    const auto product = [&](std::size_t skip,
+                             const container::map<Index, Index>& renames) {
       auto p = ex<Product>(scalar, ExprPtrList{});
       for (std::size_t j = 0; j != factors.size(); ++j)
-        if (j != skip) p->as<Product>().append(1, factors[j]);
+        if (j != skip)
+          p->as<Product>().append(1, renames.empty()
+                                         ? factors[j]
+                                         : transform_expr(factors[j], renames));
       return p;
     };
     for (std::size_t k = 0; k != factors.size(); ++k) {
       const auto& f = factors[k];
-      auto d = scalar_rule(f, y);
-      if (!d) continue;
-      auto p = product(k);
-      p->as<Product>().append(1, d);
-      result.push_back(p);
+      if (y->is<Variable>()) {
+        auto d = scalar_rule(f, y);
+        if (!d) continue;
+        auto p = product(k, {});
+        p->as<Product>().append(1, d);
+        result.push_back(p);
+        continue;
+      }
+      if (!leaf_of(f, y->as<Tensor>())) continue;
+      for (const auto& r :
+           elementary(f->as<Tensor>(), y->as<Tensor>(), externals)) {
+        auto p = product(k, r.renames);
+        for (const auto& delta : r.deltas) p->as<Product>().append(1, delta);
+        result.push_back(p);
+      }
     }
   }
   return result.empty() ? ex<Constant>(0)
@@ -104,7 +312,13 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
   auto e = E->clone();
   expand(e);
   auto terms = split_terms(e);
-  auto result = one_way(terms, x);
+  ExprPtr result;
+  if (x->is<Variable>()) {
+    result = one_way(terms, x);
+  } else {
+    rename_apart(terms, x);
+    result = one_way(terms, x);
+  }
   rapid_simplify(result);
   return result;
 }
