@@ -1,9 +1,11 @@
 #include <SeQuant/core/deriv/deriv.hpp>
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
@@ -17,6 +19,7 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -81,6 +84,18 @@ container::svector<ExprPtr> terms_of(const ExprPtr& E) {
   if (!E->is<Sum>()) return {E};
   const auto& summands = E->as<Sum>().summands();
   return {summands.begin(), summands.end()};
+}
+
+/// a spelling of a tensor variable, and its phase
+using Spelling = std::pair<ExprPtr, Constant::scalar_type>;
+
+/// core's spelling of the tensor @p x and its phase
+Spelling spelled(const ExprPtr& x) {
+  auto result = x->clone();
+  const auto phase =
+      TensorBlockCanonicalizer{}.apply(result->as<AbstractTensor>());
+  return {result,
+          phase ? phase->as<Constant>().value() : Constant::scalar_type{1}};
 }
 
 /// the external indices of a term of the function of diff(): those not in
@@ -309,6 +324,12 @@ ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y) {
                         : ex<Sum>(result.begin(), result.end());
 }
 
+/// @return whether the adjoint spelling of @p y holds the elements of @p y
+bool adjoint_holds_elements(const Tensor& y) {
+  return y.braket_symmetry() == BraKetSymmetry::Symm ||
+         base_field(y) == Field::Real;
+}
+
 /// whether the slots @p l and @p r of the variable @p y are like: one basis,
 /// the same protoindices, and each protoindex list of y holds both or neither
 bool alike(const Tensor& y, const Index& l, const Index& r) {
@@ -387,7 +408,95 @@ ExprPtr block_sum(const ExprPtr& G, const Tensor& y) {
                         : ex<Sum>(result.begin(), result.end());
 }
 
-/// the derivative of @p E by the one variable @p x
+/// whether the bra-ket exchange is an operation of @p y : y has bra-ket
+/// symmetry, its adjoint spelling holds its elements, and its bra and its ket
+/// have one nonzero rank
+bool exchanges(const Tensor& y) {
+  return y.braket_symmetry() != BraKetSymmetry::Nonsymm &&
+         adjoint_holds_elements(y) && y.bra_rank() == y.ket_rank() &&
+         y.bra_rank() != 0;
+}
+
+/// the spellings of the elements of @p y that the operations of y make, each
+/// with its phase, one per set of operations that block_sum() sums as one
+/// factor, @p y first. The operations are the permutations of the slots of
+/// each side (Symmetry::Antisymm, with their signs) or of the columns (column
+/// symmetry, equal ranks), each also followed by the exchange of bra and ket
+/// if that is an operation (exchanges())
+container::svector<Spelling> spellings(const Spelling& y) {
+  const auto& t = y.first->as<Tensor>();
+  const container::svector<Index> B(t.bra().begin(), t.bra().end()),
+      K(t.ket().begin(), t.ket().end());
+  const bool antisymm = t.symmetry() == Symmetry::Antisymm;
+  const bool columns = column_symmetric(t) && B.size() == K.size();
+  const bool exchange = exchanges(t);
+  // a spelling up to permutations of like slots: a like slot stands for its
+  // group
+  const auto [like_B, like_K] = like_slots(t);
+  const auto key = [&](const Tensor& s) {
+    container::svector<Index> result;
+    for (const auto& i : s.slots())
+      result.push_back(std::ranges::count(like_B, i)   ? like_B.front()
+                       : std::ranges::count(like_K, i) ? like_K.front()
+                                                       : i);
+    return result;
+  };
+  const auto permuted = [](const auto& slots, const auto& order) {
+    container::svector<Index> result;
+    for (const auto k : order) result.push_back(slots[k]);
+    return result;
+  };
+
+  container::svector<Spelling> result;
+  container::svector<container::svector<Index>> keys;
+  container::svector<std::size_t> order_B(B.size()), order_K(K.size());
+  std::iota(order_B.begin(), order_B.end(), std::size_t{0});
+  std::iota(order_K.begin(), order_K.end(), std::size_t{0});
+  int parity_B = 0, parity_K = 0;
+  do {
+    do {
+      const auto b = permuted(B, order_B);
+      const auto k = permuted(K, columns ? order_B : order_K);
+      const auto phase =
+          antisymm && parity_B != parity_K ? -y.second : y.second;
+      for (const bool exchanged : {false, true}) {
+        if (exchanged && !exchange) break;
+        auto s = y.first->clone();
+        auto& s_t = s->as<Tensor>();
+        s_t.set_bra(
+            {exchanged ? k.begin() : b.begin(), exchanged ? k.end() : b.end()});
+        s_t.set_ket(
+            {exchanged ? b.begin() : k.begin(), exchanged ? b.end() : k.end()});
+        auto s_key = key(s_t);
+        if (std::ranges::find(keys, s_key) != keys.end()) continue;
+        keys.push_back(std::move(s_key));
+        result.emplace_back(std::move(s), phase);
+      }
+    } while (antisymm &&
+             next_permutation_parity(parity_K, order_K.begin(), order_K.end()));
+  } while ((antisymm || columns) &&
+           next_permutation_parity(parity_B, order_B.begin(), order_B.end()));
+  return result;
+}
+
+/// the spellings() of core's spelling y of the tensor variable @p x , then,
+/// if @p with_adjoint , those of the adjoint of y, with y's phase, where that
+/// is another spelling. The adjoint is not respelled: core may spell it as y
+/// where the bra-ket exchange is no operation of x
+container::svector<Spelling> all_spellings(const ExprPtr& x,
+                                           bool with_adjoint) {
+  const auto y = spelled(x);
+  auto result = spellings(y);
+  if (with_adjoint) {
+    const Spelling y_adjoint{adjoint(y.first), y.second};
+    if (*y_adjoint.first != *y.first)
+      for (auto& s : spellings(y_adjoint)) result.push_back(std::move(s));
+  }
+  return result;
+}
+
+/// the derivative of @p E by the one variable @p x : the sum over the
+/// spellings of x of their phase times the derivative by each
 ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
   auto e = E->clone();
   expand(e);
@@ -396,8 +505,18 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
   if (x->is<Variable>()) {
     result = one_way(terms, x);
   } else {
+    // the spellings of x, and those of its adjoint where that holds the same
+    // elements and the bra-ket exchange is no operation of x
+    const auto& t = x->as<Tensor>();
+    const auto ys =
+        all_spellings(x, adjoint_holds_elements(t) && !exchanges(t));
     rename_apart(terms, x);
-    result = block_sum(one_way(terms, x), x->as<Tensor>());
+    for (const auto& [y, phase] : ys) {
+      auto by_y =
+          ex<Constant>(phase) * block_sum(one_way(terms, y), y->as<Tensor>());
+      result = result ? result + by_y : by_y;
+    }
+    expand(result);
   }
   rapid_simplify(result);
   return result;

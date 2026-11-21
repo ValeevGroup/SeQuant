@@ -1,15 +1,22 @@
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/deriv/deriv.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
+#include "contexts.hpp"
 #include "judge.hpp"
 
+#include <string>
 #include <string_view>
+#include <utility>
 
 using namespace sequant;
+
+using sequant::deriv::test::real_spaces;
 
 TEST_CASE("deriv/rules/scalars", "[deriv][rules]") {
   const auto diff = [](const ExprPtr& E, const ExprPtr& x) {
@@ -232,6 +239,10 @@ TEST_CASE("deriv/rules/symmetry", "[deriv][rules]") {
   R(L"g{i_1,i_2;a_1,a_2}:N-C-S t{a_1,a_2;i_1,i_2}:N-N-S",
     L"t{a_3,a_4;i_3,i_4}:N-N-S",
     L"2 Ŝ{a_3,a_4;i_3,i_4}:N-N-S g{i_3,i_4;a_3,a_4}:N-C-S");
+  // mixed spaces: no operation keeps the block; the leaf is spelled the other
+  // way in E
+  R(L"W{i_1,a_1;a_2,i_2}:N-N-N g{a_2,i_2;i_1,a_1}:A-C-S",
+    L"g{i_3,a_3;i_4,a_4}:A-C-S", L"-1 W{i_4,a_4;a_3,i_3}:N-N-N");
   // the ket slots alone share a basis: a one-sided Â
   R(L"W{i_1,i_2;i_3,a_1}:N-N-N g{i_3,a_1;i_1,i_2}:A-C-S",
     L"g{i_4,a_4;i_5,i_6}:A-C-S",
@@ -251,6 +262,43 @@ TEST_CASE("deriv/rules/symmetry", "[deriv][rules]") {
     L"t{a_3<i_3,i_4>,a_4<i_3,i_4>;i_3,i_4}:A-N-S",
     L"Â{a_3<i_3,i_4>,a_4<i_3,i_4>;i_3,i_4}:A-N-S "
     L"g{i_3,i_4;a_3<i_3,i_4>,a_4<i_3,i_4>}:A-C-S");
+  // pair labels that are not slots under the variable's projector: labels of
+  // its free indices, so free (the judge alone decides, and the result is not
+  // zero)
+  const std::pair<std::wstring_view, std::wstring_view> pair_labels[]{
+      {L"u{;i_1,i_2}:N-N-N "
+       L"M{a_3<i_1,i_2>,a_4<i_1,i_2>;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-N-N "
+       L"U{a_1<i_1,i_2>,a_2<i_1,i_2>;a_3<i_1,i_2>,a_4<i_1,i_2>}:A-N-S "
+       L"v{i_1,i_2;}:N-N-N",
+       L"U{a_5<i_5,i_6>,a_6<i_5,i_6>;a_7<i_5,i_6>,a_8<i_5,i_6>}:A-N-S"},
+      {L"u{;i_1,i_2}:N-N-N "
+       L"M{a_3<i_1,i_2>,a_4<i_1,i_2>;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-N-N "
+       L"U{a_1<i_1,i_2>,a_2<i_1,i_2>;a_3<i_1,i_2>,a_4<i_1,i_2>}:A-S-S "
+       L"v{i_1,i_2;}:N-N-N",
+       L"U{a_5<i_5,i_6>,a_6<i_5,i_6>;a_7<i_5,i_6>,a_8<i_5,i_6>}:A-S-S"},
+      {L"u{;i_1}:N-N-N M{a_3;a_1<i_1>,a_2<i_1>}:N-N-N "
+       L"U{a_1<i_1>,a_2<i_1>;a_3}:A-N-S v{i_1;}:N-N-N",
+       L"U{a_5<i_5>,a_6<i_5>;a_7}:A-N-S"},
+      {L"u{;i_1,i_2}:N-N-N "
+       L"M{a_3<i_2>,a_4<i_2>;a_1<i_1>,a_2<i_1>}:N-N-N "
+       L"U{a_1<i_1>,a_2<i_1>;a_3<i_2>,a_4<i_2>}:N-N-S v{i_1,i_2;}:N-N-N",
+       L"U{a_5<i_5>,a_6<i_5>;a_7<i_6>,a_8<i_6>}:N-N-S"},
+      {L"u{;i_1,i_2}:N-N-N "
+       L"M{a_3<i_2>,a_4<i_2>;a_1<i_1>,a_2<i_1>}:N-N-N "
+       L"U{a_1<i_1>,a_2<i_1>;a_3<i_2>,a_4<i_2>}:A-S-S v{i_1,i_2;}:N-N-N",
+       L"U{a_5<i_5>,a_6<i_5>;a_7<i_6>,a_8<i_6>}:A-S-S"}};
+  for (const auto& [f, x] : pair_labels) {
+    check_rule(f, x, L"");
+    REQUIRE_FALSE(diff(T(f), T(x))->is_zero());
+  }
+  // ... differentiated again by a leaf that holds the pair labels
+  for (const auto& [k, x2] : {std::pair{0, L"u{;i_9,i_10}:N-N-N"},
+                              std::pair{3, L"v{i_9,i_10;}:N-N-N"}}) {
+    const auto& [f, x] = pair_labels[k];
+    const auto first = diff(T(f), T(x));
+    check_rule(first, T(x2), nullptr);
+    REQUIRE_FALSE(diff(first, T(x2))->is_zero());
+  }
   // a group that is part of a side: the two occupied bra slots and the two
   // unoccupied ket slots of a rank-3 tensor (the judge alone decides, and the
   // result is not zero)
@@ -286,4 +334,298 @@ TEST_CASE("deriv/rules/symmetry", "[deriv][rules]") {
                  EquivalentTo(L"2 Â{a_51,a_52;i_51,i_52}:A-N-S "
                               L"w{i_51,i_52,i_71;a_51,a_52,a_71}:N-N-N"));
   }
+}
+
+TEST_CASE("deriv/rules/bra-ket-symmetric", "[deriv][rules]") {
+  namespace t = sequant::deriv::test;
+  const auto R = [](std::wstring_view f, std::wstring_view x,
+                    std::wstring_view expected, const t::Data& data) {
+    t::check_rule(f, x, expected, data);
+  };
+  // a Symm tensor's data is exchange-symmetric
+  const t::Data sym{.real = {L"h", L"g"}};
+
+  // bra-ket symmetric over one space: G + Gᵀ, whatever the field and whatever
+  // G is
+  R(L"G{p_2;p_1}:N-N-N h{p_1;p_2}:N-S-N", L"h{p_3;p_4}:N-S-N",
+    L"G{p_4;p_3}:N-N-N + G{p_3;p_4}:N-N-N", sym);
+  // the same spaces in another order: core keeps both spellings, E holds the
+  // other one
+  R(L"W{i_1,a_1;a_2,i_2}:N-N-N g{a_2,i_2;i_1,a_1}:N-S-N",
+    L"g{i_3,a_3;a_4,i_4}:N-S-N", L"W{i_3,a_3;a_4,i_4}:N-N-N", sym);
+  // a leaf over the union space holds both spellings
+  R(L"W{p_3,p_4;p_1,p_2}:N-N-N g{p_1,p_2;p_3,p_4}:N-S-N",
+    L"g{i_3,a_3;a_4,i_4}:N-S-N",
+    L"W{a_4,i_4;i_3,a_3}:N-N-N + W{i_3,a_3;a_4,i_4}:N-N-N", sym);
+  // unequal bra and ket ranks: the exchange is no operation, and a leaf
+  // written either way holds the variable's elements, whichever way the
+  // variable is written
+  for (const auto x : {L"g{;a_5}:N-S-N", L"g{a_5;}:N-S-N"}) {
+    R(L"W{a_1;}:N-N-N g{;a_1}:N-S-N", x, L"W{a_5;}:N-N-N", sym);
+    R(L"W{a_1;}:N-N-N g{;a_1}:N-S-N + V{;a_1}:N-N-N g{a_1;}:N-S-N", x,
+      L"W{a_5;}:N-N-N + V{;a_5}:N-N-N", sym);
+  }
+  for (const auto x : {L"g{i_5;a_5,a_6}:N-S-N", L"g{a_5,a_6;i_5}:N-S-N"}) {
+    R(L"W{a_1,a_2;i_1}:N-N-N g{i_1;a_1,a_2}:N-S-N", x, L"W{a_5,a_6;i_5}:N-N-N",
+      sym);
+    R(L"W{a_1,a_2;i_1}:N-N-N g{i_1;a_1,a_2}:N-S-N + "
+      L"V{i_1;a_1,a_2}:N-N-N g{a_1,a_2;i_1}:N-S-N",
+      x, L"W{a_5,a_6;i_5}:N-N-N + V{i_5;a_5,a_6}:N-N-N", sym);
+  }
+  for (const auto x : {L"g{i_5;a_5,a_6}:A-S-S", L"g{a_5,a_6;i_5}:A-S-S"})
+    R(L"W{a_1,a_2;i_1}:N-N-N g{i_1;a_1,a_2}:A-S-S + "
+      L"V{i_1;a_1,a_2}:N-N-N g{a_1,a_2;i_1}:A-S-S",
+      x,
+      L"2 Â{;a_5,a_6}:A-N-S W{a_5,a_6;i_5}:N-N-N + "
+      L"2 Â{a_5,a_6;}:A-N-S V{i_5;a_5,a_6}:N-N-N",
+      sym);
+  // ... and with an aux slot
+  R(L"W{a_1;;p_3}:N-N-N B{;a_1;p_3}:N-S-N", L"B{;a_5;p_6}:N-S-N",
+    L"W{a_5;;p_6}:N-N-N", {});
+}
+
+TEST_CASE("deriv/rules/real", "[deriv][rules]") {
+  namespace t = sequant::deriv::test;
+  const auto R = [](std::wstring_view f, std::wstring_view x,
+                    std::wstring_view expected, const t::Data& data) {
+    t::check_rule(f, x, expected, data);
+  };
+  // every space real
+  const auto resetter = real_spaces();
+  const t::Data real{.real = {L"t", L"f", L"w", L"g", L"G", L"K", L"h", L"W",
+                              L"V", L"v", L"s", L"u", L"Y", L"Z"}};
+
+  // a real t: t⁺ holds the same elements
+  R(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N",
+    L"t{a_2;i_2}:N-N-N", L"f{i_2;a_2}:N-N-N + w{a_2;i_2}:N-N-N", real);
+  R(L"t⁺{i_1;a_1}:N-N-N g{a_1,i_2;i_1,a_2}:N-N-N t{a_2;i_2}:N-N-N",
+    L"t{a_3;i_3}:N-N-N",
+    L"t⁺{i_1;a_1}:N-N-N g{a_1,i_3;i_1,a_3}:N-N-N + "
+    L"g{a_3,i_2;i_3,a_2}:N-N-N t{a_2;i_2}:N-N-N",
+    real);
+  // each term carries the projector in the layout of its own spelling
+  R(L"1/4 g{a_1,a_2;i_1,i_2}:A-N-S t⁺{i_1,i_2;a_1,a_2}:A-N-S + 1/4 "
+    L"w{i_1,i_2;a_1,a_2}:A-N-S t{a_1,a_2;i_1,i_2}:A-N-S",
+    L"t{a_3,a_4;i_3,i_4}:A-N-S",
+    L"Â{a_3,a_4;i_3,i_4}:A-N-S w{i_3,i_4;a_3,a_4}:A-N-S + "
+    L"Â{i_3,i_4;a_3,a_4}:A-N-S g{a_3,a_4;i_3,i_4}:A-N-S",
+    real);
+  // bra-ket symmetric over one space: G + Gᵀ
+  R(L"G{p_2;p_1}:N-N-N h{p_1;p_2}:N-S-N", L"h{p_3;p_4}:N-S-N",
+    L"G{p_4;p_3}:N-N-N + G{p_3;p_4}:N-N-N", real);
+  // bra-ket symmetric over two spaces: one spelling, no second term
+  R(L"G{i_1;a_1}:N-N-N h{a_1;i_1}:N-S-N + K{a_1;i_1}:N-N-N h{i_1;a_1}:N-S-N",
+    L"h{a_2;i_2}:N-S-N", L"G{i_2;a_2}:N-N-N + K{a_2;i_2}:N-N-N", real);
+  // bra-ket symmetric over one space, with a projector
+  R(L"1/4 W{p_3,p_4;p_1,p_2}:N-N-N g{p_1,p_2;p_3,p_4}:A-S-S",
+    L"g{p_5,p_6;p_7,p_8}:A-S-S",
+    L"Â{p_5,p_6;p_7,p_8}:A-N-S W{p_7,p_8;p_5,p_6}:N-N-N + "
+    L"Â{p_7,p_8;p_5,p_6}:A-N-S W{p_5,p_6;p_7,p_8}:N-N-N",
+    real);
+  // a leaf over the union space: it holds both spellings of a Hermitian
+  // variable over two spaces, and one of a variable without bra-ket symmetry
+  R(L"G{p_2;p_1}:N-N-N h{p_1;p_2}:N-C-N", L"h{i_3;a_4}:N-C-N",
+    L"G{a_4;i_3}:N-N-N + G{i_3;a_4}:N-N-N", real);
+  R(L"W{p_2;p_1}:N-N-N t{p_1;p_2}:N-N-N", L"t{a_3;i_3}:N-N-N",
+    L"W{i_3;a_3}:N-N-N", real);
+  // a bra-ket symmetric variable with a union-space slot, the leaf spelled
+  // otherwise
+  R(L"W{a_3,i_4;p_1,a_2}:N-N-N g{p_1,a_2;a_3,i_4}:N-S-S",
+    L"g{p_5,a_6;a_7,i_8}:N-S-S",
+    L"W{a_6,i_4;i_8,a_7}:N-N-N δ{p_5;i_4}:N-S-S + W{a_7,i_8;p_5,a_6}:N-N-N",
+    real);
+  // Hermitian over real spaces: the adjoint spelling holds the same elements
+  R(L"G{p_2;p_1}:N-N-N h{p_1;p_2}:N-C-N", L"h{p_3;p_4}:N-C-N",
+    L"G{p_4;p_3}:N-N-N + G{p_3;p_4}:N-N-N", real);
+  R(L"W{i_1,a_1;a_2,i_2}:N-N-N g{a_2,i_2;i_1,a_1}:N-C-N + "
+    L"V{a_1,i_1;i_2,a_2}:N-N-N g{i_2,a_2;a_1,i_1}:N-C-N",
+    L"g{i_3,a_3;a_4,i_4}:N-C-N",
+    L"V{a_4,i_4;i_3,a_3}:N-N-N + W{i_3,a_3;a_4,i_4}:N-N-N", real);
+  // bra-ket symmetric with unequal bra and ket ranks: a leaf written either
+  // way holds the variable's elements
+  R(L"W{a_1,a_2;i_1}:N-N-N g{i_1;a_1,a_2}:N-S-N", L"g{i_5;a_5,a_6}:N-S-N",
+    L"W{a_5,a_6;i_5}:N-N-N", real);
+  R(L"W{a_1,a_2;i_1}:N-N-N g{i_1;a_1,a_2}:N-S-N + "
+    L"V{i_1;a_1,a_2}:N-N-N g{a_1,a_2;i_1}:N-S-N",
+    L"g{i_5;a_5,a_6}:N-S-N", L"W{a_5,a_6;i_5}:N-N-N + V{i_5;a_5,a_6}:N-N-N",
+    real);
+  // a CSV amplitude with t⁺ leaves
+  R(L"1/4 g{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S "
+    L"t⁺{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-N-S + "
+    L"1/4 w{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-N-S "
+    L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S",
+    L"t{a_3<i_3,i_4>,a_4<i_3,i_4>;i_3,i_4}:A-N-S",
+    L"Â{a_3<i_3,i_4>,a_4<i_3,i_4>;i_3,i_4}:A-N-S "
+    L"w{i_3,i_4;a_3<i_3,i_4>,a_4<i_3,i_4>}:A-N-S + "
+    L"Â{i_3,i_4;a_3<i_3,i_4>,a_4<i_3,i_4>}:A-N-S "
+    L"g{a_3<i_3,i_4>,a_4<i_3,i_4>;i_3,i_4}:A-N-S",
+    real);
+  // a second derivative by a real variable
+  {
+    const auto E = deserialize(
+        L"t⁺{i_1;a_1}:N-N-N g{a_1,i_2;i_1,a_2}:N-N-N t{a_2;i_2}:N-N-N");
+    const auto x1 = deserialize(L"t{a_3;i_3}:N-N-N"),
+               x2 = deserialize(L"t{a_5;i_5}:N-N-N");
+    const auto first = sequant::deriv::diff(E, {x1});
+    t::check_rule(first, x2,
+                  deserialize(L"g{a_3,i_5;i_3,a_5}:N-N-N + "
+                              L"g{a_5,i_3;i_5,a_3}:N-N-N"),
+                  real);
+    REQUIRE_THAT(sequant::deriv::diff(E, {x1, x2}),
+                 EquivalentTo(sequant::deriv::diff(first, {x2})));
+  }
+  // a scalar in the term is left as it is
+  R(L"ε w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N + ε^(2) f{i_1;a_1}:N-N-N "
+    L"t{a_1;i_1}:N-N-N",
+    L"t{a_2;i_2}:N-N-N", L"ε w{a_2;i_2}:N-N-N + ε^(2) f{i_2;a_2}:N-N-N", real);
+  // a residual with its own Â
+  R(L"Â{i_1;a_1}:A-N-S w{a_1,a_2;i_1,i_2}:N-N-N t⁺{i_2;a_2}:N-N-N + "
+    L"Â{i_1;a_1}:A-N-S v{a_1,i_2;i_1,a_2}:N-N-N t{a_2;i_2}:N-N-N",
+    L"t{a_3;i_3}:N-N-N",
+    L"Â{i_1;a_1}:A-N-S v{a_1,i_3;i_1,a_3}:N-N-N + "
+    L"Â{i_1;a_1}:A-N-S w{a_1,a_3;i_1,i_3}:N-N-N",
+    real);
+  // no bra-ket symmetry: the adjoint is another label, so no slots of the
+  // variable are related (the judge alone decides, and the result is not zero)
+  for (const auto& [f, x] :
+       {std::pair{L"Y{;i_3,i_4}:N-N-N W{a_3<i_3>;a_4<i_4>}:N-N-N "
+                  L"s{a_4<i_4>;a_3<i_3>}:N-N-N Z{i_3,i_4;}:N-N-N",
+                  L"s{a_5<i_5>;a_6<i_6>}:N-N-N"},
+        std::pair{L"W{i_1,i_2;p_1,p_2}:N-N-N u{p_1,p_2;i_1,i_2}:N-N-N",
+                  L"u{p_5,p_6;i_5,i_6}:N-N-N"},
+        std::pair{
+            L"W{i_2,a_2;i_1,a_1<i_1>}:N-N-N w{i_1,a_1<i_1>;i_2,a_2}:N-N-N",
+            L"w{i_3,a_3<i_3>;i_4,a_4}:N-N-N"}}) {
+    R(f, x, L"", real);
+    REQUIRE_FALSE(
+        sequant::deriv::diff(deserialize(f), {deserialize(x)})->is_zero());
+  }
+}
+
+TEST_CASE("deriv/rules/spellings", "[deriv][rules]") {
+  namespace t = sequant::deriv::test;
+  const auto diff = [](const ExprPtr& E, const ExprPtr& x) {
+    return sequant::deriv::diff(E, {x});
+  };
+  auto T = [](std::wstring_view s) { return deserialize(s); };
+  const auto R = [](std::wstring_view f, std::wstring_view x,
+                    std::wstring_view expected, const t::Data& data = {}) {
+    t::check_rule(f, x, expected, data);
+  };
+  // the judge alone decides; the result is a sum of n terms
+  const auto R_terms = [&](std::wstring_view f, std::wstring_view x,
+                           std::size_t n, const t::Data& data = {}) {
+    t::check_rule(f, x, L"", data);
+    const auto r = diff(T(f), T(x));
+    REQUIRE(r->is<Sum>());
+    REQUIRE(r->as<Sum>().size() == n);
+  };
+
+  // a leaf over a union space meets several spellings of the variable: a
+  // term per spelling
+  R(L"G{p_2;p_1}:N-N-N h{p_1;p_2}:N-S-N", L"h{i_3;a_4}:N-S-N",
+    L"G{i_3;a_4}:N-N-N + G{a_4;i_3}:N-N-N");
+  R(L"1/4 W{p_3,p_4;p_1,p_2}:N-N-N g{p_1,p_2;p_3,p_4}:A-N-S",
+    L"g{i_5,a_5;i_6,a_6}:A-N-S",
+    L"1/4 W{i_6,a_6;i_5,a_5}:N-N-N - 1/4 W{a_6,i_6;i_5,a_5}:N-N-N - "
+    L"1/4 W{i_6,a_6;a_5,i_5}:N-N-N + 1/4 W{a_6,i_6;a_5,i_5}:N-N-N");
+  R(L"W{i_1,i_2;p_1,p_2}:N-N-N g{p_1,p_2;i_1,i_2}:N-N-S",
+    L"g{a_3,i_5;i_3,i_4}:N-N-S",
+    L"W{i_4,i_3;i_5,a_3}:N-N-N + W{i_3,i_4;a_3,i_5}:N-N-N");
+  R(L"W{p_3,p_4;p_1,p_2}:N-N-N g{p_1,p_2;p_3,p_4}:N-C-S",
+    L"g{i_3,a_3;a_4,i_4}:N-C-S",
+    L"W{a_4,i_4;i_3,a_3}:N-N-N + W{i_4,a_4;a_3,i_3}:N-N-N");
+  R(L"W{p_3,p_4;p_1,p_2}:N-N-N g{p_1,p_2;p_3,p_4}:N-S-S",
+    L"g{i_3,a_3;a_4,i_4}:N-S-S",
+    L"W{a_4,i_4;i_3,a_3}:N-N-N + W{a_3,i_3;i_4,a_4}:N-N-N + "
+    L"W{i_3,a_3;a_4,i_4}:N-N-N + W{i_4,a_4;a_3,i_3}:N-N-N");
+  // a leaf that meets one spelling, not the one the variable is written in
+  R(L"W{p_2,a_2;p_1,a_1}:N-N-N g{p_1,a_1;p_2,a_2}:A-N-S",
+    L"g{i_5,a_5;i_6,a_6}:A-N-S", L"W{i_6,a_6;i_5,a_5}:N-N-N");
+  R(L"G{a_1;p_1}:N-N-N h{p_1;a_1}:N-S-N", L"h{i_3;a_3}:N-S-N",
+    L"G{a_3;i_3}:N-N-N");
+  // variables whose operations relate slots that are not alike
+  for (const auto x :
+       {L"t{a_1<i_1>,a_2<i_2>;i_1,i_2}:A-N-S", L"h{p_1;i_1}:N-S-N",
+        L"t{p_1,i_1;a_1,a_2}:A-N-S", L"t{a_1<i_1>,a_2<i_1>;i_1,i_2}:A-N-S"})
+    R(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N", x, L"0");
+  R(L"1/4 W{a_1,a_2;p_1,p_2}:N-N-N t{p_1,p_2;a_1,a_2}:A-N-S",
+    L"t{p_3,i_3;a_3,a_4}:A-N-S",
+    L"1/2 Â{;a_3,a_4}:A-N-S W{a_3,a_4;p_3,i_3}:N-N-N - "
+    L"1/2 Â{;a_3,a_4}:A-N-S W{a_3,a_4;i_3,p_3}:N-N-N");
+  // a bra-ket symmetric variable with a union-space slot, the leaf spelled
+  // otherwise (over real spaces in deriv/rules/real)
+  R(L"W{a_3,i_4;p_1,a_2}:N-N-N g{p_1,a_2;a_3,i_4}:N-S-S",
+    L"g{p_5,a_6;a_7,i_8}:N-S-S",
+    L"W{a_6,i_4;i_8,a_7}:N-N-N δ{p_5;i_4}:N-S-S + W{a_7,i_8;p_5,a_6}:N-N-N",
+    {.real = {L"g", L"W"}});
+  // a bra-ket exchange with like slots on both sides
+  R(L"W{a_4,a_5;i_1,i_2}:N-N-N g{i_1,i_2;a_4,a_5}:A-S-S",
+    L"g{a_12,a_13;i_14,i_15}:A-S-S",
+    L"4 Â{i_14,i_15;a_12,a_13}:A-N-S W{a_12,a_13;i_14,i_15}:N-N-N");
+  // a three-slot cycle
+  R_terms(L"W{p_4;p_1,p_2,p_3}:N-N-N g{p_1,p_2,p_3;p_4}:A-N-S",
+          L"g{i_5,a_6,p_7;a_8}:A-N-S", 6);
+  // a union-space leaf with free indices
+  R(L"h{p_1;p_2}:N-S-N", L"h{i_3;a_4}:N-S-N",
+    L"δ{p_1;i_3}:N-S-S δ{a_4;p_2}:N-S-S + δ{p_1;a_4}:N-S-S δ{i_3;p_2}:N-S-S");
+  // a variable with a union-space slot: first and second derivative
+  const t::Data h_data{.real = {L"h"}};
+  R(L"G{p_2;p_1}:N-N-N h{p_1;p_2}:N-S-N", L"h{p_3;i_4}:N-S-N",
+    L"G{i_4;p_3}:N-N-N + G{p_3;i_4}:N-N-N", h_data);
+  {
+    const auto E = T(L"1/2 h{p_1;p_2}:N-S-N h{p_2;p_1}:N-S-N");
+    const auto x1 = T(L"h{p_3;i_3}:N-S-N"), x2 = T(L"h{p_5;i_5}:N-S-N");
+    t::check_rule(E, x1, T(L"h{i_3;p_3}:N-S-N + h{p_3;i_3}:N-S-N"), h_data);
+    const auto first = diff(E, x1);
+    t::check_rule(first, x2, nullptr, h_data);
+    REQUIRE_FALSE(sequant::deriv::diff(E, {x1, x2})->is_zero());
+  }
+}
+
+TEST_CASE("deriv/rules/mixed-field", "[deriv][rules]") {
+  namespace t = sequant::deriv::test;
+  // the occupied space real, the others complex
+  const auto resetter = real_spaces({L"i"});
+  const t::Data data{.real = {L"h"}};
+  const auto E =
+      L"f{i_2;i_1}:N-N-N h{i_1;i_2}:N-N-N + w{i_1;i_2}:N-N-N h⁺{i_1;i_2}:N-N-N "
+      L"+ g{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + v{a_1;i_1}:N-N-N "
+      L"t⁺{i_1;a_1}:N-N-N";
+  // over real spaces only: the adjoint spelling holds the same elements
+  t::check_rule(E, L"h{i_3;i_4}:N-N-N", L"f{i_4;i_3}:N-N-N + w{i_4;i_3}:N-N-N",
+                data);
+  // over a complex space: t and t⁺ are independent
+  t::check_rule(E, L"t{a_2;i_2}:N-N-N", L"g{i_2;a_2}:N-N-N", data);
+}
+
+TEST_CASE("deriv/rules/open-shell", "[deriv][rules]") {
+  using sequant::deriv::test::check_rule;
+  const auto diff = [](const ExprPtr& E, const ExprPtr& x) {
+    return sequant::deriv::diff(E, {x});
+  };
+  auto T = [](std::wstring_view s) { return deserialize(s); };
+  // spin blocks of one label declare different symmetries; a block whose
+  // spins are not the variable's is a constant (the judge alone decides, and
+  // the result is not zero)
+  const auto same = T(L"t{a↑3,a↑4;i↑3,i↑4}:A-N-S"),
+             opposite = T(L"t{a↑3,a↓4;i↑3,i↓4}:N-N-S");
+  const auto R_nonzero = [&](const ExprPtr& f, const ExprPtr& x) {
+    check_rule(f, x, nullptr);
+    REQUIRE_FALSE(diff(f, x)->is_zero());
+  };
+  for (const auto& x : {same, opposite})
+    R_nonzero(T(L"1/4 g{i↑1,i↑2;a↑1,a↑2}:A-N-S t{a↑1,a↑2;i↑1,i↑2}:A-N-S + "
+                L"g{i↑1,i↓1;a↑1,a↓1}:N-N-S t{a↑1,a↓1;i↑1,i↓1}:N-N-S"),
+              x);
+  // the spin-orbital CCSD energy, open-shell spin-traced
+  auto context = get_default_context();
+  context.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  const auto scope = set_scoped_default_context(context);
+  const auto energy = mbpt::open_shell_CC_spintrace(deserialize(
+      L"f{i_1;a_1} t{a_1;i_1} + 1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} + "
+      L"1/2 g{i_1,i_2;a_1,a_2} t{a_1;i_1} t{a_2;i_2}",
+      {.def_perm_symm = Symmetry::Antisymm}));
+  REQUIRE(energy.size() == 1);
+  for (const auto& x : {same, opposite}) R_nonzero(energy[0], x);
 }
