@@ -104,8 +104,10 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
         ") before spin-casing");
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
-  return Index{std::move(basis), idx.ordinal(), protoindices,
-               idx.symmetric_proto_indices()};
+  // with_basis keeps the ordinal as is: a generated (tmp) ordinal, which the
+  // public ordinal ctor rejects, stays the index's own; the proto-index bundle
+  // symmetry carries over
+  return idx.with_basis(basis, std::move(protoindices));
 }
 
 template <typename Container, typename TraceFunction, typename... Args>

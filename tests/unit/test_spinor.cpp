@@ -1663,3 +1663,37 @@ TEST_CASE("kramers_CC_trace_keeps_composite_basis_instance",
   REQUIRE(n_composites > 0);
   REQUIRE(n_without_instance == 0);
 }
+
+TEST_CASE("kramers_CC_trace_tmp_ordinal_composites", "[spinor][kramers]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using sequant::reserved::antisymm_label;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  // CSV pp-ladder whose internal (contracted) virtuals are generated
+  // composites, as csv_transform and the Kramers flip mint them: their
+  // ordinals are in the temporary range
+  const Index i1{L"i_1"}, i2{L"i_2"};
+  const Index a1 = Index(L"a_1", {i1, i2});
+  const Index a2 = Index(L"a_2", {i1, i2});
+  const Index a3 =
+      Index::make_tmp_index(a1.basis(), Index::index_vector{i1, i2});
+  const Index a4 =
+      Index::make_tmp_index(a1.basis(), Index::index_vector{i1, i2});
+  REQUIRE(*a3.ordinal() >= Index::min_tmp_index());
+
+  auto A = ex<Tensor>(antisymm_label(), bra{a1, a2}, ket{i1, i2},
+                      Symmetry::Antisymm);
+  auto g = ex<Tensor>(L"g", bra{a1, a2}, ket{a3, a4}, Symmetry::Antisymm,
+                      Hermiticity::Hermitian, ColumnSymmetry::Symm);
+  auto t = ex<Tensor>(L"t", bra{a3, a4}, ket{i1, i2}, Symmetry::Antisymm,
+                      Hermiticity::NonHermitian, ColumnSymmetry::Symm);
+  auto ppladder = ex<Constant>(rational{1, 2}) * A * g * t;
+
+  container::svector<ExprPtr> blocks;
+  REQUIRE_NOTHROW(blocks = closed_shell_kramers_CC_trace(ppladder));
+  REQUIRE(blocks.size() == 5);
+}

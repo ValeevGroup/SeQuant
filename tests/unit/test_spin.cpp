@@ -2102,6 +2102,26 @@ TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
   }
 }
 
+TEST_CASE("spincase-index-keeps-generated-ordinal", "[spin]") {
+  using namespace sequant;
+
+  // a generated (temporary) index, e.g. the composite a CSV transform or the
+  // Kramers flip mints: its ordinal is in the range the public ordinal ctor
+  // reserves, and spin-casing must keep it rather than throw
+  const Index i1(L"i_1"), i2(L"i_2");
+  const Index a1(L"a_1", {i1, i2});
+  const Index x =
+      Index::make_tmp_index(a1.basis(), Index::index_vector{i1, i2});
+  REQUIRE(*x.ordinal() >= Index::min_tmp_index());
+  for (auto make :
+       {&mbpt::make_spinalpha, &mbpt::make_spinbeta, &mbpt::make_spinfree}) {
+    Index s;
+    REQUIRE_NOTHROW(s = make(x));
+    CHECK(s.ordinal() == x.ordinal());
+    CHECK(s.proto_indices().size() == 2);
+  }
+}
+
 // a named basis instance and a generic index of the same ordinal are two
 // indices with one label up to the basis name; the index lists of the spin
 // tracers must keep both, else the named one is never assigned a spin
