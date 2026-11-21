@@ -698,4 +698,73 @@ ExprPtr diff(const ExprPtr& E, const container::svector<ExprPtr>& variables) {
   return result;
 }
 
+ExprPtr at_zero(const ExprPtr& E,
+                const container::svector<ExprPtr>& variables) {
+  const std::string where = "deriv::at_zero: ";
+  // the scalar variables, and the spellings of each tensor and of its
+  // adjoint; and each tensor and its adjoint
+  container::svector<ExprPtr> ys, tensors;
+  for (const auto& x : variables) {
+    check_variable(x, where);
+    if (x->is<Variable>()) {
+      ys.push_back(x);
+    } else {
+      for (const auto& [y, phase] : all_spellings(x, true)) ys.push_back(y);
+      tensors.push_back(x);
+      tensors.push_back(adjoint(x));
+    }
+  }
+  // whether the factor f vanishes: it lies inside some spelling of a
+  // variable; throws for a variable under a non-positive power, for a leaf
+  // that meets a spelling and lies inside none, and for one whose
+  // protoindices do not follow the slots of a spelling it meets
+  const auto zero = [&](const ExprPtr& f) {
+    const auto [base, exponent] =
+        f->is<Power>()
+            ? std::pair{f->as<Power>().base(), f->as<Power>().exponent()}
+        : f->is<TensorPower>() ? std::pair{f->as<TensorPower>().base(),
+                                           f->as<TensorPower>().exponent()}
+                               : std::pair{f, rational(1)};
+    if (base->is<Tensor>())
+      for (const auto& x : tensors)
+        check_symmetries(base->as<Tensor>(), x->as<Tensor>(), where);
+    bool met = false, held = false;
+    for (const auto& y : ys) {
+      if (y->is<Variable>()) {
+        held = held || (base->is<Variable>() && base->as<Variable>().label() ==
+                                                    y->as<Variable>().label());
+        continue;
+      }
+      if (!leaf_of(base, y->as<Tensor>())) continue;
+      check_layout(base->as<Tensor>(), y->as<Tensor>(), where);
+      met = true;
+      held = held || std::ranges::equal(
+                         y->as<Tensor>().slots(), base->as<Tensor>().slots(),
+                         [](const Index& y_l, const Index& l) {
+                           return includes(y_l.basis(), l.basis());
+                         });
+    }
+    if (met && !held)
+      throw Exception(where +
+                      "a leaf holds elements of a variable and lies inside "
+                      "none of the variables");
+    if (held && exponent <= 0)
+      throw Exception(where + "a variable stands under a non-positive power");
+    return held;
+  };
+  auto e = E->clone();
+  expand(e);
+  container::vector<ExprPtr> result;
+  for (const auto& term : terms_of(e)) {
+    // every factor, so that each is checked
+    bool vanishes = false;
+    for (const auto& f : split(term).second) vanishes = zero(f) || vanishes;
+    if (!vanishes) result.push_back(term);
+  }
+  auto r =
+      result.empty() ? ex<Constant>(0) : ex<Sum>(result.begin(), result.end());
+  rapid_simplify(r);
+  return r;
+}
+
 }  // namespace sequant::deriv

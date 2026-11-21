@@ -51,6 +51,19 @@ namespace sequant::deriv {
 [[nodiscard]] ExprPtr diff(const ExprPtr& E,
                            const container::svector<ExprPtr>& variables);
 
+/// @return @p E where every one of @p variables is zero: the terms that hold
+/// one of them, in one of its spellings or those of its adjoint, are dropped.
+/// A leaf with a tensor variable's label vanishes if it lies inside that one
+/// variable: a leaf that meets a spelling vanishes if each of its slots lies
+/// within the index space of that spelling's slot
+/// @throw Exception if a variable stands under a non-positive power, or a
+/// leaf holds elements of a variable and lies inside none of the variables
+/// (also where it lies inside their union), or declares other symmetries than
+/// the variable whose elements it may hold, or its protoindices do not follow
+/// its slots as the variable's do
+[[nodiscard]] ExprPtr at_zero(const ExprPtr& E,
+                              const container::svector<ExprPtr>& variables);
+
 }  // namespace sequant::deriv
 
 #endif  // SEQUANT_CORE_DERIV_DERIV_HPP

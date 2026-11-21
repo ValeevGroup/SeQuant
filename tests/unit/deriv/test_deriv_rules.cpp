@@ -805,3 +805,140 @@ TEST_CASE("deriv/rules/open-shell", "[deriv][rules]") {
   REQUIRE(energy.size() == 1);
   for (const auto& x : {same, opposite}) R_nonzero(energy[0], x);
 }
+
+TEST_CASE("deriv/rules/at-zero", "[deriv][rules]") {
+  using sequant::deriv::at_zero;
+  const auto diff = [](const ExprPtr& E, const ExprPtr& x) {
+    return sequant::deriv::diff(E, {x});
+  };
+  auto T = [](std::wstring_view s) { return deserialize(s); };
+  const auto x = ex<Variable>(L"x"), eps = ex<Variable>(L"ε");
+  const auto t1 = T(L"t{a_2;i_2}:N-N-N");
+  REQUIRE_THAT(at_zero(T(L"2 x + x y + y"), {x}), EquivalentTo(L"y"));
+  REQUIRE_THAT(at_zero(T(L"x^(2) y + y"), {x}), EquivalentTo(L"y"));
+  REQUIRE_THAT(at_zero(adjoint(x) * T(L"y") + T(L"y"), {x}),
+               EquivalentTo(L"y"));
+  REQUIRE(at_zero(T(L"x y"), {x})->is_zero());
+  REQUIRE_THAT(at_zero(T(L"x y + z"), {x, ex<Variable>(L"z")}),
+               EquivalentTo(ex<Constant>(0)));
+  REQUIRE(at_zero(T(L"x y + z"), {x, ex<Variable>(L"z")})->is_zero());
+  REQUIRE(at_zero(ex<Constant>(0), {x})->is_zero());
+  // E without the variable: E itself, not a Sum of one term
+  {
+    const auto E = T(L"f{i_1;a_1}:N-N-N u{a_1;i_1}:N-N-N");
+    const auto r = at_zero(E, {x, t1});
+    REQUIRE_THAT(r, EquivalentTo(E));
+    REQUIRE(r->is<Product>());
+  }
+  // a tensor: its block and its adjoint spelling vanish, another block stays
+  REQUIRE_THAT(
+      at_zero(T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + f{i_1;a_1}:N-N-N "
+                L"u{a_1;i_1}:N-N-N"),
+              {t1}),
+      EquivalentTo(L"f{i_1;a_1}:N-N-N u{a_1;i_1}:N-N-N"));
+  REQUIRE_THAT(at_zero(T(L"w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N + "
+                         L"f{i_1;a_1}:N-N-N u{a_1;i_1}:N-N-N"),
+                       {t1}),
+               EquivalentTo(L"f{i_1;a_1}:N-N-N u{a_1;i_1}:N-N-N"));
+  REQUIRE_THAT(at_zero(T(L"w{a_1;i_1}:N-N-N t{i_1;a_1}:N-N-N"), {t1}),
+               EquivalentTo(L"w{a_1;i_1}:N-N-N t{i_1;a_1}:N-N-N"));
+  // a leaf that lies inside the variable vanishes; one that also holds
+  // elements outside it does not
+  REQUIRE(
+      at_zero(T(L"W{i_1;a_1}:N-N-N k{a_1;i_1}:N-N-N"), {T(L"k{p_2;i_2}:N-N-N")})
+          ->is_zero());
+  REQUIRE_THROWS_WITH(
+      at_zero(T(L"W{i_1;p_1}:N-N-N k{p_1;i_1}:N-N-N"),
+              {T(L"k{a_2;i_2}:N-N-N")}),
+      Catch::Matchers::ContainsSubstring(
+          "deriv::at_zero: a leaf holds elements of a variable and lies "
+          "inside none of the variables"));
+  // the same for each spelling of the variable: a leaf inside one vanishes;
+  // one that meets some and lies inside none throws
+  REQUIRE(
+      at_zero(T(L"G{i_2;p_1}:N-N-N h{p_1;i_2}:N-S-N"), {T(L"h{p_3;i_3}:N-S-N")})
+          ->is_zero());
+  REQUIRE_THAT(
+      at_zero(T(L"W{i_3,a_3;a_1,i_1}:N-N-N g{a_1,i_1;i_3,a_3}:A-N-S + y"),
+              {T(L"g{i_5,a_5;i_6,a_6}:A-N-S")}),
+      EquivalentTo(L"y"));
+  // several variables: a leaf inside one of them vanishes; one that lies
+  // inside their union only throws
+  {
+    const container::svector<ExprPtr> xs{T(L"k{m_2;i_2}:N-N-N"),
+                                         T(L"k{e_3;i_3}:N-N-N")};
+    REQUIRE_THAT(at_zero(T(L"W{i_1;a_1}:N-N-N k{a_1;i_1}:N-N-N + y"), xs),
+                 EquivalentTo(L"y"));
+    REQUIRE_THROWS_WITH(
+        at_zero(T(L"W{i_1;p_1}:N-N-N k{p_1;i_1}:N-N-N"), xs),
+        Catch::Matchers::ContainsSubstring(
+            "deriv::at_zero: a leaf holds elements of a variable and lies "
+            "inside none of the variables"));
+  }
+  // bra-ket symmetric with unequal bra and ket ranks: a leaf written either
+  // way vanishes
+  for (const auto f : {L"W{a_1,a_2;i_1}:N-N-N g{i_1;a_1,a_2}:N-S-N + y",
+                       L"V{i_1;a_1,a_2}:N-N-N g{a_1,a_2;i_1}:N-S-N + y"})
+    REQUIRE_THAT(at_zero(T(f), {T(L"g{i_5;a_5,a_6}:N-S-N")}),
+                 EquivalentTo(L"y"));
+  for (const auto& [f, v] :
+       {std::pair{L"G{p_2;p_1}:N-N-N h{p_1;p_2}:N-S-N", L"h{p_3;i_3}:N-S-N"},
+        std::pair{L"W{p_2,a_2;p_1,a_1}:N-N-N g{p_1,a_1;p_2,a_2}:A-N-S",
+                  L"g{i_5,a_5;i_6,a_6}:A-N-S"},
+        std::pair{L"G{a_1;p_1}:N-N-N h{p_1;a_1}:N-S-N", L"h{i_3;a_3}:N-S-N"}})
+    REQUIRE_THROWS_WITH(
+        at_zero(T(f), {T(v)}),
+        Catch::Matchers::ContainsSubstring(
+            "deriv::at_zero: a leaf holds elements of a variable and lies "
+            "inside none of the variables"));
+  // a leaf whose protoindices do not follow its slots as the variable's do,
+  // as in diff: only its elements with i_2 = i_3 are the variable's
+  {
+    const auto E =
+        T(L"W{i_3;a_2<i_2>}:N-N-N V{i_2;}:N-N-N t{a_2<i_2>;i_3}:N-N-N");
+    const auto x = T(L"t{a_1<i_1>;i_1}:N-N-N");
+    const std::string text =
+        "a leaf's protoindices do not follow its slots as the variable's do";
+    REQUIRE_THROWS_WITH(
+        diff(E, x), Catch::Matchers::ContainsSubstring("deriv::diff: " + text));
+    REQUIRE_THROWS_WITH(at_zero(E, {x}), Catch::Matchers::ContainsSubstring(
+                                             "deriv::at_zero: " + text));
+  }
+  // a leaf of the variable's block that declares other symmetries, as in
+  // diff
+  REQUIRE_THROWS_WITH(
+      at_zero(T(L"W{i_1,i_2;a_1,a_2}:N-N-N t{a_1,a_2;i_1,i_2}:N-N-S"),
+              {T(L"t{a_3,a_4;i_3,i_4}:A-N-S")}),
+      Catch::Matchers::ContainsSubstring(
+          "deriv::at_zero: a leaf declares other symmetries than the "
+          "variable"));
+  // the response pattern: differentiate in the strength, then set it to zero
+  REQUIRE_THAT(at_zero(diff(T(L"ε^(2) y + 3 ε z + w"), eps), {eps}),
+               EquivalentTo(L"3 z"));
+  // the checks on the variable alone, as in diff
+  for (const auto& [v, text] :
+       {std::pair{T(L"Â{i_1;a_1}:A-N-S"),
+                  "the variable is not a Variable or a tensor leaf"},
+        std::pair{make_kronecker(Index(L"a_2"), Index(L"a_3")),
+                  "the variable is not a Variable or a tensor leaf"},
+        std::pair{T(L"h{p_1;p_1}:N-N-N"), "the variable repeats an index"},
+        std::pair{T(L"x{a_1<i_1,i_2>;i_1}:N-N-N"),
+                  "an index of the variable mixes protoindices that are its "
+                  "slots with others"},
+        std::pair{T(L"t{a_1,a_2;i_1,i_2}:S-N-S"),
+                  "a variable with Symmetry::Symm is not supported"}})
+    REQUIRE_THROWS_WITH(at_zero(T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N"), {v}),
+                        Catch::Matchers::ContainsSubstring(
+                            std::string("deriv::at_zero: ") + text));
+  // a variable under a non-positive power
+  REQUIRE_THROWS_WITH(
+      at_zero(T(L"x^(-1) y"), {x}),
+      Catch::Matchers::ContainsSubstring(
+          "deriv::at_zero: a variable stands under a non-positive power"));
+  REQUIRE_THROWS_WITH(
+      at_zero(ex<TensorPower>(T(L"t{a_1;i_1}:N-N-N"), rational(-1)) *
+                  T(L"r{i_1;a_1}:N-N-N"),
+              {t1}),
+      Catch::Matchers::ContainsSubstring(
+          "a variable stands under a non-positive power"));
+}
