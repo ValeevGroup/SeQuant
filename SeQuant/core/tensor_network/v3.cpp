@@ -1305,7 +1305,7 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
     if (kramers_noncanonical(t)) ++comp.n_down_first_asis;
     {
       auto flipped_copy = t._clone_shared();
-      kramers_flip_slots(*flipped_copy);
+      kramers_flip_slots_deep(*flipped_copy);
       if (kramers_noncanonical(*flipped_copy)) ++comp.n_down_first_flipped;
     }
     comp.fp_asis.push_back(std::move(fp_asis));
@@ -1322,7 +1322,7 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
     container::svector<ExprPtr> exprs;
     for (const auto m : ms) {
       auto copy = tensors_[m]->_clone_shared();
-      if (flipped) kramers_flip_slots(*copy);
+      if (flipped) kramers_flip_slots_deep(*copy);
       auto e = std::dynamic_pointer_cast<Expr>(copy);
       SEQUANT_ASSERT(e);
       exprs.emplace_back(std::move(e));
@@ -1351,7 +1351,10 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
         if (flavored(idx) && !isr->kramers_canonical(idx.space())) ++n_down;
       });
       if (n_down % 2) phase = -phase;
-      kramers_flip_slots(t);
+      // deep: the flavored proto indices of an unflavored (Kramers-union)
+      // composite follow their plain-slot occurrences, which tied them into
+      // this component (see `carried` above)
+      kramers_flip_slots_deep(t);
       if (kramers_conjugate_mark(t) == -1) phase = -phase;
       flipped.push_back(m);
     }

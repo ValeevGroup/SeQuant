@@ -2236,6 +2236,73 @@ TEST_CASE("kramers_union_index", "[canonicalize][kramers]") {
   CHECK_FALSE(
       kramers_union_index(Index(L"Κ_1", isr->retrieve_space(L"Κ")), *isr));
 }
+
+TEST_CASE("kramers_network_fold_union_composite", "[canonicalize][kramers]") {
+  // a Kramers-union CSV composite a<i↓,j↓> (spin-free, union of a↑ and a↓)
+  // carries flavored pair labels as proto indices; the same occupieds appear
+  // as plain slots elsewhere in the term. The network fold ties the tensors
+  // through both occurrences, so flipping the component must flip the pair
+  // labels inside the composite too: otherwise the plain slots read i↑ while
+  // the composite still names i↓ and the term no longer contracts the pair it
+  // was written with.
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto T = [](std::wstring_view lbl, container::svector<Index> b,
+              container::svector<Index> k) {
+    return ex<Tensor>(lbl, bra(std::move(b)), ket(std::move(k)),
+                      Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                      ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+  };
+  auto unmark = [](const ExprPtr& e) {
+    auto c = e->clone();
+    for (auto& f : c->as<Product>())
+      if (f->as<Tensor>().adjointed()) (void)f->as<Tensor>().adjoint();
+    return c;
+  };
+  // every proto index of a composite slot is a plain slot of the term
+  auto protos_follow_slots = [](const ExprPtr& e) {
+    container::set<Index> plain, protos;
+    for (auto& f : e->as<Product>())
+      for (const auto& idx : f->as<Tensor>().const_slots()) {
+        plain.insert(idx);
+        for (const auto& p : idx.proto_indices()) protos.insert(p);
+      }
+    for (const auto& p : protos)
+      if (!plain.contains(p)) return false;
+    return true;
+  };
+  const auto fold = CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::FoldKramers::Yes);
+
+  auto term = [&](wchar_t const* i1, wchar_t const* i2) {
+    const Index o1{i1}, o2{i2};
+    const Index a1(L"a_1", {o1, o2});
+    REQUIRE(kramers_union_index(a1, *isr));
+    return T(L"t", {a1}, {o1, o2}) * T(L"g", {o1, o2}, {a1});
+  };
+  auto up = term(L"i↑_1", L"i↑_2");
+  auto dn = term(L"i↓_1", L"i↓_2");
+  {
+    auto scope = sequant::tests::scoped_canonicalize_options(fold);
+    canonicalize(up);
+  }
+  {
+    auto scope = sequant::tests::scoped_canonicalize_options(fold);
+    canonicalize(dn);
+  }
+  INFO("up: " << toUtf8(to_latex(up)));
+  INFO("dn: " << toUtf8(to_latex(dn)));
+  REQUIRE(protos_follow_slots(up));
+  REQUIRE(protos_follow_slots(dn));
+  // the all-down spelling folds onto the all-up one (apart from the marks)
+  auto dn_unmarked = unmark(dn);
+  canonicalize(dn_unmarked);
+  REQUIRE(dn_unmarked == up);
+}
 TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
   using namespace sequant;
   auto ibr = mbpt::make_legacy_spaces();

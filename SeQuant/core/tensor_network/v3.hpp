@@ -579,8 +579,10 @@ class TensorNetworkV3 {
   /// component of tensors joined by shared flavored indices (slots and proto
   /// indices) ONE orientation. Components containing a named index, a
   /// non-foldable tensor (see kramers_foldable()) are pinned; a free
-  /// component is flipped (every flavored slot of every member replaced by
-  /// its Kramers partner, conjugation marker toggled) iff the flipped
+  /// component is flipped (every flavored index of every member, slot or
+  /// proto index, the flavored pair labels of a Kramers-union composite
+  /// included, replaced by its Kramers partner, conjugation marker toggled)
+  /// iff the flipped
   /// spelling has fewer down-first tensors, ties broken by the sorted
   /// (label, slot flavors) fingerprint (marker-free, so an unmarked flavor
   /// twin of a traced sum orients like the marked flip). Both spellings of a
