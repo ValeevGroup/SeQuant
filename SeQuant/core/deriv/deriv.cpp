@@ -13,6 +13,7 @@
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
@@ -20,6 +21,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -27,7 +29,9 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <numeric>
+#include <ranges>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -101,6 +105,8 @@ Spelling spelled(const ExprPtr& x) {
 /// the external indices of a term of the function of diff(): those not in
 /// exactly two slots of the factors other than Â and Ŝ, and the protoindices
 /// of those
+/// @throw Exception for an index in more than two such slots that is not
+/// external
 container::set<Index> externals_of(const container::svector<ExprPtr>& factors) {
   container::map<Index, std::int64_t> slots;
   for (const auto& f : factors) {
@@ -114,6 +120,11 @@ container::set<Index> externals_of(const container::svector<ExprPtr>& factors) {
     result.insert(i);
     for (const auto& p : i.proto_indices()) result.insert(p);
   }
+  for (const auto& [i, n] : slots)
+    if (n > 2 && !result.contains(i))
+      throw Exception(
+          "deriv::diff: an index of the function stands in more than two "
+          "slots");
   return result;
 }
 
@@ -186,6 +197,8 @@ struct Elementary {
   container::map<Index, Index> renames;
   /// make_kronecker factors that stay
   container::svector<ExprPtr> deltas;
+  /// whether a protoindex of the leaf that is not a slot is not renamed
+  bool unrenamed = false;
 };
 
 /// whether the spaces of @p l and @p r overlap
@@ -277,6 +290,7 @@ container::svector<Elementary> elementary(
     for (const auto& [l, y_l, bra] : pairs) rename(l, y_l);
     for (std::size_t k = 0; k != free.size(); ++k)
       rename(free[k], y_free[order[k]]);
+    for (const auto& l : free) r.unrenamed |= !r.renames.contains(l);
     for (const auto& [l, y_l, bra] : pairs) delta(l, y_l, bra);
     for (std::size_t k = 0; k != free.size(); ++k)
       delta(free[k], y_free[order[k]], true);
@@ -314,6 +328,7 @@ ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y) {
       if (!leaf_of(f, y->as<Tensor>())) continue;
       for (const auto& r :
            elementary(f->as<Tensor>(), y->as<Tensor>(), externals)) {
+        SEQUANT_ASSERT(!r.unrenamed);
         auto p = product(k, r.renames);
         for (const auto& delta : r.deltas) p->as<Product>().append(1, delta);
         result.push_back(p);
@@ -408,6 +423,89 @@ ExprPtr block_sum(const ExprPtr& G, const Tensor& y) {
                         : ex<Sum>(result.begin(), result.end());
 }
 
+/// per slot of @p t : the positions among the slots of t of its protoindices,
+/// sorted, -1 for one that is not a slot; and the position of the first slot
+/// that carries the same protoindex list
+auto proto_pattern(const Tensor& t) {
+  container::svector<container::svector<std::ptrdiff_t>> positions;
+  container::svector<std::size_t> first;
+  for (const auto& i : t.slots()) {
+    auto& at = positions.emplace_back();
+    for (const auto& p : i.proto_indices()) at.push_back(slot_of(t, p));
+    std::ranges::sort(at);
+    first.push_back(first_with(t, i.proto_indices()));
+  }
+  return std::pair{std::move(positions), std::move(first)};
+}
+
+/// throws, with the message starting with @p where , for a variable @p x that
+/// is rejected whatever the function
+void check_variable(const ExprPtr& x, const std::string& where) {
+  const auto reject = [&where](const char* text) {
+    throw Exception(where + text);
+  };
+  if (!x->is<Variable>() &&
+      (!x->is<Tensor>() || is_symmetrizer(x) ||
+       x->as<Tensor>().label() == reserved::kronecker_label()))
+    reject("the variable is not a Variable or a tensor leaf");
+  if (!x->is<Tensor>()) return;
+  const auto& t = x->as<Tensor>();
+  if (std::ranges::any_of(get_used_indices_with_counts(x), [](const auto& c) {
+        return c.second.nonproto() > 1;
+      }))
+    reject("the variable repeats an index");
+  for (const auto& positions : proto_pattern(t).first) {
+    const auto others = std::ranges::count(positions, -1);
+    if (others != 0 && others != std::ssize(positions))
+      reject(
+          "an index of the variable mixes protoindices that are its slots "
+          "with others");
+  }
+  if (t.symmetry() == Symmetry::Symm)
+    reject("a variable with Symmetry::Symm is not supported");
+}
+
+/// throws, with the message starting with @p where , for a @p leaf of the
+/// label and slot counts of @p x (a variable or its adjoint) that declares
+/// other symmetries: one whose slots each overlap a slot of x, and vice versa,
+/// may hold elements of x
+void check_symmetries(const Tensor& leaf, const Tensor& x,
+                      const std::string& where) {
+  // whether each slot of l overlaps some slot of r
+  const auto covers = [](const Tensor& l, const Tensor& r) {
+    return std::ranges::all_of(l.slots(), [&r](const Index& i) {
+      return std::ranges::any_of(
+          r.slots(), [&i](const Index& j) { return overlap(i, j); });
+    });
+  };
+  if (leaf.label() == x.label() && leaf.aux_rank() == x.aux_rank() &&
+      std::minmax(leaf.bra_rank(), leaf.ket_rank()) ==
+          std::minmax(x.bra_rank(), x.ket_rank()) &&
+      covers(leaf, x) && covers(x, leaf) &&
+      (leaf.symmetry() != x.symmetry() ||
+       leaf.braket_symmetry() != x.braket_symmetry() ||
+       leaf.column_symmetry() != x.column_symmetry()))
+    throw Exception(where +
+                    "a leaf declares other symmetries than the variable");
+}
+
+/// throws, with the message starting with @p where , for a @p leaf of the
+/// block of the spelling @p y (leaf_of()) whose protoindices do not follow its
+/// slots as y's do: the same slots as protoindices, and one list where y has
+/// one
+void check_layout(const Tensor& leaf, const Tensor& y,
+                  const std::string& where) {
+  const auto [positions, first] = proto_pattern(leaf);
+  const auto [y_positions, y_first] = proto_pattern(y);
+  if (positions != y_positions ||
+      std::ranges::any_of(
+          std::views::iota(std::size_t{0}, first.size()),
+          [&](std::size_t k) { return first[k] != first[y_first[k]]; }))
+    throw Exception(where +
+                    "a leaf's protoindices do not follow its slots as the "
+                    "variable's do");
+}
+
 /// whether the bra-ket exchange is an operation of @p y : y has bra-ket
 /// symmetry, its adjoint spelling holds its elements, and its bra and its ket
 /// have one nonzero rank
@@ -495,11 +593,78 @@ container::svector<Spelling> all_spellings(const ExprPtr& x,
   return result;
 }
 
+/// throws, with the message starting with @p where , for an input whose
+/// derivative is not defined: the tensor @p x , accepted by check_variable(),
+/// its spellings @p ys (by_one()), and the @p terms of the function, renamed
+/// apart from x
+void check(const container::svector<Term>& terms, const ExprPtr& x,
+           const container::svector<Spelling>& ys, const std::string& where) {
+  const auto reject = [&where](const char* text) {
+    throw Exception(where + text);
+  };
+  const auto counts = get_used_indices_with_counts(x);
+  const auto& t = x->as<Tensor>();
+  for (const auto& i : t.slots())
+    if (i.has_proto_indices() && !i.symmetric_proto_indices())
+      reject("ordered protoindices are not supported");
+  // a protoindex that is not a slot stands in just the slots with its list
+  const auto slots = t.slots();
+  const auto first_slot = proto_pattern(t).second;
+  for (std::size_t k = 0; k != first_slot.size(); ++k)
+    for (const auto& p : slots[k].proto_indices())
+      if (slot_of(t, p) < 0 &&
+          counts.at(p).proto != std::ranges::count(first_slot, first_slot[k]))
+        reject(
+            "the protoindex lists of the variable's slots share some but not "
+            "all labels");
+  const auto [B, K] = like_slots(t);
+  const auto one_group = [&t](const auto& like) {
+    return std::ranges::all_of(
+        like, [&](const Index& i) { return alike(t, i, like.front()); });
+  };
+  if (!one_group(B) || !one_group(K))
+    reject("the variable has two groups of like slots on one side");
+
+  const auto x_adjoint = adjoint(x);
+  container::set<std::wstring> names;
+  for (const auto& [i, count] : counts) names.emplace(i.label());
+  for (const auto& [scalar, factors, externals] : terms) {
+    for (const auto& i : externals)
+      if (names.contains(std::wstring(i.label())))
+        reject("the variable names an external index of the function");
+    for (const auto& f : factors) {
+      const bool power = f->is<TensorPower>();
+      const auto& base = power ? f->as<TensorPower>().base() : f;
+      if (!base->is<Tensor>()) continue;
+      const auto& b = base->as<Tensor>();
+      for (const auto& r : {x, x_adjoint})
+        check_symmetries(b, r->as<Tensor>(), where);
+      for (const auto& y : ys) {
+        const auto& y_t = y.first->as<Tensor>();
+        if (!leaf_of(base, y_t)) continue;
+        check_layout(b, y_t, where);
+        if (power) reject("the variable stands under a TensorPower");
+        if (std::ranges::any_of(elementary(b, y_t, externals),
+                                &Elementary::unrenamed))
+          reject(
+              "a protoindex label of a leaf of the variable must be summed "
+              "over the space of the variable's label");
+      }
+    }
+  }
+
+  if (column_symmetric(t) && t.bra_rank() != t.ket_rank())
+    reject("a column-symmetric variable with unequal ranks is not supported");
+}
+
 /// the derivative of @p E by the one variable @p x : the sum over the
 /// spellings of x of their phase times the derivative by each
 ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
+  const std::string where = "deriv::diff: ";
   auto e = E->clone();
   expand(e);
+  check_variable(x, where);
+  if (!e->is_cnumber()) throw Exception(where + "the function holds operators");
   auto terms = split_terms(e);
   ExprPtr result;
   if (x->is<Variable>()) {
@@ -511,6 +676,7 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
     const auto ys =
         all_spellings(x, adjoint_holds_elements(t) && !exchanges(t));
     rename_apart(terms, x);
+    check(terms, x, ys, where);
     for (const auto& [y, phase] : ys) {
       auto by_y =
           ex<Constant>(phase) * block_sum(one_way(terms, y), y->as<Tensor>());

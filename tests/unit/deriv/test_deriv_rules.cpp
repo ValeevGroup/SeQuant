@@ -3,9 +3,11 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 #include "contexts.hpp"
 #include "judge.hpp"
@@ -597,6 +599,180 @@ TEST_CASE("deriv/rules/mixed-field", "[deriv][rules]") {
                 data);
   // over a complex space: t and t⁺ are independent
   t::check_rule(E, L"t{a_2;i_2}:N-N-N", L"g{i_2;a_2}:N-N-N", data);
+}
+
+TEST_CASE("deriv/rules/rejections", "[deriv][rules]") {
+  using sequant::deriv::test::check_rule;
+  const auto diff = [](const ExprPtr& E, const ExprPtr& x) {
+    return sequant::deriv::diff(E, {x});
+  };
+  auto T = [](std::wstring_view s) { return deserialize(s); };
+  const auto X = [&](const ExprPtr& E, const ExprPtr& x, std::string text) {
+    REQUIRE_THROWS_WITH(diff(E, x),
+                        Catch::Matchers::ContainsSubstring(std::move(text)));
+  };
+
+  const auto E = T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N");
+  X(E, T(L"x + y"),
+    "deriv::diff: the variable is not a Variable or a tensor leaf");
+  X(E, T(L"Â{i_1;a_1}:A-N-S"),
+    "the variable is not a Variable or a tensor leaf");
+  X(E, make_kronecker(Index(L"a_2"), Index(L"a_3")),
+    "the variable is not a Variable or a tensor leaf");
+  // (core itself refuses an index repeated within the bra or within the ket)
+  X(E, T(L"h{p_1;p_1}:N-N-N"), "the variable repeats an index");
+  X(E, T(L"x{a_1<i_1,i_2>;i_1}:N-N-N"),
+    "an index of the variable mixes protoindices that are its slots with "
+    "others");
+  X(E, T(L"x{a_1<i_1,i_2>;a_2<i_2,i_3>}:N-N-N"),
+    "the protoindex lists of the variable's slots share some but not all "
+    "labels");
+  X(E, T(L"t{a_1,a_2;i_1,i_2}:S-N-S"),
+    "a variable with Symmetry::Symm is not supported");
+  X(E, T(L"w{i_1,i_2,a_1,a_2;i_3,i_4,a_3,a_4}:A-N-S"),
+    "the variable has two groups of like slots");
+  X(mbpt::op::H(1), T(L"t{a_2;i_2}:N-N-N"), "the function holds operators");
+  // a_1<i_1,i_2> in three slots; a trace, an index in two slots of one
+  // tensor, is accepted (deriv/rules/tensors)
+  X(T(L"W{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-N-N "
+      L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:N-N-S "
+      L"s{a_3<i_3,i_4>;a_1<i_1,i_2>}:N-N-N"),
+    T(L"t{a_5<i_5,i_6>,a_6<i_5,i_6>;i_5,i_6}:N-N-S"),
+    "deriv::diff: an index of the function stands in more than two slots");
+  X(T(L"x f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N s{a_1;i_2}:N-N-N"),
+    ex<Variable>(L"x"),
+    "deriv::diff: an index of the function stands in more than two slots");
+  X(T(L"t{a_1,a_2;i_1,i_2}:N-N-S"), T(L"t{a_3,a_4;i_3,i_4}:A-N-S"),
+    "a leaf declares other symmetries than the variable");
+  // the leaf's own symmetry spells it in another slot order than the variable's
+  for (const auto& [f, v] :
+       {std::pair{L"W{a_1;i_1}:N-N-N f{i_1;a_1}:N-N-N + "
+                  L"V{a_1;i_1}:N-N-N f{i_1;a_1}:N-S-N",
+                  L"f{i_3;a_3}:N-N-N"},
+        std::pair{L"W{a_1;i_1}:N-N-N h{i_1;a_1}:N-S-N", L"h{i_3;a_3}:N-N-N"},
+        std::pair{L"W{a_1;i_1}:N-N-N h{i_1;a_1}:N-N-N", L"h{a_3;i_3}:N-S-N"},
+        std::pair{L"W{i_1;a_1}:N-N-N h{a_1;i_1}:N-S-N", L"h{i_3;a_3}:N-N-N"},
+        std::pair{L"g{a_1,i_1;a_2,i_2}:N-N-N", L"g{a_3,i_3;a_4,i_4}:A-N-S"},
+        std::pair{L"g{a_1,i_1;a_2,i_2}:A-N-S", L"g{a_3,i_3;a_4,i_4}:N-N-N"}})
+    X(T(f), T(v), "a leaf declares other symmetries than the variable");
+  // the leaf's pair labels are not its slots, the variable's are
+  X(T(L"g{i_1,i_2;a_1<i_3,i_4>,a_2<i_3,i_4>}:N-N-N "
+      L"t{a_1<i_3,i_4>,a_2<i_3,i_4>;i_1,i_2}:N-N-N"),
+    T(L"t{a_5<i_5,i_6>,a_6<i_5,i_6>;i_5,i_6}:N-N-N"),
+    "a leaf's protoindices do not follow its slots as the variable's do");
+  // the variable names one pair where the leaf has two
+  X(T(L"u{;i_1,i_2,i_3,i_4}:N-N-N M{a_3<i_3,i_4>;a_1<i_1,i_2>}:N-N-N "
+      L"k{a_1<i_1,i_2>;a_3<i_3,i_4>}:N-N-N v{i_1,i_2,i_3,i_4;}:N-N-N"),
+    T(L"k{a_2<i_5,i_6>;a_4<i_5,i_6>}:N-N-N"),
+    "a leaf's protoindices do not follow its slots as the variable's do");
+  // ket slots in different protoindex lists are not alike: the exchange of
+  // the variable's ket slots is a spelling the leaf meets
+  X(T(L"W{i_1,i_2;a_1<i_1>,a_2<i_1,i_2>}:N-N-N "
+      L"t{a_1<i_1>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"),
+    T(L"t{a_5<i_5>,a_6<i_5,i_6>;i_5,i_6}:A-N-S"),
+    "a leaf's protoindices do not follow its slots as the variable's do");
+  X(ex<TensorPower>(T(L"D{i_1;a_1}:N-N-N"), rational(-1)) *
+        T(L"r{a_1;i_1}:N-N-N"),
+    T(L"D{i_2;a_2}:N-N-N"), "the variable stands under a TensorPower");
+  X(T(L"Â{i_1;a_1}:A-N-S v{a_1,i_2;i_1,a_2}:N-N-N t{a_2;i_2}:N-N-N"),
+    T(L"t{a_1;i_1}:N-N-N"),
+    "the variable names an external index of the function");
+  // the same spelling twice: the first result has x's indices as external
+  const auto x = T(L"t{a_2;i_2}:N-N-N");
+  X(diff(T(L"g{i_1,i_2;a_1,a_2}:N-N-N t{a_1;i_1}:N-N-N t{a_2;i_2}:N-N-N"), x),
+    x, "the variable names an external index of the function");
+  // a free index that appears only as a protoindex is external, too
+  X(T(L"w{;a_5<i_2>}:N-N-N v{a_5<i_2>;}:N-N-N f{i_1;a_1}:N-N-N "
+      L"t{a_1;i_1}:N-N-N"),
+    x, "the variable names an external index of the function");
+  // a pair label of a leaf of the variable that is not summed, or summed over
+  // less than the variable's label runs over
+  for (const auto& [f, v] :
+       {std::pair{L"Y{;i_1}:N-N-N W{;a_1<i_1>}:N-N-N k{a_1<i_1>;}:N-N-N",
+                  L"k{e_2<i_2>;}:N-N-N"},
+        std::pair{L"h{a_1<i_1>;a_1<i_1>}:N-N-N", L"h{e_2<i_2>;a_3<i_4>}:N-N-N"},
+        std::pair{L"k{a_1<i_1,i_2>;a_3<i_1,i_2>}:N-N-N "
+                  L"Z{a_3<i_1,i_2>;a_1<i_1,i_2>}:N-N-N",
+                  L"k{a_2<i_5,i_6>;a_4<i_7,i_8>}:N-N-N"},
+        std::pair{L"Y{;i_1}:N-N-N W{;a_1<i_1>}:N-N-N k{a_1<i_1>;}:N-N-N "
+                  L"Z{i_1;}:N-N-N",
+                  L"k{a_2<m_2>;}:N-N-N"}})
+    X(T(f), T(v),
+      "a protoindex label of a leaf of the variable must be summed over the "
+      "space of the variable's label");
+  // protoindex patterns the symmetry of the variable would not keep
+  const Index o1(L"i_1"), o2(L"i_2");
+  const Index a1(Index(L"a_1"), {o1, o2}, false),
+      a2(Index(L"a_2"), {o1, o2}, false);
+  X(E, ex<Tensor>(L"t", bra{a1, a2}, ket{o1, o2}, Symmetry::Antisymm),
+    "ordered protoindices are not supported");
+  // ordered lists that share some labels
+  X(E,
+    ex<Tensor>(L"x", bra{a1},
+               ket{Index(Index(L"a_2"), {o2, Index(L"i_3")}, false)}),
+    "ordered protoindices are not supported");
+  X(E, T(L"r{a_1;i_1,i_2,i_3}:N-N-S"),
+    "a column-symmetric variable with unequal ranks is not supported");
+  // the layout is checked against every spelling of the variable the leaf
+  // meets: here the one with the bra slots exchanged
+  X(T(L"W{i_1,i_2;a_1<i_1>,a_2<i_2>}:N-N-N "
+      L"t{a_1<i_1>,a_2<i_2>;i_1,i_2}:A-N-S"),
+    T(L"t{a_5<i_5>,a_6<i_6>;i_5,i_6}:A-N-S"),
+    "a leaf's protoindices do not follow its slots as the variable's do");
+
+  // what is accepted: a TensorPower of another tensor is a constant
+  check_rule(ex<TensorPower>(T(L"D{i_1;a_1}:N-N-N"), rational(-1)) *
+                 T(L"r{a_1;i_1}:N-N-N"),
+             T(L"r{a_2;i_2}:N-N-N"),
+             ex<TensorPower>(T(L"D{i_2;a_2}:N-N-N"), rational(-1)));
+  // columns related only where both their bra and their ket spaces overlap
+  check_rule(T(L"W{a_1,i_2;p_1,i_1}:N-N-N w{p_1,i_1;a_1,i_2}:N-N-S"),
+             T(L"w{p_2,i_3;a_2,i_4}:N-N-S"), nullptr);
+  REQUIRE_FALSE(diff(T(L"W{a_1,i_2;p_1,i_1}:N-N-N w{p_1,i_1;a_1,i_2}:N-N-S"),
+                     T(L"w{p_2,i_3;a_2,i_4}:N-N-S"))
+                    ->is_zero());
+  // the slots of the variable carry different pair labels, the leaf's one
+  check_rule(T(L"W{;i_1}:N-N-N h{a_1<i_1>;a_1<i_1>}:N-N-N V{i_1;}:N-N-N"),
+             T(L"h{e_2<i_2>;a_3<i_4>}:N-N-N"), nullptr);
+  // neither the order of the variable's pair labels nor the name of a summed
+  // index decides whether a pair label is renamed
+  const auto R_nonzero = [&](const ExprPtr& f, const ExprPtr& x,
+                             const ExprPtr& expected) {
+    check_rule(f, x, expected);
+    REQUIRE_FALSE(diff(f, x)->is_zero());
+  };
+  R_nonzero(T(L"W{;i_1}:N-N-N h{a_1<i_1>;a_1<i_1>}:N-N-N V{i_1;}:N-N-N"),
+            T(L"h{e_2<i_2>;a_3<m_4>}:N-N-N"), nullptr);
+  R_nonzero(T(L"W{;i_1}:N-N-N h{a_1<i_1>;a_1<i_1>}:N-N-N V{i_1;}:N-N-N"),
+            T(L"h{e_2<m_2>;a_3<i_4>}:N-N-N"),
+            T(L"W{;i_4}:N-N-N V{i_4;}:N-N-N δ{a_3<i_4>;e_2<m_2>} δ{i_4;m_2}"));
+  R_nonzero(T(L"W{;i_2}:N-N-N h{a_1<i_2>;a_1<i_2>}:N-N-N V{i_2;}:N-N-N"),
+            T(L"h{e_2<i_2>;a_3<m_4>}:N-N-N"), nullptr);
+  // a protoindex label of an external index may stand in more than two slots,
+  // as in this first derivative, which is differentiated again
+  {
+    const auto F =
+        T(L"λ{i_1;a_5<i_1>}:N-N-N s{a_5<i_1>;a_6<i_1,i_2>}:N-N-N "
+          L"t{a_6<i_1,i_2>;i_1,i_2}:N-N-N u{i_2;}:N-N-N");
+    const auto x1 = T(L"s{a_51<i_51>;a_52<i_52,i_53>}:N-N-N");
+    const auto first = diff(F, x1);
+    for (const auto& x2 :
+         {T(L"u{i_71;}:N-N-N"), T(L"λ{i_71;a_71<i_71>}:N-N-N")}) {
+      R_nonzero(first, x2, nullptr);
+      REQUIRE_THAT(sequant::deriv::diff(F, {x1, x2}),
+                   EquivalentTo(diff(first, x2)));
+    }
+  }
+  // bra and ket with different pair labels, bra-ket symmetric: the exchanged
+  // element is spelled the other way, the adjoint spelling's term
+  check_rule(T(L"Y{;i_3,i_4}:N-N-N W{a_3<i_3>;a_4<i_4>}:N-N-N "
+               L"h{a_4<i_4>;a_3<i_3>}:N-S-N Z{i_3,i_4;}:N-N-N"),
+             T(L"h{a_5<i_5>;a_6<i_6>}:N-S-N"), nullptr,
+             sequant::deriv::test::Data{.real = {L"h"}});
+  REQUIRE_FALSE(diff(T(L"Y{;i_3,i_4}:N-N-N W{a_3<i_3>;a_4<i_4>}:N-N-N "
+                       L"h{a_4<i_4>;a_3<i_3>}:N-S-N Z{i_3,i_4;}:N-N-N"),
+                     T(L"h{a_5<i_5>;a_6<i_6>}:N-S-N"))
+                    ->is_zero());
 }
 
 TEST_CASE("deriv/rules/open-shell", "[deriv][rules]") {

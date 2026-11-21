@@ -47,6 +47,7 @@ namespace sequant::deriv {
 /// With no variables, the result is @p E as it is.
 /// Symmetrizers are never expanded: those of @p E stay factors, and that of
 /// x is put on the result as a factor.
+/// @throw Exception for an input that is rejected
 [[nodiscard]] ExprPtr diff(const ExprPtr& E,
                            const container::svector<ExprPtr>& variables);
 
