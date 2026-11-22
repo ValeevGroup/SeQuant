@@ -10,7 +10,6 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -72,12 +71,10 @@ ExprPtr coefficient(const Tensor& t, std::wstring_view label, std::size_t k,
 namespace detail {
 
 std::function<Index(const IndexBasis&)> fresh_indices(const ExprPtr& expr) {
-  auto taken = std::make_shared<container::set<std::wstring>>();
-  for (const auto& i : get_used_indices(expr)) taken->emplace(i.label());
-  return [taken](const IndexBasis& basis) {
+  return [unused = unused_label_validator(*expr)](const IndexBasis& basis) {
     Index result;
     do result = Index::make_tmp_index(basis);
-    while (taken->contains(std::wstring(result.label())));
+    while (!unused(result));
     return result;
   };
 }

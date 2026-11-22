@@ -25,6 +25,10 @@ target_link_libraries(unit_tests-sequant-deriv PRIVATE
 target_include_directories(unit_tests-sequant-deriv PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_compile_definitions(unit_tests-sequant-deriv PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+# the long cases run a part of their checks when SEQUANT_SKIP_LONG_TESTS is ON
+# and in every Debug configuration, as those of unit_tests-sequant are skipped
+target_compile_definitions(unit_tests-sequant-deriv PRIVATE
+    $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)
 set_source_files_properties("../test_main.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # range-v3 names ::meta unqualified, ambiguous with sequant::meta under the

@@ -72,7 +72,7 @@ enum class Coefficients {
 /// @p quantum_numbers (as element_of() makes them where the indices of its
 /// input differ in quantum numbers). Read: h, g and their coefficients h¹, h²,
 /// g¹, g² with the symmetries of hf::energy(), the overlap coefficients s¹, s²
-/// spelled as hf::orthonormalized() writes them, and κₒ¹, κₒ² over (unoccupied;
+/// spelled as hf::orthonormalized() writes them, and κ̂¹, κ̂² over (unoccupied;
 /// occupied). @p z holds the values of the auxiliary index of a strength
 /// tensor, which the coefficients carry after their slots (z_1 for the first
 /// order, z_1,z_2 for the second); empty: a scalar strength, no auxiliary

@@ -23,7 +23,9 @@ namespace sequant::deriv {
 /// those of the ket slots, each with its sign; for Symmetry::Nonsymm with
 /// ColumnSymmetry::Symm the permutations of the columns; each alone and,
 /// where that is an operation (see below), followed by the exchange of bra
-/// and ket. At a position J of x's block (the list of the bases of its slots)
+/// and ket; and, a protoindex list being unordered, each of these with every
+/// order of each distinct protoindex list of x whose labels are not slots of
+/// x. At a position J of x's block (the list of the bases of its slots)
 /// the result is the sum of G over all operations g of x:
 /// `diff(E, x)(J) = sum_g sign(g) G(g J)`. This is the derivative with
 /// respect to the independent elements of x: at J it is the derivative along
@@ -56,7 +58,10 @@ namespace sequant::deriv {
 /// A leaf with a tensor variable's label vanishes if it lies inside that one
 /// variable: a leaf that meets a spelling vanishes if each of its slots lies
 /// within the index space of that spelling's slot
-/// @throw Exception if a variable stands under a non-positive power, or a
+/// @throw Exception if a variable is not a Variable or a tensor leaf (such as a
+/// sum, a product, a symmetrizer or a Kronecker delta), repeats an index, has
+/// an index whose protoindices mix its slots with other labels, or declares
+/// Symmetry::Symm; if a variable stands under a non-positive power; or if a
 /// leaf holds elements of a variable and lies inside none of the variables
 /// (also where it lies inside their union), or declares other symmetries than
 /// the variable whose elements it may hold, or its protoindices do not follow

@@ -201,8 +201,8 @@ int main() {
     // the energy through second order in the rotation, and two elements of
     // the rotation, spelled with the symmetries of its leaves
     const auto E = mbpt::hf::rotated_energy(2);
-    const auto x = deserialize(L"κₒ{a_1;i_1}:A-N-S");
-    const auto y = deserialize(L"κₒ{a_2;i_2}:A-N-S");
+    const auto x = deserialize(L"κ̂{a_1;i_1}:A-N-S");
+    const auto y = deserialize(L"κ̂{a_2;i_2}:A-N-S");
     // the orbital gradient
     require_equivalent(at_zero(diff(E, {x}), {x}),
                        deserialize(L"f{i_1;a_1}:A-C-S"));
@@ -222,16 +222,16 @@ int main() {
     // through second order in the strength ε of a nuclear displacement
     const auto ε = ex<Variable>(L"ε");
     const auto E = mbpt::hf::orthonormalized(mbpt::hf::energy(2), ε, 2);
-    // the orbitals follow the displacement: κₒ(ε) = ε κₒ¹ + 1/2 ε² κₒ²
-    const auto κ = deserialize(L"κₒ{a_9;i_9}:A-N-S");
-    const auto Et = at_zero(mbpt::series(E, L"κₒ", ε, 2), {κ});
+    // the orbitals follow the displacement: κ̂(ε) = ε κ̂¹ + 1/2 ε² κ̂²
+    const auto κ = deserialize(L"κ̂{a_9;i_9}:A-N-S");
+    const auto Et = at_zero(mbpt::series(E, L"κ̂", ε, 2), {κ});
     // the Fock matrix in h and g, F{P;Q} = h{P;Q} + Σ_j g{P,j;Q,j}
     const auto F = [](const std::wstring& p, const std::wstring& q) {
       return L"(h{" + p + L";" + q + L"}:A-C-S + g{" + p + L",i_9;" + q +
              L",i_9}:A-C-S)";
     };
     // the nuclear gradient dE/dε: the differentiated integrals, the
-    // differentiated overlap with F, and the orbital gradient times κₒ¹ and
+    // differentiated overlap with F, and the orbital gradient times κ̂¹ and
     // its adjoint, zero where F{i;a} = 0, kept
     require_equivalent(
         at_zero(diff(Et, {ε}), {ε}),
@@ -239,19 +239,19 @@ int main() {
                     L"1/2 s¹{i_1;p_1}:N-C-S " +
                     F(L"p_1", L"i_1") + L" - 1/2 " + F(L"i_1", L"p_1") +
                     L" s¹{p_1;i_1}:N-C-S + " + F(L"i_1", L"a_1") +
-                    L" κₒ¹{a_1;i_1}:A-N-S + κₒ¹⁺{i_1;a_1}:A-N-S " +
+                    L" κ̂¹{a_1;i_1}:A-N-S + κ̂¹⁺{i_1;a_1}:A-N-S " +
                     F(L"a_1", L"i_1")));
-    // the first-order response equation: the derivative of ∂E/∂κₒ⁺ along
-    // κₒ(ε), A κₒ¹ + B κₒ¹⁺ + b = 0
-    const auto G = diff(E, {adjoint(deserialize(L"κₒ{a_1;i_1}:A-N-S"))});
+    // the first-order response equation: the derivative of ∂E/∂κ̂⁺ along
+    // κ̂(ε), A κ̂¹ + B κ̂¹⁺ + b = 0
+    const auto G = diff(E, {adjoint(deserialize(L"κ̂{a_1;i_1}:A-N-S"))});
     const auto R1 =
-        at_zero(diff(at_zero(mbpt::series(G, L"κₒ", ε, 1), {κ}), {ε}), {ε});
+        at_zero(diff(at_zero(mbpt::series(G, L"κ̂", ε, 1), {κ}), {ε}), {ε});
     require_equivalent(
         R1, deserialize(F(L"a_1", L"a_2") +
-                        L" κₒ¹{a_2;i_1}:A-N-S - κₒ¹{a_1;i_2}:A-N-S " +
+                        L" κ̂¹{a_2;i_1}:A-N-S - κ̂¹{a_1;i_2}:A-N-S " +
                         F(L"i_2", L"i_1") +
-                        L" + g{a_1,i_2;i_1,a_2}:A-C-S κₒ¹{a_2;i_2}:A-N-S + "
-                        L"g{a_1,a_2;i_1,i_2}:A-C-S κₒ¹⁺{i_2;a_2}:A-N-S + "
+                        L" + g{a_1,i_2;i_1,a_2}:A-C-S κ̂¹{a_2;i_2}:A-N-S + "
+                        L"g{a_1,a_2;i_1,i_2}:A-C-S κ̂¹⁺{i_2;a_2}:A-N-S + "
                         L"h¹{a_1;i_1}:A-C-S + g¹{a_1,i_2;i_1,i_2}:A-C-S - "
                         L"1/2 s¹{a_1;p_1}:N-C-S " +
                         F(L"p_1", L"i_1") + L" - 1/2 " + F(L"a_1", L"p_1") +
@@ -272,18 +272,18 @@ int main() {
     const auto scope = set_scoped_default_context(context);
     const auto ε = deserialize(L"ε{;;z_1}:N-N-N");
     const auto E = mbpt::hf::orthonormalized(mbpt::hf::energy(2), ε, 2);
-    const auto Et = at_zero(mbpt::series(E, L"κₒ", ε, 2),
-                            {deserialize(L"κₒ{a_9;i_9}:A-N-S")});
+    const auto Et = at_zero(mbpt::series(E, L"κ̂", ε, 2),
+                            {deserialize(L"κ̂{a_9;i_9}:A-N-S")});
     // the gradient, over z_3, and the Hessian, over z_3 and z_4
     const auto ε3 = deserialize(L"ε{;;z_3}:N-N-N");
     const auto ε4 = deserialize(L"ε{;;z_4}:N-N-N");
     const auto gradient = at_zero(diff(Et, {ε3}), {ε});
     const auto hessian = at_zero(diff(Et, {ε3, ε4}), {ε});
-    // the Hessian holds the orbital gradient times κₒ², kept
+    // the Hessian holds the orbital gradient times κ̂², kept
     bool κ2 = false;
     hessian->visit(
         [&κ2](const ExprPtr& leaf) {
-          κ2 |= leaf->is<Tensor>() && leaf->as<Tensor>().label() == L"κₒ²";
+          κ2 |= leaf->is<Tensor>() && leaf->as<Tensor>().label() == L"κ̂²";
         },
         /*atoms_only=*/true);
     if (gradient->is_zero() || !κ2) throw Exception("unexpected Hessian");

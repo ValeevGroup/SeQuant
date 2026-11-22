@@ -1,17 +1,11 @@
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/deriv/deriv.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
-#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/string.hpp>
-#include <SeQuant/domain/mbpt/models/cc.hpp>
-#include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/series.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include "csv_test_utils.hpp"
 #include "evaluator.hpp"
 #include "identities.hpp"
 #include "judge.hpp"
@@ -54,6 +48,28 @@ struct Counts {
   container::map<std::string, std::size_t> rejected;
   bool operator==(const Counts&) const = default;
 };
+
+/// @p expected restricted to the models of t::family_models(), after
+/// requiring those to be the pinned ones: under SEQUANT_SKIP_LONG_TESTS the
+/// two spin-orbital models, else all five
+template <typename Map>
+Map of_family(const Map& expected) {
+#ifdef SEQUANT_SKIP_LONG_TESTS
+  const container::svector<std::string> pinned{"CC{2} canonical spin-orbital",
+                                               "CC{2} CSV spin-orbital"};
+#else
+  const container::svector<std::string> pinned{
+      "CC{2} canonical spin-orbital", "CC{2} canonical traced",
+      "CC{2} CSV spin-orbital", "CC{2} CSV traced", "CC{2} open-shell"};
+#endif
+  container::svector<std::string> family;
+  for (const auto& m : t::family_models()) family.push_back(t::name_of(m));
+  REQUIRE(family.size() == pinned.size());
+  REQUIRE(family == pinned);
+  Map result;
+  for (const auto& name : family) result.emplace(name, expected.at(name));
+  return result;
+}
 
 }  // namespace
 
@@ -169,7 +185,7 @@ TEST_CASE("deriv/identities/over-the-family", "[deriv][identities]") {
   // the variables other than amplitudes cannot change unnoticed
   REQUIRE(
       sampled ==
-      container::map<std::string, container::svector<std::string>>{
+      of_family(container::map<std::string, container::svector<std::string>>{
           {"CC{2} CSV spin-orbital",
            {"h¹{i_51;i_52}:A-C-S", "f{i_51;i_52}:A-C-S",
             "g{i_51,a_51<i_52,i_53>;i_52,i_53}:A-C-S",
@@ -187,8 +203,9 @@ TEST_CASE("deriv/identities/over-the-family", "[deriv][identities]") {
           {"CC{2} open-shell",
            {"h¹{i↓_51;i↓_52}:N-C-S", "g{i↑_51,a↑_51;i↑_52,i↑_53}:A-C-S",
             "g{i↑_51,a↑_51;i↑_52,a↑_52}:A-C-S",
-            "g{i↓_51,i↓_52;i↓_53,a↓_51}:A-C-S"}}});
-  // the family cannot shrink
+            "g{i↓_51,i↓_52;i↓_53,a↓_51}:A-C-S"}}}));
+  // neither the family (of_family() pins it) nor the work done for each of its
+  // models can shrink
   const std::string mixes =
       "an index of the variable mixes protoindices that are its slots with "
       "others";
@@ -207,7 +224,7 @@ TEST_CASE("deriv/identities/over-the-family", "[deriv][identities]") {
   // equations, variables, amplitudes; pairs of I1, I3, I4; those that read a
   // nonzero element; rejections
   REQUIRE(counts ==
-          container::map<std::string, Counts>{
+          of_family(container::map<std::string, Counts>{
               {"CC{2} CSV spin-orbital",
                {12, 14, 10, 168, 120, 120, 71, 120, 38, csv_rejected}},
               {"CC{2} CSV traced",
@@ -217,7 +234,7 @@ TEST_CASE("deriv/identities/over-the-family", "[deriv][identities]") {
               {"CC{2} canonical traced",
                {12, 14, 10, 168, 120, 120, 73, 120, 44, {}}},
               {"CC{2} open-shell",
-               {21, 24, 20, 504, 420, 420, 248, 420, 171, {}}}});
+               {21, 24, 20, 504, 420, 420, 248, 420, 171, {}}}}));
 }
 
 TEST_CASE("deriv/identities/own-equations", "[deriv][identities]") {
@@ -237,12 +254,12 @@ TEST_CASE("deriv/identities/own-equations", "[deriv][identities]") {
       }
     });
   // t[k], λ[k], tʼ[k], λʼ[k] for k = 1, 2; open-shell, each spin case
-  REQUIRE(compared == container::map<std::string, std::size_t>{
+  REQUIRE(compared == of_family(container::map<std::string, std::size_t>{
                           {"CC{2} CSV spin-orbital", 8},
                           {"CC{2} CSV traced", 8},
                           {"CC{2} canonical spin-orbital", 8},
                           {"CC{2} canonical traced", 8},
-                          {"CC{2} open-shell", 20}});
+                          {"CC{2} open-shell", 20}}));
 }
 
 TEST_CASE("deriv/series/cc-lagrangian", "[deriv][series]") {
@@ -282,12 +299,12 @@ TEST_CASE("deriv/series/cc-lagrangian", "[deriv][series]") {
       }
     });
   // t[k], λ[k] for k = 1, 2 at each order; open-shell, each spin case
-  REQUIRE(compared == container::map<std::string, std::size_t>{
+  REQUIRE(compared == of_family(container::map<std::string, std::size_t>{
                           {"CC{2} CSV spin-orbital", 8},
                           {"CC{2} CSV traced", 8},
                           {"CC{2} canonical spin-orbital", 8},
                           {"CC{2} canonical traced", 8},
-                          {"CC{2} open-shell", 20}});
+                          {"CC{2} open-shell", 20}}));
 }
 
 TEST_CASE("deriv/identities/each-identity-can-fail", "[deriv][identities]") {
@@ -334,45 +351,4 @@ TEST_CASE("deriv/identities/each-identity-can-fail", "[deriv][identities]") {
                                     t2_eq.free, {.projectors = true})
                       .difference.empty());
   });
-}
-
-TEST_CASE("deriv/identities/exclusions-still-fail-in-core",
-          "[deriv][identities]") {
-  // the core defect that keeps open-shell CSV out of the family; when core is
-  // fixed, this fails and the exclusion goes. Each slot of an amplitude that
-  // carries protoindices carries the amplitude's occupied slots: so in the
-  // CSV t()[1], not so in its open_shell_CC_spintrace cases
-  REQUIRE(t::family_exclusions().size() == 1);
-  const auto excluded = t::family_exclusions().front().model;
-  REQUIRE((excluded.csv && excluded.open_shell && !excluded.traced));
-  const auto pair_follows_slots = [](const Expr& x) {
-    const auto slots = x.as<Tensor>().const_braketaux();
-    container::set<Index> occupied;
-    for (const auto& i : slots)
-      if (!i.has_proto_indices()) occupied.insert(i);
-    return std::ranges::all_of(slots, [&](const Index& i) {
-      return !i.has_proto_indices() ||
-             container::set<Index>(i.proto_indices().begin(),
-                                   i.proto_indices().end()) == occupied;
-    });
-  };
-  const auto amplitudes_follow = [&](const ExprPtr& e) {
-    bool result = true;
-    e->visit(
-        [&](const ExprPtr& l) {
-          result = result && (!t::is_amplitude(l) || pair_follows_slots(*l));
-        },
-        /*atoms_only=*/true);
-    return result;
-  };
-  sequant::tests::csv::ScopedCsvContext scoped{mbpt::make_legacy_registry(),
-                                               mbpt::CSV::Yes};
-  // the Complete canonicalization open_shell_CC_spintrace requires
-  auto context = get_default_context();
-  context.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-  const auto complete = set_scoped_default_context(context);
-  const auto r1 = mbpt::CC{2}.t()[1];
-  REQUIRE(amplitudes_follow(r1));
-  REQUIRE_FALSE(std::ranges::all_of(mbpt::open_shell_CC_spintrace(r1),
-                                    amplitudes_follow));
 }

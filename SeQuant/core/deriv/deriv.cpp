@@ -157,14 +157,15 @@ void rename_apart(container::svector<Term>& terms, const ExprPtr& x) {
     }
     auto taken = in_x;
     for (const auto& i : used) taken.emplace(i.label());
-    const auto temporary = [&taken](const Index& i) {
+    const auto unused = unused_label_validator(std::move(taken));
+    const auto temporary = [&unused](const Index& i) {
       Index result;
       do
         result = i.has_proto_indices()
                      ? Index::make_tmp_index(i.basis(), i.proto_indices(),
                                              i.symmetric_proto_indices())
                      : Index::make_tmp_index(i.basis());
-      while (taken.contains(std::wstring(result.label())));
+      while (!unused(result));
       return result;
     };
     container::map<Index, Index> fresh;

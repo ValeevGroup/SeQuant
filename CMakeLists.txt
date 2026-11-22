@@ -456,6 +456,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/expr_filter.hpp
         SeQuant/core/utility/expr_matcher.cpp
         SeQuant/core/utility/expr_matcher.hpp
+        SeQuant/core/utility/indices.cpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.cpp
         SeQuant/core/utility/macros.hpp

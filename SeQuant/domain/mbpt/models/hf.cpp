@@ -7,6 +7,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
@@ -14,6 +15,7 @@
 #include <SeQuant/domain/mbpt/utils.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
+#include <cstddef>
 #include <numeric>
 #include <string>
 #include <string_view>
@@ -23,7 +25,7 @@ namespace sequant::mbpt::hf {
 
 namespace {
 
-constexpr std::wstring_view rotation_label = L"κₒ", h_label = L"h";
+constexpr std::wstring_view rotation_label = L"κ̂", h_label = L"h";
 
 [[noreturn]] void reject(std::string_view function, const std::string& text) {
   throw Exception("mbpt::hf::" + std::string(function) + ": " + text);
@@ -34,7 +36,7 @@ constexpr std::wstring_view rotation_label = L"κₒ", h_label = L"h";
 std::pair<IndexSpace, IndexSpace> spaces(std::string_view function) {
   if (!get_default_mbpt_context().op_registry()->contains(
           std::wstring(rotation_label)))
-    reject(function, "the operator label κₒ is not registered");
+    reject(function, "the operator label κ̂ is not registered");
   if (get_default_context().vacuum() != Vacuum::SingleProduct ||
       !detail::reference_is_vacuum())
     reject(function,
@@ -70,11 +72,15 @@ ExprPtr rotated(std::size_t order, const std::pair<IndexSpace, IndexSpace>& s) {
 /// the integral tensor of the @p k -body part of op::H()
 Tensor integral(std::size_t k) {
   ExprPtr result;
+  [[maybe_unused]] std::size_t found = 0;
   tensor::h(k)->visit(
-      [&result](const ExprPtr& e) {
-        if (e->is<Tensor>()) result = e;
+      [&](const ExprPtr& e) {
+        if (!e->is<Tensor>()) return;
+        result = e;
+        ++found;
       },
       /*atoms_only=*/true);
+  SEQUANT_ASSERT(found == 1, "the k-body part of op::H() must hold one tensor");
   return result->as<Tensor>();
 }
 

@@ -8,14 +8,14 @@
 namespace sequant::mbpt::hf {
 
 /// @return the Hartree-Fock energy as a function of an orbital rotation,
-/// ⟨0|e^(−κ̂) H e^(κ̂)|0⟩ − ⟨0|H|0⟩ through @p order in κ, simplified, where
-/// κ̂ = K̂ − K̂⁺ and K̂ = Σ κₒ{a;i} a†_a a_i takes every orbital of the
+/// ⟨0|e^(−(K̂ − K̂⁺)) H e^(K̂ − K̂⁺)|0⟩ − ⟨0|H|0⟩ through @p order in κ,
+/// simplified, where K̂ = Σ κ̂{a;i} a†_a a_i takes every orbital of the
 /// reference-occupied space (i) into every orbital of its complement (a),
 /// which in an F12 context includes the CABS orbitals.
 /// H is op::H(), normal ordered, so ⟨0|H|0⟩ is not part of the result. Its
 /// derivatives at κ = 0 are the electronic gradient and Hessian
 /// @throw Exception if the default mbpt context's operator registry lacks
-/// κₒ (make_legacy_registry() and make_minimal_registry() have it), the
+/// κ̂ (make_legacy_registry() and make_minimal_registry() have it), the
 /// vacuum is not Vacuum::SingleProduct, the reference is not the vacuum, the
 /// unoccupied space is not registered, or the mbpt context has CSV::Yes
 /// (orbital rotations with pair-specific orbitals are not supported)
@@ -39,7 +39,7 @@ namespace sequant::mbpt::hf {
 /// of series() of the overlap (reserved::overlap_label(): s¹, s², …), have one
 /// slot per side, Symmetry::Nonsymm and the bra-ket and column symmetries of
 /// h, i.e. of op::H()'s f; to differentiate by one, spell it so, e.g.
-/// s¹{p_1;p_2}:N-C-S. Unlike rotated_energy(), needs neither κₒ nor the
+/// s¹{p_1;p_2}:N-C-S. Unlike rotated_energy(), needs neither κ̂ nor the
 /// spaces of the rotation
 /// @throw Exception if @p expr holds an mbpt::Operator, f (unless it is
 /// labelled h), h⁺ or g⁺ (also under a TensorPower), or an h or g with a leg

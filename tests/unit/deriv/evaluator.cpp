@@ -130,14 +130,22 @@ container::map<Index, Index> names_for(
 namespace {
 
 /// @p f with every index named like an index or protoindex of @p x renamed
-/// to a temporary, protoindices following
+/// to a temporary named unlike any index of x and of f, protoindices
+/// following
 ExprPtr with_dummies_apart(const ExprPtr& f, const ExprPtr& x) {
-  container::set<std::wstring> taken;
-  for (const auto& i : get_used_indices(*x)) taken.emplace(i.label());
-  const auto apart = names_for(
-      get_used_indices(*f), [&taken](const Index& i) -> std::optional<Index> {
-        if (!taken.contains(std::wstring(i.label()))) return std::nullopt;
-        return Index::make_tmp_index(i.basis());
+  container::set<std::wstring> in_x;
+  for (const auto& i : get_used_indices(*x)) in_x.emplace(i.label());
+  const auto in_f = get_used_indices(*f);
+  auto taken = in_x;
+  for (const auto& i : in_f) taken.emplace(i.label());
+  const auto unused = unused_label_validator(std::move(taken));
+  const auto apart =
+      names_for(in_f, [&in_x, &unused](const Index& i) -> std::optional<Index> {
+        if (!in_x.contains(std::wstring(i.label()))) return std::nullopt;
+        Index result;
+        do result = Index::make_tmp_index(i.basis());
+        while (!unused(result));
+        return result;
       });
   return apart.empty() ? f : transform_expr(f, apart);
 }

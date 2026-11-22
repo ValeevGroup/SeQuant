@@ -78,7 +78,10 @@ A tensor with a declared symmetry has fewer independent elements than positions.
 respect to the *independent* elements: the derivative by each position, summed over the symmetry operations of the
 variable, each with its sign. At an element that no operation but the identity maps to itself, this is the plain
 derivative by that element; in general it is the derivative along the element and its symmetry partners, times the
-number of operations that leave the element unchanged.
+number of operations that leave the element unchanged. A protoindex list is unordered, so the reorderings of each
+protoindex list of the variable whose labels are not its slots, such as the pair ``(i, j)`` of a per-pair rotation,
+count among the operations: where the two labels of such a pair coincide, the two orders give the same element, and
+the derivative there is twice that by the element.
 
 The result writes the part of this sum that permutes the variable's *like slots* as SeQuant's normalized
 antisymmetrizer ``Â`` over them, times the number of permutations it averages over. Like slots are slots of one side
@@ -306,17 +309,17 @@ given order in the rotation,
 
 .. math::
 
-   E(\kappa) = \langle 0 | e^{-\hat\kappa} \hat H e^{\hat\kappa} | 0 \rangle - \langle 0 | \hat H | 0 \rangle,
-   \qquad \hat\kappa = \hat K - \hat K^\dagger, \qquad \hat K = \sum_{ai} \kappa_{ai}\, a^\dagger_a a_i,
+   E(\kappa) = \langle 0 | e^{-(\hat K - \hat K^\dagger)} \hat H e^{\hat K - \hat K^\dagger} | 0 \rangle
+   - \langle 0 | \hat H | 0 \rangle, \qquad \hat K = \sum_{ai} \kappa_{ai}\, a^\dagger_a a_i,
 
 generated with SeQuant's commutator expansion and Wick's theorem. :math:`\hat H` is ``op::H()``, normal ordered, so the
 reference energy is not part of the result. :math:`\hat K` takes every orbital of the reference-occupied space into
-every orbital of its complement, frozen and inactive orbitals included. Its amplitude is labelled ``κₒ``, since ``κ``
-is core's label of the cumulant. With two elements ``x`` and ``y`` of the rotation, the orbital gradient is
-``at_zero(diff(E, {x}), {x})`` (``at_zero`` by ``κₒ`` sets ``κₒ⁺`` to zero too), and the blocks of the orbital Hessian
-are :math:`A = \partial^2 E / \partial\kappa\, \partial\kappa^*`, ``diff(E, {x, adjoint(y)})``, and
-:math:`B = \partial^2 E / \partial\kappa\, \partial\kappa`, ``diff(E, {x, y})``. The energy through second order needs
-no ``at_zero`` for these:
+every orbital of its complement, frozen and inactive orbitals included. The tensor of its amplitudes :math:`\kappa_{ai}`
+carries the label ``κ̂``; the hat only keeps it apart from ``κ``, core's label of the cumulant. With two elements ``x``
+and ``y`` of the rotation, the orbital gradient is ``at_zero(diff(E, {x}), {x})`` (``at_zero`` by ``κ̂`` sets ``κ̂⁺`` to
+zero too), and the blocks of the orbital Hessian are :math:`A = \partial^2 E / \partial\kappa\, \partial\kappa^*`,
+``diff(E, {x, adjoint(y)})``, and :math:`B = \partial^2 E / \partial\kappa\, \partial\kappa`, ``diff(E, {x, y})``. The
+energy through second order needs no ``at_zero`` for these:
 
 .. literalinclude:: /examples/user/differentiation.cpp
    :language: cpp
@@ -324,12 +327,12 @@ no ``at_zero`` for these:
    :end-before: end-snippet-9
    :dedent: 4
 
-Over complex index spaces ``κₒ`` and ``κₒ⁺`` are independent variables (see `Complex and real variables`_); the
+Over complex index spaces ``κ̂`` and ``κ̂⁺`` are independent variables (see `Complex and real variables`_); the
 derivatives by ``adjoint(x)`` are separate calls and give the complex conjugates. Over real index spaces the same calls
-collect the terms of ``κₒ⁺`` as well: the gradient is ``2 f{i_1;a_1}`` and both second derivatives are
+collect the terms of ``κ̂⁺`` as well: the gradient is ``2 f{i_1;a_1}`` and both second derivatives are
 :math:`2(A + B)`. For a closed-shell reference over real spaces, the energy put through
 :func:`sequant::mbpt::closed_shell_spintrace` gives the gradient ``4 f{i_1;a_1}`` and the closed-shell Hessian, with the
-variable spelled as the spin-traced leaves are, ``κₒ{a_1;i_1}:N-N-S``.
+variable spelled as the spin-traced leaves are, ``κ̂{a_1;i_1}:N-N-S``.
 
 Nuclear derivatives
 ^^^^^^^^^^^^^^^^^^^^^
@@ -342,7 +345,8 @@ every geometry, and the energy keeps its form, the orbitals orthonormalized firs
 
 .. math::
 
-   E(\varepsilon, \kappa) = \langle 0 | e^{-\hat\kappa} \tilde H(\varepsilon) e^{\hat\kappa} | 0 \rangle.
+   E(\varepsilon, \kappa) = \langle 0 | e^{-(\hat K - \hat K^\dagger)} \tilde H(\varepsilon)
+   e^{\hat K - \hat K^\dagger} | 0 \rangle.
 
 Two generators write this function. :func:`sequant::mbpt::hf::energy` is the energy through the given order in the
 rotation, written in the integrals ``h`` and ``g``: the reference energy ``h{i_1;i_1} + 1/2 g{i_1,i_2;i_1,i_2}`` plus
@@ -358,10 +362,10 @@ is the caller's to add.
 
 The orbitals follow the displacement: the rotation is a function :math:`\kappa(\varepsilon) = \varepsilon \kappa^{(1)} +
 \frac{1}{2} \varepsilon^2 \kappa^{(2)} + \ldots` with :math:`\kappa(0) = 0`, and the total derivatives of the energy
-are those of :math:`E(\varepsilon, \kappa(\varepsilon))`. They are taken by substituting the series of ``κₒ`` with
+are those of :math:`E(\varepsilon, \kappa(\varepsilon))`. They are taken by substituting the series of ``κ̂`` with
 ``series``, removing its term of order zero with ``at_zero``, and differentiating by the strength. For the
 :math:`n`-th total derivative every order passed is at least :math:`n`: ``energy(n)``, ``orthonormalized`` through
-:math:`n` and the series of ``κₒ`` through :math:`n`. The first-order
+:math:`n` and the series of ``κ̂`` through :math:`n`. The first-order
 rotation :math:`\kappa^{(1)}` is the solution of the first-order response (coupled-perturbed Hartree-Fock) equation,
 the total derivative of :math:`\partial E / \partial \kappa^*` at zero:
 
@@ -395,11 +399,11 @@ The generators expect what follows:
 
 - **A variable is spelled as the leaves are.** ``diff`` requires the leaves of a variable's label to declare the
   variable's symmetries (see `Scope`_), so a variable carries the symmetry flags the generators give:
-  ``κₒ{a_1;i_1}:A-N-S``, ``h{p_1;p_2}:A-C-S``, ``g{p_1,p_2;p_3,p_4}:A-C-S``, ``s¹{p_1;p_2}:N-C-S``. It is also
+  ``κ̂{a_1;i_1}:A-N-S``, ``h{p_1;p_2}:A-C-S``, ``g{p_1,p_2;p_3,p_4}:A-C-S``, ``s¹{p_1;p_2}:N-C-S``. It is also
   written over the index spaces of the context the function was generated in: the examples use the minimal spaces of
   :func:`sequant::mbpt::make_min_sr_spaces`, occupied ``i`` and unoccupied ``a``; with the frozen-core spaces of
   :func:`sequant::mbpt::make_sr_spaces` the rotation runs from ``m`` to ``e``.
-- **The operator registry holds** ``κₒ``, for ``rotated_energy`` and ``energy``.
+- **The operator registry holds** ``κ̂``, for ``rotated_energy`` and ``energy``.
   :func:`sequant::mbpt::make_legacy_registry` and :func:`sequant::mbpt::make_minimal_registry` register it as an
   excitation operator; a custom registry must add it.
 - **A single-determinant reference.** ``rotated_energy`` and ``energy`` throw :class:`sequant::Exception`, with a

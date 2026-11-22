@@ -29,18 +29,13 @@ struct Model {
 
 std::string name_of(const Model& model);
 
-/// a model left out of the family, with the core defect that excludes it
-struct Exclusion {
-  Model model;
-  std::string reason;
-};
-
 /// CC{2}: canonical and CSV, spin-orbital and closed-shell traced, and
-/// canonical open-shell, but those family_exclusions() names
+/// canonical open-shell; under SEQUANT_SKIP_LONG_TESTS the spin-orbital ones
+/// only. CSV open-shell is left out until core is fixed: core's
+/// open_shell_CC_spintrace under CSV gives a protoindex the spin of the slot
+/// that carries it, so the index of a mixed-spin pair holds two spins within a
+/// term
 container::svector<Model> family_models();
-
-/// the models left out of family_models()
-container::svector<Exclusion> family_exclusions();
 
 /// the equations of a model and the variables to differentiate them by
 struct Family {

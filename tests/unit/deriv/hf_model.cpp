@@ -202,7 +202,7 @@ Model read(const container::svector<int>& z, const Data& data,
   result.s.zeroth = Matrix::Identity(n, n);
   read_coefficients<Matrix>(result.s, z, L"s¹", L"s²", one_body(L"N-C-S"));
   result.kappa.zeroth = Matrix::Zero(n, n);
-  read_coefficients<Matrix>(result.kappa, z, L"κₒ¹", L"κₒ²", kappa);
+  read_coefficients<Matrix>(result.kappa, z, L"κ̂¹", L"κ̂²", kappa);
   result.g.zeroth = two_body(L"g", L"", {});
   read_coefficients<Array4>(result.g, z, L"g¹", L"g²", two_body);
 

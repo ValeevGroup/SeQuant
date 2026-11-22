@@ -27,7 +27,8 @@ std::string validity(const ExprPtr& f, const ExprPtr& x, const ExprPtr& r);
 
 /// requires r == diff(f, x) to be @p expected (EquivalentTo; null: the judge
 /// alone decides), to agree with compare_tangents() at every element (256
-/// drawn where there are more) and to pass validity()
+/// drawn where there are more), with at least one nonzero element compared
+/// unless r is the zero expression, and to pass validity()
 void check_rule(const ExprPtr& f, const ExprPtr& x, const ExprPtr& expected,
                 const Data& data = {});
 /// check_rule() of the deserialized texts; an empty @p expected is null

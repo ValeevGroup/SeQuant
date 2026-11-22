@@ -91,30 +91,30 @@ TEST_CASE("deriv/hf/finite-differences", "[deriv][hf]") {
   const auto value = [&data](const ExprPtr& e) {
     return element_of(e, {}, data);
   };
-  const auto kappa = T(L"κₒ{e_9;m_9}:A-N-S");
+  const auto kappa = T(L"κ̂{e_9;m_9}:A-N-S");
 
   SECTION("scalar strength") {
     const auto eps = ex<Variable>(L"ε");
     const auto m = model::read({}, data, /*quantum_numbers=*/false);
 
-    // conventions, fixing transposition and conjugation: E(0); κₒ¹⁺ the
-    // conjugate transpose of κₒ¹; the first-order change under a step in κ
-    // alone, which needs both ∂E/∂κₒ and ∂E/∂κₒ⁺
+    // conventions, fixing transposition and conjugation: E(0); κ̂¹⁺ the
+    // conjugate transpose of κ̂¹; the first-order change under a step in κ
+    // alone, which needs both ∂E/∂κ̂ and ∂E/∂κ̂⁺
     require_close("E(0)", value(mbpt::hf::energy(0)), model::energy(m, {0.}),
                   1e-12);
-    const auto k1 = T(L"κₒ¹{e_1;m_1}:A-N-S"), k2 = T(L"κₒ¹{e_2;m_2}:A-N-S");
+    const auto k1 = T(L"κ̂¹{e_1;m_1}:A-N-S"), k2 = T(L"κ̂¹{e_2;m_2}:A-N-S");
     for (const auto a : m.orbitals.unoccupied)
       for (const auto i : m.orbitals.occupied)
         REQUIRE(element_of(adjoint(k1),
                            {{L"e_1", m.orbitals.values[a]},
                             {L"m_1", m.orbitals.values[i]}},
                            data) == std::conj(m.kappa.first.at(0)(a, i)));
-    auto rotation = m;  // κ(x) = x κₒ¹, the integrals and S constant
+    auto rotation = m;  // κ(x) = x κ̂¹, the integrals and S constant
     constant(rotation.h);
     constant(rotation.g);
     constant(rotation.s);
     rotation.kappa.second.clear();
-    const auto x = T(L"κₒ{e_1;m_1}:A-N-S"), y = T(L"κₒ{e_2;m_2}:A-N-S");
+    const auto x = T(L"κ̂{e_1;m_1}:A-N-S"), y = T(L"κ̂{e_2;m_2}:A-N-S");
     {
       const auto E = mbpt::hf::energy(1);
       require_close(
@@ -124,7 +124,7 @@ TEST_CASE("deriv/hf/finite-differences", "[deriv][hf]") {
           derivatives(energy_of(rotation), step).first, first_order);
     }
 
-    // rotation only: the Hessian of energy(2) along κₒ¹
+    // rotation only: the Hessian of energy(2) along κ̂¹
     {
       const auto E = mbpt::hf::energy(2);
       const auto hessian = at_zero(diff(E, {x, y}), {kappa}) * k1 * k2 +
@@ -153,7 +153,7 @@ TEST_CASE("deriv/hf/finite-differences", "[deriv][hf]") {
 
     // the integrals, and the orbitals along κ(ε)
     const auto E = mbpt::hf::orthonormalized(mbpt::hf::energy(2), eps, 2);
-    const auto Et = at_zero(mbpt::series(E, L"κₒ", eps, 2), {kappa});
+    const auto Et = at_zero(mbpt::series(E, L"κ̂", eps, 2), {kappa});
     const auto E1 = value(at_zero(diff(Et, {eps}), {eps}));
     const auto hessian = at_zero(diff(Et, {eps, eps}), {eps});
     const auto E2 = value(hessian);
@@ -161,10 +161,10 @@ TEST_CASE("deriv/hf/finite-differences", "[deriv][hf]") {
     require_close("both, first order", E1, d1, first_order);
     require_close("both, second order", E2, d2, second_order);
 
-    // wrong inputs: the κₒ² terms removed; the orbitals rotated, then
+    // wrong inputs: the κ̂² terms removed; the orbitals rotated, then
     // orthonormalized, which agrees at first order only
-    require_apart("both, second order, without κₒ²",
-                  value(at_zero(hessian, {T(L"κₒ²{e_9;m_9}:A-N-S")})), d2,
+    require_apart("both, second order, without κ̂²",
+                  value(at_zero(hessian, {T(L"κ̂²{e_9;m_9}:A-N-S")})), d2,
                   second_order);
     const auto [r1, r2] = derivatives(
         energy_of(m, model::Coefficients::rotated_then_orthonormalized), step);
@@ -189,7 +189,7 @@ TEST_CASE("deriv/hf/finite-differences", "[deriv][hf]") {
 
     const auto strength = T(L"ε{;;z_1}:N-N-N");
     const auto E = mbpt::hf::orthonormalized(mbpt::hf::energy(2), strength, 2);
-    const auto Et = at_zero(mbpt::series(E, L"κₒ", strength, 2), {kappa});
+    const auto Et = at_zero(mbpt::series(E, L"κ̂", strength, 2), {kappa});
     const auto e3 = T(L"ε{;;z_3}:N-N-N"), e4 = T(L"ε{;;z_4}:N-N-N");
     const auto E1 = at_zero(diff(Et, {e3}), {strength});
     const auto E2 = at_zero(diff(Et, {e3, e4}), {strength});
@@ -202,7 +202,13 @@ TEST_CASE("deriv/hf/finite-differences", "[deriv][hf]") {
         return model::energy(m, x);
       };
     };
-    for (std::size_t a = 0; a != z.size(); ++a) {
+#ifdef SEQUANT_SKIP_LONG_TESTS
+    // the first value of z, with itself and with the other one
+    const std::size_t first_values = 1;
+#else
+    const std::size_t first_values = z.size();
+#endif
+    for (std::size_t a = 0; a != first_values; ++a) {
       const auto [d1, daa] = derivatives(along(a, a, 0), step);
       require_close("E1{z}", element_of(E1, {{L"z_3", z[a]}}, data), d1,
                     first_order);

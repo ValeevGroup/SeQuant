@@ -3,6 +3,8 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/hf.hpp>
@@ -51,7 +53,7 @@ void check_complex(std::wstring_view o, std::wstring_view v) {
   };
   const auto o1 = index(o, 1), o2 = index(o, 2), v1 = index(v, 1),
              v2 = index(v, 2);
-  const auto x = T(L"κₒ{V_1;O_1}:A-N-S"), y = T(L"κₒ{V_2;O_2}:A-N-S");
+  const auto x = T(L"κ̂{V_1;O_1}:A-N-S"), y = T(L"κ̂{V_2;O_2}:A-N-S");
 
   REQUIRE(mbpt::hf::rotated_energy(0)->is_zero());
   require_same(
@@ -70,7 +72,7 @@ void check_complex(std::wstring_view o, std::wstring_view v) {
                T(L"g{V_1,V_2;O_1,O_2}:A-C-S"), {o1, v1, o2, v2});
 
   const auto closed_shell = mbpt::closed_shell_spintrace(E, {});
-  const auto x_cs = T(L"κₒ{V_1;O_1}:N-N-S");
+  const auto x_cs = T(L"κ̂{V_1;O_1}:N-N-S");
   require_same(at_zero(diff(closed_shell, {x_cs}), {x_cs}),
                T(L"2 f{O_1;V_1}:N-C-S"), {o1, v1});
 }
@@ -87,8 +89,36 @@ TEST_CASE("deriv/hf/orbital-rotation", "[deriv][hf]") {
   SECTION("registered") {
     for (const auto& registry :
          {mbpt::make_legacy_registry(), mbpt::make_minimal_registry()})
-      REQUIRE(registry->to_class(L"κₒ") == mbpt::OpClass::Ex);
-    REQUIRE(adjoint(T(L"κₒ{e_1;m_1}:A-N-S"))->as<Tensor>().label() == L"κₒ⁺");
+      REQUIRE(registry->to_class(L"κ̂") == mbpt::OpClass::Ex);
+    REQUIRE(adjoint(T(L"κ̂{e_1;m_1}:A-N-S"))->as<Tensor>().label() == L"κ̂⁺");
+  }
+
+  SECTION("label") {
+    REQUIRE(L"κ̂" != reserved::cumulant_label());
+    REQUIRE(reserved::is_nonreserved(L"κ̂"));
+    for (const auto* text : {L"κ̂{a_1;i_1}:A-N-S", L"κ̂¹{a_1;i_1}:A-N-S",
+                             L"κ̂⁺{i_1;a_1}:A-N-S", L"κ̂¹⁺{i_1;a_1}:A-N-S"})
+      REQUIRE(serialize(T(text)) == text);
+    // the rotation, its adjoint and their first-order series coefficients
+    const auto latex = [](const ExprPtr& e, std::wstring_view label) {
+      std::wstring result;
+      e->visit(
+          [&](const ExprPtr& leaf) {
+            if (leaf->is<Tensor>() && leaf->as<Tensor>().label() == label)
+              result = leaf->to_latex();
+          },
+          /*atoms_only=*/true);
+      REQUIRE_THAT(toUtf8(result),
+                   Catch::Matchers::ContainsSubstring("\\hat{\\kappa}"));
+      REQUIRE(result.find(L'κ') == std::wstring::npos);
+      return result;
+    };
+    const auto E = mbpt::hf::rotated_energy(1);
+    REQUIRE(latex(E, L"κ̂") == L"{\\hat{\\kappa}^{{m_1}}_{{e_1}}}");
+    latex(E, L"κ̂⁺");
+    const auto S = mbpt::series(E, L"κ̂", ex<Variable>(L"ε"), 1);
+    latex(S, L"κ̂¹");
+    latex(S, L"κ̂¹⁺");
   }
 
   SECTION("complex spaces") { check_complex(L"m", L"e"); }
@@ -104,8 +134,8 @@ TEST_CASE("deriv/hf/orbital-rotation", "[deriv][hf]") {
 
   SECTION("real spaces") {
     const auto scope = deriv::test::real_spaces();
-    const deriv::test::Data real{.real = {L"f", L"g", L"κₒ"}};
-    const auto x = T(L"κₒ{e_1;m_1}:A-N-S"), y = T(L"κₒ{e_2;m_2}:A-N-S");
+    const deriv::test::Data real{.real = {L"f", L"g", L"κ̂"}};
+    const auto x = T(L"κ̂{e_1;m_1}:A-N-S"), y = T(L"κ̂{e_2;m_2}:A-N-S");
     const auto E = mbpt::hf::rotated_energy(2);
     require_same(at_zero(diff(E, {x}), {x}), T(L"2 f{e_1;m_1}:A-S-S"), {m1, e1},
                  real);
@@ -120,8 +150,8 @@ TEST_CASE("deriv/hf/orbital-rotation", "[deriv][hf]") {
   SECTION("closed shell") {
     // the variables are spelled over the real spaces
     const auto scope = deriv::test::real_spaces();
-    const auto x = T(L"κₒ{e_1;m_1}:N-N-S"), y = T(L"κₒ{e_2;m_2}:N-N-S");
-    const deriv::test::Data real{.real = {L"f", L"g", L"κₒ"}};
+    const auto x = T(L"κ̂{e_1;m_1}:N-N-S"), y = T(L"κ̂{e_2;m_2}:N-N-S");
+    const deriv::test::Data real{.real = {L"f", L"g", L"κ̂"}};
     const auto E =
         mbpt::closed_shell_spintrace(mbpt::hf::rotated_energy(2), {});
     require_same(at_zero(diff(E, {x}), {x}), T(L"4 f{e_1;m_1}:N-S-S"), {m1, e1},
@@ -141,7 +171,7 @@ TEST_CASE("deriv/hf/orbital-rotation", "[deriv][hf]") {
     };
     {
       auto registry = mbpt::make_legacy_registry();
-      registry->remove(L"κₒ");
+      registry->remove(L"κ̂");
       const auto scope = mbpt::set_scoped_default_mbpt_context(
           mbpt::Context({.op_registry_ptr = registry}));
       REQUIRE_THROWS_WITH(
@@ -201,8 +231,8 @@ ExprPtr nuclear_gradient(std::wstring_view z) {
            L"}:A-C-S - 1/2 s¹{m_1;p_1" + Z + L"}:N-C-S " +
            fock(L"p_1", L"m_1") + L" - 1/2 " + fock(L"m_1", L"p_1") +
            L" s¹{p_1;m_1" + Z + L"}:N-C-S + " + fock(L"m_1", L"e_1") +
-           L" κₒ¹{e_1;m_1" + Z + L"}:A-N-S") +
-         adjoint(T(L"κₒ¹{e_1;m_1" + Z + L"}:A-N-S")) * T(fock(L"e_1", L"m_1"));
+           L" κ̂¹{e_1;m_1" + Z + L"}:A-N-S") +
+         adjoint(T(L"κ̂¹{e_1;m_1" + Z + L"}:A-N-S")) * T(fock(L"e_1", L"m_1"));
 }
 
 }  // namespace
@@ -213,14 +243,14 @@ TEST_CASE("deriv/hf/nuclear", "[deriv][hf]") {
   using deriv::diff;
   const auto T = [](std::wstring_view s) { return deserialize(s); };
   const auto eps = ex<Variable>(L"ε");
-  const auto kappa = T(L"κₒ{e_9;m_9}:A-N-S");
+  const auto kappa = T(L"κ̂{e_9;m_9}:A-N-S");
   const Index m1(L"m_1"), e1(L"e_1");
 
   SECTION("energy") {
     require_same(mbpt::hf::energy(0),
                  T(L"h{m_1;m_1}:A-C-S + 1/2 g{m_1,m_2;m_1,m_2}:A-C-S"));
     require_same(
-        at_zero(diff(mbpt::hf::energy(1), {T(L"κₒ{e_1;m_1}:A-N-S")}), {kappa}),
+        at_zero(diff(mbpt::hf::energy(1), {T(L"κ̂{e_1;m_1}:A-N-S")}), {kappa}),
         T(L"h{m_1;e_1}:A-C-S + g{m_1,m_2;e_1,m_2}:A-C-S"), {m1, e1});
     // every h and every g is one variable
     const auto E = mbpt::hf::energy(2);
@@ -304,12 +334,12 @@ TEST_CASE("deriv/hf/nuclear", "[deriv][hf]") {
 
   SECTION("gradient and response") {
     const auto E = mbpt::hf::orthonormalized(mbpt::hf::energy(2), eps, 2);
-    const auto Et = at_zero(mbpt::series(E, L"κₒ", eps, 2), {kappa});
+    const auto Et = at_zero(mbpt::series(E, L"κ̂", eps, 2), {kappa});
     require_same(at_zero(diff(Et, {eps}), {eps}), nuclear_gradient(L""));
 
-    const auto G = diff(E, {adjoint(T(L"κₒ{e_1;m_1}:A-N-S"))});
+    const auto G = diff(E, {adjoint(T(L"κ̂{e_1;m_1}:A-N-S"))});
     const auto R1 = at_zero(
-        diff(at_zero(mbpt::series(G, L"κₒ", eps, 1), {kappa}), {eps}), {eps});
+        diff(at_zero(mbpt::series(G, L"κ̂", eps, 1), {kappa}), {eps}), {eps});
     const auto b =
         T(L"h¹{e_1;m_1}:A-C-S + g¹{e_1,m_2;m_1,m_2}:A-C-S - "
           L"1/2 s¹{e_1;p_1}:N-C-S " +
@@ -319,10 +349,10 @@ TEST_CASE("deriv/hf/nuclear", "[deriv][hf]") {
           L"1/2 g{e_1,m_2;m_1,p_1}:A-C-S s¹{p_1;m_2}:N-C-S");
     const auto expected =
         b +
-        T(fock(L"e_1", L"e_2") + L" κₒ¹{e_2;m_1}:A-N-S - κₒ¹{e_1;m_2}:A-N-S " +
+        T(fock(L"e_1", L"e_2") + L" κ̂¹{e_2;m_1}:A-N-S - κ̂¹{e_1;m_2}:A-N-S " +
           fock(L"m_2", L"m_1") +
-          L" + g{e_1,m_2;m_1,e_2}:A-C-S κₒ¹{e_2;m_2}:A-N-S") +
-        T(L"g{e_1,e_2;m_1,m_2}:A-C-S") * adjoint(T(L"κₒ¹{e_2;m_2}:A-N-S"));
+          L" + g{e_1,m_2;m_1,e_2}:A-C-S κ̂¹{e_2;m_2}:A-N-S") +
+        T(L"g{e_1,e_2;m_1,m_2}:A-C-S") * adjoint(T(L"κ̂¹{e_2;m_2}:A-N-S"));
     require_same(R1, expected, {m1, e1});
   }
 
@@ -331,7 +361,7 @@ TEST_CASE("deriv/hf/nuclear", "[deriv][hf]") {
     const auto strength = T(L"ε{;;z_1}:N-N-N");
     const Index z3(L"z_3");
     const auto E = mbpt::hf::orthonormalized(mbpt::hf::energy(2), strength, 2);
-    const auto Et = at_zero(mbpt::series(E, L"κₒ", strength, 2), {kappa});
+    const auto Et = at_zero(mbpt::series(E, L"κ̂", strength, 2), {kappa});
     require_same(at_zero(diff(Et, {T(L"ε{;;z_3}:N-N-N")}), {strength}),
                  nuclear_gradient(L";z_3"), {z3});
   }
@@ -375,9 +405,9 @@ TEST_CASE("deriv/hf/nuclear", "[deriv][hf]") {
                           StartsWith("mbpt::hf::energy: "));
     }
     {
-      // orthonormalized needs neither κₒ nor the spaces of the rotation
+      // orthonormalized needs neither κ̂ nor the spaces of the rotation
       auto registry = mbpt::make_legacy_registry();
-      registry->remove(L"κₒ");
+      registry->remove(L"κ̂");
       const auto scope = mbpt::set_scoped_default_mbpt_context(
           mbpt::Context({.csv = mbpt::CSV::Yes, .op_registry_ptr = registry}));
       REQUIRE_THROWS_WITH(mbpt::hf::energy(1),

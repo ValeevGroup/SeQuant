@@ -46,10 +46,10 @@ TEST_CASE("deriv/series", "[deriv][series]") {
   const auto eps = ex<Variable>(L"ε");
 
   SECTION("scalar strength") {
-    const auto E = T(L"f{i_1;a_1}:N-C-S κₒ{a_1;i_1}:N-N-N");
+    const auto E = T(L"f{i_1;a_1}:N-C-S κ̂{a_1;i_1}:N-N-N");
     const auto S = mbpt::series(E, L"f", eps, 2);
     require_same(S, T(L"(f{i_1;a_1}:N-C-S + ε f¹{i_1;a_1}:N-C-S + "
-                      L"1/2 ε^(2) f²{i_1;a_1}:N-C-S) κₒ{a_1;i_1}:N-N-N"));
+                      L"1/2 ε^(2) f²{i_1;a_1}:N-C-S) κ̂{a_1;i_1}:N-N-N"));
     const auto& f = E->at(0)->as<Tensor>();
     for (const auto* label : {L"f¹", L"f²"}) {
       const auto leaves = leaves_of(S, label);
@@ -79,10 +79,10 @@ TEST_CASE("deriv/series", "[deriv][series]") {
   }
 
   SECTION("third order") {
-    const auto E = T(L"f{i_1;a_1}:N-C-S κₒ{a_1;i_1}:N-N-N");
+    const auto E = T(L"f{i_1;a_1}:N-C-S κ̂{a_1;i_1}:N-N-N");
     require_same(
         at_zero(diff(mbpt::series(E, L"f", eps, 3), {eps, eps, eps}), {eps}),
-        T(L"f³{i_1;a_1}:N-C-S κₒ{a_1;i_1}:N-N-N"));
+        T(L"f³{i_1;a_1}:N-C-S κ̂{a_1;i_1}:N-N-N"));
     const auto scope = with_batching_spaces();
     const auto strength = T(L"ε{;;z_1}:N-N-N");
     const Index z3(L"z_3"), z4(L"z_4"), z5(L"z_5");
@@ -117,23 +117,22 @@ TEST_CASE("deriv/series", "[deriv][series]") {
 
   SECTION("every block") {
     const auto E =
-        T(L"f{i_1;i_1}:N-C-S + f{i_1;a_1}:N-C-S κₒ{a_1;i_1}:N-N-N + "
+        T(L"f{i_1;i_1}:N-C-S + f{i_1;a_1}:N-C-S κ̂{a_1;i_1}:N-N-N + "
           L"f{a_1;a_2}:N-C-S X{a_2;a_1}:N-N-N");
     require_same(at_zero(diff(mbpt::series(E, L"f", eps, 1), {eps}), {eps}),
-                 T(L"f¹{i_1;i_1}:N-C-S + f¹{i_1;a_1}:N-C-S κₒ{a_1;i_1}:N-N-N "
+                 T(L"f¹{i_1;i_1}:N-C-S + f¹{i_1;a_1}:N-C-S κ̂{a_1;i_1}:N-N-N "
                    L"+ f¹{a_1;a_2}:N-C-S X{a_2;a_1}:N-N-N"));
   }
 
   SECTION("adjoint") {
-    const auto kappa_adjoint = adjoint(T(L"κₒ{a_1;i_1}:N-N-N"));
+    const auto kappa_adjoint = adjoint(T(L"κ̂{a_1;i_1}:N-N-N"));
     const auto E = kappa_adjoint * T(L"f{a_1;i_1}:N-C-S");
-    const auto S = mbpt::series(E, L"κₒ", eps, 1);
+    const auto S = mbpt::series(E, L"κ̂", eps, 1);
     const auto zeroth = leaves_of(S, kappa_adjoint->as<Tensor>().label());
     REQUIRE(zeroth.size() == 1);
     REQUIRE(*zeroth.front() == *kappa_adjoint);
-    const auto coefficient = adjoint(T(L"κₒ¹{a_1;i_1}:N-N-N"));
-    const auto leaves =
-        leaves_of(S, coefficient->as<Tensor>().label());  // κₒ¹⁺
+    const auto coefficient = adjoint(T(L"κ̂¹{a_1;i_1}:N-N-N"));
+    const auto leaves = leaves_of(S, coefficient->as<Tensor>().label());  // κ̂¹⁺
     REQUIRE(leaves.size() == 1);
     REQUIRE(*leaves.front() == *coefficient);
     require_same(at_zero(diff(S, {eps}), {eps}),

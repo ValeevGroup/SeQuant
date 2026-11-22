@@ -245,7 +245,9 @@ When configuring a build tree from scratch, mirror the `BUILD_CONFIG` flags in
 ## Tests
 
 `unit_tests-sequant` (`tests/unit`, Catch2; filter by tag or name, e.g.
-`unit_tests-sequant "[export]"`) is only part of the suite. The fixture
+`unit_tests-sequant "[export]"`) is only part of the suite. The tests of
+`SeQuant-deriv` are a separate executable, `unit_tests-sequant-deriv`
+(`tests/unit/deriv`), that `check-sequant` builds and runs too. The fixture
 comparisons above, the integration programs under `tests/integration` and,
 with `SEQUANT_PYTHON=ON`, the binding tests under `python/` are separate ctest
 entries that the unit-test binary neither builds nor runs. Run everything the

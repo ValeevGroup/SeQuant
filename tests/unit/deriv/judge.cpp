@@ -120,6 +120,7 @@ void check_rule(const ExprPtr& f, const ExprPtr& x, const ExprPtr& expected,
   const auto c = compare_tangents(f, r, x, data, {.count = 256, .seed = 1});
   INFO(c.difference);
   REQUIRE(c.difference.empty());
+  REQUIRE((c.nonzero != 0 || r->is_zero()));
   const auto violation = validity(f, x, r);
   INFO(violation);
   REQUIRE(violation.empty());

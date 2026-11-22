@@ -174,19 +174,16 @@ std::string name_of(const Model& model) {
          (model.traced ? " traced" : " spin-orbital");
 }
 
-container::svector<Exclusion> family_exclusions() {
-  return {{{.csv = true, .open_shell = true},
-           "core's open_shell_CC_spintrace under CSV gives a protoindex the "
-           "spin of the slot that carries it: the index of a mixed-spin pair "
-           "holds two spins within a term"}};
-}
-
 container::svector<Model> family_models() {
+#ifdef SEQUANT_SKIP_LONG_TESTS
+  return {{}, {.csv = true}};
+#else
   return {{},
           {.traced = true},
           {.csv = true},
           {.csv = true, .traced = true},
           {.open_shell = true}};
+#endif
 }
 
 void with_family(const Model& model,

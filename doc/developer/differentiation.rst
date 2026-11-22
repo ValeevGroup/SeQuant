@@ -185,7 +185,10 @@ cluster-specific virtual orbitals; spin-orbital, closed-shell, and open-shell fo
 value is an identity: the judge's identity for every equation by every amplitude and multiplier and by a sample of the
 other tensors that ``diff`` accepts, the model's own equations as derivatives of its Lagrangian, a Taylor expansion
 about zero that checks ``diff`` and ``at_zero`` together, mixed partial derivatives that commute, and the validity of
-each result's free indices. Each identity is shown to fail on one deliberately wrong result.
+each result's free indices. Each identity is shown to fail on one deliberately wrong result. With
+``SEQUANT_SKIP_LONG_TESTS`` (the CMake option, and every Debug configuration) the identities run over the two
+spin-orbital models only, and the finite differences of the Hartree-Fock energy in a strength tensor check its
+derivatives at one value of the perturbation index and one pair of different values only.
 
 Generators of functions
 -------------------------

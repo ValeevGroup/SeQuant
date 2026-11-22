@@ -1,6 +1,8 @@
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -10,8 +12,10 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 
 using namespace sequant;
 namespace t = sequant::deriv::test;
@@ -184,4 +188,28 @@ TEST_CASE("deriv/judge", "[deriv][judge]") {
   REQUIRE_FALSE(sample(7).empty());
   REQUIRE(sample(7) == sample(7));
   REQUIRE(sample(7) != sample(8));
+  // the dummies of f named like x's indices are renamed apart from every
+  // index of f, also where f holds the next temporary names
+  const auto minted = [](const Index& like) {
+    Index::reset_tmp_index();
+    const auto first = Index::make_tmp_index(like.basis());
+    return std::pair{first, Index::make_tmp_index(like.basis())};
+  };
+  const auto [i_tmp1, i_tmp2] = minted(Index(L"i_1"));
+  const auto [a_tmp1, a_tmp2] = minted(Index(L"a_1"));
+  const container::map<Index, Index> to_minted{{Index(L"i_7"), i_tmp1},
+                                               {Index(L"i_8"), i_tmp2},
+                                               {Index(L"a_7"), a_tmp1},
+                                               {Index(L"a_8"), a_tmp2}};
+  const auto uv = L" u{i_7,i_8;a_7,a_8}:N-N-N v{a_7,a_8;i_7,i_8}:N-N-N";
+  const auto ft = transform_expr(
+      T(std::wstring(L"g{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N") + uv), to_minted);
+  const auto rt =
+      transform_expr(T(std::wstring(L"g{i_1;a_1}:N-N-N") + uv), to_minted);
+  const auto xt = T(L"t{a_1;i_1}:N-N-N");
+  Index::reset_tmp_index();
+  REQUIRE(t::compare_tangents(ft, rt, xt).difference.empty());
+  Index::reset_tmp_index();
+  REQUIRE_FALSE(
+      t::compare_tangents(ft, ex<Constant>(2) * rt, xt).difference.empty());
 }
