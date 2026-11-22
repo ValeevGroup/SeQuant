@@ -152,7 +152,8 @@ Responses
 ``diff`` takes the dependence on a variable from ``E`` as written. To differentiate with respect to the strength
 :math:`\varepsilon` of a perturbation, write every quantity that depends on it as its series in :math:`\varepsilon`,
 differentiate, and set :math:`\varepsilon = 0` with ``at_zero``. The :math:`n`-th derivative at zero is :math:`n!`
-times the coefficient of :math:`\varepsilon^n`:
+times the coefficient of :math:`\varepsilon^n`. The example writes the series by hand; ``mbpt::series`` writes it for
+every tensor of a label (see `Series substitution`_):
 
 .. literalinclude:: /examples/user/differentiation.cpp
    :language: cpp
@@ -232,3 +233,179 @@ canonicalized; call :func:`sequant::simplify` on the final result for SeQuant's 
    names.
 
 How ``diff`` computes the result is described in :doc:`the developer guide </developer/differentiation>`.
+
+Series substitution
+---------------------
+
+:func:`sequant::mbpt::series` (``SeQuant/domain/mbpt/series.hpp``) writes the dependence on a perturbation strength
+into an expression: ``series(E, label, ε, n)`` replaces each leaf :math:`p` labelled ``label`` by its Taylor series in
+the strength :math:`\varepsilon` through order :math:`n`,
+
+.. math::
+
+   p \to \sum_{k=0}^{n} \frac{1}{k!}\, \varepsilon^k p^{(k)}, \qquad p^{(0)} = p.
+
+The coefficient :math:`p^{(k)}` is the :math:`k`-th derivative of :math:`p` at :math:`\varepsilon = 0`; the factor
+:math:`1/k!` belongs to the series, not to the coefficient. It is an ordinary tensor: the leaf with the order added to
+its label as SeQuant's perturbation operators write it (``t¹``, ``t²``), and with the same slots and symmetries. The
+:math:`k`-th derivative of the series at zero is therefore the coefficient itself:
+
+.. literalinclude:: /examples/user/differentiation.cpp
+   :language: cpp
+   :start-after: start-snippet-8
+   :end-before: end-snippet-8
+   :dedent: 4
+
+The label is matched exactly: ``t`` matches ``t`` of every rank and every block, but not ``t¹``. A leaf with the adjoint
+label, ``t⁺``, is matched too. The strength is real, so the series of ``t⁺`` is the adjoint of the series of ``t``, with
+the coefficients ``t¹⁺``, ``t²⁺``, ... that :func:`sequant::adjoint` gives. Nothing is expanded or truncated: ``diff``
+expands, and ``at_zero`` removes what is left of higher order. A series through order :math:`n` holds no coefficient
+above :math:`n`, so a derivative of order above :math:`n` lacks the terms of the higher coefficients.
+
+The strength is a scalar :class:`sequant::Variable` or a *strength tensor*: a tensor with one auxiliary index and no
+other slot, such as ``ε{;;z_1}``, which holds several perturbations of one kind, such as the :math:`3N` coordinates of
+:math:`N` nuclei. The index space of its index is the caller's choice, for example the batching space ``z`` that
+:func:`sequant::mbpt::add_batching_spaces` registers. With a strength tensor the term of order :math:`k` is
+:math:`\frac{1}{k!}\, p^{(k)}_{\ldots; z_1 \ldots z_k}\, \varepsilon_{z_1} \cdots \varepsilon_{z_k}`: the perturbation
+indices are appended to the leaf's auxiliary slots, as in ``h¹{p_1;p_2;z_3} ε{;;z_3}``, and are new for every leaf,
+named unlike every index of the expression. A derivative is then taken by an element such as ``ε{;;z_4}``, under index
+names of the caller's choice, and ``at_zero`` by the strength tensor sets all of its elements to zero.
+
+``series`` throws :class:`sequant::Exception`, with a message starting with ``mbpt::series:``, for an empty or adjoint
+label, a strength that is neither an unconjugated ``Variable`` nor a tensor with exactly one auxiliary index and no
+other slot, an order above 9, an expression that holds a ``Variable`` labelled like the label or an ``mbpt``
+operator (expand its tensor form first), a leaf of the label under a ``TensorPower``, and an expression that already
+holds a tensor labelled like one of the coefficients it would write.
+
+.. note::
+
+   Auxiliary slots have no symmetry in SeQuant, so a coefficient is not known to be symmetric in its perturbation
+   indices. A second derivative by a strength tensor therefore comes back as
+   ``1/2 h²{p_1;p_2;z_3,z_4} + 1/2 h²{p_1;p_2;z_4,z_3}``, not as ``h²{p_1;p_2;z_3,z_4}``: correct, but not merged.
+
+Hartree-Fock orbital and nuclear derivatives
+----------------------------------------------
+
+The generators in ``sequant::mbpt::hf`` (``SeQuant/domain/mbpt/models/hf.hpp``) return the Hartree-Fock energy as a
+function of an orbital rotation and of a perturbation strength; its derivatives are then a few calls of ``diff``,
+``at_zero`` and ``series``. The generators belong to ``SeQuant::mbpt``, which does not link ``SeQuant::deriv``; code
+that differentiates links both, as ``SeQuant::SeQuant`` does.
+
+No equation is solved, and nothing is assumed about the orbitals. A term is removed only by the mathematics of the
+differentiation (a derivative that is zero) or by ``at_zero``, never because of a physical condition: the Brillouin
+condition (:math:`F_{ia} = 0` on the Hartree-Fock solution), stationarity and the :math:`2n+1` rule (on the solution,
+the orbital response through order :math:`n` determines the energy derivatives through order :math:`2n+1`) are not
+applied. A term that vanishes on the Hartree-Fock solution stays in the result; using such a condition is a separate
+step for the caller.
+
+Orbital rotation
+^^^^^^^^^^^^^^^^^^
+
+:func:`sequant::mbpt::hf::rotated_energy` returns the energy of the reference under an orbital rotation, through the
+given order in the rotation,
+
+.. math::
+
+   E(\kappa) = \langle 0 | e^{-\hat\kappa} \hat H e^{\hat\kappa} | 0 \rangle - \langle 0 | \hat H | 0 \rangle,
+   \qquad \hat\kappa = \hat K - \hat K^\dagger, \qquad \hat K = \sum_{ai} \kappa_{ai}\, a^\dagger_a a_i,
+
+generated with SeQuant's commutator expansion and Wick's theorem. :math:`\hat H` is ``op::H()``, normal ordered, so the
+reference energy is not part of the result. :math:`\hat K` takes every orbital of the reference-occupied space into
+every orbital of its complement, frozen and inactive orbitals included. Its amplitude is labelled ``κₒ``, since ``κ``
+is core's label of the cumulant. With two elements ``x`` and ``y`` of the rotation, the orbital gradient is
+``at_zero(diff(E, {x}), {x})`` (``at_zero`` by ``κₒ`` sets ``κₒ⁺`` to zero too), and the blocks of the orbital Hessian
+are :math:`A = \partial^2 E / \partial\kappa\, \partial\kappa^*`, ``diff(E, {x, adjoint(y)})``, and
+:math:`B = \partial^2 E / \partial\kappa\, \partial\kappa`, ``diff(E, {x, y})``. The energy through second order needs
+no ``at_zero`` for these:
+
+.. literalinclude:: /examples/user/differentiation.cpp
+   :language: cpp
+   :start-after: start-snippet-9
+   :end-before: end-snippet-9
+   :dedent: 4
+
+Over complex index spaces ``κₒ`` and ``κₒ⁺`` are independent variables (see `Complex and real variables`_); the
+derivatives by ``adjoint(x)`` are separate calls and give the complex conjugates. Over real index spaces the same calls
+collect the terms of ``κₒ⁺`` as well: the gradient is ``2 f{i_1;a_1}`` and both second derivatives are
+:math:`2(A + B)`. For a closed-shell reference over real spaces, the energy put through
+:func:`sequant::mbpt::closed_shell_spintrace` gives the gradient ``4 f{i_1;a_1}`` and the closed-shell Hessian, with the
+variable spelled as the spin-traced leaves are, ``κₒ{a_1;i_1}:N-N-S``.
+
+Nuclear derivatives
+^^^^^^^^^^^^^^^^^^^^^
+
+At a displaced geometry, displaced by the strength :math:`\varepsilon`, the integrals change and the reference orbitals
+are no longer orthonormal: their overlap is :math:`S(\varepsilon)`, with :math:`S(0) = 1`. In the symmetrically
+orthonormalized orbitals, with :math:`X = S^{-1/2}`, the one-electron integrals are :math:`X h X` and the two-electron
+integrals carry a factor :math:`X` on each of their four legs. The operators then refer to orthonormal orbitals at
+every geometry, and the energy keeps its form, the orbitals orthonormalized first and rotated second:
+
+.. math::
+
+   E(\varepsilon, \kappa) = \langle 0 | e^{-\hat\kappa} \tilde H(\varepsilon) e^{\hat\kappa} | 0 \rangle.
+
+Two generators write this function. :func:`sequant::mbpt::hf::energy` is the energy through the given order in the
+rotation, written in the integrals ``h`` and ``g``: the reference energy ``h{i_1;i_1} + 1/2 g{i_1,i_2;i_1,i_2}`` plus
+``rotated_energy`` with each Fock matrix element written as :math:`h_{pq} + \sum_i g_{pi,qi}`. ``h`` takes the
+symmetries of the ``f`` it replaces and ``g`` those of the ``g`` of ``op::H()``, so all ``h`` and all ``g`` of the
+result are one variable each. :func:`sequant::mbpt::hf::orthonormalized` replaces each ``h`` and ``g`` by its series
+in the strength and puts :math:`X` on each leg, as the series :math:`X = \sum_k \binom{-1/2}{k} \Delta^k` in
+:math:`\Delta = S(\varepsilon) - 1 = \varepsilon s^{(1)} + \frac{1}{2} \varepsilon^2 s^{(2)} + \ldots`. The overlap
+coefficients ``s¹``, ``s²``, ... have one slot on each side and the bra-ket symmetry of ``h``; as a variable, ``s¹`` is
+spelled ``s¹{p_1;p_2}:N-C-S``. Each leaf is cut at the given order in the strength, so a derivative of higher order
+than that is not the derivative of the full function. The nuclear-repulsion energy, a function of the geometry alone,
+is the caller's to add.
+
+The orbitals follow the displacement: the rotation is a function :math:`\kappa(\varepsilon) = \varepsilon \kappa^{(1)} +
+\frac{1}{2} \varepsilon^2 \kappa^{(2)} + \ldots` with :math:`\kappa(0) = 0`, and the total derivatives of the energy
+are those of :math:`E(\varepsilon, \kappa(\varepsilon))`. They are taken by substituting the series of ``κₒ`` with
+``series``, removing its term of order zero with ``at_zero``, and differentiating by the strength. For the
+:math:`n`-th total derivative every order passed is at least :math:`n`: ``energy(n)``, ``orthonormalized`` through
+:math:`n` and the series of ``κₒ`` through :math:`n`. The first-order
+rotation :math:`\kappa^{(1)}` is the solution of the first-order response (coupled-perturbed Hartree-Fock) equation,
+the total derivative of :math:`\partial E / \partial \kappa^*` at zero:
+
+.. literalinclude:: /examples/user/differentiation.cpp
+   :language: cpp
+   :start-after: start-snippet-10
+   :end-before: end-snippet-10
+   :dedent: 4
+
+The nuclear gradient is the derivative of the integrals with the density, minus the derivative of the overlap with the
+Fock matrix, which on the Hartree-Fock solution is :math:`-\sum_{ij} s^{(1)}_{ij} F_{ji}`, the overlap derivative
+contracted with the energy-weighted density (the occupied block of :math:`F`), plus
+:math:`\sum_{ai} (F_{ia} \kappa^{(1)}_{ai} + \kappa^{(1)*}_{ai} F_{ai})`. That last term, the orbital gradient times
+the first-order rotation, is zero on the solution, where :math:`F_{ia} = 0`, and is kept. The response equation is
+:math:`\sum_{bj} (A_{ai,bj} \kappa^{(1)}_{bj} + B_{ai,bj} \kappa^{(1)*}_{bj}) + b_{ai} = 0` with the textbook
+:math:`A_{ai,bj} = F_{ab} \delta_{ij} - F_{ji} \delta_{ab} + \langle aj \| ib \rangle` and
+:math:`B_{ai,bj} = \langle ab \| ij \rangle`, the transpose of the ``A`` above and the conjugate of its ``B``, since
+this derivative is by :math:`\kappa^*`; :math:`b` holds the derivatives of the integrals and of the overlap. The second
+derivative, ``at_zero(diff(Et, {ε, ε}), {ε})``, likewise holds every term: the second derivative at fixed orbitals,
+the mixed terms in :math:`\kappa^{(1)}`, the orbital Hessian between two :math:`\kappa^{(1)}`, and the orbital gradient
+times :math:`\kappa^{(2)}`, which again vanishes on the solution. With a strength tensor in place of ``ε`` the same
+calls give the gradient and the Hessian over all coordinates at once:
+
+.. literalinclude:: /examples/user/differentiation.cpp
+   :language: cpp
+   :start-after: start-snippet-11
+   :end-before: end-snippet-11
+   :dedent: 4
+
+The generators expect what follows:
+
+- **A variable is spelled as the leaves are.** ``diff`` requires the leaves of a variable's label to declare the
+  variable's symmetries (see `Scope`_), so a variable carries the symmetry flags the generators give:
+  ``κₒ{a_1;i_1}:A-N-S``, ``h{p_1;p_2}:A-C-S``, ``g{p_1,p_2;p_3,p_4}:A-C-S``, ``s¹{p_1;p_2}:N-C-S``. It is also
+  written over the index spaces of the context the function was generated in: the examples use the minimal spaces of
+  :func:`sequant::mbpt::make_min_sr_spaces`, occupied ``i`` and unoccupied ``a``; with the frozen-core spaces of
+  :func:`sequant::mbpt::make_sr_spaces` the rotation runs from ``m`` to ``e``.
+- **The operator registry holds** ``κₒ``, for ``rotated_energy`` and ``energy``.
+  :func:`sequant::mbpt::make_legacy_registry` and :func:`sequant::mbpt::make_minimal_registry` register it as an
+  excitation operator; a custom registry must add it.
+- **A single-determinant reference.** ``rotated_energy`` and ``energy`` throw :class:`sequant::Exception`, with a
+  message starting with ``mbpt::hf::``, for a vacuum other than ``Vacuum::SingleProduct``, a reference that is not the
+  vacuum, a registry without an unoccupied space, and pair-specific orbitals (``CSV::Yes``); ``energy`` also for a
+  spin-free basis.
+- **Integrals in h and g.** ``orthonormalized`` needs no rotation, only the complete space. It throws for an expression
+  that still holds ``f`` (it takes the result of ``energy``, not of ``rotated_energy``), ``h⁺`` or ``g⁺``, or an
+  ``mbpt`` operator, and for a leg of ``h`` or ``g`` that carries protoindices (pair-specific orbitals) or a spin.

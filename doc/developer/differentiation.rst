@@ -186,3 +186,19 @@ value is an identity: the judge's identity for every equation by every amplitude
 other tensors that ``diff`` accepts, the model's own equations as derivatives of its Lagrangian, a Taylor expansion
 about zero that checks ``diff`` and ``at_zero`` together, mixed partial derivatives that commute, and the validity of
 each result's free indices. Each identity is shown to fail on one deliberately wrong result.
+
+Generators of functions
+-------------------------
+
+``mbpt::series`` and the generators in ``mbpt::hf`` (see the user page) write the functions that the engine
+differentiates. They live in the many-body layer, ``SeQuant/domain/mbpt``, since the perturbation-order labels (``t¹``)
+and the perturbation index space are that layer's conventions, and ``SeQuant::mbpt`` does not link ``SeQuant::deriv``:
+the derivative is the caller's few calls. Their tests are in ``tests/unit/deriv``, where the judge is.
+
+``series`` does not use core's ``replace`` (``SeQuant/core/utility/expr.hpp``). There a target matches only leaves over
+the same index spaces, so ``f{p_1;p_2}`` does not match ``f{i_1;a_1}``, and an index that only the replacement holds,
+such as a perturbation index or a summed index, keeps its name in every match, so a term with two leaves of the label
+would hold it in four slots. ``series`` visits the leaves once and builds each replacement from the leaf itself. Every
+index it adds is a new temporary index from core's counter (``Index::make_tmp_index``), skipping the names already used
+in the expression, so it is new whatever state the counter is in; ``hf::energy`` and ``hf::orthonormalized`` take
+their new summed indices the same way.
