@@ -8,6 +8,7 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
+#include <SeQuant/domain/mbpt/series.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include "csv_test_utils.hpp"
@@ -236,6 +237,51 @@ TEST_CASE("deriv/identities/own-equations", "[deriv][identities]") {
       }
     });
   // t[k], λ[k], tʼ[k], λʼ[k] for k = 1, 2; open-shell, each spin case
+  REQUIRE(compared == container::map<std::string, std::size_t>{
+                          {"CC{2} CSV spin-orbital", 8},
+                          {"CC{2} CSV traced", 8},
+                          {"CC{2} canonical spin-orbital", 8},
+                          {"CC{2} canonical traced", 8},
+                          {"CC{2} open-shell", 20}});
+}
+
+TEST_CASE("deriv/series/cc-lagrangian", "[deriv][series]") {
+  // ℒ with t and λ replaced by their series in ε is ℒ at ε = 0, and the
+  // derivatives of that by λ and t are SeQuant's own t and λ equations; its
+  // first ε-derivative at 0 is checked against tʼ and λʼ by own_equations()
+  const auto eps = ex<Variable>(L"ε");
+  container::map<std::string, std::size_t> compared;
+  for (const auto& m : t::family_models())
+    t::with_family(m, [&](const t::Family& f) {
+      const std::wstring name = m.open_shell ? L"ℒ case 0" : L"ℒ";
+      const auto L = t::equation_named(f, name);
+      for (const std::size_t order : {1, 2}) {
+        INFO(t::name_of(m) << ", order " << order);
+        const auto L0 = deriv::at_zero(
+            mbpt::series(mbpt::series(L, L"t", eps, order), L"λ", eps, order),
+            {eps});
+        const auto same = t::compare_arrays(L0, L, {}, {.projectors = true});
+        INFO(same.difference);
+        CHECK(same.difference.empty());
+        CHECK(same.nonzero != 0);
+        t::Family at_zero{.model = m};
+        for (const auto& [n, e] : f.equations)
+          if (n == name)
+            at_zero.equations.emplace_back(n, L0);
+          else if (n.starts_with(L"t[") || n.starts_with(L"λ["))
+            at_zero.equations.emplace_back(n, e);
+        for (const auto& c : t::own_equations(at_zero)) {
+          INFO(toUtf8(c.name));
+          const auto own = t::compare_arrays(c.generated, c.expected, c.free,
+                                             {.projectors = true});
+          INFO(own.difference);
+          CHECK(own.difference.empty());
+          CHECK(own.nonzero != 0);
+          ++compared[t::name_of(m)];
+        }
+      }
+    });
+  // t[k], λ[k] for k = 1, 2 at each order; open-shell, each spin case
   REQUIRE(compared == container::map<std::string, std::size_t>{
                           {"CC{2} CSV spin-orbital", 8},
                           {"CC{2} CSV traced", 8},

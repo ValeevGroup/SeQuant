@@ -34,6 +34,12 @@ void check_rule(const ExprPtr& f, const ExprPtr& x, const ExprPtr& expected,
 void check_rule(std::wstring_view f, std::wstring_view x,
                 std::wstring_view expected, const Data& data = {});
 
+/// requires @p a and @p b to be the same nonzero array over @p free
+/// (compare_arrays()); by default the strength ε is real
+void require_same(const ExprPtr& a, const ExprPtr& b,
+                  const container::set<Index>& free = {},
+                  const Data& data = {.real = {L"ε"}});
+
 }  // namespace sequant::deriv::test
 
 #endif  // SEQUANT_TESTS_UNIT_DERIV_JUDGE_HPP

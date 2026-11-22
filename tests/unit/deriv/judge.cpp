@@ -131,4 +131,13 @@ void check_rule(std::wstring_view f, std::wstring_view x,
              expected.empty() ? nullptr : deserialize(expected), data);
 }
 
+void require_same(const ExprPtr& a, const ExprPtr& b,
+                  const container::set<Index>& free, const Data& data) {
+  INFO(text_of(a) << "\n  vs\n" << text_of(b));
+  const auto c = compare_arrays(a, b, free, data);
+  INFO(c.difference);
+  REQUIRE(c.difference.empty());
+  REQUIRE(c.nonzero != 0);
+}
+
 }  // namespace sequant::deriv::test

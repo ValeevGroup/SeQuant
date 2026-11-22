@@ -15,6 +15,7 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
+#include <SeQuant/domain/mbpt/series.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include "ccsd_helpers.hpp"
 #include "csv_test_utils.hpp"
@@ -87,12 +88,6 @@ ExprPtr with_block_replaced(const ExprPtr& e, const ExprPtr& target,
   return result;
 }
 
-ExprPtr tensor_like(const Tensor& t, std::wstring_view label,
-                    container::svector<Index> b, container::svector<Index> k) {
-  return ex<Tensor>(label, bra(std::move(b)), ket(std::move(k)), aux{},
-                    t.symmetry(), t.braket_symmetry(), t.column_symmetry());
-}
-
 /// the first factor Â or Ŝ of a term of @p e ; none if no term has one
 const AbstractTensor* projector_of(const ExprPtr& e) {
   for (const auto& term : summands_of(e)) {
@@ -151,11 +146,6 @@ ExprPtr biorthogonal(const ExprPtr& r, const AbstractTensor& p) {
   for (std::size_t k = 0; k != p._bra_rank(); ++k)
     pairs.push_back({p._ket()[k], p._bra()[k]});
   return mbpt::biorthogonal_transform_pre_nnsproject(moment, pairs);
-}
-
-/// whether @p x is a t or λ leaf, neither perturbed nor conjugated
-bool is_unperturbed_amplitude(const ExprPtr& x) {
-  return is_tensor_labeled(*x, L"t") || is_tensor_labeled(*x, L"λ");
 }
 
 /// @p y spelled apart from x, as schwarz() differentiates by it
@@ -413,7 +403,7 @@ container::svector<OwnEquation> own_equations(const Family& family) {
     const auto label = t_eq ? L"λ" : L"t";
     const auto* leaf = leaf_over(L, label, b);
     REQUIRE(leaf);
-    const auto x = tensor_like(*leaf, label, b, k);
+    const auto x = mbpt::detail::tensor_like(*leaf, label, b, k, {});
     const auto r = diff(L, {x});
     OwnEquation entry{.name = name, .generated = e, .expected = r};
     if (model.open_shell) {
@@ -439,25 +429,12 @@ container::svector<OwnEquation> own_equations(const Family& family) {
   for (const auto& [name, e] : family.equations) {
     const bool t_eq = name.starts_with(L"tʼ"), λ_eq = name.starts_with(L"λʼ");
     if (!t_eq && !λ_eq) continue;
-    auto shifted = equation_named(
-        family,
-        (t_eq ? std::wstring(L"t") : std::wstring(L"λ")) + name.substr(2));
-    Expressions blocks;
-    for (const auto& a : family.variables) {
-      if (!is_unperturbed_amplitude(a) ||
-          (t_eq && !is_tensor_labeled(*a, L"t")))
-        continue;
-      // one spelling per block: a block replaced twice would shift twice
-      if (std::ranges::any_of(blocks, [&a](const ExprPtr& b) {
-            return ExprMatcher(*b, {.tensor_cmp = TensorComparison::Block}) ==
-                   *a;
-          }))
-        continue;
-      blocks.push_back(a);
-      const auto base = a->as<Tensor>().label();
-      shifted = with_block_replaced(
-          shifted, a, a + eps * relabeled(a, base == L"t" ? L"t¹" : L"λ¹"));
-    }
+    auto shifted = mbpt::series(
+        equation_named(
+            family,
+            (t_eq ? std::wstring(L"t") : std::wstring(L"λ")) + name.substr(2)),
+        L"t", eps, 1);
+    if (λ_eq) shifted = mbpt::series(shifted, L"λ", eps, 1);
     auto generated = without_terms_of(e, {L"h¹", L"ω"});
     auto expected = at_zero(diff(shifted, {eps}), {eps});
     if (model.open_shell && !projector_of(e)) {

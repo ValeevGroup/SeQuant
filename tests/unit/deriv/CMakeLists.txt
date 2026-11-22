@@ -8,6 +8,7 @@ add_executable(unit_tests-sequant-deriv ${BUILD_BY_DEFAULT}
     "test_deriv_identities.cpp"
     "test_deriv_judge.cpp"
     "test_deriv_rules.cpp"
+    "test_deriv_series.cpp"
 )
 set_target_properties(unit_tests-sequant-deriv PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 # SeQuant::mbpt: test_main.cpp sets up the mbpt Context; dtl: catch2_sequant.hpp

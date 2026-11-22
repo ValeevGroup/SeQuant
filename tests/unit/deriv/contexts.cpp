@@ -16,4 +16,12 @@ ContextScope real_spaces(std::vector<std::wstring> keys) {
   return set_scoped_default_context(context);
 }
 
+ContextScope with_batching_spaces() {
+  auto registry = mbpt::make_sr_spaces();
+  mbpt::add_batching_spaces(registry);
+  auto context = get_default_context();
+  context.set(registry);
+  return set_scoped_default_context(context);
+}
+
 }  // namespace sequant::deriv::test
