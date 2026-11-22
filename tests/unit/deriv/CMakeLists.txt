@@ -5,6 +5,7 @@ add_executable(unit_tests-sequant-deriv ${BUILD_BY_DEFAULT}
     "evaluator.cpp"
     "identities.cpp"
     "judge.cpp"
+    "test_deriv_hf.cpp"
     "test_deriv_identities.cpp"
     "test_deriv_judge.cpp"
     "test_deriv_rules.cpp"

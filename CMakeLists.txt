@@ -496,6 +496,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/detail/concepts.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
+        SeQuant/domain/mbpt/models/hf.cpp
+        SeQuant/domain/mbpt/models/hf.hpp
         SeQuant/domain/mbpt/op_registry.hpp
         SeQuant/domain/mbpt/op_registry.cpp
         SeQuant/domain/mbpt/op.cpp

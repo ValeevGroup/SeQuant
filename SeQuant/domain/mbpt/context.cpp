@@ -135,6 +135,7 @@ std::shared_ptr<OpRegistry> make_minimal_registry() {
       .add(L"t", OpClass::Ex)     /// cluster operator
       .add(L"λ", OpClass::Deex)   /// deexcitation cluster operator
       .add(L"R", OpClass::Ex)     /// right-hand eigenstate
+      .add(L"κₒ", OpClass::Ex)    /// orbital rotation
       .add(L"L", OpClass::Deex);  /// left-hand eigenstate
 
   return registry;
@@ -154,6 +155,7 @@ std::shared_ptr<OpRegistry> make_legacy_registry() {
       .add(L"t", OpClass::Ex)
       .add(L"λ", OpClass::Deex)
       .add(L"R", OpClass::Ex)
+      .add(L"κₒ", OpClass::Ex)  /// orbital rotation
       .add(L"L", OpClass::Deex)
       /// R12
       .add(L"F", OpClass::Gen)
