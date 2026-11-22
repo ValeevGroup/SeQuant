@@ -3,21 +3,25 @@ add_executable(unit_tests-sequant-deriv ${BUILD_BY_DEFAULT}
     "../test_main.cpp"
     "contexts.cpp"
     "evaluator.cpp"
+    "hf_model.cpp"
     "identities.cpp"
     "judge.cpp"
     "test_deriv_hf.cpp"
+    "test_deriv_hf_numeric.cpp"
     "test_deriv_identities.cpp"
     "test_deriv_judge.cpp"
     "test_deriv_rules.cpp"
     "test_deriv_series.cpp"
 )
 set_target_properties(unit_tests-sequant-deriv PROPERTIES CXX_SCAN_FOR_MODULES OFF)
-# SeQuant::mbpt: test_main.cpp sets up the mbpt Context; dtl: catch2_sequant.hpp
+# SeQuant::mbpt: test_main.cpp sets up the mbpt Context; dtl: catch2_sequant.hpp;
+# Eigen: hf_model.cpp
 target_link_libraries(unit_tests-sequant-deriv PRIVATE
     SeQuant::deriv
     SeQuant::mbpt
     Catch2::Catch2
-    dtl::dtl)
+    dtl::dtl
+    Eigen3::Eigen)
 target_include_directories(unit_tests-sequant-deriv PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_compile_definitions(unit_tests-sequant-deriv PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
