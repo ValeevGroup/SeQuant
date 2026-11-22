@@ -6,7 +6,9 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/hf.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
+#include <SeQuant/domain/mbpt/series.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -178,6 +180,216 @@ TEST_CASE("deriv/hf/orbital-rotation", "[deriv][hf]") {
           mbpt::hf::rotated_energy(1),
           StartsWith("mbpt::hf::rotated_energy: ") &&
               Catch::Matchers::ContainsSubstring("pair-specific"));
+    }
+  }
+}
+
+namespace {
+
+/// the Fock matrix element f{P;Q} = h{P;Q} + Σ_m g{P,m;Q,m}, in h and g
+std::wstring fock(std::wstring_view p, std::wstring_view q) {
+  return L"(h{" + std::wstring(p) + L";" + std::wstring(q) + L"}:A-C-S + g{" +
+         std::wstring(p) + L",m_9;" + std::wstring(q) + L",m_9}:A-C-S)";
+}
+
+/// the derivative of the energy along κ(ε), first-order coefficients carrying
+/// the auxiliary indices @p z (";z_3" or empty)
+ExprPtr nuclear_gradient(std::wstring_view z) {
+  const std::wstring Z(z);
+  const auto T = [](const std::wstring& s) { return deserialize(s); };
+  return T(L"h¹{m_1;m_1" + Z + L"}:A-C-S + 1/2 g¹{m_1,m_2;m_1,m_2" + Z +
+           L"}:A-C-S - 1/2 s¹{m_1;p_1" + Z + L"}:N-C-S " +
+           fock(L"p_1", L"m_1") + L" - 1/2 " + fock(L"m_1", L"p_1") +
+           L" s¹{p_1;m_1" + Z + L"}:N-C-S + " + fock(L"m_1", L"e_1") +
+           L" κₒ¹{e_1;m_1" + Z + L"}:A-N-S") +
+         adjoint(T(L"κₒ¹{e_1;m_1" + Z + L"}:A-N-S")) * T(fock(L"e_1", L"m_1"));
+}
+
+}  // namespace
+
+TEST_CASE("deriv/hf/nuclear", "[deriv][hf]") {
+  using Catch::Matchers::StartsWith;
+  using deriv::at_zero;
+  using deriv::diff;
+  const auto T = [](std::wstring_view s) { return deserialize(s); };
+  const auto eps = ex<Variable>(L"ε");
+  const auto kappa = T(L"κₒ{e_9;m_9}:A-N-S");
+  const Index m1(L"m_1"), e1(L"e_1");
+
+  SECTION("energy") {
+    require_same(mbpt::hf::energy(0),
+                 T(L"h{m_1;m_1}:A-C-S + 1/2 g{m_1,m_2;m_1,m_2}:A-C-S"));
+    require_same(
+        at_zero(diff(mbpt::hf::energy(1), {T(L"κₒ{e_1;m_1}:A-N-S")}), {kappa}),
+        T(L"h{m_1;e_1}:A-C-S + g{m_1,m_2;e_1,m_2}:A-C-S"), {m1, e1});
+    // every h and every g is one variable
+    const auto E = mbpt::hf::energy(2);
+    REQUIRE_NOTHROW(diff(E, {T(L"h{p_1;p_2}:A-C-S")}));
+    REQUIRE_NOTHROW(diff(E, {T(L"g{p_1,p_2;p_3,p_4}:A-C-S")}));
+  }
+
+  SECTION("one-electron") {
+    const auto h = mbpt::hf::orthonormalized(T(L"h{m_1;m_1}:A-C-S"), eps, 1);
+    REQUIRE_NOTHROW(diff(h, {T(L"s¹{p_1;p_2}:N-C-S")}));
+    require_same(
+        at_zero(diff(h, {eps}), {eps}),
+        T(L"h¹{m_1;m_1}:A-C-S - 1/2 s¹{m_1;p_1}:N-C-S h{p_1;m_1}:A-C-S - "
+          L"1/2 h{m_1;p_1}:A-C-S s¹{p_1;m_1}:N-C-S"));
+    // a Variable labelled like the overlap, or an overlap under a power, is
+    // not expanded
+    const auto s = ex<Variable>(L"s");
+    require_same(mbpt::hf::orthonormalized(s * T(L"h{m_1;m_1}:A-C-S"), eps, 1),
+                 s * h);
+    REQUIRE_NOTHROW(mbpt::hf::orthonormalized(
+        ex<TensorPower>(T(L"s{m_2;m_3}:N-C-S"), -1) * T(L"h{m_1;m_1}:A-C-S"),
+        eps, 1));
+    {
+      // there op::H()'s one-body tensor is labelled h
+      auto context = get_default_context();
+      context.set(Vacuum::Physical);
+      const auto scope = set_scoped_default_context(context);
+      require_same(
+          at_zero(diff(mbpt::hf::orthonormalized(
+                           T(L"h{p_1;p_2}:A-C-S D{p_2;p_1}:N-N-N"), eps, 1),
+                       {eps}),
+                  {eps}),
+          T(L"(h¹{p_1;p_2}:A-C-S - 1/2 s¹{p_1;p_3}:N-C-S h{p_3;p_2}:A-C-S - "
+            L"1/2 h{p_1;p_3}:A-C-S s¹{p_3;p_2}:N-C-S) D{p_2;p_1}:N-N-N"));
+    }
+    require_same(
+        at_zero(diff(mbpt::hf::orthonormalized(
+                         T(L"h{p_1;p_2}:A-C-S D{p_2;p_1}:N-N-N"), eps, 2),
+                     {eps, eps}),
+                {eps}),
+        T(L"(h²{p_1;p_2}:A-C-S - s¹{p_1;p_3}:N-C-S h¹{p_3;p_2}:A-C-S - "
+          L"h¹{p_1;p_3}:A-C-S s¹{p_3;p_2}:N-C-S - "
+          L"1/2 s²{p_1;p_3}:N-C-S h{p_3;p_2}:A-C-S - "
+          L"1/2 h{p_1;p_3}:A-C-S s²{p_3;p_2}:N-C-S + "
+          L"3/4 s¹{p_1;p_3}:N-C-S s¹{p_3;p_4}:N-C-S h{p_4;p_2}:A-C-S + "
+          L"3/4 h{p_1;p_3}:A-C-S s¹{p_3;p_4}:N-C-S s¹{p_4;p_2}:N-C-S + "
+          L"1/2 s¹{p_1;p_3}:N-C-S h{p_3;p_4}:A-C-S s¹{p_4;p_2}:N-C-S) "
+          L"D{p_2;p_1}:N-N-N"));
+  }
+
+  SECTION("an index named like a new one") {
+    // t: the first temporary indices of the complete space, then the counter
+    // back at them
+    Index::reset_tmp_index();
+    container::svector<Index> t;
+    for (int k = 0; k != 4; ++k)
+      t.push_back(Index::make_tmp_index(Index(L"p_1").space()));
+    Index::reset_tmp_index();
+    const Index p8(L"p_8");
+    const auto tensor = [](std::wstring label, const Index& a, const Index& b,
+                           BraKetSymmetry braket = BraKetSymmetry::Conjugate,
+                           Symmetry symmetry = Symmetry::Antisymm) {
+      return ex<Tensor>(std::move(label), bra{a}, ket{b}, symmetry, braket,
+                        ColumnSymmetry::Symm);
+    };
+    const auto s1 = [&](const Index& a, const Index& b) {
+      return tensor(L"s¹", a, b, BraKetSymmetry::Conjugate, Symmetry::Nonsymm);
+    };
+    const auto D = tensor(L"D", t[2], t[3], BraKetSymmetry::Nonsymm);
+    const auto half = ex<Constant>(rational{1, 2});
+    require_same(at_zero(diff(mbpt::hf::orthonormalized(
+                                  tensor(L"h", t[0], t[1]) * D, eps, 1),
+                              {eps}),
+                         {eps}),
+                 (tensor(L"h¹", t[0], t[1]) -
+                  half * s1(t[0], p8) * tensor(L"h", p8, t[1]) -
+                  half * tensor(L"h", t[0], p8) * s1(p8, t[1])) *
+                     D,
+                 {t.begin(), t.end()});
+  }
+
+  SECTION("gradient and response") {
+    const auto E = mbpt::hf::orthonormalized(mbpt::hf::energy(2), eps, 2);
+    const auto Et = at_zero(mbpt::series(E, L"κₒ", eps, 2), {kappa});
+    require_same(at_zero(diff(Et, {eps}), {eps}), nuclear_gradient(L""));
+
+    const auto G = diff(E, {adjoint(T(L"κₒ{e_1;m_1}:A-N-S"))});
+    const auto R1 = at_zero(
+        diff(at_zero(mbpt::series(G, L"κₒ", eps, 1), {kappa}), {eps}), {eps});
+    const auto b =
+        T(L"h¹{e_1;m_1}:A-C-S + g¹{e_1,m_2;m_1,m_2}:A-C-S - "
+          L"1/2 s¹{e_1;p_1}:N-C-S " +
+          fock(L"p_1", L"m_1") + L" - 1/2 " + fock(L"e_1", L"p_1") +
+          L" s¹{p_1;m_1}:N-C-S - "
+          L"1/2 s¹{m_2;p_1}:N-C-S g{e_1,p_1;m_1,m_2}:A-C-S - "
+          L"1/2 g{e_1,m_2;m_1,p_1}:A-C-S s¹{p_1;m_2}:N-C-S");
+    const auto expected =
+        b +
+        T(fock(L"e_1", L"e_2") + L" κₒ¹{e_2;m_1}:A-N-S - κₒ¹{e_1;m_2}:A-N-S " +
+          fock(L"m_2", L"m_1") +
+          L" + g{e_1,m_2;m_1,e_2}:A-C-S κₒ¹{e_2;m_2}:A-N-S") +
+        T(L"g{e_1,e_2;m_1,m_2}:A-C-S") * adjoint(T(L"κₒ¹{e_2;m_2}:A-N-S"));
+    require_same(R1, expected, {m1, e1});
+  }
+
+  SECTION("strength tensor") {
+    const auto scope = deriv::test::with_batching_spaces();
+    const auto strength = T(L"ε{;;z_1}:N-N-N");
+    const Index z3(L"z_3");
+    const auto E = mbpt::hf::orthonormalized(mbpt::hf::energy(2), strength, 2);
+    const auto Et = at_zero(mbpt::series(E, L"κₒ", strength, 2), {kappa});
+    require_same(at_zero(diff(Et, {T(L"ε{;;z_3}:N-N-N")}), {strength}),
+                 nuclear_gradient(L";z_3"), {z3});
+  }
+
+  SECTION("rejections") {
+    const auto rejects = [&](const ExprPtr& e) {
+      REQUIRE_THROWS_WITH(mbpt::hf::orthonormalized(e, eps, 1),
+                          StartsWith("mbpt::hf::orthonormalized: "));
+    };
+    rejects(mbpt::hf::rotated_energy(1));
+    rejects(ex<TensorPower>(T(L"f{m_1;m_1}:A-C-S"), -1));
+    rejects(mbpt::op::H());
+    rejects(adjoint(T(L"h{e_1;m_1}:A-N-S")));
+    rejects(adjoint(T(L"g{e_1,e_2;m_1,m_2}:A-N-S")));
+    // pair-specific orbitals, spin orbitals of one spin
+    rejects(T(L"h{e_1<m_2>;m_1}:A-C-S"));
+    rejects(T(L"g{m_1,m_2;m_1,e_1<m_3>}:A-C-S"));
+    rejects(T(L"h{m↑_1;m↑_1}:A-C-S"));
+    for (const auto* leaf : {L"h{m_1;m_1}:A-C-S", L"g{m_1,m_2;m_1,m_2}:A-C-S"})
+      REQUIRE_THROWS_WITH(
+          mbpt::hf::orthonormalized(
+              T(L"h{m_3;m_3}:A-C-S") * ex<TensorPower>(T(leaf), -1), eps, 1),
+          StartsWith("mbpt::series: "));
+    REQUIRE_THROWS_WITH(mbpt::hf::orthonormalized(nullptr, eps, 1),
+                        StartsWith("mbpt::series: "));
+    const auto h = T(L"h{p_1;p_2}:A-C-S D{p_2;p_1}:N-N-N");
+    REQUIRE_THROWS_WITH(
+        mbpt::hf::orthonormalized(h + T(L"h¹{p_1;p_2}:A-C-S"), eps, 1),
+        StartsWith("mbpt::series: "));
+    {
+      const auto scope = deriv::test::with_batching_spaces();
+      REQUIRE_THROWS_WITH(
+          mbpt::hf::orthonormalized(h, T(L"ε{p_1;p_2}:N-N-N"), 1),
+          StartsWith("mbpt::series: "));
+    }
+    {
+      auto context = get_default_context();
+      context.set(SPBasis::Spinfree);
+      const auto scope = set_scoped_default_context(context);
+      REQUIRE_THROWS_WITH(mbpt::hf::energy(1),
+                          StartsWith("mbpt::hf::energy: "));
+    }
+    {
+      // orthonormalized needs neither κₒ nor the spaces of the rotation
+      auto registry = mbpt::make_legacy_registry();
+      registry->remove(L"κₒ");
+      const auto scope = mbpt::set_scoped_default_mbpt_context(
+          mbpt::Context({.csv = mbpt::CSV::Yes, .op_registry_ptr = registry}));
+      REQUIRE_THROWS_WITH(mbpt::hf::energy(1),
+                          StartsWith("mbpt::hf::energy: "));
+      REQUIRE_NOTHROW(mbpt::hf::orthonormalized(h, eps, 1));
+    }
+    {
+      auto context = get_default_context();
+      context.set(mbpt::make_legacy_spaces());
+      const auto scope = set_scoped_default_context(context);
+      REQUIRE_NOTHROW(mbpt::hf::orthonormalized(
+          T(L"h{p_1;p_2}:A-C-S D{p_2;p_1}:N-N-N"), eps, 1));
     }
   }
 }
