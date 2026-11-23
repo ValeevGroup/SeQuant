@@ -146,7 +146,8 @@ is a spelling of its own.
 
 What a symmetrizer over like slots cannot express is rejected rather than approximated: ``Symmetry::Symm``, for which
 SeQuant has no symmetrizer; two groups of like slots on one side; and a column-symmetric variable with unequal bra and
-ket ranks, whose unpaired slots core also permutes.
+ket ranks, whose unpaired slots core also permutes (one with at most one slot on each side has no permutation to
+express, and is accepted).
 
 Three more checks guard the matching itself. A leaf with the variable's label whose slots could hold the variable's
 elements and that declares other symmetries would be read, position by position, as the same array with other

@@ -193,7 +193,8 @@ kinds:
   other symmetries.
 - **What a symmetrizer over like slots can express.** The variable is not ``Symmetry::Symm`` (``Ŝ`` exchanges columns,
   and SeQuant has no symmetrizer that permutes bra slots alone without a sign), it has at most one group of like slots
-  on each side, and a column-symmetric variable has as many bra as ket slots.
+  on each side, and a column-symmetric variable has as many bra as ket slots, unless it has at most one slot on each
+  side (such as ``ε{;a_1}``), where there is nothing to permute.
 - **Protoindex labels as well-defined sets.** The protoindices of a slot of the variable are either all slots of the
   variable or none of them, and form an unordered list; the lists of two slots are the same or share no label. An
   occurrence of the variable lays out its protoindices as the spelling it matches does: the same slots as

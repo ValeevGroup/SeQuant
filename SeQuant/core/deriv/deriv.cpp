@@ -657,7 +657,9 @@ void check(const container::svector<Term>& terms, const ExprPtr& x,
     }
   }
 
-  if (column_symmetric(t) && t.bra_rank() != t.ket_rank())
+  // with at most one slot per side the column symmetry permutes nothing
+  if (column_symmetric(t) && t.bra_rank() != t.ket_rank() &&
+      std::max(t.bra_rank(), t.ket_rank()) > 1)
     reject("a column-symmetric variable with unequal ranks is not supported");
 }
 

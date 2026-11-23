@@ -724,6 +724,10 @@ TEST_CASE("deriv/rules/rejections", "[deriv][rules]") {
     "ordered protoindices are not supported");
   X(E, T(L"r{a_1;i_1,i_2,i_3}:N-N-S"),
     "a column-symmetric variable with unequal ranks is not supported");
+  // with at most one slot per side there is nothing to permute
+  REQUIRE_THAT(sequant::deriv::diff(T(L"e{;a_1}:N-N-S + e{i_1;}:N-N-S"),
+                                    {T(L"e{;a_2}:N-N-S")}),
+               EquivalentTo(L"δ{a_2;a_1}"));
   // the layout is checked against every spelling of the variable the leaf
   // meets: here the one with the bra slots exchanged
   X(T(L"W{i_1,i_2;a_1<i_1>,a_2<i_2>}:N-N-N "
