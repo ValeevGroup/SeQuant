@@ -78,15 +78,32 @@ TEST_CASE("kramers_trace", "[spinor]") {
     REQUIRE(result->size() == 7);
     REQUIRE(count_realparts(result) == 7);
 
-    // Coefficient bookkeeping: every summand is `Constant * RealPart`, and the
-    // outer coefficients sum to 2^n = 16 (all Kramers configurations accounted
-    // for: T-fold contributes x2, sigma multiplicity the rest).
-    Constant::scalar_type coeff_sum = 0;
+    // Coefficient bookkeeping: every summand is `c * Re[s * g . t-bar]` and
+    // stands for c * s T-orbits of Kramers configurations (the T-fold pairs
+    // the 2^n = 16 configurations into 8 orbits, and sigma merges some of
+    // them). A real scalar can sit on either side of the wrapper -- RealPart's
+    // canonical form hoists it out -- so the weight is the product c * s.
+    std::size_t n_single = 0, n_doubled = 0, n_signed = 0;
     for (const auto& term : *result) {
       REQUIRE(term->is<Product>());
-      coeff_sum += term->as<Product>().scalar();
+      const auto& prod = term->as<Product>();
+      auto weight = prod.scalar();
+      for (const auto& f : prod.factors())
+        if (f->is<RealPart>() && f->as<RealPart>().inner()->is<Product>())
+          weight *= f->as<RealPart>().inner()->as<Product>().scalar();
+      if (weight == Constant::scalar_type{1})
+        ++n_single;
+      else if (weight == Constant::scalar_type{2})
+        ++n_doubled;
+      else if (weight == Constant::scalar_type{-1})
+        ++n_signed;
     }
-    REQUIRE(coeff_sum == Constant::scalar_type{16});
+    // five single orbits, one orbit doubled by sigma, and the unfolded
+    // self-complementary partner, spelled g^{a_ a^} with its antisymmetry
+    // sign: 5 + 2 + 1 = 8 orbits, every one of the 16 configurations
+    REQUIRE(n_single == 5);
+    REQUIRE(n_doubled == 1);
+    REQUIRE(n_signed == 1);
   }
 
   SECTION("kramers_config_orbits: doubles external + direct folds") {
@@ -260,14 +277,53 @@ TEST_CASE("kramers_trace", "[spinor]") {
     auto term_count = [](const ExprPtr& b) -> std::size_t {
       return b->is<Sum>() ? b->as<Sum>().size() : 1;
     };
-    // generic external blocks: 4 internal classes (no sigma fold);
-    // at least one block must show all 4 distinct internal configs.
-    std::size_t max_terms = 0;
+    // the Kramers labels of a term's internal pair, the two indices its g and
+    // t share, as (virtual label, occupied label)
+    auto internal_class = [](const ExprPtr& term) {
+      const Tensor* g = nullptr;
+      const Tensor* t = nullptr;
+      for (const auto& f : term->as<Product>().factors()) {
+        if (!f->is<Tensor>()) continue;
+        const auto& tnsr = f->as<Tensor>();
+        if (tnsr.label() == L"g") g = &tnsr;
+        if (tnsr.label() == L"t") t = &tnsr;
+      }
+      REQUIRE(g);
+      REQUIRE(t);
+      auto slots_of = [](const Tensor& tnsr) {
+        container::svector<Index> slots;
+        for (const auto& idx : tnsr.bra()) slots.push_back(idx);
+        for (const auto& idx : tnsr.ket()) slots.push_back(idx);
+        return slots;
+      };
+      std::pair<mbpt::Spin, mbpt::Spin> cls{mbpt::Spin::any, mbpt::Spin::any};
+      for (const auto& gi : slots_of(*g))
+        for (const auto& ti : slots_of(*t))
+          if (gi == ti)
+            (gi.label().front() == L'a' ? cls.first : cls.second) =
+                mbpt::to_spin(gi.space().qns());
+      return cls;
+    };
+    // generic external blocks: 4 internal classes (no sigma fold); at least
+    // one block must show all 4 distinct internal configs. Â is expanded in
+    // full (KramersAExpansion::full, the default) and g and t are not
+    // antisymmetric here, so the 4 signed external permutations, 1/(2! 2!)
+    // each, do not merge: each carries its own copy of every internal class.
+    std::size_t max_classes = 0;
     for (const auto& b : blocks) {
       INFO("ring block (" << term_count(b) << " terms)");
-      max_terms = std::max(max_terms, term_count(b));
+      REQUIRE(b->is<Sum>());
+      container::set<std::pair<mbpt::Spin, mbpt::Spin>> classes;
+      for (const auto& term : *b) {
+        REQUIRE(term->is<Product>());
+        const auto c = term->as<Product>().scalar();
+        REQUIRE(c * c == Constant::scalar_type{rational{1, 16}});
+        classes.insert(internal_class(term));
+      }
+      REQUIRE(term_count(b) == 4 * classes.size());
+      max_classes = std::max(max_classes, classes.size());
     }
-    REQUIRE(max_terms == 4);
+    REQUIRE(max_classes == 4);
   }
 
   SECTION("CC internal fold: separable T2^2 quad -> 10 classes (9-vs-10)") {
