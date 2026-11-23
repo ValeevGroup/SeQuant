@@ -57,9 +57,11 @@ int main() {
   // start-snippet-4
   // TensorPower is the element-wise rational power of a tensor leaf; pow()
   // builds it, e.g. the inverse of a symmetric denominator tensor
+  // (the bra-ket exchange symmetry follows from the Hermiticity trait and the
+  // field of the basis; it is not pinned)
   auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
                       TensorSymmetries{.perm = Symmetry::Symm,
-                                       .braket = BraKetSymmetry::Symm,
+                                       .hermiticity = Hermiticity::Hermitian,
                                        .column = ColumnSymmetry::Symm});
   auto D_inv = pow(D, rational{-1});
 
