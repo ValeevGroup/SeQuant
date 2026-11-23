@@ -3,6 +3,9 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expressions/expr_ptr.hpp>
+
+#include <string_view>
 
 namespace sequant::deriv {
 
@@ -82,6 +85,42 @@ namespace sequant::deriv {
 [[nodiscard]] ExprPtr diff(const ExprPtr& E,
                            const container::svector<ExprPtr>& variables,
                            const container::svector<ResultExpr>& definitions);
+
+/// the gradient of a function by the elements of a block of its leaves
+struct BlockGradient {
+  /// the block: a tensor with the label, symmetries and slot spaces of the
+  /// leaves, under index names of its own
+  ExprPtr variable;
+  /// the derivative by the element of the block at the indices of @c variable
+  ExprPtr gradient;
+};
+
+/// @return the gradients of @p E by the blocks of its leaves labelled
+/// @p label , such that the first-order change of @p E under any change δ of
+/// those leaves that has their symmetries is
+///
+///   δE = Σ_blocks Σ_J gradient(J) δ(J),
+///
+/// J running over every element of the block (not only the independent
+/// ones). A block is the list of the spaces of the slots of a leaf; blocks
+/// that an operation of the leaves (see diff()) maps onto one another hold
+/// the same elements and are one entry, spelled as the block met first.
+/// Each gradient is `diff(E, {variable}, definitions)` divided by the number
+/// of operations that keep the block.
+///
+/// This is the density that multiplies the derivative of the leaves in the
+/// derivative of @p E by a parameter the leaves depend on. Where the adjoint
+/// spelling of a leaf holds other numbers than the leaf (see diff()), its
+/// blocks are entries of their own.
+/// @throw Exception what diff() throws; for a leaf with the label that has
+/// protoindices; and for two blocks that overlap without being one block
+[[nodiscard]] container::svector<BlockGradient> block_gradients(
+    const ExprPtr& E, std::wstring_view label,
+    const container::svector<ResultExpr>& definitions);
+
+/// block_gradients() with no definitions
+[[nodiscard]] container::svector<BlockGradient> block_gradients(
+    const ExprPtr& E, std::wstring_view label);
 
 /// @return @p E where every one of @p variables is zero: the terms that hold
 /// one of them, in one of its spellings or those of its adjoint, are dropped.

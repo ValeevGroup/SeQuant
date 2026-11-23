@@ -251,6 +251,30 @@ leaf of the variable itself.
    :end-before: end-snippet-12
    :dedent: 4
 
+Gradients by blocks and orbital rotations
+-------------------------------------------
+
+Two functions prepare what the derivative of a function by a parameter of its leaves needs, such as a nuclear gradient,
+where the integrals and the orbitals depend on the geometry.
+
+:func:`sequant::deriv::block_gradients` returns the gradient of ``E`` by each block of the leaves of a label, a block
+being the list of the spaces of a leaf's slots. Unlike ``diff``, it is normalized as a density: the first-order change
+of ``E`` is the sum over the blocks of the gradient times the change of the leaf, summed over every element of the
+block, not only the independent ones. Blocks that a symmetry of the leaf maps onto one another hold the same elements
+and are returned once.
+
+:func:`sequant::mbpt::rotation_gradient` (``SeQuant/domain/mbpt/rotation_gradient.hpp``) returns the response of a
+scalar ``E`` to a rotation of the orbitals, :math:`X_{qp} = \sum_T \sum_{\text{slots}} (\partial E / \partial T_{\dots
+p \dots})\, T_{\dots q \dots}`, for the leaves ``T`` of the labels given. It takes the two free indices: the space of
+``p`` selects the slots that rotate, and the space of ``q`` the blocks of the tensors the result is written in. Its
+antisymmetric part is the orbital gradient. Every bra and ket slot transforms alike, as for real orbitals.
+
+.. literalinclude:: /examples/user/differentiation.cpp
+   :language: cpp
+   :start-after: start-snippet-13
+   :end-before: end-snippet-13
+   :dedent: 4
+
 The form of the result
 ------------------------
 
