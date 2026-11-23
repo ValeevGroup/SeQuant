@@ -248,6 +248,16 @@ bool includes(const IndexBasis& basis, const IndexBasis& subbasis);
 /// functions of such bases is an overlap, not a Kronecker delta
 bool different_instances(const IndexBasis& b1, const IndexBasis& b2);
 
+/// @return a reference to the unique, program-lifetime copy of @p basis, which
+/// agrees with @p basis in every attribute (unlike IndexBasis::operator==,
+/// which ignores the extent, metric and field); the copy is created on first
+/// use and never destroyed, so the reference never dangles. Two calls return
+/// the same address iff their arguments agree in all attributes. Thread-safe.
+const IndexBasis& intern(const IndexBasis& basis);
+
+/// @return `intern(IndexBasis{})`
+const IndexBasis& null_basis();
+
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_BASIS_HPP

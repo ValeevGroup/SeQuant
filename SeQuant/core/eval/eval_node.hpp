@@ -53,7 +53,6 @@ ExprPtr linearize_eval_node(Node const& node) {
           if (!x->is<Tensor>()) return;
           auto& t = x->as<Tensor>();
           kramers_flip_slots_deep(t);
-          t.reset_tags();
         },
         /*atoms_only=*/true);
     return flipped;

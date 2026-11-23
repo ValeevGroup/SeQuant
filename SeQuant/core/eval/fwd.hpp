@@ -5,6 +5,7 @@
 #ifndef SEQUANT_EVAL_FWD_HPP
 #define SEQUANT_EVAL_FWD_HPP
 
+#include <cstdint>
 #include <memory>
 
 namespace sequant {
@@ -12,13 +13,13 @@ namespace sequant {
 /// Backend-agnostic flag to control tensor de-nesting behavior during products.
 /// When multiplying tensor-of-tensor types, this controls whether the result
 /// should be "de-nested" (flattened) to a regular tensor or kept as nested.
-enum class DeNest { True, False };
+enum class DeNest : std::uint8_t { True, False };
 
 /// \brief Flavor of an \c EvalExpr::node_slice_mask entry: whether the index is
 ///        contracted away somewhere in the term (\c Contracted), or is an
 ///        external index that survives to the term's result
 ///        (\c External). See \c EvalExpr::node_slice_mask.
-enum class BatchModeType { Contracted, External };
+enum class BatchModeType : std::uint8_t { Contracted, External };
 
 /// \brief Per-contraction-node batch annotation; defined in
 ///        \c SeQuant/core/eval/node_batch_annotation.hpp (needs a complete

@@ -26,6 +26,34 @@ from highest to lowest. They never override the "Never"/"Do not" rules below.
    can be dramatic. Do not introduce a worse complexity class than necessary
    on such paths, even if it is simpler. The benchmarks, integration tests and
    external interface runs are examples of typical loads.
+
+   Object size is the other exception. Frequently instantiated types (those
+   created, copied and compared in very large numbers, e.g. Tensor, Index,
+   EvalExpr) have a `sizeof` and cache footprint that affect run time across
+   the whole library; shrinking them sped up the benchmarks by about 16% on
+   average. For such types:
+   - order data members to minimize padding (largest alignment first), and use
+     the smallest sufficient type for enums and counters as *storage*. Only the
+     storage type shrinks: the public API keeps the canonical type (e.g.
+     `std::size_t` for sizes and counts, ordinals), converting at the
+     accessor/constructor boundary, with a checked narrowing where the value
+     comes from the caller;
+   - do not add a member to such a type without checking `sizeof` before and
+     after. Wrappers such as `std::optional<T>` add a flag plus padding (often
+     doubling the size of a small `T`); prefer a sentinel value when the
+     storage type has one to spare. The sentinel must lie far outside any value
+     a caller can legitimately supply or the library can plausibly produce
+     (e.g. the maximum of the storage type, not `-1` or `0` in a type where
+     those are meaningful), be a named constant, and be enforced at the
+     boundary: inputs that could collide with it are rejected (see
+     `SEQUANT_ENFORCE`), not silently accepted, and it never leaks through the
+     public API (the accessor returns `std::optional` or the canonical type
+     as appropriate). Allocate rarely-used data lazily or share it
+     (interning) instead of storing it per object. If the growth is
+     unavoidable, say so in the commit message;
+   - member reordering and similar size reductions on these types count as
+     performance work under this item, so justify them in the commit message
+     with the before/after `sizeof` (and the benchmark timing, if measured).
 4. **Smallest diff.** Make the smallest change that gets the job done,
    without compromising on correctness or code readability. Don't fold in
    unrelated refactoring, cleanup, or new abstractions the change doesn't
@@ -197,8 +225,8 @@ throw Exception("message");  // sequant::Exception outside namespace sequant
 `catch (const std::exception&)` handlers still work; it exists so that callers
 can catch SeQuant-originated failures distinctly. Where callers need to
 distinguish further, derive from it rather than reaching for a `std` type.
-`IndexSpace::bad_key`, `SerializationError`, `ConversionException` and
-`bad_any_comparable_cast` already do, and some code catches those by subtype —
+`IndexSpace::bad_key`, `SerializationError` and `ConversionException`
+already do, and some code catches those by subtype —
 do not flatten them back into plain `Exception`.
 
 For internal invariants prefer `SEQUANT_ASSERT` over throwing. What a tripped
@@ -263,7 +291,7 @@ Note the target names: `unit_tests-sequant` and `check-sequant`, not
 
 ### TiledArray-backed tests
 
-With `SEQUANT_TILEDARRAY=ON` the suite gains `test_eval_ta.cpp` (inside
+With `SEQUANT_TILEDARRAY=ON` the suite gains `test_eval_ta*.cpp` (inside
 `unit_tests-sequant`, tag `[eval]`) and the `sequant/integration/eval_ta`
 program, plus the backend under `SeQuant/core/eval/backends/tiledarray/`.
 Failures there often come down to TiledArray or MADWorld behaviour rather

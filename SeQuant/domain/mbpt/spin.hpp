@@ -20,6 +20,7 @@
 
 #include <range/v3/algorithm/contains.hpp>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -259,7 +260,7 @@ container::svector<ResultExpr> closed_shell_spintrace(
 
 // clang-format off
 /// biorthogonalization variants
-enum class BiorthogonalizationMethod {
+enum class BiorthogonalizationMethod : std::uint8_t {
   /// standard biorthogonalization method
   V1,
   /// improved Wang-Knizia biorthogonalization (DOI 10.48550/arXiv.1805.00565), with factored out the Non-Null-Space (NNS) projector (expressed as a linear combination of permutations)

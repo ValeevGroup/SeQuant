@@ -67,7 +67,14 @@ int main(int argc, char* argv[]) {
   TA::set_default_world(world);
 #endif
 
-  int result = session.run(argc, argv);
+  int result = session.applyCommandLine(argc, argv);
+#ifdef SEQUANT_HAS_TILEDARRAY
+  // every rank must run the same tests in the same order, or the ranks' TA
+  // collectives pair up across different tests; the order derives from the
+  // seed, which Catch2 picks per process unless --rng-seed is given
+  if (result == 0) world.gop.broadcast(session.configData().rngSeed, 0);
+#endif
+  if (result == 0) result = session.run();
 
 #ifdef SEQUANT_HAS_TILEDARRAY
   TA::finalize();

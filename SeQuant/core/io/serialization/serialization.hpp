@@ -8,6 +8,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -32,7 +33,7 @@ struct SerializationError : Exception {
 ///
 /// @note Everything but Latest is considered to be deprecated by default
 ///       and support for it may be removed in future versions.
-enum class SerializationSyntax {
+enum class SerializationSyntax : std::uint8_t {
   V1,
 
   Latest = V1

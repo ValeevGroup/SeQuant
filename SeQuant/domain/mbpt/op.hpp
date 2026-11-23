@@ -58,7 +58,7 @@ namespace mbpt {
 
 namespace detail {
 /// Prefactor applied to an operator of rank {c,a}
-enum class Normalization {
+enum class Normalization : std::uint8_t {
   Default,    ///< 1/(c! a!)
   Implicit,   ///< none; Â and Ŝ include their normalization
   SquareRoot  ///< 1/sqrt(c! a!)
@@ -656,7 +656,7 @@ class OpMaker {
   /// @param[in] params named parameters for operator construction
   OpMaker(const std::wstring& label, ncre nc, nann na, const OpParams& params);
 
-  enum class UseDepIdx {
+  enum class UseDepIdx : std::uint8_t {
     /// bra/cre indices depend on ket
     Bra,
     /// ket/ann indices depend on bra

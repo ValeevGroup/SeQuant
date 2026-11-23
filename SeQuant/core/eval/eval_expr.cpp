@@ -217,7 +217,6 @@ void EvalExpr::refresh_identity_tensor() {
   if (repl.empty()) return;
   Tensor t = expr_->as<Tensor>();
   t.transform_indices(repl);
-  t.reset_tags();
   identity_tensor_ = std::move(t);
 }
 
@@ -501,9 +500,9 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
+      canon_transform_{transform},
       expr_{ex.clone()},
       canon_indices_{std::move(ixs)},
-      canon_transform_{transform},
       hash_value_{h},
       connectivity_{std::move(connectivity)} {
   if (connectivity_ != nullptr) {
@@ -660,6 +659,11 @@ ExprPtr EvalExpr::denoted_expr() const {
 
 CanonTransform EvalExpr::canon_transform() const noexcept {
   return canon_transform_;
+}
+
+const EvalBatchInfo& EvalExpr::batch_info() const noexcept {
+  static const EvalBatchInfo defaults;
+  return batch_.get() ? *batch_.get() : defaults;
 }
 
 bool EvalExpr::has_connectivity_graph() const noexcept {
@@ -1603,7 +1607,6 @@ std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
         if (!x->is<Tensor>()) return;
         auto& t = x->as<Tensor>();
         kramers_flip_slots_deep(t);
-        t.reset_tags();
       },
       /*atoms_only=*/true);
   IndexSet flipped_uncontract;
@@ -1638,7 +1641,6 @@ std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
   auto const phase = static_cast<std::int8_t>((n_down % 2) ? -1 : 1);
   Tensor denoted = inner->as_tensor();
   kramers_flip_slots_deep(denoted);
-  denoted.reset_tags();
   return make_kramers_flip_node(std::move(inner), std::move(modes), phase,
                                 std::move(denoted));
 }
@@ -1950,7 +1952,6 @@ struct InlineContext {
       }
       map_slots(head.aux(), leaf->aux());
       transform_indices(head, renaming);
-      reset_tags(head);
     }
     // every other index of the rhs (a dummy, or every index under a scalar
     // head) gets a fresh one, so the subtree cannot collide with the

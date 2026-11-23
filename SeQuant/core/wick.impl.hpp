@@ -31,6 +31,7 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <cstdint>
 #include <numeric>
 #include <utility>
 #include <vector>
@@ -424,7 +425,7 @@ compute_index_replacement_rules(
 
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
-  enum class Outcome { Done, Deferred, Zero };
+  enum class Outcome : std::uint8_t { Done, Deferred, Zero };
 #define SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT(x) \
   { x; }                                                                  \
   if (zero_result_status) return Outcome::Zero;
@@ -587,40 +588,13 @@ inline void apply_index_replacement_rules(
     std::set<Index, Index::LabelCompare> &all_indices) {
   expr_range exrng(product);
 
-  if constexpr (assert_enabled()) {
-    // assert that tensors_ indices are not tagged since going to tag indices
-    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-      const auto &factor = *it;
-      if (factor->is<AbstractTensor>()) {
-        [[maybe_unused]] auto &tensor = factor->as<AbstractTensor>();
-        SEQUANT_ASSERT(ranges::none_of(tensor._slots(), [](const Index &idx) {
-          return idx.tag().has_value();
-        }));
-      }
-    }
-  }
-  // a transformed index is tagged, so a rule applies to it only once, but
-  // Index::transform replaces an index and its protoindices on separate
-  // applications: apply the rules until nothing changes
-  bool pass_mutated = false;
-  do {
-    pass_mutated = false;
-    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-      const auto &factor = *it;
-      if (factor->is<AbstractTensor>())
-        pass_mutated |=
-            factor->as<AbstractTensor>()._transform_indices(const_replrules);
-    }
-  } while (pass_mutated);
-
-  // reset the tags
-  {
-    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-      const auto &factor = *it;
-      if (factor->is<AbstractTensor>()) {
-        factor->as<AbstractTensor>()._reset_tags();
-      }
-    }
+  // a rule applies to an index only once, but to the protoindices of its
+  // image too
+  const auto rules = replace_proto_indices_of_images(const_replrules);
+  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+    const auto &factor = *it;
+    if (factor->is<AbstractTensor>())
+      factor->as<AbstractTensor>()._transform_indices(rules);
   }
 
   // update all_indices

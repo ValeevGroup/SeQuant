@@ -1119,7 +1119,6 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
             auto copy = factors;
             for (ExprPtr& expr : copy) {
               expr.as<Tensor>().transform_indices(idxrepl);
-              reset_tags(expr.as<Tensor>());
             }
 
             TN tn(copy);

@@ -15,6 +15,7 @@
 #include <range/v3/algorithm/find.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <stack>
 #include <utility>
 #include <variant>
@@ -33,7 +34,7 @@ class GenerationOptimizer final
 
   using Object = std::variant<Tensor, Variable>;
 
-  enum class OperationType {
+  enum class OperationType : std::uint8_t {
     Create,
     Load,
     LoadAndZero,
@@ -44,7 +45,7 @@ class GenerationOptimizer final
     Compute,
   };
 
-  enum class MemoryAction {
+  enum class MemoryAction : std::uint8_t {
     Deallocate,
     None,
     Allocate,

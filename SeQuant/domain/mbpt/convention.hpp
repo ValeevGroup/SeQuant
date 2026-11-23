@@ -11,6 +11,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 
+#include <cstdint>
 #include <limits>
 #include <string_view>
 
@@ -18,7 +19,7 @@ namespace sequant {
 namespace mbpt {
 
 /// @brief Conventions for partitioning the single-particle Hilbert space
-enum class Convention {
+enum class Convention : std::uint8_t {
   Minimal,  //!< occupied/hole + unoccupied/particle + their union
   SR,       //!< single determinant reference: occupied (frozen + active) +
             //!< unoccupied (active + frozen)
@@ -30,7 +31,7 @@ enum class Convention {
 };
 
 /// @brief Conventions for representing spin quantum numbers
-enum class SpinConvention {
+enum class SpinConvention : std::uint8_t {
   None,  //!< particles are assumed spin-free, spin bits are set to Spin::none
   Default,  //!< fermions are assumed spin-1/2 (Spin::any, Spin::up,
             //!< Spin::down), bosons are spin-free (Spin::none)

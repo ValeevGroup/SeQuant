@@ -238,12 +238,11 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   // below) and routinely share subexpression objects: tensors reused by
   // expand(), a nested Sum factor reused across the terms it appears in, a
   // factor appearing twice in one product. Canonicalization mutates those
-  // objects in place -- index tags, memoized labels and hashes -- from
-  // several threads at once, which is a data race (under
-  // SEQUANT_ASSERT_BEHAVIOR=THROW it surfaces as Taggable::assign on an
-  // already tagged slot). So every summand that reaches an object already
-  // reached by an earlier summand (or twice by itself) is canonicalized on a
-  // PRIVATE clone instead, as optimize_impl does for the same reason.
+  // objects in place -- memoized labels and hashes -- from several threads
+  // at once, which is a data race. So every summand that reaches an object
+  // already reached by an earlier summand (or twice by itself) is
+  // canonicalized on a PRIVATE clone instead, as optimize_impl does for the
+  // same reason.
   if (num_threads() > 1 && summands_.size() > 1) {
     container::set<const Expr *> seen;
     for (auto &summand : summands_)

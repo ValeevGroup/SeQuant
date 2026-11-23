@@ -205,11 +205,6 @@ bool TensorPower::_transform_indices(
   return result;
 }
 
-void TensorPower::_reset_tags() {
-  base_tensor_mut()._reset_tags();
-  reset_hash_value();
-}
-
 void TensorPower::_swap_bra_ket() {
   base_tensor_mut()._swap_bra_ket();
   reset_hash_value();

@@ -15,16 +15,6 @@
 
 namespace sequant {
 
-void reset_tags(const ExprPtr& expr) {
-  expr->visit(
-      [](const ExprPtr& current) {
-        if (current.is<AbstractTensor>()) {
-          reset_tags(current->as<AbstractTensor>());
-        }
-      },
-      /* atoms_only = */ true);
-}
-
 bool cross_type_less(const AbstractTensor& a, const AbstractTensor& b) {
   if (a._label() != b._label()) return a._label() < b._label();
   if (a._bra_rank() != b._bra_rank()) return a._bra_rank() < b._bra_rank();

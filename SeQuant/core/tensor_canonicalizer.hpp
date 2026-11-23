@@ -237,8 +237,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   ///       indices) than the internal indices
   ExprPtr apply(AbstractTensor& t) const override;
 
-  /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization,
-  /// i.e. no tagging/untagging
+  /// Core of DefaultTensorCanonicalizer::apply, only does the canonicalization
+  /// (sorting) with the given comparers
   template <typename IndexComp, typename IndexPairComp>
   ExprPtr apply(AbstractTensor& t, const IndexComp& idxcmp,
                 const IndexPairComp& paircmp) const {
@@ -303,11 +303,12 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     return result;
   }
 
+ protected:
+  /// @return the external indices among the indices of @p t
+  container::set<Index> external_indices_of(const AbstractTensor& t) const;
+
  private:
   container::set<Index> external_indices_;
-
- protected:
-  void tag_indices(AbstractTensor& t) const;
 };
 
 class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {

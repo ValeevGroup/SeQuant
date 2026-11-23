@@ -653,7 +653,6 @@ TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
       REQUIRE(t.adjoint() == 1);
       REQUIRE(t.adjointed());
       REQUIRE(t.transform_indices(to_real));
-      t.reset_tags();  // transform_indices tags the replaced indices
       REQUIRE(t.base_field() == Field::Real);
       REQUIRE_FALSE(t.adjointed());
       REQUIRE(t.bra()[0].label() == L"a_1");

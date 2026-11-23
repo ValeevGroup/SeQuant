@@ -1342,7 +1342,6 @@ TEST_CASE("fold_stripped_antisymmetrizer_exchange_driver_csv_composites",
             if (!x->is<Tensor>()) return;
             Tensor tt{x->as<Tensor>()};
             tt.transform_indices(swap);
-            tt.reset_tags();
             x = ex<Tensor>(std::move(tt));
           },
           /* atoms_only = */ true);
@@ -1440,9 +1439,6 @@ TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
       if (f->is<Tensor>()) {
         Tensor t{f->as<Tensor>()};
         t.transform_indices(repl);
-        // the transform tags every index it replaces; a tagged slot is
-        // refused by the canonicalizer
-        t.reset_tags();
         out->append(1, ex<Tensor>(std::move(t)), Product::Flatten::No);
       } else {
         out->append(1, f, Product::Flatten::No);

@@ -209,7 +209,6 @@ inline Tensor erase_indices(Tensor const& t, ErasureMap const& m) {
   if (m.empty()) return t;
   Tensor result = t;
   result.transform_indices(m);
-  result.reset_tags();
   return result;
 }
 
@@ -218,7 +217,6 @@ inline Index erase_index(Index const& ix, ErasureMap const& m) {
   if (m.empty()) return ix;
   Index result = ix;
   result.transform(m);
-  result.reset_tag();
   return result;
 }
 

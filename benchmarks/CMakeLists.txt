@@ -7,6 +7,7 @@ add_executable(sequant_benchmarks
         "density_fitting.cpp"
         "export.cpp"
         "hash.cpp"
+        "intern.cpp"
         "inputs.cpp"
         "main.cpp"
         "nevpt2.cpp"

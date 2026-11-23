@@ -1984,7 +1984,6 @@ TEST_CASE("slot_mutation_renormalizes_states", "[conjugation]") {
   SECTION("onto a real basis: the coset spelling, parity None keeps the star") {
     auto t = adjointed_t(ConjugationParity::None);
     REQUIRE(t.transform_indices(to_real));
-    t.reset_tags();  // transform_indices tags the replaced indices
     REQUIRE(t.base_field() == Field::Real);
     REQUIRE_FALSE(t.adjointed());
     REQUIRE(t.kconjugated());
@@ -1997,7 +1996,6 @@ TEST_CASE("slot_mutation_renormalizes_states", "[conjugation]") {
   SECTION("onto a real basis: the default parity consumes the star") {
     auto t = adjointed_t(ConjugationParity::Even);
     REQUIRE(t.transform_indices(to_real));
-    t.reset_tags();
     REQUIRE(t.base_field() == Field::Real);
     REQUIRE_FALSE(t.adjointed());
     REQUIRE_FALSE(t.kconjugated());
@@ -2025,7 +2023,6 @@ TEST_CASE("slot_mutation_renormalizes_states", "[conjugation]") {
     auto t = adjointed_t(ConjugationParity::None);
     const container::map<Index, Index> rename{{Index{L"i_1"}, Index{L"i_2"}}};
     REQUIRE(t.transform_indices(rename));
-    t.reset_tags();
     REQUIRE(t.base_field() == Field::Complex);
     REQUIRE(t.adjointed());
     REQUIRE_FALSE(t.kconjugated());
@@ -2070,7 +2067,6 @@ TEST_CASE("slot_mutation_renormalizes_states", "[conjugation]") {
         {Index{L"i_1"}, idx(L"i_1", Field::Real)},
         {Index{L"a_1"}, idx(L"a_1", Field::Real)}};
     REQUIRE(moved.transform_indices(g_to_real));
-    moved.reset_tags();
 
     const Tensor fresh(L"g", bra{idx(L"i_1", Field::Real)},
                        ket{idx(L"a_1", Field::Real)}, hermitian);

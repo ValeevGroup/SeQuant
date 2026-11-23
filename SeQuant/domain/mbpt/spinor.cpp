@@ -414,26 +414,7 @@ ExprPtr restrict_antisymmetrizer(const ExprPtr& expr, bool keep_bra,
 
 }  // namespace
 
-namespace {
-
-/// Resets the index tags of every tensor in @p expr. Index::transform tags
-/// every index it replaces (the marker that keeps a replaced index from being
-/// replaced again in the same pass); the passes that build the per-block
-/// expressions here (append_spin, the flavour relabelings) leave those tags
-/// behind, and the canonicalizer requires untagged slots.
-void reset_index_tags(const ExprPtr& expr) {
-  if (expr->is<Tensor>()) {
-    expr->as<Tensor>().reset_tags();
-    return;
-  }
-  expr->visit(
-      [](const ExprPtr& x) {
-        if (x->is<Tensor>()) x->as<Tensor>().reset_tags();
-      },
-      /* atoms_only = */ true);
-}
-
-}  // namespace
+namespace {}  // namespace
 
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(
     const ExprPtr& expr, bool expand_g, bool use_T,
@@ -624,7 +605,6 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
       }
     }
 
-    reset_index_tags(block);
     canonicalize(block);  // sigma merge + dummy canonicalization
     rapid_simplify(block);
     if (drop_mixed_kramers_fock) {
@@ -657,7 +637,6 @@ ExprPtr closed_shell_kramers_trace(
   // a later optimization stage.)
   ExprPtr traced_input =
       expand_g ? expand_label_antisymm(expr, L"g") : expr->clone();
-  reset_index_tags(traced_input);
   canonicalize(traced_input);
   rapid_simplify(traced_input);
 
@@ -697,7 +676,6 @@ ExprPtr closed_shell_kramers_trace(
   for (const auto& group : ext_index_groups) {
     for (const auto& idx : group) {
       Index x = idx;
-      x.reset_tag();
       ext_indices.insert(std::move(x));
     }
   }
@@ -750,7 +728,6 @@ ExprPtr closed_shell_kramers_trace(
     }
 
     ExprPtr block = append_spin(traced_input, replacements);
-    reset_index_tags(block);
     canonicalize(block);  // particle-interchange (sigma) merge within the block
     rapid_simplify(block);
     if (drop_mixed_kramers_fock) {
@@ -877,11 +854,6 @@ ExprPtr kramers_term_flip(const ExprPtr& term,
     if (f->is<Tensor>()) {
       Tensor t{f->as<Tensor>()};
       t.transform_indices(repl);
-      // Index::transform tags every index it replaces (a marker that keeps a
-      // replaced index from being replaced again in the same pass); the tags
-      // are stale once the transform is done and must not reach the
-      // canonicalizer, which requires untagged slots
-      t.reset_tags();
       // every leaf: the time-reversal image is conj+relabel (the conjugation
       // spelled on the core model by kramers_conjugate_mark; a sign it
       // consumes scales the term)
@@ -952,11 +924,6 @@ ExprPtr external_swap_image(const ExprPtr& term, const Index& p,
     if (f->is<Tensor>()) {
       Tensor t{f->as<Tensor>()};
       t.transform_indices(repl);
-      // Index::transform tags every index it replaces (a marker that keeps a
-      // replaced index from being replaced again in the same pass); the tags
-      // are stale once the transform is done and must not reach the
-      // canonicalizer, which requires untagged slots
-      t.reset_tags();
       out->append(1, ex<Tensor>(std::move(t)), Product::Flatten::No);
     } else {
       out->append(1, f, Product::Flatten::No);
@@ -976,9 +943,6 @@ CanonicalKey canonical_key(const ExprPtr& term,
                            const CanonicalizeOptions& opts) {
   CanonicalKey key;
   auto e = term->clone();
-  // canonicalize() leaves index tags behind (proto indices included); a stale
-  // tag changes the result
-  reset_tags(e);
   {
     // the options are read from the default context
     auto scope =

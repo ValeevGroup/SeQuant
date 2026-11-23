@@ -17,6 +17,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <optional>
@@ -195,7 +196,14 @@ std::function<IrrepSet<Irrep>(const Tensor &)> resolve_by_pattern(
 /// spans the IRREPs of the child and of its conjugate (Re E = (E + E*)/2)
 /// (Broadcast: a child expanded over modes it lacks, constant along them and
 /// hence nonzero in every IRREP block of them)
-enum class IrrepNodeKind { Leaf, Product, Sum, Adjoint, Projection, Broadcast };
+enum class IrrepNodeKind : std::uint8_t {
+  Leaf,
+  Product,
+  Sum,
+  Adjoint,
+  Projection,
+  Broadcast
+};
 
 /// Adapter that makes a given type of (expression) node accessible to the
 /// generic IRREP propagation. Specializations provide
