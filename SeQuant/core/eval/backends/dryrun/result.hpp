@@ -19,7 +19,9 @@
 #include <algorithm>
 #include <any>
 #include <array>
+#include <atomic>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <utility>
@@ -68,6 +70,37 @@ class ResultDryRunNested;
     ExtentOverrides overrides = {}, ExtentOverrides lobounds = {});
 
 namespace detail {
+
+/// A byte size computed on first request and kept until \c reset(). Safe to
+/// fill from concurrent const readers; copies carry the stored value.
+class SizeMemo {
+ public:
+  SizeMemo() = default;
+  SizeMemo(SizeMemo const& other) noexcept
+      : v_{other.v_.load(std::memory_order_relaxed)} {}
+  SizeMemo& operator=(SizeMemo const& other) noexcept {
+    v_.store(other.v_.load(std::memory_order_relaxed),
+             std::memory_order_relaxed);
+    return *this;
+  }
+
+  template <typename F>
+  [[nodiscard]] std::size_t get(F&& compute) const {
+    std::size_t v = v_.load(std::memory_order_relaxed);
+    if (v == k_unknown_) {
+      v = std::forward<F>(compute)();
+      v_.store(v, std::memory_order_relaxed);
+    }
+    return v;
+  }
+
+  void reset() noexcept { v_.store(k_unknown_, std::memory_order_relaxed); }
+
+ private:
+  static constexpr std::size_t k_unknown_ =
+      std::numeric_limits<std::size_t>::max();
+  mutable std::atomic<std::size_t> v_{k_unknown_};
+};
 
 /// Whether any index of \p idx carries proto-indices, i.e. whether a result
 /// over \p idx is nested.
@@ -717,6 +750,7 @@ class ResultDryRun final : public Result {
     detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
                                         block, mode, block_lo, block_hi,
                                         lobounds_);
+    bytes_.reset();
   }
 
   void add_inplace(Result const& other) override {
@@ -726,6 +760,7 @@ class ResultDryRun final : public Result {
     overrides_ =
         detail::merge_overrides(overrides_, detail::overrides_of(other));
     lobounds_ = detail::merge_overrides(lobounds_, detail::lobounds_of(other));
+    bytes_.reset();
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
@@ -747,7 +782,7 @@ class ResultDryRun final : public Result {
   }
 
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    return cm_->memsize(indices_, overrides_);
+    return bytes_.get([this] { return cm_->memsize(indices_, overrides_); });
   }
 
   container::svector<Index> indices_;
@@ -755,6 +790,9 @@ class ResultDryRun final : public Result {
   ExtentOverrides overrides_;
   ExtentOverrides lobounds_;  // positional lobounds of sliced modes
   AssembledCoverage assembled_;
+  /// size_in_bytes(), computed on first use and reset whenever overrides_
+  /// changes; the meter asks every live token for it on every op.
+  detail::SizeMemo bytes_;
 };
 
 ///
@@ -889,6 +927,7 @@ class ResultDryRunNested final : public Result {
     detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
                                         block, mode, block_lo, block_hi,
                                         lobounds_);
+    bytes_.reset();
   }
 
   void add_inplace(Result const& other) override {
@@ -898,6 +937,7 @@ class ResultDryRunNested final : public Result {
     overrides_ =
         detail::merge_overrides(overrides_, detail::overrides_of(other));
     lobounds_ = detail::merge_overrides(lobounds_, detail::lobounds_of(other));
+    bytes_.reset();
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
@@ -921,7 +961,7 @@ class ResultDryRunNested final : public Result {
   }
 
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    return cm_->memsize(indices_, overrides_);
+    return bytes_.get([this] { return cm_->memsize(indices_, overrides_); });
   }
 
   container::svector<Index> outer_;
@@ -931,6 +971,9 @@ class ResultDryRunNested final : public Result {
   ExtentOverrides overrides_;
   ExtentOverrides lobounds_;  // positional lobounds of sliced modes
   AssembledCoverage assembled_;
+  /// size_in_bytes(), computed on first use and reset whenever overrides_
+  /// changes; the meter asks every live token for it on every op.
+  detail::SizeMemo bytes_;
 };
 
 [[nodiscard]] inline ResultPtr make_dryrun_result(
