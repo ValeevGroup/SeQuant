@@ -28,12 +28,14 @@ namespace sequant::mbpt {
 /// the orbital gradient of @p L , and X is the right-hand side that the
 /// orbital-response (Z-vector) equations and the energy-weighted density of a
 /// nuclear gradient are built from.
-/// @throw Exception for a null @p L , or one that holds operators; if @p p
+/// A leaf spelled as the adjoint of a tensor labelled as one of @p labels
+/// rotates too.
+/// @throw Exception for a null @p L , one that holds operators, or one that
+/// is not a scalar (an index in one slot of a term, or an Â or Ŝ); if @p p
 /// or @p q has protoindices or they are one index; if @p L uses the label of
-/// @p p or @p q ; and for a leaf labelled as one of @p labels that stands
-/// under a TensorPower, has a slot whose index has protoindices, is free in
-/// its term, or runs over a space that overlaps that of @p p without
-/// including it
+/// @p p or @p q ; and for a leaf to rotate that stands under a TensorPower,
+/// has a slot whose index has protoindices or is a protoindex in its term,
+/// or runs over a space that overlaps that of @p p without including it
 [[nodiscard]] ExprPtr rotation_gradient(
     const ExprPtr& L, const container::svector<std::wstring>& labels,
     const Index& p, const Index& q);

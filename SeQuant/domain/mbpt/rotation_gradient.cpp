@@ -9,6 +9,7 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -54,8 +55,14 @@ ExprPtr rotation_gradient(const ExprPtr& L,
   if (!e->is_cnumber()) reject("the function holds operators");
   const auto registry = get_default_index_basis_registry();
   SEQUANT_ASSERT(registry);
-  const auto rotates = [&labels](const Tensor& t) {
-    return std::ranges::find(labels, t.label()) != labels.end();
+  // a leaf spelled as the adjoint of a tensor to rotate rotates too: every
+  // slot transforms alike
+  const auto rotates = [&labels](const ExprPtr& f) {
+    const auto named = [&labels](const ExprPtr& leaf) {
+      return std::ranges::find(labels, leaf->as<Tensor>().label()) !=
+             labels.end();
+    };
+    return f->is<Tensor>() && (named(f) || named(adjoint(f)));
   };
 
   container::vector<ExprPtr> result;
@@ -67,26 +74,37 @@ ExprPtr rotation_gradient(const ExprPtr& L,
     Constant::scalar_type scalar = 1;
     container::svector<ExprPtr> factors;
     split(term, scalar, factors);
-    // in how many bra, ket and auxiliary slots of the term an index stands
+    // in how many bra, ket and auxiliary slots of the term an index stands,
+    // and the indices that are protoindices in it
     container::map<Index, std::int64_t> slots;
-    for (const auto& f : factors)
+    container::set<Index> protos;
+    for (const auto& f : factors) {
+      if (f->is<Tensor>() &&
+          (f->as<Tensor>().label() == reserved::antisymm_label() ||
+           f->as<Tensor>().label() == reserved::symm_label()))
+        reject("the function is not a scalar");
       for (const auto& [i, count] : get_used_indices_with_counts(*f)) {
         if (i.label() == p.label() || i.label() == q.label())
           reject("the function uses the label of p or q");
         slots[i] += count.nonproto();
+        if (count.proto > 0) protos.insert(i);
       }
+    }
+    for (const auto& [i, n] : slots)
+      if (n == 1 && !protos.contains(i)) reject("the function is not a scalar");
     for (std::size_t k = 0; k != factors.size(); ++k) {
       const auto& f = factors[k];
-      if (f->is<TensorPower>() && f->as<TensorPower>().base()->is<Tensor>() &&
-          rotates(f->as<TensorPower>().base()->as<Tensor>()))
+      if (f->is<TensorPower>() && rotates(f->as<TensorPower>().base()))
         reject("a leaf to rotate stands under a TensorPower");
-      if (!f->is<Tensor>() || !rotates(f->as<Tensor>())) continue;
+      if (!rotates(f)) continue;
       const auto& t = f->as<Tensor>();
       const auto nb = t.bra_rank();
       for (std::size_t s = 0; s != nb + t.ket_rank(); ++s) {
         const auto& u = s < nb ? t.bra()[s] : t.ket()[s - nb];
-        if (u.has_proto_indices())
-          reject("a slot of a leaf to rotate has protoindices");
+        if (u.has_proto_indices() || protos.contains(u))
+          reject(
+              "a slot of a leaf to rotate has protoindices or is a "
+              "protoindex");
         if (!includes(u.basis(), p.basis())) {
           if (registry->valid_intersection(u.space(), p.space()))
             reject(
@@ -94,7 +112,6 @@ ExprPtr rotation_gradient(const ExprPtr& L,
                 "including it");
           continue;
         }
-        if (slots.at(u) < 2) reject("a slot of a leaf to rotate is free");
         // the term with q in this slot and p for u elsewhere
         const container::map<Index, Index> u_to_p{{u, p}};
         auto rotated = transform_expr(f, u_to_p);

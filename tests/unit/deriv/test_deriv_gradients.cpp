@@ -198,6 +198,16 @@ TEST_CASE("deriv/gradients/rotation", "[deriv][gradients]") {
                  T(L"h{a_5;i_5}:N-N-N + h{i_5;a_5}:N-N-N"), {i, a}, {});
   }
 
+  SECTION("a leaf spelled as the adjoint rotates too") {
+    const Index i(L"i_5"), a(L"a_5");
+    require_same(rotation_gradient(T(L"f⁺{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
+                                     L"f{i_1;a_1}:N-N-N u{a_1;i_1}:N-N-N"),
+                                   {L"f"}, i, a),
+                 T(L"f⁺{a_5;a_1}:N-N-N t{a_1;i_5}:N-N-N + "
+                   L"f{a_5;a_1}:N-N-N u{a_1;i_5}:N-N-N"),
+                 {i, a}, {});
+  }
+
   SECTION("a Hadamard index and an auxiliary slot") {
     const Index i(L"i_5"), a(L"a_5");
     require_same(
@@ -240,7 +250,15 @@ TEST_CASE("deriv/gradients/rotation", "[deriv][gradients]") {
     X(E, Index(L"p_5"), a,
       "a slot of a leaf to rotate overlaps the space of p without including "
       "it");
-    X(T(L"f{i_1;a_1}:N-N-N"), i, a, "a slot of a leaf to rotate is free");
+    X(T(L"f{i_1;a_1}:N-N-N"), i, a, "the function is not a scalar");
+    X(T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N w{;a_2}:N-N-N"), i, a,
+      "the function is not a scalar");
+    X(T(L"Â{i_1;a_1}:A-N-S f{i_1;a_1}:N-N-N"), i, a,
+      "the function is not a scalar");
+    X(T(L"f{i_1;i_2}:N-N-N Y{a_1<i_1>;a_2<i_2>}:N-N-N "
+        L"Z{a_2<i_2>;a_1<i_1>}:N-N-N"),
+      i, Index(L"i_6"),
+      "a slot of a leaf to rotate has protoindices or is a protoindex");
     X(pow(T(L"f{i_1;a_1}:N-N-N"), 2) * T(L"t{a_1;i_1}:N-N-N"), i, a,
       "a leaf to rotate stands under a TensorPower");
     X(mbpt::op::H(1), i, a, "the function holds operators");
