@@ -945,8 +945,10 @@ CanonicalKey canonical_key(const ExprPtr& term,
   auto e = term->clone();
   {
     // the options are read from the default context
-    auto scope =
-        set_scoped_default_context(Context(get_default_context()).set(opts));
+    // sequant::Context, spelled out: inside this namespace a bare Context
+    // is mbpt::Context wherever its header is visible (e.g. a unity build)
+    auto scope = sequant::set_scoped_default_context(
+        sequant::Context(get_default_context()).set(opts));
     e = canonicalize(e);
   }
   if (!e) return key;
