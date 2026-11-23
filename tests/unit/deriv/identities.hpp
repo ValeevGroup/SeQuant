@@ -39,10 +39,10 @@ container::svector<Model> family_models();
 
 /// the equations of a model and the variables to differentiate them by
 struct Family {
-  Model model;
-  std::vector<std::pair<std::wstring, ExprPtr>> equations;
+  Model model = {};
+  std::vector<std::pair<std::wstring, ExprPtr>> equations = {};
   /// every leaves_as_variables() spelling and the generated spellings
-  Expressions variables;
+  Expressions variables = {};
 };
 
 /// calls @p f with the family of @p model , made once per process and used
@@ -128,12 +128,12 @@ const ExprPtr& schwarz_partner(const ExprPtr& r, const ExprPtr& x,
 /// one comparison of I2: an equation SeQuant generates against the derivative
 /// that gives it
 struct OwnEquation {
-  std::wstring name;
+  std::wstring name = {};
   /// the generated equation, as compared
-  ExprPtr generated;
+  ExprPtr generated = {};
   /// the derivative, as compared
-  ExprPtr expected;
-  container::set<Index> free;
+  ExprPtr expected = {};
+  container::set<Index> free = {};
 };
 
 /// I2, SeQuant's own equations of @p family : t()[k] against diff(ℒ, λ_k),

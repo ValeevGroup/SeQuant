@@ -318,7 +318,7 @@ Number number_of(std::uint64_t h, bool real) {
 /// a slot of a factor: the label numbers of its index and protoindices
 struct Slot {
   int own = 0;
-  container::svector<int> protos;
+  container::svector<int> protos = {};
   bool symmetric = false;
 };
 
@@ -370,7 +370,7 @@ struct Stored {
 /// a factor of a term, read once and evaluated at each assignment
 struct Factor {
   enum class Kind { number, kronecker, overlap, data } kind = Kind::number;
-  Number number;  // Kind::number
+  Number number = {};  // Kind::number
   /// Kind::number: a Variable, its value unconjugated
   bool variable = false;
   std::uint64_t key = 0;
@@ -381,17 +381,17 @@ struct Factor {
   Symmetry symmetry = Symmetry::Nonsymm;
   BraKetSymmetry braket = BraKetSymmetry::Nonsymm;
   ColumnSymmetry column = ColumnSymmetry::Nonsymm;
-  container::svector<Slot> bra, ket, aux;
+  container::svector<Slot> bra = {}, ket = {}, aux = {};
   /// an overlap of unit metric within one basis instance, its protoindices
   /// aside: is_identity_at() decides by their values
   bool unit_overlap = false;
   /// a Power or TensorPower: the element raised, conjugated if flagged
-  std::optional<rational> exponent;
+  std::optional<rational> exponent = {};
   bool power_conjugated = false;
   /// the label numbers of its slots and their protoindices, once each
-  container::svector<int> labels;
+  container::svector<int> labels = {};
   /// what stored() read, per assignment of the labels
-  mutable std::unordered_map<Key, Stored, KeyHash> read;
+  mutable std::unordered_map<Key, Stored, KeyHash> read = {};
 };
 
 /// the label numbers of the slots of @p f and of their protoindices, once each
@@ -571,7 +571,7 @@ struct Perturbation {
   std::uint64_t key = 0;
   /// a Variable; else the element at these canonical slots
   bool variable = false;
-  Addresses b, k, x;
+  Addresses b = {}, k = {}, x = {};
   int sign = 1;
   bool swapped = false;
   /// the perturbed spelling is the conjugate one: its derivative is by z̄
@@ -637,7 +637,7 @@ N value_of(const Factor& f, const Assignment& v, const Perturbation* p) {
 /// slots, signed for Â, of columns for Ŝ
 struct Projection {
   bool antisymmetric = true;
-  container::svector<int> bra, ket;
+  container::svector<int> bra = {}, ket = {};
 };
 
 /// every permutation of 0, …, n-1 with its sign, by core's
@@ -748,15 +748,15 @@ namespace {
 /// external labels, the k-th summed label has number externals + k
 struct Term {
   Number scalar = 1;
-  container::svector<Factor> factors;
+  container::svector<Factor> factors = {};
   /// the projectors applied to the term, over external labels
-  container::svector<Projection> projections;
+  container::svector<Projection> projections = {};
   std::size_t externals = 0;
-  container::svector<container::svector<int>> domains;
+  container::svector<container::svector<int>> domains = {};
   /// the factors that can be evaluated before any summed label is assigned,
   /// and once the k-th is
-  container::svector<std::size_t> first;
-  container::svector<container::svector<std::size_t>> after;
+  container::svector<std::size_t> first = {};
+  container::svector<container::svector<std::size_t>> after = {};
 };
 
 /// reads the terms of an expression with fixed external labels
