@@ -61,7 +61,7 @@ Evaluating a forest under ``BatchScheduler::ordered`` proceeds through four stag
    values are separated into ordered sub-passes within the same loop nest rather than left to race.
 3. **The cell table** (``cell_table.hpp``, ``cell_table_builder.hpp``). Rather than let the executor *infer* what to read from where
    while it runs, the schedule is first lowered into an explicit table: one entry per distinct value-form actually resident at some
-   scope, and one entry per read of it, naming exactly which scope produces it, how long it lives, and who consumes it. A validator
+   scope, and one entry per read of it, naming exactly which scope produces it and who consumes it. A validator
    checks this table for internal consistency before any tensor operation runs, so a scheduling bug is caught as a fast, deterministic
    failure rather than a wrong number arrived at after an expensive run.
 4. **The executor** (``ordered_executor.hpp``). Walks the cell table exactly as written: every operand of every operation is resolved
@@ -91,7 +91,9 @@ The optimizer records on each node the modes it slices and the loops it opens; t
 the node. Two occurrences can still be sliced differently in different equations, so the ordered scheduler also
 records each occurrence's *home*: the enclosing loops that slice its own result modes (``occurrence_home()``). Value
 identity tells apart occurrences with different homes. Forest descent instead uses the intersection over
-occurrences (``sliced_modes()``).
+occurrences (``sliced_modes()``), and its per-batch scratch shares a node only among occurrences that put the batch
+mode, the batched external modes and the axes of the enclosing loops at the same result positions: two equal nodes
+binding different physical indices to an enclosing loop's axis hold different slices.
 
 Placement, escapes, and pass splits
 ----------------------------------------
@@ -103,16 +105,44 @@ and nested blocks; external requirements of an inner block propagate outward to 
 The ordered driver's optional ``mode_order`` ranks index spaces from outermost to innermost. It only breaks ties left
 by the recorded nesting constraints; there is no cost search over nest orders.
 
-Legality classifies a value relative to each loop as ``LoopLocal``, ``Reduction``, or ``LoopCarried``. A wholly local
-value is a ``BuildStep`` in its home block. A reduction or loop-carried value instead escapes through the block's
-outputs: ``AccumulateSum`` for reduction, ``AccumulateScatter`` for carried result modes. Multiple escapes form a
-chain, with raw production at the deepest site and forwarding at shallower sites. An escape can skip an interposed
-loop on which the value is invariant.
+Legality classifies a value relative to each loop as ``LoopLocal``, ``Reduction``, or ``LoopCarried``. A reduction is
+a property of the value's own node. The other two are decided per occurrence, against the recorded loop instances: an
+occurrence whose enclosing loops include the instance that slices the value's position reads it in lockstep, per
+batch; one they do not reads it assembled (``OccurrenceRole``). A value with a lockstep occurrence is ``LoopLocal``
+and a ``BuildStep`` in its home block; if it also has assembled readers it escapes from that block as well, and those
+readers follow the block in their own block's order. A value with no lockstep occurrence is ``LoopCarried``. A reduction or loop-carried value escapes through the block's outputs:
+``AccumulateSum`` for reduction, ``AccumulateScatter`` for carried result modes. Multiple escapes form a chain, with
+raw production at the deepest site and forwarding at shallower sites. An escape can skip an interposed loop on which
+the value is invariant.
 
 A consumer requiring a completed loop-carried value, or a completed reduction while it is inside that reduction's
-loop, moves to a later pass. A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a
-later pass reads the earlier pass's assembled value. Values needed across a split are materialized, not recomputed.
-Unsupported cases raise ``sequant::Exception``.
+loop, or a loop-local value assembled over a loop instance while it is itself produced inside that instance, moves to
+a later pass.
+
+Passes must also leave every block level orderable. The steps of a level are its builds and the blocks nested in it
+(at root: the root builds and each nest's pass blocks), and a block stands for everything produced inside it, so the
+steps of one pass can need each other in a cycle although no value does: a build that reads what the inner block
+completes while a reader of that build sits inside the block, or two nests whose blocks each read a completed value of
+the other. The pass levels are refined until no such cycle is left: each round finds the cycles among the steps of one
+pass and moves the consumers on them to a later pass than the operands they read there.
+
+These requirements bound a reader's pass only from below. Among the assignments they allow, the readers of one value
+are gathered into one pass where that is possible: a reader that nothing holds in an earlier pass joins the latest
+reader of a value they share, its consumers move as their own requirements then dictate, and operands follow their
+readers. A move is kept only if it lowers the number of passes in which values are read and adds no pass. Neither
+costs nor sizes enter the choice, so it does not see the values it makes resident together.
+
+A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a later pass reads an earlier
+pass's completed values (loop-carried, reduction) in their assembled form. The nest's inner levels are ordered once,
+with all passes present, and then forked per pass, so only dependencies between two steps of one pass order them.
+
+A value built per batch is visible only to the pass that builds it. Where its readers still fall in several passes
+(one of them feeds a value that another must read complete) it is built again in each later pass that reads it, per
+batch, along with the per-batch operands it needs there. It is not assembled over the loops that slice it: no
+occurrence of it asked for that residence, and the assembled value can be far larger than any batch of it. A copy
+cannot serve a reader that needs the value complete, a reader separated from it to keep a pass's steps orderable, or
+a pass whose steps the copy itself would leave unorderable. A value with such a reader is assembled by the pass that
+builds it, and every later reader takes that form. Unsupported cases raise ``sequant::Exception``.
 
 .. _batched-evaluation-cell-table:
 
@@ -124,24 +154,31 @@ is still a partial sum, and how it is produced (leaf, build, or sum/scatter asse
 whose residency encloses it.
 
 Each operand occurrence is a separate ``Read``, so a consumer using one value twice reads it twice. A read names its
-source cell and how to slice it. A cell's lifetime is the number of reads it will serve, each weighted by how many times
-the loops enclosing the consumer but not the source replay it; the executor frees the cell when the count reaches zero.
-A cell invariant on an enclosing loop is built on the first batch and reused until a loop it depends on advances. Only
-unbound, non-volatile values at the persistent-to-volatile frontier persist across evaluations.
+source cell and how to slice it. A cell invariant on an enclosing loop is built on the first batch and reused until a
+loop it depends on advances. Only unbound, non-volatile values at the persistent-to-volatile frontier persist across
+evaluations.
+
+How long a cell lives is not counted; it is read off the schedule (``ReleasePlan``, ``release_plan.hpp``). A cell
+lives for one epoch, from its production until the loop that re-produces it advances. Within an epoch that loop's
+block runs its steps and then its outputs once, and every read of the cell happens at one of those positions, directly
+or somewhere inside the nested block that is the step there. The cell is released when the last position holding a
+read of it is done, whether that step ran, was skipped, or replayed its reads once per batch of loops nested in it.
+The schedule's results are kept for the caller.
 
 ``validate_cell_table`` checks the table for consistency before any tensor operation runs: every read has a visible
-source of the right form, assemblies close the right partial or scattered form, lifetimes match the weighted reads,
-and no value is built twice at one scope. It does not check array ranges; the dry-run backend does.
+source of the right form, assemblies close the right partial or scattered form, no cell resident inside a loop goes
+unread, and no value is built twice at one scope. It does not check array ranges; the dry-run backend does.
 
 Executing the table
 -----------------------
 
-The executor resolves each declared read against the cell registry, spends one unit of the source's lifetime, and
-applies the read's slices; the last non-persistent read moves the value out, which makes in-place accumulation safe.
-Each batch clears the cells bound to that loop, executes the block's steps, and folds outputs into their assembly
-cells (summing partials, or scattering blocks into the destination). When the loop closes, the assembled cell becomes
-visible to the next link of its escape chain. Persistent cells are published to the cache's ``PersistentValueStore``
-and restored from it on later evaluations, in which case their productions are skipped.
+The executor resolves each declared read against the cell registry and applies the read's slices. A read the release
+plan marks as the last use of a non-persistent cell, made once per epoch of that cell, takes the value over, which
+makes in-place accumulation safe. Each batch clears the cells bound to that loop, executes the block's steps, and
+folds outputs into their assembly cells (summing partials, or scattering blocks into the destination); after each step
+and each output it releases the cells whose last reader that position holds. When the loop closes, the assembled
+cell becomes visible to the next link of its escape chain. Persistent cells are published to the cache's
+``PersistentValueStore`` and restored from it on later evaluations, in which case their productions are skipped.
 
 A correctness caveat for sparse backends
 ---------------------------------------------
@@ -164,18 +201,47 @@ Dry runs and diagnostics
 The sizing backend in ``SeQuant/core/eval/backends/dryrun/`` stores descriptors instead of tensors and checks
 shared-label ranges on every operation. :func:`sequant::eval::dryrun::meter` drives the same ``evaluate`` entry point
 as a real run and reports the realized peak and work, checking the runtime's scheduling and accounting rather than
-the optimizer's per-product estimate. It assumes real double-precision data.
+the optimizer's per-product estimate. It assumes real double-precision data. Every slice, permutation and phase change
+it makes is priced as a copy, also where a backend (TiledArray, for one) keeps a lazy view that holds no memory of its
+own, so for batched schedules the metered peak is a conservative estimate of what such a backend keeps resident. It is
+not a bound on process memory either way: transients inside a production and the backend's own temporaries are not
+modeled.
 
 ``SeQuant/core/eval/ordered_dump.hpp`` provides environment-gated dumps of each pipeline stage;
 :doc:`/user/guide/evaluation` explains how to read evaluation traces.
+
+Schedule documents
+-----------------------------
+
+A schedule document (``SeQuant/core/eval/schedule_document.hpp``) is one JSON document that describes a batched
+schedule for inspection and for steering later runs. It has a pinnable ``roots`` section, which records the choices the
+optimizer made for each root and can be fed back to reproduce them, a read-only ``dag`` section, which describes the
+ordered schedule built from those choices, and an optional ``run`` section, which carries what an evaluation measured.
+The optimizer side lives in ``SeQuant/core/optimize/schedule_pin.hpp``: ``opt::schedule::record_root`` captures a root,
+and a ``PinSession`` or ``RecordSession`` set on ``OptimizeOptions::pinned`` or ``OptimizeOptions::recording`` replays
+pinned choices or collects the recorded ones during optimization. Recording or pinning a Sum makes the optimized Sum
+carry canonical dummy labels (each summand is optimized on its canonicalized clone). A term's key is its canonical
+form, so it is independent of the dummy labels and of the factor order the caller used, but not of the external index
+labels: a root must be spelled with the same external labels on every run that pins it. ``fingerprint_of`` summarizes the
+binarized forest a document was recorded for, and ``check_fingerprint``, run after binarization and before the DAG
+stages, throws when a loaded document's fingerprint no longer matches the live forest's. ``eval::schedule::record_dag`` (``SeQuant/core/eval/schedule_dag_record.hpp``) builds the ``dag``
+section from a rich schedule, its legality and the volatility predicate the evaluation runs with (a value's
+``persistent`` is the cell table's own flag); given a cost model it also prices every value (its home-relative slab and
+its full size). The ordered entry points in ``ordered_executor.hpp`` take an optional ``RunRecord*`` out-parameter that
+is filled with the ``run`` section: per value, the bytes the backend measured for what each production, leaf fetch or
+seeding left in the value's cell. ``size_audit_table`` sets the two side by side, per value and as a peak: both peaks are
+the same liveness sweep over the ``dag`` section, one priced by the model and one by the run, so a mis-sized value or a
+peak the model misses shows up as a ratio rather than as a number without a reference. The ``sequant-schedule``
+command-line tool validates, diffs and renders documents.
 
 Current scope
 ----------------
 
 The ``ordered`` pipeline does not: choose the fusion of loop instances optimally where producer/consumer
 connectivity allows more than one valid choice (a valid, but not necessarily optimal, choice is recorded); reorder loop nesting across
-index spaces for cost (the realized nesting honors recorded constraints and the caller's ``mode_order`` ranking); make a
-cost-aware choice between materializing and recomputing a value across a forced pass split (a pass split always materializes); or
+index spaces for cost (the realized nesting honors recorded constraints and the caller's ``mode_order`` ranking); weigh
+the cost of building a value again in a later pass against the memory of keeping it assembled (it is built again wherever a
+copy can serve the reader), or the memory that gathering readers into one pass makes resident together; order the steps of a block to shorten the lifetimes of the values they share; or
 share a transient value across multiple reads (an unrecorded intermediate is recomputed inside every production tree that needs it).
 A scatter assembly writes along one position of its output; one needing several positions throws.
 None of this affects correctness — every one of these is a possible future efficiency

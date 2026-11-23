@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace sequant::mbpt {
@@ -70,11 +71,11 @@ enum class ProjectionTerms : std::uint32_t {
 
 /// where a moved leg lands: its partner's pair (a basis stamp) or the
 /// integral's own pair, its two distinct occupied indices (PNO)
-enum class ProjectionDomain { PartnerPair, OwnPair };
+enum class ProjectionDomain : std::uint8_t { PartnerPair, OwnPair };
 
 /// the basis instance a moved leg takes: its partner's (the amplitude family)
 /// or the one ProjectionOptions::cell_instance names for the integral's cell
-enum class ProjectionBasis { Amplitude, Integral };
+enum class ProjectionBasis : std::uint8_t { Amplitude, Integral };
 
 struct ProjectionOptions {
   ProjectionTerms terms = ProjectionTerms::None;
@@ -84,11 +85,34 @@ struct ProjectionOptions {
   std::function<IndexBasis::instance_type(ProjectionTerms cell)> cell_instance =
       {};
   std::wstring integral_label = L"g";
+  /// also move a virtual leg that is a residual external (the overlap then
+  /// carries the external): every leg of a selected integral lands on the
+  /// target pair, so a density-fitted `(vv|Κ)` factor of an own-pair
+  /// integral can fold into that pair's leaf; an approximation beyond the
+  /// CSV truncation itself, exact at complete pair spaces. Off by default.
+  bool move_externals = false;
+  /// the basis every moved leg is minted in, instead of the leg's own space
+  /// and instance: a Kramers-restricted kit passes its spin-free union
+  /// expansion basis, so a flavoured leg moves into the pair's whole space
+  /// (a pair basis is a set of whole Kramers doublets, with support on both
+  /// flavours; its flavoured half alone is not a projector). Under
+  /// `Amplitude` the leg takes this basis as given; under `Integral` it
+  /// takes this basis's space and the instance of its cell.
+  std::optional<IndexBasis> leg_basis = {};
+  /// under `OwnPair`, move a leg only if the cluster it sits on (its proto
+  /// indices) shares an occupied index with the integral's own pair. A leg on
+  /// an unrelated cluster stays where it is: moving it costs an overlap
+  /// between two clusters with no common index, one block for every pair of
+  /// pairs, where the unmoved leg needs none. Off by default.
+  bool connected_legs_only = false;
 };
 
 /// In each R2 term (residual rank read off the `Ŝ`/`Â` symmetrizer; other
-/// terms are returned as is) every `integral_label` tensor of a selected cell
-/// gets each virtual leg `x` that is not a residual external replaced by a
+/// terms are returned as is; a term without a symmetrizer, a residual block
+/// whose `Â` the caller expanded or stripped as the Kramers-restricted trace
+/// does, takes its externals from its own external indices and its rank from
+/// the number of unoccupied ones) every `integral_label` tensor of a selected
+/// cell gets each virtual leg `x` that is not a residual external replaced by a
 /// fresh `x'` on the target pair and basis, times the overlap `s{x';x}`
 /// (`s{x;x'}` for a bra leg); a leg already there stays. An approximation,
 /// exact only at complete domains, and opt-in: with the default

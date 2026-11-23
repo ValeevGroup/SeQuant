@@ -1,0 +1,871 @@
+{
+  "format": "sequant.schedule/1",
+  "producer_version": "example",
+  "producer_date": "2026-10-19",
+  "fingerprint": {
+    "roots": [
+      "R1",
+      "R2"
+    ],
+    "batchable": {
+      "a": [
+        false,
+        false
+      ],
+      "i": [
+        false,
+        true
+      ]
+    },
+    "volatile_leaves": [],
+    "persistent_only": false,
+    "batch_spectator_indices": true,
+    "accumulation_factor": 0.0,
+    "scheduler": "forest_descent",
+    "objective_function": "DenseTimeSpaceBatched",
+    "reorder": "Reorder",
+    "cse": {
+      "subnet": "false"
+    },
+    "mode_order": [
+      "a",
+      "i"
+    ],
+    "context": {
+      "vacuum": "SingleProduct",
+      "spbasis": "Spinor",
+      "strict_braket_symmetry": true,
+      "cardinal_tensor_labels": [
+        "Â",
+        "Ŝ",
+        "P̂",
+        "κ",
+        "γ",
+        "η",
+        "Γ",
+        "L",
+        "λ",
+        "λ¹",
+        "h",
+        "f",
+        "f̃",
+        "g",
+        "θ",
+        "t",
+        "t¹",
+        "R",
+        "F",
+        "X",
+        "μ",
+        "V",
+        "Ṽ",
+        "B",
+        "U",
+        "GR",
+        "C",
+        "s",
+        "δ",
+        "a",
+        "ã",
+        "b",
+        "b̃",
+        "E"
+      ],
+      "canonicalization_method": "topological",
+      "ignore_named_index_labels": true
+    }
+  },
+  "roots": [
+    {
+      "label": "R1",
+      "terms": [
+        {
+          "key": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+          "factors": [
+            "f{i_2;i_3}:N-N-S",
+            "t{a_1;i_2}:N-N-S",
+            "g{i_1;a_1}:N-N-S"
+          ],
+          "scalar": "1",
+          "tree": [
+            0,
+            [
+              1,
+              2
+            ]
+          ],
+          "nodes": [
+            {
+              "axes": [
+                {
+                  "label": "i_1",
+                  "kind": "external"
+                }
+              ],
+              "opened_here": [],
+              "order_aware": true
+            },
+            {
+              "axes": [
+                {
+                  "label": "i_1",
+                  "kind": "external"
+                }
+              ],
+              "opened_here": [
+                {
+                  "label": "i_1",
+                  "kind": "external"
+                }
+              ],
+              "order_aware": true
+            }
+          ],
+          "pinnable": true
+        },
+        {
+          "key": "h{i_1;i_3}:N-N-S",
+          "factors": [
+            "h{i_1;i_3}:N-N-S"
+          ],
+          "scalar": "1",
+          "tree": 0,
+          "nodes": [],
+          "pinnable": true
+        }
+      ]
+    },
+    {
+      "label": "R2",
+      "terms": [
+        {
+          "key": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+          "factors": [
+            "f{i_3;i_1}:N-N-S",
+            "t{a_1;i_2}:N-N-S",
+            "g{i_1;a_1}:N-N-S"
+          ],
+          "scalar": "1",
+          "tree": [
+            0,
+            [
+              1,
+              2
+            ]
+          ],
+          "nodes": [
+            {
+              "axes": [
+                {
+                  "label": "i_2",
+                  "kind": "external"
+                }
+              ],
+              "opened_here": [],
+              "order_aware": true
+            },
+            {
+              "axes": [
+                {
+                  "label": "i_2",
+                  "kind": "external"
+                }
+              ],
+              "opened_here": [
+                {
+                  "label": "i_2",
+                  "kind": "external"
+                }
+              ],
+              "order_aware": true
+            }
+          ],
+          "pinnable": true
+        },
+        {
+          "key": "h{i_3;i_2}:N-N-S",
+          "factors": [
+            "h{i_3;i_2}:N-N-S"
+          ],
+          "scalar": "1",
+          "tree": 0,
+          "nodes": [],
+          "pinnable": true
+        }
+      ]
+    }
+  ],
+  "dag": {
+    "values": [
+      {
+        "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#0",
+        "name": "R1/0#0",
+        "expr": "R1/0#0 = f",
+        "hash": "0xc1c75fe9ea45a77f",
+        "key": "0xc1c75fe9ea45a77f",
+        "leaf": true,
+        "result_modes": [
+          "i_2:i",
+          "i_3:i"
+        ],
+        "home_modes": [],
+        "enclosing_modes": [
+          "i_1:i",
+          "i_2:i"
+        ],
+        "divergent_modes": [
+          "i_2:i",
+          "i_1:i"
+        ],
+        "home_block": 0,
+        "home_depth": -1,
+        "persistent": false,
+        "first_use": 0,
+        "last_use": 11,
+        "build_site": [],
+        "home_floor": [],
+        "forced_split_axes": [],
+        "per_axis": [],
+        "occurrences": [
+          {
+            "term": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 0,
+            "consumer": 4,
+            "home": [],
+            "enclosing": [
+              "i_1:i"
+            ],
+            "opens": []
+          },
+          {
+            "term": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 0,
+            "consumer": 4,
+            "home": [],
+            "enclosing": [
+              "i_2:i"
+            ],
+            "opens": []
+          }
+        ],
+        "siblings": []
+      },
+      {
+        "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#1",
+        "name": "R1/0#1",
+        "expr": "R1/0#1 = t",
+        "hash": "0x63aa8a62e82687cd",
+        "key": "0x63aa8a62e82687cd",
+        "leaf": true,
+        "result_modes": [
+          "a_1:a",
+          "i_2:i"
+        ],
+        "home_modes": [],
+        "enclosing_modes": [
+          "i_1:i",
+          "i_2:i"
+        ],
+        "divergent_modes": [],
+        "home_block": 0,
+        "home_depth": -1,
+        "persistent": false,
+        "first_use": 1,
+        "last_use": 10,
+        "build_site": [],
+        "home_floor": [],
+        "forced_split_axes": [],
+        "per_axis": [],
+        "occurrences": [
+          {
+            "term": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 1,
+            "consumer": 3,
+            "home": [],
+            "enclosing": [
+              "i_1:i"
+            ],
+            "opens": []
+          },
+          {
+            "term": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 1,
+            "consumer": 3,
+            "home": [],
+            "enclosing": [
+              "i_2:i"
+            ],
+            "opens": []
+          }
+        ],
+        "siblings": []
+      },
+      {
+        "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#2",
+        "name": "R1/0#2",
+        "expr": "R1/0#2 = g",
+        "hash": "0xc6f06bbae601396",
+        "key": "0xc6f06bbae601396",
+        "leaf": true,
+        "result_modes": [
+          "i_1:i",
+          "a_1:a"
+        ],
+        "home_modes": [],
+        "enclosing_modes": [
+          "i_1:i",
+          "i_2:i"
+        ],
+        "divergent_modes": [],
+        "home_block": 0,
+        "home_depth": -1,
+        "persistent": false,
+        "first_use": 2,
+        "last_use": 10,
+        "build_site": [],
+        "home_floor": [],
+        "forced_split_axes": [],
+        "per_axis": [],
+        "occurrences": [
+          {
+            "term": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 2,
+            "consumer": 3,
+            "home": [],
+            "enclosing": [
+              "i_1:i"
+            ],
+            "opens": []
+          },
+          {
+            "term": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 2,
+            "consumer": 3,
+            "home": [],
+            "enclosing": [
+              "i_2:i"
+            ],
+            "opens": []
+          }
+        ],
+        "siblings": []
+      },
+      {
+        "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+        "name": "R1/0#3",
+        "expr": "R1/0#3[i_1] = t * g[i_1]",
+        "hash": "0xbccc9055519a1969",
+        "key": "0x5fee5dd47dc33425",
+        "leaf": false,
+        "result_modes": [
+          "i_1:i",
+          "i_2:i"
+        ],
+        "home_modes": [
+          "i_1:i"
+        ],
+        "enclosing_modes": [
+          "i_1:i"
+        ],
+        "divergent_modes": [],
+        "home_block": 1,
+        "home_depth": 0,
+        "persistent": false,
+        "first_use": 3,
+        "last_use": 4,
+        "build_site": [
+          "i_1:i"
+        ],
+        "home_floor": [
+          "i_1:i"
+        ],
+        "forced_split_axes": [],
+        "per_axis": [
+          {
+            "mode": "i_1:i",
+            "role": "LoopLocal"
+          }
+        ],
+        "occurrences": [
+          {
+            "term": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 3,
+            "consumer": 4,
+            "home": [
+              "i_1:i"
+            ],
+            "enclosing": [
+              "i_1:i"
+            ],
+            "opens": []
+          }
+        ],
+        "siblings": [
+          "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3"
+        ]
+      },
+      {
+        "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+        "name": "R1/0#4",
+        "expr": "R1/0#4[i_1] = f * R1/0#3[i_1]",
+        "hash": "0x4531b265b115e73c",
+        "key": "0xe73674a8a8bcef7f",
+        "leaf": false,
+        "result_modes": [
+          "i_1:i",
+          "i_3:i"
+        ],
+        "home_modes": [],
+        "enclosing_modes": [],
+        "divergent_modes": [],
+        "home_block": 1,
+        "home_depth": -1,
+        "persistent": false,
+        "first_use": 4,
+        "last_use": 6,
+        "build_site": [
+          "i_1:i"
+        ],
+        "home_floor": [],
+        "forced_split_axes": [
+          "i_1:i"
+        ],
+        "per_axis": [
+          {
+            "mode": "i_1:i",
+            "role": "LoopCarried"
+          }
+        ],
+        "occurrences": [
+          {
+            "term": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 4,
+            "consumer": null,
+            "home": [
+              "i_1:i"
+            ],
+            "enclosing": [],
+            "opens": [
+              {
+                "label": "i_1:i",
+                "kind": "external"
+              }
+            ]
+          }
+        ],
+        "siblings": []
+      },
+      {
+        "id": "h{i_1;i_3}:N-N-S#0",
+        "name": "R1/1#0",
+        "expr": "R1/1#0 = h",
+        "hash": "0xa6b8cbf1655caf3f",
+        "key": "0xa6b8cbf1655caf3f",
+        "leaf": true,
+        "result_modes": [
+          "i_1:i",
+          "i_3:i"
+        ],
+        "home_modes": [],
+        "enclosing_modes": [],
+        "divergent_modes": [
+          "i_1:i",
+          "i_2:i"
+        ],
+        "home_block": 0,
+        "home_depth": -1,
+        "persistent": false,
+        "first_use": 5,
+        "last_use": 13,
+        "build_site": [],
+        "home_floor": [],
+        "forced_split_axes": [],
+        "per_axis": [],
+        "occurrences": [
+          {
+            "term": "h{i_1;i_3}:N-N-S",
+            "node": 0,
+            "consumer": null,
+            "home": [],
+            "enclosing": [],
+            "opens": []
+          },
+          {
+            "term": "h{i_3;i_2}:N-N-S",
+            "node": 0,
+            "consumer": null,
+            "home": [],
+            "enclosing": [],
+            "opens": []
+          }
+        ],
+        "siblings": []
+      },
+      {
+        "id": "R1+1",
+        "name": "R1+1",
+        "expr": "R1+1 = R1/0#4 + h",
+        "hash": "0xb918de8d4bd8855f",
+        "key": "0xaf443a91992d8fd9",
+        "leaf": false,
+        "result_modes": [
+          "i_1:i",
+          "i_3:i"
+        ],
+        "home_modes": [],
+        "enclosing_modes": [],
+        "divergent_modes": [],
+        "home_block": 0,
+        "home_depth": -1,
+        "persistent": true,
+        "first_use": 6,
+        "last_use": 6,
+        "build_site": [],
+        "home_floor": [],
+        "forced_split_axes": [],
+        "per_axis": [],
+        "occurrences": [
+          {
+            "term": "R1",
+            "node": 1,
+            "consumer": null,
+            "home": [],
+            "enclosing": [],
+            "opens": []
+          }
+        ],
+        "siblings": []
+      },
+      {
+        "id": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+        "name": "R2/0#3",
+        "expr": "R2/0#3[i_2] = t[i_2] * g",
+        "hash": "0xbccc9055519a1969",
+        "key": "0xfba75627c3f4384e",
+        "leaf": false,
+        "result_modes": [
+          "i_1:i",
+          "i_2:i"
+        ],
+        "home_modes": [
+          "i_2:i"
+        ],
+        "enclosing_modes": [
+          "i_2:i"
+        ],
+        "divergent_modes": [],
+        "home_block": 2,
+        "home_depth": 0,
+        "persistent": false,
+        "first_use": 10,
+        "last_use": 11,
+        "build_site": [
+          "i_2:i"
+        ],
+        "home_floor": [
+          "i_2:i"
+        ],
+        "forced_split_axes": [],
+        "per_axis": [
+          {
+            "mode": "i_2:i",
+            "role": "LoopLocal"
+          }
+        ],
+        "occurrences": [
+          {
+            "term": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 3,
+            "consumer": 4,
+            "home": [
+              "i_2:i"
+            ],
+            "enclosing": [
+              "i_2:i"
+            ],
+            "opens": []
+          }
+        ],
+        "siblings": [
+          "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3"
+        ]
+      },
+      {
+        "id": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+        "name": "R2/0#4",
+        "expr": "R2/0#4[i_2] = f * R2/0#3[i_2]",
+        "hash": "0x569d6ec195596c6f",
+        "key": "0x68604bf889a2b158",
+        "leaf": false,
+        "result_modes": [
+          "i_3:i",
+          "i_2:i"
+        ],
+        "home_modes": [],
+        "enclosing_modes": [],
+        "divergent_modes": [],
+        "home_block": 2,
+        "home_depth": -1,
+        "persistent": false,
+        "first_use": 11,
+        "last_use": 13,
+        "build_site": [
+          "i_2:i"
+        ],
+        "home_floor": [],
+        "forced_split_axes": [
+          "i_2:i"
+        ],
+        "per_axis": [
+          {
+            "mode": "i_2:i",
+            "role": "LoopCarried"
+          }
+        ],
+        "occurrences": [
+          {
+            "term": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S",
+            "node": 4,
+            "consumer": null,
+            "home": [
+              "i_2:i"
+            ],
+            "enclosing": [],
+            "opens": [
+              {
+                "label": "i_2:i",
+                "kind": "external"
+              }
+            ]
+          }
+        ],
+        "siblings": []
+      },
+      {
+        "id": "R2+1",
+        "name": "R2+1",
+        "expr": "R2+1 = R2/0#4 + h",
+        "hash": "0x704c47e729f0e8db",
+        "key": "0xdda02cae07256825",
+        "leaf": false,
+        "result_modes": [
+          "i_3:i",
+          "i_2:i"
+        ],
+        "home_modes": [],
+        "enclosing_modes": [],
+        "divergent_modes": [],
+        "home_block": 0,
+        "home_depth": -1,
+        "persistent": true,
+        "first_use": 13,
+        "last_use": 13,
+        "build_site": [],
+        "home_floor": [],
+        "forced_split_axes": [],
+        "per_axis": [],
+        "occurrences": [
+          {
+            "term": "R2",
+            "node": 1,
+            "consumer": null,
+            "home": [],
+            "enclosing": [],
+            "opens": []
+          }
+        ],
+        "siblings": []
+      }
+    ],
+    "blocks": [
+      {
+        "id": 0,
+        "parent": null,
+        "axis": null,
+        "kind": "root",
+        "depth": 0,
+        "slot": 0,
+        "altitude": 0,
+        "pass": 0,
+        "steps": [
+          {
+            "build": null,
+            "block": 1
+          },
+          {
+            "build": "R1+1",
+            "block": null
+          },
+          {
+            "build": null,
+            "block": 2
+          },
+          {
+            "build": "R2+1",
+            "block": null
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": 1,
+        "parent": 0,
+        "axis": "i_1:i",
+        "kind": "external",
+        "depth": 1,
+        "slot": 0,
+        "altitude": 0,
+        "pass": 0,
+        "steps": [
+          {
+            "build": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+            "block": null
+          }
+        ],
+        "outputs": [
+          [
+            "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+            "AccumulateScatter"
+          ]
+        ]
+      },
+      {
+        "id": 2,
+        "parent": 0,
+        "axis": "i_1:i",
+        "kind": "external",
+        "depth": 2,
+        "slot": 1,
+        "altitude": 0,
+        "pass": 0,
+        "steps": [
+          {
+            "build": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+            "block": null
+          }
+        ],
+        "outputs": [
+          [
+            "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+            "AccumulateScatter"
+          ]
+        ]
+      }
+    ],
+    "loops": [
+      {
+        "space": "i",
+        "depth": 0,
+        "kind": "external"
+      },
+      {
+        "space": "i",
+        "depth": 1,
+        "kind": "external"
+      }
+    ],
+    "loop_order": [],
+    "edges": [
+      {
+        "from": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#1",
+        "to": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+        "sliced": true
+      },
+      {
+        "from": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#2",
+        "to": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+        "sliced": true
+      },
+      {
+        "from": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#0",
+        "to": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+        "sliced": true
+      },
+      {
+        "from": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+        "to": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+        "sliced": false
+      },
+      {
+        "from": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+        "to": "R1+1",
+        "sliced": false
+      },
+      {
+        "from": "h{i_1;i_3}:N-N-S#0",
+        "to": "R1+1",
+        "sliced": false
+      },
+      {
+        "from": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#1",
+        "to": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+        "sliced": true
+      },
+      {
+        "from": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#2",
+        "to": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+        "sliced": true
+      },
+      {
+        "from": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#0",
+        "to": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+        "sliced": true
+      },
+      {
+        "from": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
+        "to": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+        "sliced": false
+      },
+      {
+        "from": "h{i_1;i_3}:N-N-S#0",
+        "to": "R2+1",
+        "sliced": false
+      },
+      {
+        "from": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
+        "to": "R2+1",
+        "sliced": false
+      }
+    ]
+  },
+  "run": {
+    "extents": {
+      "a": 100,
+      "i": 10
+    },
+    "batch_targets": {
+      "i": 2
+    },
+    "n_batches": {
+      "1": 5,
+      "2": 5
+    },
+    "footprint": {
+      "R1+1": 800,
+      "R2+1": 800,
+      "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 160,
+      "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 160,
+      "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 160,
+      "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 160
+    },
+    "size": {
+      "R1+1": 800,
+      "R2+1": 800,
+      "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 160,
+      "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 800,
+      "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 160,
+      "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 800
+    },
+    "builds": {
+      "R1+1": 1,
+      "R2+1": 1,
+      "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 5,
+      "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 5,
+      "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 5,
+      "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 5
+    },
+    "planner": {
+      "objective_function": "DenseTimeSpaceBatched"
+    }
+  }
+}

@@ -29,11 +29,21 @@ Scalar quantities are represented by two different leaf types, depending on whet
 - :class:`sequant::Variable` holds a *named* scalar, such as a perturbation strength :math:`\lambda`, whose value is not fixed by the
   expression itself.
 - :class:`sequant::Power` represents ``base^exponent`` for a rational exponent, where the base is a ``Constant`` or a ``Variable``.
+- :class:`sequant::TensorPower` represents the element-wise ``base^exponent`` of a tensor leaf for a rational exponent. Build either kind of
+  power with :func:`sequant::pow`, which refuses a compound tensor-valued base (name it as a ``ResultExpr`` and raise the resulting leaf). An odd
+  integer exponent keeps the base's permutational symmetry, an even one makes an antisymmetric base symmetric, and a non-integer exponent on an
+  antisymmetric base is rejected. A ``TensorPower`` evaluates numerically on every backend; code export of one is supported by the text, Python and Julia TensorOperations generators (the ITF, Julia ITensor and Julia TensorKit generators refuse it; see :doc:`export`).
 
 .. literalinclude:: /examples/user/expressions.cpp
    :language: cpp
    :start-after: start-snippet-1
    :end-before: end-snippet-1
+   :dedent: 2
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
    :dedent: 2
 
 Composition: ``Product`` and ``Sum``
@@ -69,6 +79,73 @@ since both need to know the external index pairing and symmetry of the result, n
    :language: cpp
    :start-after: start-snippet-3
    :end-before: end-snippet-3
+   :dedent: 2
+
+A tensorial expression that a later equation needs as a factor, a Hadamard (element-wise) product such as
+:math:`\ell^{a_1 a_2}_{i_1 i_2} = M^{a_1 a_2}_{i_1 i_2} / D^{a_1 a_2}_{i_1 i_2}` in a perturbative correction, is composed through heads: it
+becomes its own ``ResultExpr``, whose head declares the external indices and symmetries once, and the later equation uses that head
+as a leaf via :func:`ResultExpr::result_as_tensor() <sequant::ResultExpr::result_as_tensor>` rather than respelling it. This is also
+how a compound expression is raised to a power: name it, then apply :func:`sequant::pow` to the leaf.
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-5
+   :end-before: end-snippet-5
+   :dedent: 2
+
+Under a head, the summands of a :class:`sequant::Sum` need not carry the same external indices: a summand may omit some of the
+head's indices, meaning that it is constant along those modes and is broadcast over them, as in the orbital-energy denominator
+``D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}``. :func:`is_valid() <sequant::is_valid>` accepts such a ``ResultExpr``
+if every summand's external indices are a subset of the head's and together the summands supply all of them; a bare ``Sum``, which
+has no head to name the missing modes, must still be uniformly indexed. Aux modes cannot be broadcast over: a summand must carry
+every aux index of the head. :func:`sequant::binarize` of a ``ResultExpr`` wraps each short summand in a unary
+:cpp:enumerator:`sequant::EvalOp::Broadcast` node, which expands it over the head modes it lacks; :func:`sequant::optimize`
+optimizes the summands like any others and leaves the broadcast to ``binarize``. Evaluating such a tree requires ``BackendArrayOps`` on the cache (``CacheManager::set_array_ops``), the
+same backend hooks batched evaluation uses (see :doc:`evaluation`), because the extents and tilings of the added modes come from the
+backend's per-space tilings; as in batched evaluation, the leaf tilings must agree with those array ops on every mode, which the
+broadcast itself does not diagnose. Code export spells the Broadcast nodes per backend (see
+:doc:`export`).
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-6
+   :end-before: end-snippet-6
+   :dedent: 2
+
+Systems of equations
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Equations composed through heads, such as ``D``, ``ℓ`` and a consumer of ``ℓ``, can be binarized together:
+:func:`sequant::binarize` of a ``std::span<const ResultExpr>`` returns an :class:`sequant::InlinedSystem` with one evaluation tree
+per equation, in input order, a ``consumed`` flag for each equation whose head another equation used, and ``roots()``, the trees of
+the equations no other equation used. Each leaf that names a head is replaced by that head's equation, binarized as it would be on
+its own (so a broadcast sum gets its Broadcast nodes and nested definitions are inlined in turn); the equations may be given in any order.
+
+A :class:`sequant::Tensor` leaf names a head if its label, its bra, ket and aux ranks and the index space and number of proto
+indices of every slot agree with the head's. A leaf that agrees only with bra and ket swapped, as :func:`sequant::canonicalize`
+may spell it, names a bra-ket symmetric head too; for a conjugate-symmetric head it throws (define the conjugate as its own
+equation), and for a head without bra-ket symmetry it is a different tensor. A head that matches the leaf as written takes
+precedence over one that matches it swapped. A leaf with the same label but a different shape remains an ordinary leaf, served by
+the leaf evaluator. A leaf that names a head must declare the head's symmetries, otherwise binarization throws; spelling the use
+through :func:`ResultExpr::result_as_tensor() <sequant::ResultExpr::result_as_tensor>` guarantees that. A
+:class:`sequant::Variable` leaf names a scalar head by its label; a conjugated use, or a use as the base of a scalar power,
+throws, so define the conjugate or the power as its own equation. Two equations with the same label and shape (for a bra-ket
+symmetric head, also with bra and ket swapped), and a definition that reaches its own head, are errors as well; the API reference
+lists every exception.
+
+An inlined equation enters its consumer as one factor with the layout and symmetries of the authored head: the consumer contracts
+with ``ℓ`` as declared, not with the factors of its right-hand side, so the head, rather than the factors that define it, is what
+the consumer's legality (for instance the context's strict bra-ket rule) is checked against. Repeated uses of a head yield
+subtrees with equal hashes and are recognized as the same intermediate like any repeated subexpression. Batched evaluation
+(see :doc:`batching`) slices through an inlined equation like through any other subtree, so a batch loop opened in the
+consumer also bounds the intermediates of the definition: a denominator built from orbital energies need not be materialized
+whole. Code export does not use the system overload; export each ``ResultExpr`` in order (see :doc:`export`), and a later
+equation reads an earlier head like any other tensor.
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-7
+   :end-before: end-snippet-7
    :dedent: 2
 
 The examples print expressions with ``<<`` and ``std::format``, which :file:`SeQuant/core/io/format.hpp` provides and which

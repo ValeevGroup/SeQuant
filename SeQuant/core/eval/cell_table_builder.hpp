@@ -2,6 +2,7 @@
 #define SEQUANT_EVAL_CELL_TABLE_BUILDER_HPP
 
 #include <SeQuant/core/eval/cell_table.hpp>
+#include <SeQuant/core/eval/loop_space_key.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -20,8 +21,7 @@ namespace sequant::eval {
 
 /// Inputs to \c build_cell_table: the finished ordered schedule plus the
 /// per-value callbacks the table derivation needs but does not itself own
-/// the source of (sliced-mode set, volatility, batch count of a loop
-/// instance).
+/// the source of (sliced-mode set, volatility).
 struct CellTableInputs {
   OrderedSchedule const* ordered = nullptr;
   RichSchedule const* rich = nullptr;
@@ -29,7 +29,6 @@ struct CellTableInputs {
   SlicedModeAssignment const* sliced = nullptr;
   std::function<container::svector<Index>(std::size_t)> sliced_modes_of;
   std::function<bool(std::size_t)> volatile_of;
-  std::function<std::size_t(LoopKey const&)> n_batches_of;
   /// Optional: the value's direct operand value ids with repetition -- one
   /// entry per leg of its production tree, so a value contracted with itself
   /// appears twice. Both \c ordered_schedule_dep_graph's \c depends_on and
@@ -91,9 +90,11 @@ template <typename Node>
     container::svector<std::wstring> const& path_spaces) {
   ValueCell const& c = rich.cells[vid];
   if (c.occurrences.empty() || p >= c.carried.size()) return std::nullopt;
-  std::wstring const space{c.carried[p].basis().base_key()};
+  std::wstring const space{loop_space_key(c.carried[p])};
   for (std::size_t i = 0; i < path.size(); ++i) {
     if (path_spaces[i] != space) continue;
+    // every occurrence carries the same stamp at p (ValueCell::key); any
+    // one that has it decides
     for (OccurrenceRec const& occ : c.occurrences)
       if (p < occ.loop_slot.size() && occ.loop_slot[p] >= 0 &&
           occ.loop_slot[p] == path[i].first.loop_slot)
@@ -198,7 +199,7 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     }
     auto const& child = std::get<ScopeBlock>(step.value);
     path.push_back({child.level.key(), child.latitude_ordinal});
-    path_spaces.push_back(std::wstring{child.axis.basis().base_key()});
+    path_spaces.push_back(loop_space_key(child.axis));
     block_stack.push_back(&child);
     emit_cells(in, child, path, path_spaces, block_stack, st);
     // The child's outputs assemble at this (the parent's) scope, while an
@@ -289,10 +290,20 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
 ///
 ///   \c persistent == carries no volatile leaf
 ///                 and is bound to no enclosing loop instance
-///                 and (some consumer of it holds a volatile value
+///                 and (some consumer of it is produced again on a later
+///                      evaluation
 ///                      or it has no consumer at all -- a forest root;
 ///                      validator rule 4 admits a zero-consumer cell only at
 ///                      the root scope).
+///
+/// A cell is produced again on a later evaluation iff it is not persistent
+/// and either holds a volatile value or feeds a cell that is produced again.
+/// That covers the amplitude-dependent cells, and also the amplitude-
+/// independent ones that cannot persist because they are bound to a loop --
+/// a slice built inside a batch loop that a volatile consumer reads. Such a
+/// cell is rebuilt on every evaluation and reads its sources again each time,
+/// so an unbound source of it must persist, or the whole chain below it is
+/// rebuilt on every evaluation too.
 ///
 /// The consumers of a cell are the consumer cells of every \c Read whose \c
 /// source is it, plus every \c Assemble whose \c production.source is it --
@@ -301,22 +312,16 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
 ///
 /// Why the frontier and not the whole invariant region: a persistent cell is
 /// held across evaluations and skipped by cache-halt on every later one. A
-/// non-volatile cell all of whose consumers are non-volatile is therefore
-/// never read again -- each such consumer is itself either persistent-and-held
-/// (skipped by cache-halt rule 1) or demoted here and, by induction from the
-/// roots, skipped by rule 2 because all of its consumers are skipped. Keeping
-/// such a cell resident across evaluations buys nothing and costs its bytes in
-/// the persistent value store for the life of the cache handle. Only the cells
-/// feeding volatile work -- and the forest's own results -- have a reader on a
-/// later evaluation.
+/// candidate none of whose consumers is produced again is never read again.
+/// Keeping such a cell resident across evaluations buys nothing and costs its
+/// bytes in the persistent value store for the life of the cache handle.
 ///
-/// Leaves follow the same rule: an input tensor whose every consumer is
-/// non-volatile is re-fetched on the (rare) evaluation that actually needs it
-/// rather than held forever.
+/// Leaves follow the same rule: an input tensor none of whose consumers is
+/// produced again is re-fetched on the (rare) evaluation that actually needs
+/// it rather than held forever.
 inline void apply_persistence_frontier(
     CellTable& table, std::function<bool(std::size_t)> const& volatile_of) {
   std::size_t const n = table.cells.size();
-  container::vector<char> has_consumer(n, 0), has_volatile_consumer(n, 0);
   // volatile_of walks the value's whole production subtree; memoize it, since
   // one value is the consumer of many reads.
   std::unordered_map<std::size_t, bool> vol_of;
@@ -327,19 +332,40 @@ inline void apply_persistence_frontier(
     vol_of.emplace(vid, v);
     return v;
   };
-  auto const note = [&](CellId source, CellId consumer) {
-    if (source >= n || consumer >= n) return;
-    has_consumer[source] = 1;
-    if (is_vol(table.cells[consumer].value_id))
-      has_volatile_consumer[source] = 1;
-  };
-  for (Read const& r : table.reads) note(r.source, r.consumer);
+  // the (source, consumer) edges
+  container::vector<std::pair<CellId, CellId>> edges;
+  edges.reserve(table.reads.size());
+  for (Read const& r : table.reads)
+    if (r.source < n && r.consumer < n)
+      edges.emplace_back(r.source, r.consumer);
   for (CellId c = 0; c < n; ++c)
-    if (table.cells[c].production.kind == ProductionKind::Assemble)
-      note(table.cells[c].production.source, c);
+    if (table.cells[c].production.kind == ProductionKind::Assemble &&
+        table.cells[c].production.source < n)
+      edges.emplace_back(table.cells[c].production.source, c);
+  // produced_again: seeded with the volatile non-candidates, then propagated
+  // from consumer to source through the cells that cannot persist. A
+  // candidate stops the propagation: it is held instead (needed).
+  container::vector<char> has_consumer(n, 0), needed(n, 0),
+      produced_again(n, 0);
+  for (CellId c = 0; c < n; ++c)
+    produced_again[c] =
+        !table.cells[c].persistent && is_vol(table.cells[c].value_id);
+  for (auto const& [source, consumer] : edges) has_consumer[source] = 1;
+  for (bool changed = true; changed;) {
+    changed = false;
+    for (auto const& [source, consumer] : edges) {
+      if (!produced_again[consumer]) continue;
+      if (table.cells[source].persistent) {
+        needed[source] = 1;
+      } else if (!produced_again[source]) {
+        produced_again[source] = 1;
+        changed = true;
+      }
+    }
+  }
   for (CellId c = 0; c < n; ++c) {
     TableCell& cell = table.cells[c];
-    if (cell.persistent && has_consumer[c] && !has_volatile_consumer[c])
+    if (cell.persistent && has_consumer[c] && !needed[c])
       cell.persistent = false;
   }
 }
@@ -352,10 +378,8 @@ inline void apply_persistence_frontier(
 /// block -- an escape chain may skip a level the value is invariant to), and
 /// one \c Leaf cell for every leaf value that is an operand of
 /// some computed value; then one \c Read per leg of every Build cell's
-/// production tree, and every cell's \c life from those reads (weighted by
-/// batch multiplicity) plus the Assembles that consume it. Sliced-mode
-/// positions that match no enclosing loop instance are reported in \c
-/// CellTable::unresolved.
+/// production tree. Sliced-mode positions that match no enclosing loop
+/// instance are reported in \c CellTable::unresolved.
 [[nodiscard]] inline CellTable build_cell_table(CellTableInputs const& in) {
   if (!in.ordered || !in.rich || !in.sliced || !in.sliced_modes_of ||
       !in.volatile_of)
@@ -514,19 +538,6 @@ inline void apply_persistence_frontier(
     detail::dump_cells_of(st.table, *in.rich, want);
     detail::dump_occs_of(st.table, *in.rich, want);
   }
-  // Lives: reads weighted by the consumer's extra enclosing batches
-  // (detail::read_multiplicity), plus one per Assemble that consumes the
-  // cell.
-  for (TableCell& c : st.table.cells) c.life = 0;
-  for (Read const& r : st.table.reads) {
-    TableCell const& s = st.table.cells[r.source];
-    TableCell const& c = st.table.cells[r.consumer];
-    st.table.cells[r.source].life +=
-        detail::read_multiplicity(s, c.scope, in.n_batches_of);
-  }
-  for (TableCell const& c : st.table.cells)
-    if (c.production.kind == ProductionKind::Assemble)
-      st.table.cells[c.production.source].life += 1;
   return std::move(st.table);
 }
 

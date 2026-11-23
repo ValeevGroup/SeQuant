@@ -8,6 +8,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/complex.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -242,6 +243,49 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(t4.hermiticity() == Hermiticity::Hermitian);
       REQUIRE(t5.hermiticity() == Hermiticity::AntiHermitian);
       REQUIRE(t6.hermiticity() == Hermiticity::NonHermitian);
+    }
+
+    SECTION("Tensor with Kramers symmetry") {
+      // a time-reversal-symmetric tensor spells its Kramers symmetry as a
+      // fifth letter, `T`, after its parity letter; a tensor without the
+      // symmetry is spelled as before
+      auto plain = deserialize<ExprPtr>(L"g{a1;i1}:N-H-N");
+      REQUIRE(plain->as<Tensor>().kramers_symmetry() ==
+              KramersSymmetry::Nonsymm);
+      auto tr = plain->clone();
+      tr->as<Tensor>().set_kramers_symmetry(KramersSymmetry::TimeReversal);
+      REQUIRE(*tr != *plain);
+
+      const auto plain_str = serialize(plain, {.annot_symm = true});
+      const auto tr_str = serialize(tr, {.annot_symm = true});
+      REQUIRE(plain_str == L"g{a_1;i_1}:N-H-N");
+      REQUIRE(tr_str == L"g{a_1;i_1}:N-H-N-E-T");
+
+      auto back = deserialize<ExprPtr>(tr_str);
+      REQUIRE(back->as<Tensor>().kramers_symmetry() ==
+              KramersSymmetry::TimeReversal);
+      REQUIRE(*back == *tr);
+      REQUIRE(back->hash_value() == tr->hash_value());
+      // the letters before it mean what they mean without it
+      REQUIRE(back->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+      REQUIRE(back->as<Tensor>().conjugation_parity() ==
+              plain->as<Tensor>().conjugation_parity());
+
+      // `N` spells the absence out
+      REQUIRE(*deserialize<ExprPtr>(L"g{a1;i1}:N-H-N-E-N") == *plain);
+      // within a product, with proto indices and a state mark
+      auto prod = deserialize<ExprPtr>(
+          L"1/2 g{a1;i1}:N-H-N-E-T * C{a2<i1,i2>;a1}:N-N-N-N-T");
+      REQUIRE(*deserialize<ExprPtr>(serialize(prod, {.annot_symm = true})) ==
+              *prod);
+      for (const auto& factor : prod->as<Product>().factors())
+        REQUIRE(factor->as<Tensor>().kramers_symmetry() ==
+                KramersSymmetry::TimeReversal);
+
+      REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"g{a1;i1}:N-H-N-E-X"),
+                             io::serialization::SerializationError,
+                             serializationErrorMatches(
+                                 17, 1, "Invalid Kramers symmetry specifier"));
     }
 
     SECTION("NormalOperator") {
@@ -654,6 +698,32 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(prod2.factor(2)->is<Tensor>());
     }
 
+    SECTION("TensorPower") {
+      auto p = deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}^(-1)");
+      REQUIRE(p->is<TensorPower>());
+      CHECK(p->as<TensorPower>().exponent() == rational{-1});
+      CHECK(*p->as<TensorPower>().base() ==
+            *deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}"));
+      auto half = deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}^(1/2)");
+      CHECK(half->as<TensorPower>().exponent() == rational{1, 2});
+      // scalar powers are unchanged
+      CHECK(deserialize<ExprPtr>(L"x^(2)")->is<Power>());
+      CHECK(deserialize<ExprPtr>(L"2^(1/2)")->is<Power>());
+      // in a product, with a prefactor
+      auto prod = deserialize<ExprPtr>(
+          L"2 * D{i_1,i_2;a_1,a_2}^(-1) * t{a_1,a_2;i_1,i_2}");
+      REQUIRE(prod->is<Product>());
+      CHECK(prod->as<Product>().factors().size() == 2);
+      CHECK(*deserialize<ExprPtr>(serialize(prod)) == *prod);
+      CHECK(*deserialize<ExprPtr>(serialize(p)) == *p);
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}:A^(1/2)"),
+                        io::serialization::SerializationError);
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"0^(-1)"),
+                        io::serialization::SerializationError);
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"(D{i_1;a_1}^(2))^*"),
+                        io::serialization::SerializationError);
+    }
+
     SECTION("Sum") {
       auto expr1 = deserialize<ExprPtr>(
           L"f{a1;i1}"
@@ -781,13 +851,11 @@ TEST_CASE("serialization", "[serialization]") {
 
     SECTION("Error handling") {
       SECTION("Exception type") {
-        std::vector<std::wstring> inputs = {L"t^",
-                                            L"a + + b"
-                                            L"1/t"
-                                            L"T{}"
+        std::vector<std::wstring> inputs = {L"t^", L"a + + b", L"1/t",
                                             L"T^{i1}{a1}"};
 
         for (const std::wstring& current : inputs) {
+          CAPTURE(toUtf8(current));
           REQUIRE_THROWS_AS(deserialize<ExprPtr>(current),
                             io::serialization::SerializationError);
         }
@@ -982,6 +1050,7 @@ TEST_CASE("serialization", "[serialization]") {
         {L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}", L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"}};
 
     for (const auto& [current, serialized] : expressions) {
+      CAPTURE(toUtf8(current));
       ExprPtr expression = deserialize<ExprPtr>(current);
 
       REQUIRE(serialize(expression, {.annot_symm = true}) == serialized);
@@ -1010,6 +1079,7 @@ TEST_CASE("serialization", "[serialization]") {
       };
 
       for (const std::wstring& current : expressions) {
+        CAPTURE(toUtf8(current));
         ResultExpr result = deserialize<ResultExpr>(current);
 
         REQUIRE(serialize(result, {.annot_symm = true}) == current);

@@ -161,6 +161,9 @@ tensor, ``Re`` alone is a variable, and only ``Re[`` opens a real part. Deserial
 as the :func:`real_part() <sequant::real_part>` / :func:`imaginary_part() <sequant::imaginary_part>` builders, so ``Re[Re[x]]`` yields
 ``Re[x]``, ``Im[Re[x]]`` yields ``0``, and a real scalar prefactor hoists out of the brackets (``Re[1/2 x]`` yields ``1/2 Re[x]``).
 
+A power is written ``base^(exponent)``, e.g. ``D{i_1,i_2;a_1,a_2}^(-1)``; besides a number or a variable, the base may also be a tensor, which yields a
+:class:`sequant::TensorPower`.
+
 :func:`sequant::io::serialization::from_string<ExprPtr>` will start at rule :code:`Expression`, whereas
 :func:`sequant::io::serialization::from_string<ResultExpr>` will start at :code:`Result`.
 

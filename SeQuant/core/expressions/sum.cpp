@@ -1,10 +1,20 @@
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <algorithm>
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <typeinfo>
+
+#include <algorithm>
+#include <iterator>
 
 namespace sequant {
 
@@ -18,16 +28,14 @@ Sum::Sum(ExprPtrList summands) {
 Sum::Sum(summands_type &&summands, move_only_tag)
     : summands_(std::move(summands)) {
   std::size_t pos = 0;
-  for (auto it = summands_.begin(); it != summands_.end(); ++it) {
+  for (auto it = summands_.begin(); it != summands_.end();) {
     auto &summand = *it;
     bool do_erase = false;
     if (summand->is_zero()) {
       do_erase = true;
     } else if (summand->is<Constant>()) {
-      auto summand_constant = summand.as_shared_ptr<Constant>();
       if (constant_summand_idx_) {  // add up to the existing constant ...
-        SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
-        summands_[*constant_summand_idx_].as<Constant>() += *summand_constant;
+        fold_constant(summand->as<Constant>());
         do_erase = true;
       } else {  // or memorize the position of the constant
         constant_summand_idx_ = pos;
@@ -36,12 +44,13 @@ Sum::Sum(summands_type &&summands, move_only_tag)
 
     // erase if needed
     if (do_erase) {
-      summands_.erase(it);
-      it = summands_.begin();
-      std::advance(it, pos);
-    } else
+      it = summands_.erase(it);
+    } else {
+      ++it;
       ++pos;
+    }
   }
+  drop_zero_constant();
 }
 
 Sum &Sum::append(ExprPtr summand) {
@@ -50,10 +59,9 @@ Sum &Sum::append(ExprPtr summand) {
     if (!summand->is_zero()) {        // exclude zeros
       if (summand->is<Constant>()) {  // add up constants
         // immediately, if possible
-        auto summand_constant = summand.as_shared_ptr<Constant>();
-        if (constant_summand_idx_) {
-          SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
-          summands_[*constant_summand_idx_].as<Constant>() += *summand;
+        if (constant_summand_idx()) {
+          fold_constant(summand->as<Constant>());
+          drop_zero_constant();
         } else {
           summands_.push_back(summand->clone());
           constant_summand_idx_ = summands_.size() - 1;
@@ -75,10 +83,9 @@ Sum &Sum::prepend(ExprPtr summand) {
     if (!summand->is_zero()) {
       // exclude zeros
       if (summand->is<Constant>()) {
-        auto summand_constant = summand.as_shared_ptr<Constant>();
-        if (constant_summand_idx_) {  // add up to the existing constant ...
-          SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
-          summands_[*constant_summand_idx_].as<Constant>() += *summand_constant;
+        if (constant_summand_idx()) {  // add up to the existing constant ...
+          fold_constant(summand->as<Constant>());
+          drop_zero_constant();
         } else {  // or include the nonzero constant and update
           // constant_summand_idx_
           summands_.insert(summands_.begin(), summand->clone());
@@ -86,7 +93,7 @@ Sum &Sum::prepend(ExprPtr summand) {
         }
       } else {
         summands_.insert(summands_.begin(), summand->clone());
-        if (constant_summand_idx_)  // if have a constant, update its position
+        if (constant_summand_idx())  // if have a constant, update its position
           ++*constant_summand_idx_;
       }
       reset_hash_value();
@@ -95,6 +102,25 @@ Sum &Sum::prepend(ExprPtr summand) {
     for (auto &subsummand : *summand) this->prepend(subsummand);
   }
   return *this;
+}
+
+void Sum::fold_constant(const Constant &constant) {
+  SEQUANT_ASSERT(constant_summand_idx_);
+  auto &recorded = summands_.at(*constant_summand_idx_);
+  SEQUANT_ASSERT(recorded->is<Constant>());
+  // replace rather than modify in place: the move-only ctor does not clone,
+  // so the recorded constant may still be held by the caller
+  auto folded = std::make_shared<Constant>(recorded->as<Constant>());
+  *folded += constant;
+  recorded = std::move(folded);
+}
+
+void Sum::drop_zero_constant() {
+  if (constant_summand_idx_ &&
+      summands_.at(*constant_summand_idx_)->is_zero()) {
+    summands_.erase(summands_.begin() + *constant_summand_idx_);
+    constant_summand_idx_.reset();
+  }
 }
 
 const Sum::summands_type &Sum::summands() const { return summands_; }
@@ -178,6 +204,22 @@ std::int8_t Sum::kconjugate() {
   return 1;
 }
 
+namespace {
+
+/// Whether the subexpression tree of @p e contains an object already in
+/// @p seen (an object reachable from an earlier summand, or twice from this
+/// one); every object of @p e is added to @p seen as it is met.
+bool shares_seen_object(const ExprPtr &e, container::set<const Expr *> &seen) {
+  if (!seen.insert(e.get()).second) return true;
+  if (e->is_atom()) return false;
+  bool shared = false;
+  for (const auto &child : e->expr())
+    if (shares_seen_object(child, seen)) shared = true;
+  return shared;
+}
+
+}  // namespace
+
 ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
@@ -192,6 +234,20 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   rapid_opts.method = CanonicalizationMethod::Lexicographic;
   auto full_opts = rapid_opts;
   full_opts.method = opts.method | CanonicalizationMethod::Topological;
+  // The summands are canonicalized on parallel threads (sequant::for_each
+  // below) and routinely share subexpression objects: tensors reused by
+  // expand(), a nested Sum factor reused across the terms it appears in, a
+  // factor appearing twice in one product. Canonicalization mutates those
+  // objects in place -- memoized labels and hashes -- from several threads
+  // at once, which is a data race. So every summand that reaches an object
+  // already reached by an earlier summand (or twice by itself) is
+  // canonicalized on a PRIVATE clone instead, as optimize_impl does for the
+  // same reason.
+  if (num_threads() > 1 && summands_.size() > 1) {
+    container::set<const Expr *> seen;
+    for (auto &summand : summands_)
+      if (shares_seen_object(summand, seen)) summand = summand->clone();
+  }
 
   const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
@@ -258,11 +314,30 @@ Sum &Sum::operator-=(const Expr &that) {
   return *this;
 }
 
+std::optional<size_t> Sum::constant_summand_idx() const {
+  if (!constant_summand_idx_valid_) {
+    const auto it = std::ranges::find_if(summands_, [](const ExprPtr &summand) {
+      return summand.is<Constant>();
+    });
+    constant_summand_idx_ =
+        it == summands_.end()
+            ? std::nullopt
+            : std::optional<size_t>(std::distance(summands_.begin(), it));
+    constant_summand_idx_valid_ = true;
+  }
+  return constant_summand_idx_;
+}
+
+void Sum::invalidate_summand_caches() const {
+  hash_value_.reset();
+  constant_summand_idx_valid_ = false;
+}
+
 ExprIterator Sum::begin_subexpr() {
   // N.B. the canonical mark need not be reset: changes of the summands are
   // detected by Expr::is_canonical()
   if (!summands_.empty()) {
-    hash_value_.reset();
+    invalidate_summand_caches();
   }
 
   return ExprIterator{summands_.data()};
@@ -273,7 +348,7 @@ ExprIterator Sum::end_subexpr() {
   // memoized hash, regardless of which end of the range it points at
   // (`*(--end())` mutates just as `*begin()` does)
   if (!summands_.empty()) {
-    hash_value_.reset();
+    invalidate_summand_caches();
   }
 
   return ExprIterator{summands_.data() + summands_.size()};
@@ -338,6 +413,16 @@ bool Sum::static_equal(const Expr &that) const {
     return false;
 }
 
+std::weak_ordering Sum::static_lexicographic_compare(
+    const Expr &that, const LexicographicCompareOptions &opts) const {
+  const auto &that_cast = static_cast<const Sum &>(that);
+  return std::lexicographical_compare_three_way(
+      summands_.begin(), summands_.end(), that_cast.summands_.begin(),
+      that_cast.summands_.end(), [&opts](const ExprPtr &a, const ExprPtr &b) {
+        return a->lexicographic_compare(*b, opts);
+      });
+}
+
 HashingAccumulator &HashingAccumulator::append(ExprPtr summand, bool flatten) {
   // flatten, if needed
   if (flatten && summand.is<Sum>()) {
@@ -391,13 +476,47 @@ SumPtr HashingAccumulator::make_sum_impl(bool canonicalize) {
   }
 
   if (canonicalize) {
-    ranges::sort(summands, [](const auto &e1, const auto &e2) {
-      if (e1->hash_value() == e2->hash_value()) {
-        return e1 < e2;
-      } else {
-        return e1->hash_value() < e2->hash_value();
-      }
-    });
+    // Sort by hash, then by content (Expr::operator<); a complete tie keeps
+    // the accumulation order (stable sort). Never order by the ExprPtr
+    // handles: ExprPtr is a std::shared_ptr, so `e1 < e2` is heap-address
+    // order, which differs between MPI ranks (and between runs) and made the
+    // summand order -- hence every downstream evaluation tree --
+    // rank-dependent whenever two non-proportional summands share a hash
+    // value (observed 2026-09-07 on an 8-rank Kramers-restricted MP1 energy
+    // sum: one rank had two such summands swapped).
+    std::stable_sort(summands.begin(), summands.end(),
+                     [](const auto &e1, const auto &e2) {
+                       const auto h1 = e1->hash_value();
+                       const auto h2 = e2->hash_value();
+                       if (h1 != h2) return h1 < h2;
+                       return *e1 < *e2;
+                     });
+  }
+
+  // SEQUANT_SUM_TIE_TRACE (diagnostic): report adjacent canonicalized summands
+  // that share a hash value, with their dynamic types and expressions, so the
+  // terms whose relative order rests on the content tie-break can be seen.
+  static const bool trace_ties =
+      std::getenv("SEQUANT_SUM_TIE_TRACE") != nullptr;
+  if (canonicalize && trace_ties) {
+    auto narrow = [](const std::wstring &w) {
+      std::string r;
+      for (wchar_t c : w) r.push_back(c < 128 ? static_cast<char>(c) : '?');
+      return r;
+    };
+    for (std::size_t i = 1; i < summands.size(); ++i) {
+      if (summands[i - 1]->hash_value() != summands[i]->hash_value()) continue;
+      const Expr &prev = *summands[i - 1];
+      const Expr &cur = *summands[i];
+      std::cerr << "[sequant-sum-tie] hash=0x" << std::hex
+                << summands[i]->hash_value() << std::dec
+                << " lt=" << (prev < cur) << "/" << (cur < prev)
+                << " types=" << typeid(prev).name() << "/" << typeid(cur).name()
+                << " ids=" << summands[i - 1]->type_id() << "/"
+                << summands[i]->type_id() << "\n    "
+                << narrow(summands[i - 1]->to_latex()) << "\n    "
+                << narrow(summands[i]->to_latex()) << "\n";
+    }
   }
 
   return std::make_shared<Sum>(std::move(summands), Sum::move_only_tag{});

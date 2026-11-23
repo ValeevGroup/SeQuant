@@ -10,6 +10,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <iterator>
 #include <string>
 #include <string_view>
 
@@ -49,11 +50,12 @@ void ProjectionStep::set_options(const nlohmann::json &options) {
 
 std::size_t ProjectionStep::process(std::string_view id_prefix,
                                     std::size_t id_start, ExecutionContext &ctx,
-                                    const ExpressionData &data) {
+                                    WorkingCopy<ExpressionData> &input) {
   container::svector<ResultExpr> transformed;
 
-  transformed.insert(transformed.end(), data.expressions.begin(),
-                     data.expressions.end());
+  transformed.insert(transformed.end(),
+                     std::make_move_iterator(input.data.expressions.begin()),
+                     std::make_move_iterator(input.data.expressions.end()));
 
   container::svector<std::optional<ExprPtr>> symmetrizers;
   symmetrizers.reserve(transformed.size());
@@ -64,13 +66,7 @@ std::size_t ProjectionStep::process(std::string_view id_prefix,
   mbpt::biorthogonal_transform(transformed);
 
   for (std::size_t i = 0; i < transformed.size(); ++i) {
-    if (symmetrizers.at(i).has_value()) {
-      transformed.at(i).expression() =
-          ex<Product>(ExprPtrList{std::move(symmetrizers.at(i).value()),
-                                  std::move(transformed.at(i).expression())},
-                      Product::Flatten::No);
-    }
-
+    push_symmetrizer(transformed.at(i), std::move(symmetrizers.at(i)));
     simplify(transformed.at(i));
   }
 

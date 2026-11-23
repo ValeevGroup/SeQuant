@@ -16,22 +16,16 @@
 //      the scratch-folded batched peak via the metered dry-run replay
 //      (dryrun::meter).
 
-// Flip Trace::Default -> Trace::On for this ENTIRE translation unit (must
-// precede every SeQuant/core/eval/eval.hpp inclusion, directly or
-// transitively -- header include guards mean the Trace enum's Default member
-// is fixed, for this whole TU, by whether this macro is defined before the
-// header's FIRST inclusion). This is load-bearing for the [dryrun-eval]
-// replay below: make_batched_custom_evaluator's inner per-batch/per-member
-// replay calls `evaluate(*mem, le_g, bs.cache)` WITHOUT an explicit `<Trace::
-// ...>` argument, so those nested calls (and their note_working_set() calls,
-// which are gated at COMPILE TIME on the EvalTrace template argument, not
-// just Logger's runtime level) only fire if Trace::Default resolves to On.
-// Without this, working_set_hwmark() would reflect only the outermost
-// custom-evaluator interception and stay blind to everything the batched
-// replay does inside it -- exactly the visibility the replay witness needs.
-// mpqc's own C60 trace (614336.log, cited throughout this file) was captured
-// the same way (SEQUANT_EVAL_TRACE defined in that build).
-#define SEQUANT_EVAL_TRACE 1
+// Every evaluate()/make_evaluator()/make_batched_custom_evaluator() call in
+// this file passes Trace::On explicitly. This is load-bearing for the
+// [dryrun-eval] replay below: the batched evaluator's nested
+// per-batch/per-member re-entries (and their note_working_set() calls) are
+// gated at COMPILE TIME on the EvalTrace template argument, not just on
+// Logger's runtime level. Without it, working_set_hwmark() would reflect only
+// the outermost custom-evaluator interception and stay blind to everything the
+// batched replay does inside it. (Do NOT instead #define SEQUANT_EVAL_TRACE
+// here: that flips Trace::Default for this TU only, which is an ODR violation
+// against the other TUs linked into the same test executable.)
 
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
@@ -39,14 +33,17 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include "csv_size_fixtures.hpp"
+#include "tensor_power_fixtures.hpp"
+
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/op_counts.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
-#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
@@ -68,6 +65,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
 #include "csv_test_utils.hpp"
@@ -79,8 +77,10 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <format>
 #include <fstream>
 #include <functional>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -93,6 +93,8 @@
 #include <vector>
 
 using namespace sequant;
+using sequant::eval::dryrun::kMaxCompositeGroup;
+using sequant::eval::dryrun::MomentTable;
 using sequant::eval::dryrun::SizeRegime;
 
 namespace {
@@ -117,7 +119,7 @@ SizeRegime probe_regime() {
   };
   // CC-average PNO ~58, OSV ~20 (order-of-magnitude stand-ins; see report).
   double const pno = 58.0, osv = 20.0;
-  for (std::size_t k = 0; k <= 4; ++k) {
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_pno_moment[k] = std::pow(pno, double(k));
     r.csv_osv_moment[k] = std::pow(osv, double(k));
   }
@@ -169,13 +171,13 @@ TEST_CASE("dryrun size regime basic extents", "[dryrun-probe]") {
 TEST_CASE("dryrun size regime keys a named basis by its label",
           "[dryrun][sizing][basis]") {
   using namespace sequant;
-  auto isr = mbpt::make_min_sr_spaces();
-  const IndexSpace a = isr->retrieve_space(L"a");
+  auto ibr = mbpt::make_min_sr_spaces();
+  const IndexSpace a = ibr->retrieve_space(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  isr->add(L"μ̃", IndexBasis{a, P});  // before the Context adopts the registry
+  ibr->add(L"μ̃", a, P);  // before the Context adopts the registry
   auto ctx = set_scoped_default_context(
-      Context({.index_basis_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
   const auto& registry = *get_default_context().index_basis_registry();
   eval::dryrun::SizeRegime r;
@@ -190,6 +192,91 @@ TEST_CASE("dryrun size regime keys a named basis by its label",
   CHECK(r.extent(unnamed) == 40);
   CHECK(r.slice_extents(pao).size() == 3);
   CHECK(r.slice_extents(virt).empty());
+}
+
+TEST_CASE("dryrun size regime prices a composite by its basis instance",
+          "[dryrun][sizing][basis]") {
+  using namespace sequant;
+  eval::dryrun::SizeRegime r;
+  r.space_extent = {{L"i", 10u}, {L"a", 300u}};
+  eval::dryrun::SizeRegime::CsvMomentTables perturbed;
+  // every table varies with k, so a check also pins the column it reads
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
+    auto const dk = static_cast<double>(k);
+    r.csv_pno_moment[k] = 14.0 + dk;
+    r.csv_osv_moment[k] = 9.0 + dk;
+    perturbed.pno[k] = 19.0 + dk;
+    perturbed.osv[k] = 12.0 + dk;
+    perturbed.by_rank[3][k] = 25.0 + dk;
+  }
+  constexpr IndexBasis::instance_type P = 10;
+  const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4");
+  r.csv_moment_by_instance[eval::dryrun::SizeRegime::csv_basis_key(
+      Index(L"a_1").space(), P)] = perturbed;
+  const Index pno(L"a_1", {i1, i2}), osv(L"a_2", {i1}),
+      triple(L"a_3", {i1, i2, i3}), quad(L"a_4", {i1, i2, i3, i4});
+  // no instance: the default tables
+  CHECK(r.inner_pow(pno, 2) == Catch::Approx(16.0));
+  CHECK(r.inner_pow(osv, 1) == Catch::Approx(10.0));
+  CHECK(r.inner_pow(triple, 1) == Catch::Approx(15.0));
+  CHECK(r.inner_pow(quad, 3) == Catch::Approx(17.0));
+  // the listed instance: its own tables, rank dispatch included
+  CHECK(r.inner_pow(pno.replace_basis_instance(P), 2) == Catch::Approx(21.0));
+  CHECK(r.inner_pow(osv.replace_basis_instance(P), 1) == Catch::Approx(13.0));
+  CHECK(r.inner_pow(triple.replace_basis_instance(P), 1) ==
+        Catch::Approx(26.0));
+  // a rank without a table of its own falls back to the instance's PNO table,
+  // not to the default one
+  CHECK(r.inner_pow(quad.replace_basis_instance(P), 3) == Catch::Approx(22.0));
+  // an instance that is not listed: the default tables
+  CHECK(r.inner_pow(pno.replace_basis_instance(P + 1), 2) ==
+        Catch::Approx(16.0));
+  // the same instance number of another space is another basis instance
+  CHECK(r.inner_pow(Index(L"p_1", {i1, i2}).replace_basis_instance(P), 2) ==
+        Catch::Approx(16.0));
+  // a plain index is sized by its space extent whatever its instance
+  CHECK(r.inner_pow(Index(L"a_5").replace_basis_instance(P), 2) ==
+        Catch::Approx(9.0e4));
+}
+
+TEST_CASE("dryrun size regime scales the composites of a listed space",
+          "[dryrun][sizing][basis]") {
+  using namespace sequant;
+  eval::dryrun::SizeRegime r;
+  r.space_extent = {{L"i", 10u}, {L"a", 300u}, {L"p", 310u}};
+  eval::dryrun::SizeRegime::CsvMomentTables listed;
+  // every table varies with k, so a check also pins the column it reads
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
+    auto const dk = static_cast<double>(k);
+    r.csv_pno_moment[k] = 14.0 + dk;
+    r.csv_osv_moment[k] = 9.0 + dk;
+    listed.pno[k] = 19.0 + dk;
+    listed.osv[k] = 12.0 + dk;
+  }
+  constexpr IndexBasis::instance_type P = 10;
+  const Index i1(L"i_1"), i2(L"i_2");
+  // the tables count the members of one sector of p (say one spin flavour)
+  // and a composite of p spans two: its domain, hence every power mean of
+  // it, is twice the table's
+  const Index wide(L"p_1", {i1, i2}), narrow(L"a_1", {i1, i2});
+  r.csv_moment_by_instance[eval::dryrun::SizeRegime::csv_basis_key(wide.space(),
+                                                                   P)] = listed;
+  r.csv_moment_by_instance[eval::dryrun::SizeRegime::csv_basis_key(
+      narrow.space(), P)] = listed;
+  r.csv_space_scale[std::wstring{wide.space().base_key()}] = 2.0;
+  // the default tables, whatever the rank and the group size
+  CHECK(r.inner_pow(wide, 1) == Catch::Approx(2 * 15.0));
+  CHECK(r.inner_pow(wide, 3) == Catch::Approx(2 * 17.0));
+  CHECK(r.inner_pow(Index(L"p_2", {i1}), 2) == Catch::Approx(2 * 11.0));
+  // the tables of a listed instance
+  CHECK(r.inner_pow(wide.replace_basis_instance(P), 2) ==
+        Catch::Approx(2 * 21.0));
+  // a space that is not listed keeps its tables' moments
+  CHECK(r.inner_pow(narrow, 1) == Catch::Approx(15.0));
+  CHECK(r.inner_pow(narrow.replace_basis_instance(P), 2) ==
+        Catch::Approx(21.0));
+  // a plain index of the listed space is sized by its extent alone
+  CHECK(r.inner_pow(Index(L"p_3"), 1) == Catch::Approx(310.0));
 }
 
 TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
@@ -239,14 +326,56 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
 // raw moments would be caught even though the CURRENT SizeRegime factories
 // in this file (probe_regime/df_regime) all use a constant domain, for which
 // M_k == d for every k and the bug would otherwise be invisible.
+// SizeRegime::extent is the integer extent of a proto-FREE index; a composite
+// (proto-indexed CSV/PNO index) is sized by inner_pow and has no integer
+// extent, so asking for one is refused rather than answered with the extent
+// registered under the composite's base key (which names the space it is
+// expanded in, e.g. the PAO count, not its size).
+// A group of more than four composites on one cluster is priced by its own
+// column, p * M_k^k, not by reusing column 4 (which under-priced it by
+// p^((k - 4)/4)); a group beyond the table is an error, not an extrapolation.
+TEST_CASE("regime-max-composite-group", "[dryrun][sizing][extent-contract]") {
+  SizeRegime r;
+  r.space_extent = {{L"i", 10u}};
+  double const p = 0.25;
+  for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = std::pow(p, 1.0 / double(k)) * (20.0 + 2.0 * k);
+  Index const i1(L"i_1"), i2(L"i_2");
+  Index const a(L"a_1", {i1, i2});
+  for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k) {
+    double prod = 1.0;
+    for (std::size_t m = 0; m < k; ++m) prod *= r.inner_pow(a, k);
+    CHECK(prod == Catch::Approx(p * std::pow(20.0 + 2.0 * k, double(k))));
+  }
+  CHECK_THROWS_AS(r.inner_pow(a, kMaxCompositeGroup + 1), sequant::Exception);
+  CHECK_THROWS_AS(r.inner_pow(a, 0), sequant::Exception);
+  // a plain index is unaffected by the table bound
+  CHECK(r.inner_pow(i1, 5) == Catch::Approx(1e5));
+}
+
+TEST_CASE("SizeRegime refuses the integer extent of a composite",
+          "[dryrun][sizing][extent-contract]") {
+  SizeRegime r;
+  r.space_extent = {{L"i", 10u}, {L"a", 300u}};
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = 7.0;
+  Index const i1(L"i_1"), i2(L"i_2");
+  Index const a_i1i2(L"a_1", {i1, i2});
+  CHECK(r.extent(i1) == 10);
+  CHECK_THROWS_AS(r.extent(a_i1i2), sequant::Exception);
+  CHECK_THROWS_AS(r.idx_to_extent()(a_i1i2), sequant::Exception);
+  CHECK(r.inner_pow(a_i1i2, 1) == Catch::Approx(7.0));
+}
+
 TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
   // Heavy-tailed PNO domain: power means strictly increasing in k.
   // (For any non-degenerate distribution, M_1 < M_2 < M_3 < M_4 by Jensen.)
   SizeRegime r;
   const std::size_t occ = 10;
   r.space_extent[L"i"] = occ;  // occupied index extent
-  const std::array<double, 5> Mk{1.0, 30.0, 40.0, 55.0, 75.0};  // M_0..M_4
-  for (std::size_t k = 0; k <= 4; ++k) {
+  // M_0..M_8 (heavy tail, non-decreasing)
+  const MomentTable Mk{1.0, 30.0, 40.0, 55.0, 75.0, 90.0, 100.0, 108.0, 115.0};
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_pno_moment[k] = Mk[k];
     r.csv_osv_moment[k] = Mk[k];
   }
@@ -284,7 +413,7 @@ TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
 // behavior where every proto-rank >= 2 used the PNO table).
 TEST_CASE("dryrun rank-general CSV moment dispatch", "[dryrun][sizing]") {
   SizeRegime r;
-  for (std::size_t k = 0; k <= 4; ++k) {
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_osv_moment[k] = 3.0;   // rank-1 table (flat, distinct value)
     r.csv_pno_moment[k] = 30.0;  // rank-2 table (flat, distinct value)
   }
@@ -340,65 +469,31 @@ namespace {
 // ...) sizes a k-composite group as mean(d^k), the true block-sparse volume.
 // pno_M[k]/osv_M[k] for k in [1,4]; index 0 unused (kept 1). Rank >= 3
 // (CSV-CCSDT) is not populated here (CCSD is ranks 1-2).
-SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
-                     std::array<double, 5> const& pno_M,
-                     std::array<double, 5> const& osv_M) {
-  SizeRegime r;
-  r.space_extent = {
-      {L"i", i_occ},
-      {L"μ̃", mu_tilde},
-      {L"Κ", aux},
-      {L"a", mu_tilde},
-  };
-  r.csv_pno_moment = pno_M;
-  r.csv_osv_moment = osv_M;
-  return r;
+// The named problem sizes (kWater20_pVDZF12, kC60_pVDZF12), their provenance
+// and the occupancy adjustment mpqc applies to the moment tables live in
+// csv_size_fixtures.hpp; the aliases below keep this file's historical names.
+using sequant::tests::csv_sizes::occupancy_adjusted_moments;
+using ProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
+inline constexpr auto const& kC60_pVDZF12 =
+    sequant::tests::csv_sizes::kC60_pVDZF12;
+inline constexpr auto const& kWater20_pVDZF12 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
+
+// Regime for the post-transform (mu~ + K) residual from explicit extents and
+// moments (occupancy 1 unless given): see df_size_regime for the shape.
+[[maybe_unused]] SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux,
+                                      std::size_t i_occ,
+                                      MomentTable const& pno_M,
+                                      MomentTable const& osv_M,
+                                      double pno_occupancy = 1.0,
+                                      double osv_occupancy = 1.0) {
+  return sequant::tests::csv_sizes::df_size_regime(ProblemSize{
+      mu_tilde, aux, i_occ, pno_M, osv_M, pno_occupancy, osv_occupancy});
 }
-
-// One named (molecule, basis, parameter-set) problem size for the DryRun cost
-// model: base-space extents + the measured heavy-tailed CSV power means. Single
-// source of truth -- use df_regime(kFoo) at every call site instead of
-// repeating the literals, so a moment re-measurement is a one-line edit.
-struct ProblemSize {
-  std::size_t mu_tilde;         // PAO domain extent (= #AO)
-  std::size_t aux;              // DF aux (K) extent
-  std::size_t i_occ;            // active occupied extent
-  std::array<double, 5> pno_M;  // per-pair PNO power means M_0..M_4 (0 unused)
-  std::array<double, 5> osv_M;  // per-orbital OSV power means M_0..M_4
-};
-
-// C60, cc-pVDZ-F12, TCUTPNO=1e-8 / TCUTOSV=1e-9. Extents from the Owl job log;
-// PNO/OSV power means M_1..M_4 measured by mpqc PaoPnoRMP2 (job 617809 -- the
-// TRUE pVDZ-F12 values; NOTE the earlier 48.60/64.35 PNO + 206/234 OSV numbers
-// were from job 617653, which was mis-configured with an aug-cc-pVTZ OBS).
-inline constexpr ProblemSize kC60_pVDZF12{
-    /*mu_tilde=*/1800u,
-    /*aux=*/4320u,
-    /*i_occ=*/120u,
-    /*pno_M=*/
-    {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
-     53.151291880343109},
-    /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
-
-// Water-20 (H2O)20 / cc-pVDZ-F12, extracted from Owl job 649160:
-//   ext(i)=80 (active occ), ext(K)=1682 (DF aux; from g(i,i,K)=86.1MB),
-//   ext(mu~)=896 (PAO; from g(mu~,mu~,K)=10.8GB), and the measured heavy-tailed
-//   CSV moments (PNO M_1..M_4 per pair, OSV M_1..M_4 per orbital).
-inline constexpr ProblemSize kWater20_pVDZF12{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
 
 // Build a SizeRegime from a named ProblemSize.
 SizeRegime df_regime(ProblemSize const& p) {
-  return df_regime(p.mu_tilde, p.aux, p.i_occ, p.pno_M, p.osv_M);
+  return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
 // Batchable = the two modes mpqc's runtime batches on the CSV path: PAO (mu~)
@@ -412,7 +507,7 @@ bool is_df_batchable(Index const& ix) {
 
 }  // namespace
 
-// Diagnostic ([.]): does the order-aware ordered-key DP actually ENGAGE on the
+// Diagnostic: does the order-aware ordered-key DP actually ENGAGE on the
 // real C60 giant, or does build_cells' m>7 fallback (enumeration blowup guard)
 // make it inert? Prints m (# batchable indices), ordered, nCells. Fast: only
 // Regression (fast, no DP solve): is_valid must ACCEPT a CSV (proto-indexed)
@@ -424,6 +519,23 @@ bool is_df_batchable(Index const& ix) {
 // aborted every CSV-CCk run at MPQC_ASSERT(is_valid(e)); the proto-aware
 // external-index comparison fixes it. This reuses the real C60 doubles residual
 // data file (a genuine proto-indexed CSV Sum).
+TEST_CASE("is_valid accepts Re/Im/Power nodes", "[utilities][is_valid]") {
+  using namespace sequant;
+  // The time-reversal fold of a complex network emits Re(...) summands; the
+  // production path validates every summand before binarization, so these
+  // node types must be accepted (they are valid iff their inner is).
+  auto prod = deserialize(L"t{a_1;i_1} g{i_1;a_1}");
+  std::string msg;
+  REQUIRE(is_valid(ex<RealPart>(prod), &msg));
+  REQUIRE(is_valid(ex<ImagPart>(prod), &msg));
+  REQUIRE(is_valid(ex<Power>(ex<Variable>(L"x"), 2), &msg));
+  auto sum = deserialize(L"t{a_1;i_1} g{i_1;a_1} + f{a_1;i_1} h{i_1;a_1}");
+  REQUIRE(is_valid(ex<RealPart>(sum), &msg));
+  // an invalid inner is still reported
+  auto bad = deserialize(L"t{a_1;i_1} g{i_1;a_1} f{a_1;i_2}");
+  REQUIRE(!is_valid(ex<RealPart>(bad), &msg));
+}
+
 TEST_CASE("is_valid accepts a CSV proto-indexed residual",
           "[utilities][is_valid][csv]") {
   using namespace sequant;
@@ -482,6 +594,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.peak_threshold = 100e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -548,8 +661,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
 // contraction, binarize's node_counter == node_batch_axes.size() assertion
 // aborts. Mirrors MPQC's path: DenseTimeSpaceBatched optimize + head-pinned
 // binarize with the CSV rank-1 residual head R{a<i>;i}.
-TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
-          "[optimize][batch][r1-offbyone]") {
+TEST_CASE("node-axes-match-binarize", "[optimize][batch][r1-offbyone]") {
   using namespace sequant;
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
@@ -566,6 +678,7 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.peak_threshold = 100e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -615,7 +728,7 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
 
 // build_context, no DP solve.
 TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
-          "[.][ordered-key-c60-m]") {
+          "[ordered-key-c60-m]") {
   using namespace sequant;
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
@@ -652,183 +765,11 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
              << ctx.nCells << L" (nB=" << ctx.nB << L")\n";
 }
 
-// Diagnostic + regression ([.]): scan EVERY summand of the C60 CSV-CCSD doubles
-// residual under the batching configuration recommended for deployment, and
-// report the modeled peak per term.
-//
-// Configuration (see the role-based batchability control):
-//   - PAOs (mu~) are NOT batchable at all;
-//   - the DF aux (K) is batchable in the CONTRACTED role;
-//   - the occupied space is batchable in BOTH roles. Admitting its CONTRACTED
-//     occurrences is what controls the g.g-over-K intermediates
-//     (mu~,i3,mu~,i4): with external-occ only, those plateau at a ~391 GB floor
-//     that NO occ block size can reach, because i3,i4 occur contracted there.
-//     Re-admitting them brings the whole residual under budget.
-//
-// A correct inner_pow (CSV composite sizing) is REQUIRED: without it composites
-// size at their base PAO extent and the factorization inverts (4-PAO integral).
-TEST_CASE("C60 residual peak per summand under the recommended batching",
-          "[.][occ-driver-scan]") {
-  using namespace sequant;
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(expr);
-  REQUIRE(expr->is<Sum>());
-  auto const& summands = expr->as<Sum>().summands();
-
-  auto regime = df_regime(kC60_pVDZF12);
-  auto idxsz = regime.idx_to_extent();
-  auto inner_pow = regime.inner_pow_fn();
-  std::function<bool(Tensor const&)> is_vol = [](Tensor const& t) {
-    return t.label() == L"t";
-  };
-  // aux + occ are contracted-batchable; PAOs are not batchable at all.
-  auto is_batchable_contracted = [](Index const& ix) {
-    auto const k = ix.basis().base_key();
-    return k == L"Κ" || k == L"i";  // DF aux (Greek Kappa) + occupied
-  };
-  // occ is additionally batchable in the external (spectator) role.
-  std::function<bool(Index const&)> is_batchable_external =
-      [](Index const& ix) { return ix.basis().base_key() == L"i"; };
-  std::function<std::size_t(Index const&)> bts =
-      [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"i" ? std::size_t{8} : std::size_t{72};
-  };
-
-  auto measure = [&](TensorNetwork const& net,
-                     container::svector<Index> const& tgt, bool spectator,
-                     double& flops_out) {
-    opt::detail::PeakBatchedModel model{idxsz, bts, is_vol, inner_pow};
-    model.is_batchable_contracted_index = is_batchable_contracted;
-    model.is_batchable_external_index = is_batchable_external;
-    model.batch_spectator_indices = spectator;
-    model.perf_first = true;
-    model.peak_threshold = 100e9;
-    model.numeric_size = 8.0;
-    auto ctx = model.build_context(net, tgt);
-    auto st = opt::detail::solve_single_term(model, net, tgt, ctx);
-    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
-    int const best = model.select_root(ctx, st);
-    flops_out = (best >= 0) ? st[root][0][best].flops : 0.0;
-    double pk = 0.0;
-    (void)model.reconstruct_batched_modes(ctx, st, &pk);
-    return pk / 1e9;  // GB
-  };
-
-  double max_on = 0.0, tot_off = 0.0, tot_on = 0.0;
-  std::size_t arg_on = 0;
-  for (std::size_t gi = 0; gi < summands.size(); ++gi) {
-    ExprPtr g = summands[gi];
-    if (g->is<Product>())
-      g = ex<Product>(g->as<Product>().scalar(), g->as<Product>().factors(),
-                      Product::Flatten::Yes);
-    if (!g->is<Product>()) continue;
-    TensorNetwork net(g->as<Product>().factors());
-    container::svector<Index> targets;
-    double f_off = 0.0, f_on = 0.0;
-    double const p_off = measure(net, targets, false, f_off);
-    double const p_on = measure(net, targets, true, f_on);
-    tot_off += f_off;
-    tot_on += f_on;
-    if (p_on > max_on) {
-      max_on = p_on;
-      arg_on = gi;
-    }
-    if (p_off > 50.0 || p_on != p_off)
-      std::wcerr << L"[occ-driver] summand " << gi << L": peak " << p_off
-                 << L" -> " << p_on << L" GB   flops " << f_off << L" -> "
-                 << f_on << L"\n";
-  }
-  std::wcerr << L"[occ-driver] MAX peak=" << max_on << L" GB (summand "
-             << arg_on << L"), budget 100 GB;  total flops " << tot_off
-             << L" -> " << tot_on << L" (added compute "
-             << (tot_off > 0.0 ? (tot_on - tot_off) / tot_off * 100.0 : 0.0)
-             << L"%)\n";
-  // Batching an external/spectator mode is work-neutral: no recompute is added.
-  CHECK(tot_on == tot_off);
-}
-
-// Regression ([.]): the C60 giant (summand 38) is (g.C)(g.C).t where the two
-// DF integrals g share the same aux Κ. Contracting Κ early reconstructs the
-// (μ̃μ̃|μ̃μ̃) 4-PAO integral -- ~1800^4*8 ≈ 84 TB. That factorization ONLY looks
-// competitive when the PNO composites a<i,j> are mis-sized at their base PAO
-// extent (1800) instead of the per-pair PNO domain, i.e. when inner_pow is
-// omitted. With correct inner_pow the DP picks the g.C 3-center path (Κ sliced)
-// and the modeled peak is orders of magnitude below any 4-PAO scale. Guards
-// both: (1) omitting inner_pow now THROWS; (2) with it, no 4-PAO node forms.
-TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
-          "[.][roofline-4pao]") {
-  using namespace sequant;
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(expr);
-  REQUIRE(expr->is<Sum>());
-  auto const& summands = expr->as<Sum>().summands();
-  std::size_t const gi = 38 < summands.size() ? 38 : 0;
-  ExprPtr giant = summands[gi];
-  if (giant->is<Product>())
-    giant = ex<Product>(giant->as<Product>().scalar(),
-                        giant->as<Product>().factors(), Product::Flatten::Yes);
-  REQUIRE(giant->is<Product>());
-  TensorNetwork net(giant->as<Product>().factors());
-  container::svector<Index> targets;
-
-  auto regime = df_regime(kC60_pVDZF12);
-  auto idxsz = regime.idx_to_extent();
-  std::function<std::size_t(Index const&)> bts = [](Index const& ix) {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
-  };
-  auto is_aux = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";  // K only; PAO NOT batchable
-  };
-  std::function<bool(Tensor const&)> is_vol = [](Tensor const& t) {
-    return t.label() == L"t";
-  };
-
-  // (1) Omitting inner_pow on this composite network is now a hard error.
-  {
-    opt::detail::PeakBatchedModel bad{idxsz, bts, is_vol, {}};
-    bad.is_batchable_contracted_index = is_aux;
-    CHECK_THROWS_AS(bad.build_context(net, targets), sequant::Exception);
-  }
-
-  // (2) With correct composite sizing, the DP forms NO 4-PAO integral.
-  opt::detail::PeakBatchedModel model{idxsz, bts, is_vol,
-                                      regime.inner_pow_fn()};
-  model.is_batchable_contracted_index = is_aux;
-  model.perf_first = true;
-  model.volatile_weight = 20.0;
-  model.peak_threshold = std::numeric_limits<double>::infinity();
-  model.numeric_size = 8.0;
-  auto ctx = model.build_context(net, targets);
-  auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-  double peak_bytes = 0.0;
-  (void)model.reconstruct_batched_modes(ctx, st, &peak_bytes);
-  std::wcerr << L"[roofline-4pao] K-only modeled peak=" << (peak_bytes / 1e9)
-             << L" GB (a 4-PAO mu~^4 node would be ~84000 GB)\n";
-  // A μ̃^4 node is 1800^4*8 ≈ 84000 GB; correct sizing keeps the peak far below.
-  CHECK(peak_bytes < 10000e9);
-}
-
-// Hidden ([.]) whole-residual dev sweep (no correctness assertions): optimizes
+#ifndef SEQUANT_SKIP_LONG_TESTS
+// Whole-residual dev sweep (no correctness assertions): optimizes
 // every summand and prints, per term, whether its free-mu~ giant got a mu~/K
-// batch mode or escaped slicing. Select explicitly:
-//   ./unit_tests-sequant "[dryrun-df]"
-TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
+// batch mode or escaped slicing.
+TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[dryrun-df]") {
   // Augment the default mbpt registry with PAO (mu~) and DF-aux (K) so the
   // post-transform fixture deserializes; raise the dummy-ordinal ceiling for
   // mpqc's high internal ordinals (mu~_1152, a_21674, ...).
@@ -941,8 +882,11 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   auto regime = df_regime(
       /*mu_tilde=*/kC60_pVDZF12.mu_tilde, /*aux=*/kC60_pVDZF12.aux,
       /*i_occ=*/occ_ext,
-      std::array<double, 5>{1.0, pno_mom, pno_m2, pno_m3, pno_m4},
-      std::array<double, 5>{1.0, osv_mom, osv_m2, osv_m3, osv_m4});
+      // M_5..M_8 flat at M_4 (unmeasured; see csv_size_fixtures.hpp)
+      MomentTable{1.0, pno_mom, pno_m2, pno_m3, pno_m4, pno_m4, pno_m4, pno_m4,
+                  pno_m4},
+      MomentTable{1.0, osv_mom, osv_m2, osv_m3, osv_m4, osv_m4, osv_m4, osv_m4,
+                  osv_m4});
   std::wcerr << L"[dryrun-df] moments: PNO M_1..M_4=" << pno_mom << L","
              << pno_m2 << L"," << pno_m3 << L"," << pno_m4 << L"  OSV M_1..M_4="
              << osv_mom << L"," << osv_m2 << L"," << osv_m3 << L"," << osv_m4
@@ -1019,6 +963,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     };
     opts.batch_policy.accumulation_factor = 1.0;
     opts.batch_policy.peak_threshold = peak_threshold;
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
     opts.volatile_weight = vol_weight;
     if (use_roofline) {
       opts.roofline.machine_balance = 200.0;
@@ -1296,6 +1241,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   REQUIRE(total_mu_nodes > 0);
   SUCCEED();
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // DryRun eval BACKEND (zero-data Result + eval_expr) and the
@@ -1328,7 +1274,7 @@ SizeRegime backend_test_regime() {
       {L"a", 20},
   };
   double const pno = 4.0;
-  for (std::size_t k = 0; k <= 4; ++k)
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k)
     r.csv_pno_moment[k] = std::pow(pno, double(k));
   r.csv_osv_moment = r.csv_pno_moment;
   return r;
@@ -1351,7 +1297,61 @@ TEST_CASE("dryrun cost model memsize matches memsize_counter",
   auto direct = sequant::opt::detail::memsize_counter(
       r.idx_to_extent(), r.inner_pow_fn())(idx, container::svector<Index>{},
                                            container::svector<Index>{});
-  CHECK(cm.memsize(idx) == static_cast<std::size_t>(direct * 8.0));
+  // Bytes: the default registry is complex, so an element is two reals.
+  CHECK(cm.memsize(idx) == static_cast<std::size_t>(direct * 16.0));
+  CHECK(cm.numeric_size() == 8.0);
+}
+
+TEST_CASE("dryrun cost model sizes elements and flops by the field",
+          "[dryrun-costmodel]") {
+  auto r = backend_test_regime();
+  CostModel cm{r};
+  container::svector<Index> out{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> contracted{Index{L"i_2"}};
+  auto const madds =
+      sequant::opt::detail::flops_counter(r.idx_to_extent(), r.inner_pow_fn())(
+          out, contracted, container::svector<Index>{});
+  auto const elems = sequant::opt::detail::memsize_counter(
+      r.idx_to_extent(), r.inner_pow_fn())(out, container::svector<Index>{},
+                                           container::svector<Index>{});
+  // Complex (the default registry): two reals per element, four real
+  // multiply-adds per complex one.
+  CHECK(cm.memsize(out) == static_cast<std::size_t>(elems * 16.0));
+  CHECK(cm.flops(out, contracted) == Catch::Approx(madds * 4.0));
+
+  // Real spaces: one real per element, one multiply-add each.
+  auto resetter = scoped_real_field_context();
+  container::svector<Index> rout{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> rcontracted{Index{L"i_2"}};
+  CHECK(cm.memsize(rout) == static_cast<std::size_t>(elems * 8.0));
+  CHECK(cm.flops(rout, rcontracted) == Catch::Approx(madds));
+  // exec_cost takes real flops and bytes; with no roofline it is the flops.
+  CHECK(cm.exec_cost(cm.flops(rout, rcontracted), Field::Real, cm.memsize(rout),
+                     cm.memsize(rcontracted),
+                     cm.memsize(rout)) == Catch::Approx(madds));
+  CHECK(cm.exec_cost(cm.flops(out, contracted), Field::Complex, cm.memsize(out),
+                     cm.memsize(contracted),
+                     cm.memsize(out)) == Catch::Approx(madds * 4.0));
+}
+
+TEST_CASE("dryrun result applies a canon transform as a relabel",
+          "[dryrun-costmodel]") {
+  // Every leaf fetch applies its CanonTransform (phase, conj, relabel) to
+  // the yielded result; the dry run must honor that hook (it used to throw
+  // "Not implemented: apply_transform" and abort the whole prediction). In
+  // the size model phase and conj are free, the relabel reorders modes.
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  container::svector<Index> pre{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> post{Index{L"i_1"}, Index{L"a_3"}};
+  ResultDryRun res{pre, cm};
+  Result const& base = res;  // the hooks are the Result interface's
+  auto out = base.apply_transform(
+      CanonTransform{}, std::array<std::any, 2>{std::any{pre}, std::any{post}});
+  REQUIRE(out);
+  REQUIRE(out->size_in_bytes() == base.size_in_bytes());
+  REQUIRE(out->is<ResultDryRun>());
+  REQUIRE(out->as<ResultDryRun>().indices() == post);
 }
 
 TEST_CASE("dryrun cost model memsize honors an extent override",
@@ -1377,14 +1377,11 @@ TEST_CASE("dryrun cost model flops and exec_cost are finite/positive",
   CHECK(f > 0.0);
   // exec_cost takes the op's FULL compulsory traffic: both operand footprints
   // plus the result's (see the roofline note on CostModel::exec_cost).
-  CHECK(cm.exec_cost(f, cm.memsize(out), cm.memsize(contracted),
+  CHECK(cm.exec_cost(f, Field::Complex, cm.memsize(out), cm.memsize(contracted),
                      cm.memsize(out)) > 0.0);
 }
 
-TEST_CASE(
-    "dryrun product roofline exec charges both operands and the result, "
-    "order-independently",
-    "[dryrun-costmodel][roofline]") {
+TEST_CASE("roofline-exec-charges", "[dryrun-costmodel][roofline]") {
   // The roofline `traffic` term is the COMPULSORY single-pass data movement of
   // one contraction -- read both operands, WRITE the result -- which is what
   // the optimizer's DP charges (S[lp] + S[rp] + S[n]; PeakModel::relax and
@@ -1402,6 +1399,7 @@ TEST_CASE(
                              .fast_mem_elems = 1000000.0};
   auto const regime = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(regime, rp);
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
 
   Index const i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"}, a4{L"a_4"};
   // Deliberately lopsided operands: big = 20*20*10 = 4000 elements,
@@ -1486,8 +1484,7 @@ TEST_CASE("dryrun flat result size delegates to cost model",
   CHECK(rt.size_in_bytes() == cm->memsize(idx));
 }
 
-TEST_CASE("dryrun flat result prod yields the result annotation index set",
-          "[dryrun-result]") {
+TEST_CASE("flat-result-prod-annotation", "[dryrun-result]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   ResultDryRun l{{Index{L"a_3"}, Index{L"i_2"}}, cm};
@@ -1529,6 +1526,31 @@ TEST_CASE("dryrun flat result slice_mode shrinks the sliced mode",
   CHECK(sliced->size_in_bytes() == full / 4);
 }
 
+// A value shared by several occurrences keeps the labels of the one that
+// produced it; permute/adjoint must carry its slices to the positions the
+// engine's annotations name, not look them up by the stored labels.
+TEST_CASE("dryrun permute and adjoint move slices by annotation",
+          "[dryrun-result]") {
+  using sequant::eval::dryrun::detail::lobounds_of;
+  using sequant::eval::dryrun::detail::overrides_of;
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  // stored as (a_3,i_3), read here as (a_2,i_2), sliced on a_2 to [4,8)
+  ResultDryRun const t{{Index{L"a_3"}, Index{L"i_3"}}, cm};
+  auto const sliced = static_cast<Result const&>(t).slice_mode(0, 4, 8);
+  container::svector<Index> const pre{Index{L"a_2"}, Index{L"i_2"}};
+  container::svector<Index> const post{Index{L"i_2"}, Index{L"a_2"}};
+  std::array<std::any, 2> const ann{pre, post};
+  for (auto const& out :
+       {sliced->permute(ann),
+        sliced->apply_transform(CanonTransform{.conj = true}, ann)}) {
+    REQUIRE(out);
+    CHECK(overrides_of(*out) == ExtentOverrides{{1, 4}});
+    CHECK(lobounds_of(*out) == ExtentOverrides{{1, 4}});
+    CHECK(out->size_in_bytes() == sliced->size_in_bytes());
+  }
+}
+
 TEST_CASE("dryrun axis_batches tiles the axis space extent",
           "[dryrun-result]") {
   auto r = backend_test_regime();
@@ -1540,8 +1562,7 @@ TEST_CASE("dryrun axis_batches tiles the axis space extent",
   CHECK(batches.back().second == 20);
 }
 
-TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
-          "[dryrun-result][pre-sized]") {
+TEST_CASE("make-zeros-flat", "[dryrun-result][pre-sized]") {
   // The runtime External-mode scatter builds its destination from the node's
   // own (unsliced) index list via BackendArrayOps::make_zeros -- every mode at
   // its space's full extent, a structural fact queryable immediately via
@@ -1561,8 +1582,7 @@ TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
   CHECK(dest->size_in_bytes() == full_bytes);
 }
 
-TEST_CASE("dryrun make_zeros builds a full-extent nested scatter destination",
-          "[dryrun-result][pre-sized]") {
+TEST_CASE("make-zeros-nested", "[dryrun-result][pre-sized]") {
   // ToT analogue of the flat case above -- CSV/PNO residuals carry
   // ResultDryRunNested tokens, so make_zeros must build a nested full-extent
   // destination when the descriptor carries a proto-indexed (composite) leg.
@@ -1585,10 +1605,7 @@ TEST_CASE("dryrun make_zeros builds a full-extent nested scatter destination",
   CHECK(dest->size_in_bytes() == full_bytes);
 }
 
-TEST_CASE(
-    "dryrun result write_into_slice assembles disjoint blocks into a "
-    "pre-sized destination",
-    "[dryrun-result][write-into-slice]") {
+TEST_CASE("write-into-slice-blocks", "[dryrun-result][write-into-slice]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
 
@@ -1640,9 +1657,8 @@ TEST_CASE(
         std::pair<std::size_t, std::size_t>{2, 6});
 }
 
-TEST_CASE(
-    "dryrun result write_into_slice REFUSES a gapped or overlapping block",
-    "[dryrun-result][write-into-slice]") {
+TEST_CASE("write-into-slice-refuses-gaps",
+          "[dryrun-result][write-into-slice]") {
   // Copilot review (PR #613): the contiguity requirement used to be carried by
   // a SEQUANT_ASSERT alone. Asserts are compiled out in non-Debug builds (and
   // CI builds with SEQUANT_ASSERT_BEHAVIOR=THROW rather than relying on the
@@ -1688,8 +1704,81 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
-          "[dryrun-nested]") {
+TEST_CASE("write-into-slice-refuses-mismatched-modes",
+          "[dryrun-result][write-into-slice]") {
+  // A block scattered along one mode must agree with the destination on every
+  // other mode they share. Issue #762's shape: the block is sliced to an
+  // enclosing batch of i_1 that the destination is not; the mismatch must
+  // surface at the scatter, not at whichever consumer next contracts the
+  // destination.
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  Index i1{L"i_1"}, a3{L"a_3"};
+  ResultDryRun const tmpl{{i1, a3}, cm};
+  Result const& tmpl_r = tmpl;
+
+  // the block: i_1 in the enclosing batch [0,3), a_3 in the scatter block [0,5)
+  auto const blk = tmpl_r.slice_mode(0, 0, 3)->slice_mode(1, 0, 5);
+  REQUIRE(blk);
+
+  SECTION("destination at the full extent of the enclosing mode") {
+    ResultDryRun dest{{i1, a3}, cm};
+    CHECK_THROWS_AS(static_cast<Result&>(dest).write_into_slice(*blk, 1, 0, 5),
+                    sequant::Exception);
+  }
+  SECTION("destination sliced to another batch of the enclosing mode") {
+    auto dest = tmpl_r.slice_mode(0, 3, 6);
+    CHECK_THROWS_AS(dest->write_into_slice(*blk, 1, 0, 5), sequant::Exception);
+  }
+  SECTION("destination sliced to the same batch") {
+    auto dest = tmpl_r.slice_mode(0, 0, 3);
+    CHECK_NOTHROW(dest->write_into_slice(*blk, 1, 0, 5));
+  }
+}
+
+// The block is the destination value's own per-batch form, so the scatter is
+// positional; a block that carries another occurrence's labels (a shared
+// value passed through by a pow or scalar product) must still assemble.
+TEST_CASE("write-into-slice-is-positional",
+          "[dryrun-result][write-into-slice]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  ResultDryRun const stored{{Index{L"i_3"}, Index{L"a_3"}}, cm};
+  Result const& stored_r = stored;
+  container::svector<Index> const idx{Index{L"i_1"}, Index{L"a_1"}};
+
+  SECTION("blocks tile the scattered mode") {
+    ResultDryRun dest{idx, cm, {{1, 0}}};  // mode 1 unfilled
+    Result& dest_w = dest;
+    for (std::size_t lo = 0; lo != 20; lo += 5)
+      dest_w.write_into_slice(*stored_r.slice_mode(1, lo, lo + 5), 1, lo,
+                              lo + 5);
+    CHECK(dest_w.size_in_bytes() == cm->memsize(idx));
+  }
+  // the width mismatch trips a SEQUANT_ASSERT ahead of the throw
+  if (assert_behavior() != AssertBehavior::Abort) {
+    SECTION("a block of the wrong width is refused") {
+      ResultDryRun dest{idx, cm, {{1, 0}}};
+      CHECK_THROWS_AS(static_cast<Result&>(dest).write_into_slice(
+                          *stored_r.slice_mode(1, 0, 4), 1, 0, 5),
+                      sequant::Exception);
+    }
+  }
+  SECTION("the enclosing batch is compared by position") {
+    // whole on the scattered mode, so only the enclosing i batch can differ
+    auto const dest = [&] {
+      return static_cast<Result const&>(ResultDryRun{idx, cm})
+          .slice_mode(0, 0, 3);
+    };
+    CHECK_THROWS_AS(
+        dest()->write_into_slice(*stored_r.slice_mode(0, 3, 6), 1, 0, 20),
+        sequant::Exception);
+    CHECK_NOTHROW(
+        dest()->write_into_slice(*stored_r.slice_mode(0, 0, 3), 1, 0, 20));
+  }
+}
+
+TEST_CASE("nested-moment-aware-extent", "[dryrun-nested]") {
   auto r = backend_test_regime();
   // Non-trivial second moment: <#PNO^2> != <#PNO>^2 (dispersion inflates it).
   r.csv_pno_moment[1] = 4.0;
@@ -1720,8 +1809,7 @@ TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
   CHECK(rc.size_in_bytes() == with_composite);
 }
 
-TEST_CASE("dryrun make_dryrun_result dispatches flat vs nested by content",
-          "[dryrun-nested]") {
+TEST_CASE("make-dryrun-result-dispatch", "[dryrun-nested]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   Index i1{L"i_1"}, i2{L"i_2"};
@@ -1762,19 +1850,24 @@ TEST_CASE("dryrun leaf yielder builds a sized token from a tensor leaf",
   CHECK(res->size_in_bytes() == cm->memsize(idx));
 }
 
-TEST_CASE(
-    "dryrun external-mode scatter replay models the sliced footprint (D3.1)",
-    "[dryrun-extmode][eval]") {
-  // The runtime External-mode scatter branch in make_batched_custom_evaluator
-  // (eval.hpp) builds its destination once via BackendArrayOps::make_zeros and
-  // then calls dest->write_into_slice(...) for every block; the dry-run Result
-  // classes model both, so the witness measures external batching. This test
-  // drives that same scatter branch the TA regression
-  // `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp) exercises, on
-  // the dry-run backend: a small forest carrying the occupied index only as a
-  // protoindex of a composite PNO leg (canonicalization promotes it to a plain
-  // outer canon index, so index_position locates it directly -- no proto-aware
-  // locator needed, exactly as that TA test documents).
+TEST_CASE("external-scatter-replay", "[dryrun-extmode][eval]") {
+  // D3.1 regression: the runtime External-mode scatter branch in
+  // make_batched_custom_evaluator (eval.hpp) calls, on the first block,
+  // part->pre_sized_zeros_over_mode(dest_mode, carrier_full, carrier_mode),
+  // then dest->write_into_slice(...) for every block. Before this task the
+  // dry-run Result classes did not override pre_sized_zeros_over_mode, so
+  // the replay hit the base class's `throw
+  // detail::unimplemented_method("pre_sized_zeros_over_mode")` the moment an
+  // External mode was stamped -- the witness could not measure external
+  // batching at all (doc/developer/cost_model.rst,
+  // "Ordered batch contexts and costing").
+  // This test drives the SAME scatter branch the TA
+  // regression `batched_eval_external_proto_occ_scatter`
+  // (test_eval_ta_batched_external.cpp) exercises, on the dry-run backend: a
+  // small forest carrying the occupied index ONLY as a protoindex of a
+  // composite PNO leg (canonicalization promotes it to a plain outer canon
+  // index, so index_position locates it directly -- no proto-aware locator
+  // needed, exactly as that TA test documents).
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
@@ -1834,7 +1927,7 @@ TEST_CASE(
 
   // Reference: plain unbatched evaluation (node_slice_mask are ignored without
   // a custom evaluator).
-  auto const ref = evaluate(node, yield);
+  auto const ref = evaluate<Trace::On>(node, yield);
   REQUIRE(ref);
   auto const ref_bytes = ref->size_in_bytes();
   REQUIRE(ref_bytes > 0);
@@ -1849,7 +1942,7 @@ TEST_CASE(
   auto cache = sequant::CacheManager<node_t>::empty();
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   cache.set_array_ops(&aops);
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
+  cache.set_custom_evaluator(make_batched_custom_evaluator<Trace::On>(
       yield, [](Index const&) -> std::size_t { return 4; }, accept_occ, spy,
       never_volatile{}));
 
@@ -1857,7 +1950,7 @@ TEST_CASE(
   bool threw = false;
   std::string what;
   try {
-    result = evaluate(node, yield, cache);
+    result = evaluate<Trace::On>(node, yield, cache);
   } catch (std::exception const& e) {
     threw = true;
     what = e.what();
@@ -1898,10 +1991,7 @@ TEST_CASE(
 
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "dryrun eval backend replays the post-transform giant term through the "
-    "real batched runtime",
-    "[dryrun-eval]") {
+TEST_CASE("giant-term-replay", "[dryrun-eval]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -1966,7 +2056,8 @@ TEST_CASE(
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;  // DP-side knob only; the runtime evaluator
-                                 // never consults peak_threshold.
+  policy.infeasible_is_error = false;  // may be over budget
+                                       // never consults peak_threshold.
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2001,10 +2092,6 @@ TEST_CASE(
   auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-  if (std::getenv("SEQUANT_SCHED_DUMP"))
-    std::cerr << "SCHEDULE_IR_JSON "
-              << sequant::eval::schedule_ir_json(node, "giant") << "\n";
-
   // Locate the giant sub-node (the free-mu~ contraction node whose modeled
   // size dwarfs everything else -- same identification criterion the
   // [dryrun-df] verdict case above used) purely to REPORT what the DP
@@ -2037,7 +2124,7 @@ TEST_CASE(
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   cache.set_array_ops(&aops);
   cache.set_custom_evaluator(
-      sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
+      sequant::make_evaluator<Trace::On>(policy, DryRunLeafEvaluator{cm}));
 
   // Enable eval tracing (redirected to a private ostringstream, not stdout)
   // so working_set_hwmark() actually accumulates: the engine's per-op hwmark
@@ -2055,14 +2142,6 @@ TEST_CASE(
 
   std::cerr << "[dryrun-eval] replaying giant term through the batched "
                "runtime evaluator ...\n";
-  // Enable THIS replay's per-DISTINCT-value build tally on its own cache
-  // (CacheManager::tally_build, keyed by the exact cache identity) so the
-  // avoidable-recompute breakdown is accumulated. Using the test's OWN replay
-  // -- not a separate metered replay -- means the numbers match the exact
-  // run events the visualizer consumes (same cache, same slicing), and there is
-  // no second replay flooding the SCHEDULE_RUN_EVENT stream.
-  bool const sched_dump = std::getenv("SEQUANT_SCHED_DUMP") != nullptr;
-  if (sched_dump) cache.set_recompute_tally_enabled(true);
   auto t1 = std::chrono::steady_clock::now();
   ResultPtr result;
   bool threw = false;
@@ -2072,52 +2151,6 @@ TEST_CASE(
   } catch (std::exception const& e) {
     threw = true;
     what = e.what();
-  }
-  if (sched_dump) {
-    // The replay's per-node avoidable recompute, keyed by the node's
-    // topological hash (the SAME join key the IR and run-event nodes carry) so
-    // the visualizer joins each DAG node to these numbers instead of
-    // recomputing avoidable. Rolled up per DISTINCT value over its SLICES (see
-    // BuildTally): for each slice total += builds*cost and build_once += cost,
-    // so avoidable -- the arithmetic the replay repeated beyond building each
-    // distinct slice once -- is sum over slices of (builds-1)*cost. A value
-    // tiled over DISTINCT slices has builds==1 per slice => 0 avoidable (pure
-    // tiling, even non-uniform); a value rebuilt at the SAME slice (an
-    // invariant rebuilt every block of a loop it does not carry) has builds>1
-    // there. Keeps only values with a positive avoidable amount, worst first.
-    struct AvoidableNode {
-      std::string label;
-      double count = 0;
-      double flops = 0;
-    };
-    std::vector<AvoidableNode> av;
-    for (auto const& [node, t] : cache.recompute_tally()) {
-      double total = 0, once = 0, extra_builds = 0;
-      for (auto const& [sig, bc] : t.slices) {
-        total += bc.count * bc.flops;
-        once += bc.flops;
-        extra_builds += static_cast<double>(bc.count - 1);
-      }
-      if (total - once <= 0.0) continue;
-      av.push_back({.label = std::to_string(node->hash_value()),
-                    .count = extra_builds,
-                    .flops = total - once});
-    }
-    std::sort(av.begin(), av.end(),
-              [](AvoidableNode const& a, AvoidableNode const& b) {
-                return a.flops > b.flops;
-              });
-    std::ostringstream cjson;
-    cjson << "SCHEDULE_COST_JSON {\"term_id\":\"giant\",\"nodes\":[";
-    for (std::size_t i = 0; i < av.size(); ++i) {
-      if (i) cjson << ',';
-      cjson << "{\"sig\":\""
-            << sequant::eval::detail::sched_json_escape(av[i].label)
-            << "\",\"count\":" << av[i].count << ",\"flops\":" << av[i].flops
-            << "}";
-    }
-    cjson << "]}";
-    std::cerr << cjson.str() << "\n";
   }
   auto const eval_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - t1)
@@ -2235,10 +2268,7 @@ TEST_CASE(
 // so no ASSERTION is made about it.
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "dryrun perf-first never forms the 4-PAO AO integral and peaks on the "
-    "genuine 4-PNO W node (C60 giant)",
-    "[dryrun-objective]") {
+TEST_CASE("perf-first-no-4pao", "[dryrun-objective]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2324,6 +2354,7 @@ TEST_CASE(
              ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
              : 40.0) *
         1e9;
+    policy.infeasible_is_error = false;  // may be over budget
 
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2508,18 +2539,20 @@ TEST_CASE(
   // dominated by the GENUINE 4-PNO intermediate the perf-first schedule forms
   // -- the CC doubles W node {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>} with FOUR
   // distinct PNO legs over one occ-pair (see SEQUANT_UT_DRYRUN_PERF_TREE
-  // dump). With the FAITHFUL measured moments (kC60_pVDZF12), it is sized
-  // occ^2 * M_4^4 = 120^2 * 53.151^4 * 8 ~= 0.92 TB (dense occ^2 pairs; the
-  // screened ~6300 CC pairs would give ~0.40 TB). This is the CORRECT,
-  // moment-aware size (df_regime's csv_pno_moment[k] are power means), NOT a
-  // naive-product artifact and NOT a mis-sized twin R{a<i,i>,a<i,i>} (which
-  // would be occ^2*M_2^2 ~= 0.3 GB). The Kappa mode is CONTRACTED at this
-  // node, so batching cannot shrink W -- it is the irreducible peak floor of
-  // the flop-optimal factorization, and precisely why perf-first (which forms
-  // it) OOMs C60 while peak-first (which does not) does not. A 0.5..2 TB band
-  // brackets the real-moment value with margin and is non-flaky.
-  CHECK(perf_first.peak_bytes < 2e12);
-  CHECK(perf_first.peak_bytes > 5e11);
+  // dump). With the FAITHFUL measured moments and pair occupancy
+  // (kC60_pVDZF12), it is sized occ^2 * p * M_4^4 = 120^2 * 0.4375 *
+  // 53.151^4 * 8 ~= 0.40 TB (the ~6300 stored CC pairs of 120^2; the dense
+  // pair grid, p = 1, would give ~0.92 TB). This is the CORRECT, moment- and
+  // occupancy-aware size (df_regime's csv_pno_moment[k] are the
+  // occupancy-folded power means), NOT a naive-product artifact and NOT a
+  // mis-sized twin R{a<i,i>,a<i,i>} (which would be occ^2*p*M_2^2 ~= 0.15
+  // GB). The Kappa mode is CONTRACTED at this node, so batching cannot shrink
+  // W -- it is the irreducible peak floor of the flop-optimal factorization,
+  // and precisely why perf-first (which forms it) OOMs C60 while peak-first
+  // (which does not) does not. A 0.2..1 TB band brackets the real value with
+  // margin and is non-flaky.
+  CHECK(perf_first.peak_bytes < 1e12);
+  CHECK(perf_first.peak_bytes > 2e11);
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
@@ -2530,9 +2563,7 @@ TEST_CASE(
 // BatchModeType::External only on occ labels; with the flag off the reported
 // peak stays over budget and no External mode is stamped. The size of the drop
 // is not pinned.
-TEST_CASE(
-    "dryrun external-mode seeding lowers the DP-reported peak of the C60 giant",
-    "[dryrun-extmode]") {
+TEST_CASE("external-seeding-lowers-peak", "[dryrun-extmode]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2680,11 +2711,8 @@ TEST_CASE(
 // tests), the footprint would not move.
 //
 // This does NOT touch runtime, optimize() selection, or emit wiring. It sizes
-// ONE node's free-index set twice, with two extent functions. Hidden tag; run:
-//   ./tests/unit/unit_tests-sequant "[dryrun-occ-sizing]"
-TEST_CASE(
-    "dryrun external-occ slicing shrinks the PPL W footprint (P1 sizing gate)",
-    "[.][dryrun-occ-sizing]") {
+// ONE node's free-index set twice, with two extent functions.
+TEST_CASE("external-occ-sizing", "[dryrun-occ-sizing]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2723,6 +2751,7 @@ TEST_CASE(
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40.0 * 1e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2861,165 +2890,7 @@ TEST_CASE(
         Catch::Approx(giant_full_bytes * expected_ratio).epsilon(1e-9));
 }
 
-// P1 recognition gate: prove the batched DP's batchable-mode scan
-// (batchable_mode_list) now admits the external occupied protoindices carried
-// on the C60 giant's composite (PNO) legs. Before the proto-aware change,
-// batchable_mode_list scanned only the top-level bra/ket/aux slots, so the
-// residual's external occ pair -- which lives ONLY as protoindices of the
-// composite legs and never as a top-level slot -- was dropped from
-// canon_indices_ and could never enter the batchable set. The forest-batching
-// feature needs it there. This is the recognition twin of the
-// [dryrun-occ-sizing] sizing gate: same C60 term, same optimize+binarize, same
-// giant-node locator and ext_occ extraction; it asserts on the batchable list,
-// not the footprint. Hidden tag; run:
-//   ./tests/unit/unit_tests-sequant "[dryrun-occ-recognize]"
-TEST_CASE(
-    "dryrun external occ is recognized as a batchable mode (P1 recognition "
-    "gate)",
-    "[.][dryrun-occ-recognize]") {
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(static_cast<bool>(expr));
-  REQUIRE(expr->is<Sum>());
-  auto const& summands = expr->as<Sum>().summands();
-  REQUIRE(!summands.empty());
-  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
-    if (!e->is<Product>()) return e;
-    auto const& p = e->as<Product>();
-    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
-  };
-  // Same term as [dryrun-occ-sizing]: index 38 is the C60 PPL/ladder giant.
-  std::size_t giant_idx = 38;
-  if (giant_idx >= summands.size()) giant_idx = 0;
-  ExprPtr giant = flatten_product(summands[giant_idx]);
-  REQUIRE(giant);
-
-  // FAITHFUL real C60 config -- SAME regime/policy as [dryrun-occ-sizing].
-  auto regime = df_regime(kC60_pVDZF12);
-
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = is_df_batchable;
-  policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
-  };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
-  policy.accumulation_factor = 1.0;
-  policy.peak_threshold = 40.0 * 1e9;
-
-  auto axes_map = std::make_shared<std::unordered_map<
-      Expr const*, container::vector<NodeBatchAnnotation>>>();
-  OptimizeOptions opts;
-  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.idx_to_extent = regime.idx_to_extent();
-  opts.inner_pow = regime.inner_pow_fn();
-  opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
-  opts.roofline.machine_balance = 200.0;
-  opts.roofline.fast_mem_elems = 1000000.0;
-  opts.term_batch_axes = axes_map;
-
-  auto optimized = optimize(giant, opts);
-  REQUIRE(static_cast<bool>(optimized));
-  auto it = axes_map->find(optimized.get());
-  container::vector<NodeBatchAnnotation> node_axes;
-  if (it != axes_map->end()) node_axes = it->second;
-  BinarizationOptions bopts;
-  bopts.node_batch_axes = node_axes;
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-
-  // Locate the giant PPL W node (identical locator to [dryrun-occ-sizing]) and
-  // grab its intermediate tensor: the perf-first (gC)^2 ladder W whose four PNO
-  // composite legs share one occ pair, carries NO free mu~ and NO free K, and
-  // has >= 2 PNO legs. That tensor's composite legs carry the external occ pair
-  // as protoindices -- the external mode the forest batching targets.
-  auto memsize_full = sequant::opt::detail::memsize_counter(
-      regime.idx_to_extent(), regime.inner_pow_fn());
-  auto free_has_bare = [](std::vector<Index> const& ixs, std::wstring_view bk) {
-    for (auto const& ix : ixs)
-      if (ix.basis().base_key() == bk) return true;
-    return false;
-  };
-  auto count_pno = [](std::vector<Index> const& ixs) {
-    std::size_t n = 0;
-    for (auto const& ix : ixs)
-      if (ix.proto_indices().size() >= 2) ++n;
-    return n;
-  };
-  double giant_full_bytes = 0.0;
-  ExprPtr giant_tensor;
-  node.visit_internal([&](auto const& n) {
-    if (!n->is_tensor()) return;
-    auto free_ixs = node_free_indices(*n);
-    if (free_has_bare(free_ixs, L"μ̃") || free_has_bare(free_ixs, L"Κ")) return;
-    if (count_pno(free_ixs) < 2) return;
-    double const bytes =
-        memsize_full(free_ixs, std::vector<Index>{}, std::vector<Index>{}) *
-        8.0;
-    if (bytes > giant_full_bytes) {
-      giant_full_bytes = bytes;
-      giant_tensor = n->as_tensor().clone();
-    }
-  });
-  REQUIRE(giant_full_bytes > 0.0);
-  REQUIRE(static_cast<bool>(giant_tensor));
-
-  // The external occ protos the recognition must surface (same extraction as
-  // [dryrun-occ-sizing]): distinct occupied ("i") protos of the giant's
-  // composite legs.
-  std::vector<Index> ext_occ;
-  for (auto const& ix : giant_tensor->as<Tensor>().const_braketaux_indices())
-    for (auto const& p : ix.proto_indices())
-      if (p.basis().base_key() == L"i") {
-        bool seen = false;
-        for (auto const& e : ext_occ)
-          if (e.full_label() == p.full_label()) seen = true;
-        if (!seen) ext_occ.push_back(p);
-      }
-  REQUIRE(!ext_occ.empty());
-
-  // Build a one-tensor network from the giant W node and scan it exactly as the
-  // batched DP does (cost_model's build_context calls this same function with
-  // the same is_batchable predicate). is_df_batchable admits ONLY mu~/K; before
-  // the proto-aware change the returned list carries NO occupied index, so this
-  // gate FAILS. After it, the external occ pair must appear.
-  auto tn = TensorNetwork{container::vector<ExprPtr>{giant_tensor}};
-  auto batchable =
-      sequant::opt::detail::batchable_mode_list(tn, is_df_batchable);
-
-  std::vector<Index> batchable_v(batchable.begin(), batchable.end());
-  std::wcerr << L"\n=== [dryrun-occ-recognize] P1 RECOGNITION GATE (C60 giant, "
-             << L"term " << giant_idx << L") ===\n"
-             << L"external occ protos on giant (" << ext_occ.size() << L") = {"
-             << describe_indices(ext_occ) << L"}\n"
-             << L"batchable_mode_list (" << batchable_v.size() << L") = {"
-             << describe_indices(batchable_v) << L"}\n";
-
-  auto is_active_occ = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
-  };
-  // The giant's external occ must now be a batchable mode, even though it has
-  // no top-level slot on the node.
-  CHECK(std::any_of(batchable.begin(), batchable.end(), is_active_occ));
-
-  // ...and the surfaced occ mode is exactly one of the giant's external occ
-  // protos, not some unrelated occupied index.
-  bool matches_ext = false;
-  for (auto const& b : batchable)
-    if (is_active_occ(b))
-      for (auto const& e : ext_occ)
-        if (b.full_label() == e.full_label()) matches_ext = true;
-  CHECK(matches_ext);
-}
-
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // P4 GO/NO-GO AUDIT (Concern #3): across ALL C60 residual terms under the
 // perf-first (DenseTimeSpaceBatched) objective, does external-occ FOREST
 // batching (P3, the result-external occ carried as composite protos)
@@ -3038,10 +2909,7 @@ TEST_CASE(
 // P1 [dryrun-occ-sizing] slice -- O(1), no DP), giving the footprint AFTER
 // external-occ forest batching. The verdict classifies each term as
 // BOUNDED-by-P3 (occ slice fits) / NEEDS-mu-forest / NEEDS-k-forest / GAP.
-// Hidden; run:
-//   ./tests/unit/unit_tests-sequant "[dryrun-c60-batchability-audit]"
-TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
-          "[.][dryrun-c60-batchability-audit]") {
+TEST_CASE("c60-perf-first-audit", "[dryrun-c60-batchability-audit]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -3100,6 +2968,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = kThrGB * 1e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   struct TermVerdict {
     std::size_t t = 0;
@@ -3157,9 +3026,8 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
       for (auto const& f : giant->as<Product>().factors())
         if (f->is<Tensor>()) gts.push_back(f);
       TensorNetwork gtn{gts};
-      container::svector<Index> const empty_tidxs{};  // matches single_term_opt
-      auto conn =
-          sequant::opt::detail::outer_product_connectivity(gtn, empty_tidxs);
+      auto conn = sequant::opt::detail::outer_product_connectivity(
+          gtn, gtn.ext_indices());
       std::size_t const nt = gts.size();
       std::size_t total_ge2 = 0, connected_ge2 = 0;
       for (std::size_t n = 1; n < conn.size(); ++n) {
@@ -3370,6 +3238,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
 
   REQUIRE(verdicts.size() > 0);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // The opt-in scratch-fold peak sink captures the batched-inner peak the
 // OUTER cache.working_set_hwmark() misses. Reuse the [dryrun-objective]
@@ -3419,6 +3288,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -3453,7 +3323,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   cache.set_array_ops(&aops);
   std::atomic<double> peak{0.0};
-  cache.set_custom_evaluator(sequant::make_evaluator(
+  cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
       policy, DryRunLeafEvaluator{cm}, sequant::make_no_scope_guard{}, &peak));
 
   std::ostringstream trace_os;
@@ -3539,8 +3409,8 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
 
 // Regression guard: a metered replay's peak_bytes must be the
 // TRUE co-resident sum across the cache scope chain, not
-// max(scratch_hwmark, outer_hwmark). eval.hpp's 7 note_working_set() call
-// sites now add cache.parent()->chain_residency() (CacheManager) to
+// max(scratch_hwmark, outer_hwmark). eval.hpp's note_working_set() call
+// sites add CacheManager::outer_residency() (through log::working_set) to
 // the per-op hwmark, so a scratch cache chained (CacheManager::set_parent)
 // to an outer cache holding a PERSISTENT, ALIVE cross-term entry folds that
 // outer residency into its own working_set_hwmark(). Before this fix, a
@@ -3643,11 +3513,13 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   scratch_isolated.set_array_ops(&aops);
   scratch_isolated.set_custom_evaluator(
-      make_batched_custom_evaluator(yield, target_batch_size, accept_occ,
-                                    make_no_scope_guard{}, never_volatile{}));
+      make_batched_custom_evaluator<Trace::On>(
+          yield, target_batch_size, accept_occ, make_no_scope_guard{},
+          never_volatile{}));
   ResultPtr result_isolated;
   try {
-    result_isolated = sequant::evaluate(node, yield, scratch_isolated);
+    result_isolated =
+        sequant::evaluate<Trace::On>(node, yield, scratch_isolated);
   } catch (std::exception const&) {
   }
   size_t const hwmark_isolated = scratch_isolated.working_set_hwmark();
@@ -3659,12 +3531,12 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   auto scratch_chained = sequant::CacheManager<node_t>::empty();
   scratch_chained.set_parent(&outer);
   scratch_chained.set_array_ops(&aops);
-  scratch_chained.set_custom_evaluator(
-      make_batched_custom_evaluator(yield, target_batch_size, accept_occ,
-                                    make_no_scope_guard{}, never_volatile{}));
+  scratch_chained.set_custom_evaluator(make_batched_custom_evaluator<Trace::On>(
+      yield, target_batch_size, accept_occ, make_no_scope_guard{},
+      never_volatile{}));
   ResultPtr result_chained;
   try {
-    result_chained = sequant::evaluate(node, yield, scratch_chained);
+    result_chained = sequant::evaluate<Trace::On>(node, yield, scratch_chained);
   } catch (std::exception const&) {
   }
   size_t const hwmark_chained = scratch_chained.working_set_hwmark();
@@ -3748,6 +3620,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   // Optimize (perf-first) + binarize the giant, carrying the per-node batch
   // modes so the binarized tree matches the real schedule.
@@ -3864,9 +3737,9 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   task_cache.set_array_ops(&aops);
   task_cache.set_custom_evaluator(
-      sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
-  REQUIRE_NOTHROW(
-      (void)sequant::evaluate(node, DryRunLeafEvaluator{cm}, task_cache));
+      sequant::make_evaluator<Trace::On>(policy, DryRunLeafEvaluator{cm}));
+  REQUIRE_NOTHROW((void)sequant::evaluate<Trace::On>(
+      node, DryRunLeafEvaluator{cm}, task_cache));
   CHECK_FALSE(task_cache.exists(giant_node));  // still not registered => never
                                                // resident
   CHECK_FALSE(task_cache.alive(giant_node));
@@ -3882,117 +3755,6 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
       << (task_cache.exists(small_node) ? L"YES" : L"no") << L"\n";
 }
 
-// PNO-CCSD water-20 aux-batching FRAGMENTATION surrogate. Faithfully mirrors
-// the MPQC water-20 pVDZ-F12 PNO-CCSD run (job 658937): the SAME csv doubles
-// residual equation, df_regime(kWater20_pVDZF12) (extents/moments verified
-// against the job log), and the EXACT batch config make_csv_batch_policy emits
-// for aux-only batching (objective dense_time_space, K contracted-batchable,
-// target 256, peak_threshold 1e11, persistent_only false, no PAO/occ axis).
-// MPQC drives batching through this same DP, so the aprime decisions reproduce
-// by construction. Purpose: reproduce the batched-member explosion (the
-// ~405-vs-83 group fragmentation the new-vs-old logs showed) and, under
-// SEQUANT_DP_RECOMPUTE_DEBUG=1, expose why -- the K-carrying gC-class
-// composites are charged rf==1 (the escaped-mode recompute model charges ZERO
-// recompute to a node that CARRIES the only batch mode), so the DP prices
-// slicing them as free and over-batches; the runtime then rebuilds them per
-// batch group (the measured 2.5x product-work regression). See
-// cost_model.hpp:1811-1817 ("if the expensive gC-class nodes show rf==1, the DP
-// is not pricing the runtime recompute").
-TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
-          "[.][dryrun-water-frag]") {
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(static_cast<bool>(expr));
-  REQUIRE(expr->is<Sum>());
-  auto const& summands = expr->as<Sum>().summands();
-  REQUIRE(!summands.empty());
-  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
-    if (!e->is<Product>()) return e;
-    auto const& p = e->as<Product>();
-    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
-  };
-  std::size_t nterms = summands.size();
-  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
-    nterms = std::min<std::size_t>(nterms, std::atoll(nt));
-  auto regime = df_regime(kWater20_pVDZF12);
-
-  // EXACT MPQC aux-only config (make_csv_batch_policy with aux_target=256,
-  // pao_target=0, occ_target=0): K is the ONLY batchable mode, contracted role.
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
-  };
-  policy.is_batchable_external_index = [](Index const&) { return false; };
-  policy.batch_spectator_indices = false;
-  policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
-  policy.accumulation_factor = 1.0;
-  policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
-
-  auto axes_map = std::make_shared<std::unordered_map<
-      Expr const*, container::vector<NodeBatchAnnotation>>>();
-  OptimizeOptions opts;
-  // MPQC "dense_time_space" + aux batch keywords => the perf-first BATCHED
-  // objective (the batchability model that emits the contracted-K aprime; plain
-  // DenseTimeSpace carries no per-index batch model, options.hpp:62).
-  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.idx_to_extent = regime.idx_to_extent();
-  opts.inner_pow = regime.inner_pow_fn();
-  opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
-  opts.roofline.machine_balance = 200.0;
-  opts.roofline.fast_mem_elems = 1000000.0;
-  opts.term_batch_axes = axes_map;
-
-  std::size_t n_kcon = 0;      // K-contracted batched-member annotations
-  std::size_t n_terms_ok = 0;  // terms that optimized
-  for (std::size_t s = 0; s < nterms; ++s) {
-    ExprPtr const term = flatten_product(summands[s]);
-    if (!term) continue;
-    ExprPtr optimized;
-    try {
-      optimized = optimize(term, opts);
-    } catch (std::exception const&) {
-      continue;
-    }
-    if (!optimized) continue;
-    ++n_terms_ok;
-    auto it = axes_map->find(optimized.get());
-    if (it == axes_map->end()) continue;
-    for (auto const& na : it->second)
-      for (auto const& e : na.axes)
-        if (e.second == sequant::BatchModeType::Contracted &&
-            e.first.basis().base_key() == L"Κ")
-          ++n_kcon;
-  }
-  std::wcerr
-      << L"\n=== [dryrun-water-frag] water-20 aux-only, " << n_terms_ok
-      << L" terms optimized ===\n  K-contracted batched-member "
-         L"annotations: "
-      << n_kcon
-      << L"\n  (SEQUANT_DP_RECOMPUTE_DEBUG=1 dumps per-node rf; CONFIRMED "
-         L"all 91 K-carrying gC composites -- largest 34 GB -- priced "
-         L"rf==1 while the 46 K-escaping nodes are charged rf==7: the DP "
-         L"prices slicing the gC giants as free, cost_model.hpp:1811)\n";
-  CHECK(n_terms_ok > 0);
-  // Reproduces the MPQC-log fragmentation (~35 distinct batched-member shapes):
-  // aux batching promotes MANY nodes to K-batched members. The mechanism is the
-  // rf==1 pricing of every K-carrying gC composite (confirmed via
-  // SEQUANT_DP_RECOMPUTE_DEBUG): the escaped-mode recompute model charges zero
-  // to a node that CARRIES the only batch mode, so the flops-neutral slice
-  // looks free -- but the runtime rebuilds each such composite per consumer
-  // batch group (the measured 2.5x product-work regression, not modeled here).
-  CHECK(n_kcon > 20);
-}
-
 // Does canonicalization preserve DISTINCT composite (PNO) proto pairs? A
 // contraction spanning composites on different occ pairs (a<i_1,i_2>,
 // b<i_2,i_3>) physically spans THREE occ; if canon_indices collapsed the pairs
@@ -4004,11 +3766,11 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto resetter = set_scoped_default_context(std::move(ctx));
 
   Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
@@ -4090,10 +3852,7 @@ TEST_CASE("PeakMonitor tracks hierarchy-wide co-resident high-water",
   CHECK(peaks == std::vector<std::size_t>{100, 300});
 }
 
-TEST_CASE(
-    "PeakMonitor wired onto a CacheManager observes the same high-water as "
-    "the cache's own working_set_hwmark()",
-    "[meter]") {
+TEST_CASE("peak-monitor-cache-hwmark", "[meter]") {
   using sequant::eval::dryrun::CostModel;
   using sequant::eval::dryrun::DryRunLeafEvaluator;
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -4155,10 +3914,7 @@ TEST_CASE(
   CHECK(mon.hwmark_bytes == cache.working_set_hwmark());
 }
 
-TEST_CASE(
-    "assemble_report rolls a metered dry-run replay's per-node build tally "
-    "into a MeterReport (peak, persistent/volatile FLOPs+time, build-vs-home)",
-    "[meter]") {
+TEST_CASE("meter-assemble-report", "[meter]") {
   using sequant::eval::compute_dag_boulevard;
   using sequant::eval::PeakMonitor;
   using sequant::eval::dryrun::assemble_report;
@@ -4303,10 +4059,7 @@ TEST_CASE(
 // PeakMonitor parent-chain under a real batched walk); with it forest_descent,
 // the SAME forest runs through today's unbatched per-tree descent. Both modes
 // must report a positive peak/build count and the matching `scheduler` value.
-TEST_CASE(
-    "meter runs the policy-selected executor (ordered and forest) with "
-    "the sizing backend and a metered cache",
-    "[meter]") {
+TEST_CASE("meter-policy-executor", "[meter]") {
   using sequant::BatchModeType;
   using sequant::BatchPolicy;
   using sequant::Index;
@@ -4326,11 +4079,11 @@ TEST_CASE(
 
   // A single-root, fully-contracted product -- a_3 is a genuine operand
   // index of BOTH factors (contracted away at the root), hand-stamped as the
-  // root's one Contracted batch axis (no optimize() involved, matching
-  // test_eval_dryrun.cpp's hand-built batch-annotation recipe): the driver
-  // entry rebuilds its schedule from the forest's OWN node_slice_mask()
-  // stamps, not from BatchPolicy predicates, so this alone is enough for it
-  // to realize a non-root-only loop nest.
+  // root's one Contracted batch axis and as the loop the root opens (no
+  // optimize() involved, matching test_eval_dryrun.cpp's hand-built
+  // batch-annotation recipe): the driver entry rebuilds its schedule from the
+  // forest's OWN stamps, not from BatchPolicy predicates, so these two stamps
+  // are enough for it to realize a non-root-only loop nest.
   auto expr =
       sequant::deserialize<sequant::ExprPtr>(L"g{i_1;a_3} * h{a_3;i_1}");
   REQUIRE(static_cast<bool>(expr));
@@ -4342,6 +4095,10 @@ TEST_CASE(
 
   Index const a3{L"a_3"};
   node->set_node_slice_mask({{a3, BatchModeType::Contracted}});
+  // The root reduces a_3 in batches, so it is also the node that opens that
+  // loop; the DP records both (NodeBatchAnnotation::opened_here), and the
+  // boulevard reads the loop's kind off the open.
+  node->set_batch_loops_opened_here({{a3, BatchModeType::Contracted}});
 
   std::vector<EvalNodeDryRun> const forest{node};
 
@@ -4358,6 +4115,33 @@ TEST_CASE(
   CHECK(ord_report.peak_bytes > 0.0);
   CHECK(ord_report.builds_total > 0);
   CHECK(ord_report.scheduler == sequant::BatchScheduler::ordered);
+  CHECK_FALSE(ord_report.peak_bytes_steady.has_value());
+  CHECK(ord_report.disk_peak_bytes == 0.0);
+
+  // ---- a second, steady evaluation: the first one's report is unchanged,
+  // and with nothing volatile here the steady one builds nothing new. ----
+  {
+    sequant::eval::dryrun::MeterOptions opts;
+    opts.steady_iteration = true;
+    auto const two = meter(forest, policy, regime, cfg, nullptr, opts);
+    CHECK(two.peak_bytes == ord_report.peak_bytes);
+    CHECK(two.builds_total == ord_report.builds_total);
+    REQUIRE(two.peak_bytes_steady.has_value());
+    CHECK(*two.peak_bytes_steady <= two.peak_bytes);
+  }
+
+  // ---- disk accounting: with every value eligible by size, whatever the
+  // schedule can keep on disk leaves the peak. ----
+  {
+    sequant::eval::DiskSpill disk;
+    disk.min_bytes = 0;
+    sequant::eval::dryrun::MeterOptions opts;
+    opts.disk = &disk;
+    auto const spilled = meter(forest, policy, regime, cfg, nullptr, opts);
+    CHECK(spilled.peak_bytes <= ord_report.peak_bytes);
+    CHECK(spilled.disk_peak_bytes ==
+          static_cast<double>(disk.peak_bytes_on_disk));
+  }
 
   // ---- forest descent: the SAME forest/policy, scheduler reset. ----
   policy.scheduler = sequant::BatchScheduler::forest_descent;
@@ -4394,4 +4178,1069 @@ TEST_CASE("range evaluate does not accumulate into a cached result",
   // 3 * (2 * 2); with the cache buffer used as the accumulator the third use
   // reads the partial sum (2A) and the total comes out 4A = 16
   REQUIRE(sum->get<double>() == Catch::Approx(12.0));
+}
+
+// Issue #762: under forest descent, an External loop opened INSIDE an
+// enclosing batch loop must pre-size its scatter destination to the enclosing
+// loops' current batches on every mode the node carries: each partial is
+// evaluated sliced to those batches, so a destination at their full extent
+// would disagree with it. In every section the root opens a Contracted loop
+// over i_1 and X = g * h, which carries i_1, opens the External loop(s) below
+// it. The ordered scheduler realizes the same stamps as a reference.
+TEST_CASE("forest-descent-nested-external-scatter", "[batch][forest_descent]") {
+  using sequant::BatchModeType;
+  using sequant::BatchPolicy;
+  using sequant::Index;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+  using Mask = container::svector<std::pair<Index, BatchModeType>>;
+  constexpr auto C = BatchModeType::Contracted;
+  constexpr auto E = BatchModeType::External;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.basis().base_key() == L"i";
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.basis().base_key() == L"a";
+  };
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.basis().base_key() == L"i" ? std::size_t{3} : std::size_t{5};
+  };
+
+  auto binarize_expr = [](std::wstring_view s) {
+    auto expr = sequant::deserialize<sequant::ExprPtr>(s);
+    REQUIRE(static_cast<bool>(expr));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return sequant::binarize<EvalExprDryRun>(expr);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+  // stamps a non-leaf node; every mode a loop opened here is carried by its
+  // children (a Contracted loop) or by the node itself (an External loop)
+  auto stamp = [](EvalNodeDryRun& n, Mask const& mask, Mask const& opens) {
+    REQUIRE_FALSE(n.leaf());
+    for (auto const& [ix, kind] : opens)
+      REQUIRE(sequant::index_position(n, ix).has_value() ==
+              (kind == BatchModeType::External));
+    n->set_node_slice_mask(mask);
+    n->set_batch_loops_opened_here(opens);
+  };
+
+  Index const i1{L"i_1"};
+  Index const i3{L"i_3"};
+  Index const a1{L"a_1"};
+  Index const a2{L"a_2"};
+
+  std::optional<EvalNodeDryRun> root;
+  SECTION("one External loop under one Contracted loop") {
+    auto& node = root.emplace(
+        binarize_expr(L"(g{i_1;a_3} * h{a_3;a_1}) * L{a_1;i_1,i_2}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {a1, E}}, {{a1, E}});  // X
+  }
+  SECTION("one External loop under two Contracted loops") {
+    // the middle node opens a second Contracted loop, over i_3, that X also
+    // carries
+    auto& node = root.emplace(binarize_expr(
+        L"((g{i_1,i_3;a_3} * h{a_3;a_1}) * L{a_1;i_3}) * M{i_2;i_1}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {i3, C}}, {{i3, C}});
+    stamp(node.left().left(), {{i1, C}, {i3, C}, {a1, E}}, {{a1, E}});  // X
+  }
+  SECTION("two External loops on one node under one Contracted loop") {
+    auto& node = root.emplace(
+        binarize_expr(L"(g{i_1;a_3} * h{a_3;a_1,a_2}) * L{a_1,a_2;i_1,i_2}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {a1, E}, {a2, E}}, {{a1, E}, {a2, E}});  // X
+  }
+
+  REQUIRE(root);
+  auto const& node = *root;
+
+  std::vector<EvalNodeDryRun> const forest{node};
+  CacheConfig const cfg;
+
+  policy.scheduler = sequant::BatchScheduler::ordered;
+  auto const ord_report = meter(forest, policy, regime, cfg);
+  CHECK(ord_report.builds_total > 0);
+
+  policy.scheduler = sequant::BatchScheduler::forest_descent;
+  // forest descent's meter reports no builds for a root-opened loop (issue
+  // #755), so its result is checked by direct evaluation below.
+  REQUIRE_NOTHROW(meter(forest, policy, regime, cfg));
+
+  // The batched forest-descent result has the unbatched result's size.
+  auto cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator yield{cm};
+  auto const ref = sequant::evaluate<Trace::On>(node, yield);
+  REQUIRE(ref);
+
+  auto cache = sequant::CacheManager<EvalNodeDryRun>::empty();
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
+  cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
+      policy, yield, sequant::make_no_scope_guard{}));
+  sequant::ResultPtr result;
+  REQUIRE_NOTHROW(result = sequant::evaluate<Trace::On>(node, yield, cache));
+  REQUIRE(result);
+  CHECK(result->size_in_bytes() == ref->size_in_bytes());
+}
+
+// An element-wise power is a build of its own: the dry-run backend sizes it
+// like its operand and charges one operation per element, so the meter sees
+// both ops of a Hadamard product with a power factor, under either scheduler.
+TEST_CASE("meter-elementwise-power", "[meter]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+
+  SECTION("the power result is sized like its operand") {
+    auto cm = std::make_shared<CostModel const>(regime);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize<EvalExprDryRun>(pow(D, rational{-1}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(node->op_type() == EvalOp::Power);
+    auto const res = evaluate<Trace::On>(node, DryRunLeafEvaluator{cm});
+    REQUIRE(res);
+    auto const operand = DryRunLeafEvaluator{cm}(node.left());
+    CHECK(res->size_in_bytes() == operand->size_in_bytes());
+    CHECK(res->size_in_bytes() == static_cast<std::size_t>(nelem * 8));
+  }
+
+  SECTION("both schedulers meter the product and the power") {
+    ResultExpr ell(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          TensorSymmetries{.perm = Symmetry::Antisymm}),
+                   M * pow(D, rational{-1}));
+    std::vector<EvalNodeDryRun> const forest{binarize<EvalExprDryRun>(ell)};
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      BatchPolicy policy;
+      policy.scheduler = scheduler;
+      auto const report = meter(forest, policy, regime, CacheConfig{});
+      CHECK(report.scheduler == scheduler);
+      CHECK(report.builds_total >= 2);
+      // the Hadamard product and the power each touch every element once
+      CHECK(report.flops_persistent + report.flops_volatile ==
+            Catch::Approx(2 * nelem));
+    }
+  }
+}
+
+// A broadcast Sum binarizes to Broadcast nodes over its short summands; the
+// dry-run backend shapes each from the array-ops (the operand's modes from the
+// operand), so the result is sized by the union of the head's indices.
+TEST_CASE("dryrun-broadcast-sum", "[dryrun][broadcast]") {
+  using namespace sequant;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+
+  auto const cm = std::make_shared<CostModel const>(backend_test_regime());
+  DryRunLeafEvaluator const yield{cm};
+  auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+
+  // D{i_1;a_1} = ε{;a_1} − ε{i_1;}
+  ResultExpr const res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+                       ex<Tensor>(L"ε", bra{}, ket{L"a_1"}) -
+                           ex<Tensor>(L"ε", bra{L"i_1"}, ket{}));
+  auto const node = binarize<EvalExprDryRun>(res);
+  REQUIRE(node->op_type() == EvalOp::Sum);
+  REQUIRE(node.left()->is_broadcast());
+  REQUIRE(node.right()->is_broadcast());
+  container::svector<Index> const head_idx{Index{L"i_1"}, Index{L"a_1"}};
+  auto const head_bytes = cm->memsize(head_idx);
+
+  SECTION("tree evaluator") {
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate<Trace::On>(node, yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a Broadcast node is sized from the array-ops") {
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate<Trace::On>(node.left(), yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a scalar summand is broadcast over every head mode") {
+    ResultExpr const scalar(
+        Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Tensor>(L"ε", bra{}, ket{L"a_1"}) - ex<Variable>(L"E"));
+    auto const snode = binarize<EvalExprDryRun>(scalar);
+    REQUIRE(snode.right()->is_broadcast());
+    REQUIRE(snode.right().left()->is_scalar());
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate<Trace::On>(snode, yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a Broadcast node needs array-ops") {
+    REQUIRE_THROWS_WITH(
+        evaluate<Trace::On>(node, yield),
+        Catch::Matchers::ContainsSubstring("needs BackendArrayOps"));
+  }
+
+  SECTION("ordered executor") {
+    std::vector<EvalNodeDryRun> const forest{node};
+    BatchPolicy policy;
+    policy.scheduler = BatchScheduler::ordered;
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got =
+        evaluate<Trace::On>(forest, policy, std::wstring{}, yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+}
+
+// E{i_2;i_3} = L · (M ⊙ pow(D,-1)), batched over the occupied i_1 the root
+// contracts:
+// the loop opened at the root slices the Hadamard product and the power
+// below it, so both schedulers replay a batched loop through the Power node.
+TEST_CASE("meter-batch-through-power", "[meter][tensor-power]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  auto _ = set_scoped_default_context(lax_braket_context());
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const plain = binarize<EvalExprDryRun>(hadamard_power_term());
+  auto batched = binarize<EvalExprDryRun>(hadamard_power_term());
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(plain->op_type() == EvalOp::Product);
+  REQUIRE(plain.right()->op_type() == EvalOp::Product);
+  REQUIRE(plain.right().right()->op_type() == EvalOp::Power);
+  stamp_occ_loop(batched);
+  auto policy = occ_contracted_policy();
+
+  // the unbatched reference
+  std::vector<EvalNodeDryRun> const plain_forest{plain};
+  auto const ref = meter(plain_forest, BatchPolicy{}, regime, CacheConfig{});
+  auto const ref_flops = ref.flops_persistent + ref.flops_volatile;
+  auto const cm = std::make_shared<CostModel const>(regime);
+  auto const ref_bytes =
+      evaluate<Trace::On>(plain, DryRunLeafEvaluator{cm})->size_in_bytes();
+  REQUIRE(ref_bytes == 10 * 10 * 8);
+
+  std::vector<EvalNodeDryRun> const forest{batched};
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    eval::dryrun::MeterReport report;
+    REQUIRE_NOTHROW(report = meter(forest, policy, regime, CacheConfig{}));
+    CHECK(report.scheduler == scheduler);
+    auto const flops = report.flops_persistent + report.flops_volatile;
+    if (scheduler == BatchScheduler::ordered) {
+      // one build of the power, the Hadamard product and the contraction per
+      // batch of i_1 (extent 10, batches of 1), each on its slice: the same
+      // flops as the unbatched run, in which the power and the Hadamard
+      // product each touch D's 10·10·20·20 elements once and the contraction
+      // costs i_1·i_2·i_3·a_1·a_2 = 10 times as much
+      CHECK(report.builds_total == 30);
+      CHECK(flops == Catch::Approx(ref_flops));
+      CHECK(ref_flops == Catch::Approx(12 * nelem));
+    } else {
+      // Pre-existing forest_descent metering blind spot (issue #755): the loop
+      // the root opens over a contracted mode is replayed (the result below
+      // assembles) but the meter tallies no builds or flops; the control L·D,
+      // with no power, reports the same zeros. When #755 is fixed these
+      // CHECKs should flip to the ordered scheduler's numbers above.
+      CHECK(report.builds_total == 0);
+      CHECK(flops == 0);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      auto control = binarize<EvalExprDryRun>(base_term());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      stamp_occ_loop(control);
+      auto const control_report = meter(std::vector<EvalNodeDryRun>{control},
+                                        policy, regime, CacheConfig{});
+      CHECK(control_report.builds_total == 0);
+      CHECK(control_report.flops_persistent + control_report.flops_volatile ==
+            0);
+    }
+
+    // the batched result assembles to the unbatched one's size (10·10)
+    DryRunLeafEvaluator const yield{cm};
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator<Trace::On>(policy, yield, make_no_scope_guard{}));
+    auto const res =
+        evaluate<Trace::On>(forest, policy, std::wstring{}, yield, cache);
+    REQUIRE(res);
+    CHECK(res->size_in_bytes() == ref_bytes);
+  }
+}
+
+// E{i_2;i_3} = L · ℓ with ℓ = M ⊙ pow(D,-1) inlined from its own equation:
+// the loop over i_1 opened at the root slices the inlined head and the power
+// below it as it slices the Hadamard product of the direct term, so the meter
+// sees the direct term's builds, flops and peak. Binarizing the system needs
+// no lax bra-ket context.
+TEST_CASE("meter-batch-through-inlined-head", "[meter][tensor-power][inline]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::MeterReport;
+  using sequant::eval::dryrun::SizeRegime;
+  using Forest = std::vector<EvalNodeDryRun>;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+  auto const flops_of = [](MeterReport const& r) {
+    return r.flops_persistent + r.flops_volatile;
+  };
+  auto policy = occ_contracted_policy();
+
+  SECTION("the meter sees the direct Hadamard term") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{ell_definition(), consumer_E()});
+    REQUIRE(sys.roots().size() == 1);
+    auto const roots = sys.roots();
+    EvalNodeDryRun const& plain = roots[0].get();
+    REQUIRE(plain.right()->is_equation_boundary());
+    EvalNodeDryRun batched = plain;
+    stamp_occ_loop(batched);
+
+    auto direct = [] {
+      auto _ = set_scoped_default_context(lax_braket_context());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      return binarize<EvalExprDryRun>(hadamard_power_term());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    }();
+    auto const direct_ref =
+        meter(Forest{direct}, BatchPolicy{}, regime, CacheConfig{});
+    stamp_occ_loop(direct);
+
+    // the unbatched reference
+    auto const ref = meter(Forest{plain}, BatchPolicy{}, regime, CacheConfig{});
+    CHECK(flops_of(ref) == Catch::Approx(12 * nelem));
+    CHECK(ref.peak_bytes == direct_ref.peak_bytes);
+
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      MeterReport report;
+      REQUIRE_NOTHROW(
+          report = meter(Forest{batched}, policy, regime, CacheConfig{}));
+      CHECK(report.scheduler == scheduler);
+      if (scheduler == BatchScheduler::ordered) {
+        // the numbers of "meter batches a loop through an element-wise
+        // power": one build of the power, ℓ and the contraction per batch of
+        // i_1 (extent 10, batches of 1)
+        CHECK(report.builds_total == 30);
+        CHECK(flops_of(report) == Catch::Approx(12 * nelem));
+        // the leaves L, M and D are each as large as ℓ and resident whole, so
+        // batching does not lower this peak; it matches the direct term's
+        auto const direct_report =
+            meter(Forest{direct}, policy, regime, CacheConfig{});
+        CHECK(report.builds_total == direct_report.builds_total);
+        CHECK(report.peak_bytes == direct_report.peak_bytes);
+      } else {
+        // the forest_descent blind spot of issue #755, as for the direct term
+        CHECK(report.builds_total == 0);
+        CHECK(flops_of(report) == 0);
+      }
+    }
+  }
+
+  SECTION("three levels of inlining") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    REQUIRE(sys.roots().size() == 1);
+    EvalNodeDryRun batched = sys.roots()[0].get();
+    stamp_occ_loop(batched);
+    policy.scheduler = BatchScheduler::ordered;
+    MeterReport report;
+    REQUIRE_NOTHROW(report =
+                        meter(Forest{batched}, policy, regime, CacheConfig{}));
+    // per batch of i_1 (extent 10, batches of 1), 7 builds: the
+    // contraction, ℓ and the power, as in the two-level system, and the four
+    // Broadcast nodes of D, each sliced to the batch along i_1. The three
+    // in-place Sum steps and the two -1 scalings tally no build.
+    CHECK(report.builds_total == 10 * (3 + 4));
+  }
+
+  SECTION("an inlined intermediate larger than every leaf is never whole") {
+    // X{i_2,i_3;a_2,a_3} = t{a_1;i_1} · pow(D3,-1), D3 the o³v³ broadcast Sum
+    // of rank-1 orbital energies, read through its head
+    Tensor const d3 = D3_broadcast().result_as_tensor();
+    auto const x = ResultExpr(
+        Tensor(L"X", bra{L"i_2", L"i_3"}, ket{L"a_2", L"a_3"},
+               TensorSymmetries{.perm = Symmetry::Nonsymm}),
+        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+            pow(ex<Tensor>(relabelled(d3, d3.bra(), d3.ket())), rational{-1}));
+    auto const sys =
+        binarize<EvalExprDryRun>(std::vector<ResultExpr>{D3_broadcast(), x});
+    REQUIRE(sys.roots().size() == 1);
+    auto const roots = sys.roots();
+    EvalNodeDryRun const& plain = roots[0].get();
+    EvalNodeDryRun batched = plain;
+    stamp_occ_loop(batched);
+
+    auto const cm = std::make_shared<CostModel const>(regime);
+    auto const d3_bytes = static_cast<double>(
+        cm->memsize({Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"},
+                     Index{L"a_2"}, Index{L"a_3"}}));
+    policy.scheduler = BatchScheduler::ordered;
+    auto const ref = meter(Forest{plain}, BatchPolicy{}, regime, CacheConfig{});
+    MeterReport report;
+    REQUIRE_NOTHROW(report =
+                        meter(Forest{batched}, policy, regime, CacheConfig{}));
+    CAPTURE(ref.peak_bytes, report.peak_bytes, d3_bytes);
+    CHECK(ref.peak_bytes >= d3_bytes);
+    CHECK(report.peak_bytes < d3_bytes);
+
+    // the batch loop over i_1 slices the Broadcast nodes of D3 along i_1,
+    // which some of them add and the others' operands carry: the batched
+    // result assembles to the unbatched one's size on either scheduler
+    DryRunLeafEvaluator const yield{cm};
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    auto const x_bytes = cm->memsize(
+        {Index{L"i_2"}, Index{L"i_3"}, Index{L"a_2"}, Index{L"a_3"}});
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto cache = CacheManager<EvalNodeDryRun>::empty();
+      cache.set_array_ops(&aops);
+      if (scheduler == BatchScheduler::forest_descent)
+        cache.set_custom_evaluator(
+            make_evaluator<Trace::On>(policy, yield, make_no_scope_guard{}));
+      ResultPtr res;
+      REQUIRE_NOTHROW(res = evaluate<Trace::On>(Forest{batched}, policy,
+                                                std::wstring{}, yield, cache));
+      REQUIRE(res);
+      CHECK(res->size_in_bytes() == x_bytes);
+    }
+  }
+}
+
+// A scalar head inlined into a tensor-tensor contraction:
+// E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}, H{i_1;a_1} = E t{i_1;a_2}
+// u{a_2;a_1}; the inlined E is a boundary below the product contracting a_2.
+TEST_CASE("dryrun-inlined-scalar-head", "[dryrun][inline]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+
+  auto const e = ResultExpr(
+      Variable(L"E"),
+      antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+          ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
+                                bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})));
+  auto const h = ResultExpr(Tensor(L"H", bra{L"i_1"}, ket{L"a_1"}),
+                            ex<Variable>(L"E") *
+                                ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}) *
+                                ex<Tensor>(L"u", bra{L"a_2"}, ket{L"a_1"}));
+  auto const sys = binarize<EvalExprDryRun>(std::vector<ResultExpr>{e, h});
+  REQUIRE(sys.roots().size() == 1);
+  auto const cm = std::make_shared<CostModel const>(backend_test_regime());
+  ResultPtr res;
+  REQUIRE_NOTHROW(
+      res = evaluate<Trace::On>(sys.roots()[0].get(), DryRunLeafEvaluator{cm}));
+  REQUIRE(res);
+  CHECK(res->size_in_bytes() ==
+        cm->memsize(container::svector<Index>{Index{L"i_1"}, Index{L"a_1"}}));
+}
+
+// the system {D, ℓ, E}: pow(D,-1) inside ℓ raises the inlined broadcast D,
+// whose trace spelling must read D as its head
+TEST_CASE("meter-inlined-three-level", "[meter][inline]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  container::svector<ResultExpr> const sys{D_broadcast(), ell_definition(),
+                                           consumer_E()};
+  auto res = binarize<EvalExprDryRun>(sys);
+  REQUIRE(res.roots().size() == 1);
+  EvalNodeDryRun e = res.trees[2];
+  std::vector<EvalNodeDryRun> const plain{e};
+  REQUIRE_NOTHROW(meter(plain, BatchPolicy{}, regime, CacheConfig{}));
+
+  stamp_occ_loop(e);
+  std::vector<EvalNodeDryRun> const batched{e};
+  auto policy = occ_contracted_policy();
+  policy.scheduler = BatchScheduler::ordered;
+  REQUIRE_NOTHROW(meter(batched, policy, regime, CacheConfig{}));
+}
+
+// The contract the fixtures share with mpqc's CSVSizeMoments::extent: a group
+// of k composites on one cluster, each sized by the occupancy-adjusted M_k,
+// has the per-member product p * M_k^k, so nocc^rank times it is the
+// block-sparse volume sum_{nonnull clusters} d^k. Occupancy 1 is the identity.
+TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
+          "[dryrun][sizing]") {
+  auto const& w20 = kWater20_pVDZF12;
+  for (double p : {1.0, w20.pno_occupancy, 0.01}) {
+    auto const adj = occupancy_adjusted_moments(w20.pno_M, p);
+    CHECK(adj[0] == 1.0);
+    for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k) {
+      double prod = 1.0;
+      for (std::size_t member = 0; member < k; ++member) prod *= adj[k];
+      CHECK(prod == Catch::Approx(p * std::pow(w20.pno_M[k], double(k))));
+    }
+  }
+  // The regime builder applies it to both tables, and an occupancy of 1
+  // leaves the moments untouched.
+  auto const r = df_regime(w20);
+  CHECK(r.csv_pno_moment[1] == Catch::Approx(w20.pno_occupancy * w20.pno_M[1]));
+  CHECK(r.csv_osv_moment[2] == Catch::Approx(w20.osv_M[2]));
+}
+
+// E{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2} batched over i_1 and
+// E2{i_1;i_3} = L{a_1,a_2;i_2,i_3} ℓ{i_1,i_2;a_1,a_2} batched over i_2, both
+// reading the inlined broadcast D through ℓ: the Broadcast values of D are
+// sliced at a different position under each loop, which the ordered
+// executor's canonical loop axis does not spell
+TEST_CASE("meter-broadcast-sliced-per-consumer", "[meter][broadcast][inline]") {
+  // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+  // over the (default) complex basis no trait derives
+  [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+  using Forest = std::vector<EvalNodeDryRun>;
+  SizeRegime regime;
+  regime.space_extent = {{L"i", 10}, {L"a", 20}};
+  auto e2 = ex<Product>(ExprPtrList{});
+  e2->as<Product>().append(
+      1, antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_2", L"i_3"}),
+      Product::Flatten::No);
+  e2->as<Product>().append(
+      1,
+      ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
+                            bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})),
+      Product::Flatten::No);
+  auto const E2 =
+      ResultExpr(Tensor(L"E2", bra{L"i_1"}, ket{L"i_3"},
+                        TensorSymmetries{.perm = Symmetry::Nonsymm}),
+                 e2);
+  auto const sys = binarize<EvalExprDryRun>(std::vector<ResultExpr>{
+      D_broadcast(), ell_definition(), consumer_E(), E2});
+  REQUIRE(sys.roots().size() == 2);
+  EvalNodeDryRun a = sys.roots()[0].get();
+  EvalNodeDryRun b = sys.roots()[1].get();
+  stamp_occ_loop(a);
+  Index const i2{L"i_2"};
+  b->set_node_slice_mask({{i2, BatchModeType::Contracted}});
+  b->set_batch_loops_opened_here({{i2, BatchModeType::Contracted}});
+  auto policy = occ_contracted_policy();
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    REQUIRE_NOTHROW(meter(Forest{a, b}, policy, regime, CacheConfig{}));
+    auto const cm = std::make_shared<CostModel const>(regime);
+    DryRunLeafEvaluator const yield{cm};
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator<Trace::On>(policy, yield, make_no_scope_guard{}));
+    REQUIRE_NOTHROW(evaluate<Trace::On>(Forest{a, b}, policy, std::wstring{},
+                                        yield, cache));
+  }
+}
+
+namespace {
+
+/// meters and evaluates \p forest batched by \p policy on \p schedulers,
+/// requiring each to succeed with a result of \p result_bytes
+void require_batched_run(
+    std::vector<sequant::eval::dryrun::EvalNodeDryRun> const& forest,
+    sequant::BatchPolicy policy,
+    sequant::eval::dryrun::SizeRegime const& regime, std::size_t result_bytes,
+    std::initializer_list<sequant::BatchScheduler> schedulers = {
+        sequant::BatchScheduler::ordered,
+        sequant::BatchScheduler::forest_descent}) {
+  using namespace sequant;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  auto const cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator const yield{cm};
+  auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+  for (auto const scheduler : schedulers) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    REQUIRE_NOTHROW(eval::dryrun::meter(forest, policy, regime, CacheConfig{}));
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator<Trace::On>(policy, yield, make_no_scope_guard{}));
+    ResultPtr res;
+    REQUIRE_NOTHROW(res = evaluate<Trace::On>(forest, policy, std::wstring{},
+                                              yield, cache));
+    REQUIRE(res);
+    CHECK(res->size_in_bytes() == result_bytes);
+  }
+}
+
+/// contracted occupied and virtual modes batchable, in batches of 3 and 7
+sequant::BatchPolicy nested_contracted_policy() {
+  using namespace sequant;
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const&) { return true; };
+  policy.is_batchable_external_index = [](Index const&) { return true; };
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"i" ? 3 : 7;
+  };
+  policy.peak_threshold = 1;
+  policy.infeasible_is_error = false;  // may be over budget
+  return policy;
+}
+
+}  // namespace
+
+// Two canonically equal nodes binding different occupied indices, e.g. the
+// Broadcast operands −1·ε{i_1;} and −1·ε{i_2;} of the inlined D, under two
+// nested loops: the inner loop's scratch must not serve the value sliced
+// along the outer loop's i_1 to the occurrence that binds i_2.
+TEST_CASE("meter-nested-loops-distinct-slices", "[meter][broadcast][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {{L"i", 10}, {L"a", 20}};
+  auto const cm = std::make_shared<CostModel const>(regime);
+  Index const i1{L"i_1"}, a1{L"a_1"}, a2{L"a_2"};
+
+  SECTION("two loops at the root of E, inlined D") {
+    // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+    // over the (default) complex basis no trait derives
+    [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    EvalNodeDryRun e = sys.roots()[0].get();
+    e->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    e->set_batch_loops_opened_here(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    require_batched_run(
+        {e}, nested_contracted_policy(), regime,
+        cm->memsize(container::svector<Index>{Index{L"i_2"}, Index{L"i_3"}}));
+  }
+
+  SECTION("an outer loop at E, an inner one at the inlined ℓ") {
+    // a real-basis registry: the tensors here pin BraKetSymmetry::Symm, which
+    // over the (default) complex basis no trait derives
+    [[maybe_unused]] auto const real_basis_scope = scoped_real_field_context();
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    EvalNodeDryRun e = sys.roots()[0].get();
+    e->set_node_slice_mask({{i1, BatchModeType::Contracted}});
+    e->set_batch_loops_opened_here({{i1, BatchModeType::Contracted}});
+    auto& ell = e.right();
+    ell->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a2, BatchModeType::External}});
+    ell->set_batch_loops_opened_here({{a2, BatchModeType::External}});
+    // ordered only: forest_descent does not slice the destination of an
+    // External loop opened below an enclosing loop by that loop, whether or
+    // not the tree holds a Broadcast node (the same system with D a leaf
+    // fails the same way)
+    require_batched_run(
+        {e}, nested_contracted_policy(), regime,
+        cm->memsize(container::svector<Index>{Index{L"i_2"}, Index{L"i_3"}}),
+        {BatchScheduler::ordered});
+  }
+
+  SECTION("without a broadcast: two equal sums over i_1 and i_2") {
+    // R{;i_3} = L{a_1;i_1,i_2,i_3} · ((x{i_1;} + y{i_1;}) (x{i_2;} + y{i_2;})
+    // g{;a_1}), the root contracting i_1, i_2 and a_1
+    auto s = [](wchar_t const* i) {
+      return ex<Tensor>(L"x", bra{i}, ket{}) + ex<Tensor>(L"y", bra{i}, ket{});
+    };
+    auto inner = ex<Product>(ExprPtrList{});
+    inner->as<Product>().append(1, s(L"i_1"), Product::Flatten::No);
+    inner->as<Product>().append(1, s(L"i_2"), Product::Flatten::No);
+    inner->as<Product>().append(1, ex<Tensor>(L"g", bra{}, ket{L"a_1"}),
+                                Product::Flatten::No);
+    auto rhs = ex<Product>(ExprPtrList{});
+    rhs->as<Product>().append(
+        1, ex<Tensor>(L"L", bra{L"a_1"}, ket{L"i_1", L"i_2", L"i_3"}),
+        Product::Flatten::No);
+    rhs->as<Product>().append(1, inner, Product::Flatten::No);
+    ResultExpr const r(Tensor(L"R", bra{}, ket{L"i_3"}), rhs);
+    EvalNodeDryRun root = binarize<EvalExprDryRun>(r);
+    REQUIRE(contracted_indices(root).size() == 3);
+    root->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    root->set_batch_loops_opened_here(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    require_batched_run({root}, nested_contracted_policy(), regime,
+                        cm->memsize(container::svector<Index>{Index{L"i_3"}}));
+  }
+}
+
+// An adjoint leaf (t⁺) binarizes to an Adjoint node over the bare t leaf. A
+// batched ordered schedule that slices the product's operands must slice the
+// adjoint operand too, exactly as the wet executor does (issue #780).
+TEST_CASE("meter-ordered-batched-adjoint-leaf", "[meter][batch]") {
+  using namespace sequant;
+  namespace dr = sequant::eval::dryrun;
+
+  auto ctx = get_default_context_snapshot();
+  auto ibr = mbpt::make_sr_spaces();
+  // real bases: g's bra-ket symmetry is then derivable without a declared
+  // Hermiticity trait (the fork refuses a bare Symm over a complex basis)
+  ibr->extent(L"i", 8).extent(L"a", 16);
+  ibr->field(L"i", Field::Real).field(L"a", Field::Real);
+  ctx.set(Vacuum::SingleProduct).set(SPBasis::Spinor).set(ibr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const is_a = [](Index const& ix) {
+    return ix.basis().base_key() == L"a";
+  };
+  dr::SizeRegime regime;
+  regime.space_extent = {{L"i", 8}, {L"a", 16}};
+  regime.space_slice_extents[L"a"] =
+      dr::batch_slice_extents_from_tiles({4, 4, 4, 4}, 4);
+
+  // `leaf` is t⁺, whose bare operand t is the same value as the t{a_3;i_3}
+  // leaf, or the plain leaf u in its place as a control.
+  // the fork reads an adjointed leaf's slots swapped (the adjoint is the
+  // conjugating bra-ket swap), so t⁺ is spelled with the slots of the t it is
+  // the adjoint of: its effective bra i_2 meets R's ket, its ket a_2 g's bra
+  auto run = [&](std::wstring_view leaf, BatchScheduler scheduler) {
+    auto const res = deserialize<ResultExpr>(
+        L"R{a_1;i_1}:A-N-S = R{a_1;i_2}:A-N-S * g{i_3,a_2;i_1,a_3}:A-S-S * "
+        L"t{a_3;i_3}:A-N-S * " +
+        std::wstring(leaf) +
+        (leaf == L"t⁺" ? L"{a_2;i_2}:A-N-S" : L"{i_2;a_2}:A-N-S"));
+    BatchPolicy policy;
+    policy.is_batchable_contracted_index = is_a;
+    policy.batch_target_size = [is_a](Index const& ix) {
+      return is_a(ix) ? std::size_t{4} : std::size_t{0};
+    };
+    policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"R"; };
+    // below this term's unbatched peak (133120 B), so a node is sliced
+    policy.peak_threshold = 100000;
+    policy.infeasible_is_error = false;  // may be over budget
+    policy.scheduler = scheduler;
+
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) { return ix.basis().extent(); };
+    opts.batch_policy = policy;
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    auto rhs = optimize_result(res.expression(), opts).expr;
+    BinarizationOptions bopts;
+    if (auto it = opts.term_batch_axes->find(rhs.get());
+        it != opts.term_batch_axes->end())
+      bopts.node_batch_axes = it->second;
+    REQUIRE_FALSE(bopts.node_batch_axes.empty());
+    std::vector<dr::EvalNodeDryRun> const forest{binarize<dr::EvalExprDryRun>(
+        ResultExpr{res.result_as_tensor(), std::move(rhs)}, bopts)};
+    return dr::meter(forest, policy, regime, {});
+  };
+
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    dr::MeterReport adj, ctl;
+    REQUIRE_NOTHROW(adj = run(L"t⁺", scheduler));
+    REQUIRE_NOTHROW(ctl = run(L"u", scheduler));
+    // the adjoint is metered like a plain leaf of the same shape: same
+    // schedule, same work (only the leaf footprint differs, t being shared)
+    CHECK(adj.builds_total == ctl.builds_total);
+    CHECK(adj.flops_persistent + adj.flops_volatile ==
+          Catch::Approx(ctl.flops_persistent + ctl.flops_volatile));
+  }
+}
+
+// The roots of a metered forest are the results of different equations
+// (a singles and a doubles residual, a de-excitation, an energy): they have
+// nothing to be summed into, and are metered each as its own result, all of
+// them held at once. Every root here is evaluated in batches of a virtual
+// index.
+TEST_CASE("meter-roots-of-different-shapes", "[meter][batch]") {
+  using namespace sequant;
+  namespace dr = sequant::eval::dryrun;
+  using Catch::Matchers::ContainsSubstring;
+
+  auto ctx = get_default_context_snapshot();
+  auto ibr = mbpt::make_sr_spaces();
+  ibr->extent(L"i", 8).extent(L"a", 16).extent(L"g", 24);
+  // the sizes below are of real (8-byte) elements: the cost model takes a
+  // space's field from the registry, and an undeclared space is complex
+  ibr->field(L"i", Field::Real)
+      .field(L"a", Field::Real)
+      .field(L"g", Field::Real);
+  ctx.set(Vacuum::SingleProduct).set(SPBasis::Spinor).set(ibr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  // the virtuals, of two spaces of different extents, are batched
+  auto const is_a = [](Index const& ix) {
+    return ix.basis().base_key() == L"a" || ix.basis().base_key() == L"g";
+  };
+  dr::SizeRegime regime;
+  regime.space_extent = {{L"i", 8}, {L"a", 16}, {L"g", 24}};
+  regime.space_slice_extents[L"a"] =
+      dr::batch_slice_extents_from_tiles({4, 4, 4, 4}, 4);
+  regime.space_slice_extents[L"g"] =
+      dr::batch_slice_extents_from_tiles({4, 4, 4, 4, 4, 4}, 4);
+
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = is_a;
+  policy.is_batchable_external_index = is_a;
+  policy.batch_target_size = [is_a](Index const& ix) {
+    return is_a(ix) ? std::size_t{4} : std::size_t{0};
+  };
+  policy.peak_threshold = 1;           // every term is batched
+  policy.infeasible_is_error = false;  // and is still over budget
+
+  auto root_of = [&](std::wstring_view equation) {
+    auto const res = deserialize<ResultExpr>(equation);
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) { return ix.basis().extent(); };
+    opts.batch_policy = policy;
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    auto rhs = optimize_result(res.expression(), opts).expr;
+    BinarizationOptions bopts;
+    if (auto it = opts.term_batch_axes->find(rhs.get());
+        it != opts.term_batch_axes->end())
+      bopts.node_batch_axes = it->second;
+    // what this test is about: the root is evaluated in batches
+    REQUIRE_FALSE(bopts.node_batch_axes.empty());
+    if (res.produces_tensor())
+      return binarize<dr::EvalExprDryRun>(
+          ResultExpr{res.result_as_tensor(), std::move(rhs)}, bopts);
+    return binarize<dr::EvalExprDryRun>(
+        ResultExpr{res.result_as_variable(), std::move(rhs)}, bopts);
+  };
+  auto const singles =
+      root_of(L"S{a_1;i_1}:N-N-N = f{a_1;a_2}:N-N-N * t{a_2;i_1}:N-N-N");
+  auto const doubles = root_of(
+      L"D{a_1,a_2;i_1,i_2}:N-N-N = g{a_1,a_2;a_3,a_4}:N-N-N * "
+      L"t{a_3,a_4;i_1,i_2}:N-N-N");
+  // of the rank of the singles, with the batched index at the other mode
+  auto const deexcitation =
+      root_of(L"L{i_1;a_1}:N-N-N = λ{i_1;a_2}:N-N-N * f{a_2;a_1}:N-N-N");
+  auto const energy = root_of(L"E = f{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N");
+
+  using Forest = std::vector<dr::EvalNodeDryRun>;
+  auto const cm = std::make_shared<dr::CostModel const>(regime);
+  dr::DryRunLeafEvaluator const yield{cm};
+  auto const aops = dr::make_dryrun_array_ops(cm);
+  // the two driver entries, on a cache set up as the meter sets up its own
+  auto with_cache = [&](auto&& run) {
+    auto cache = CacheManager<dr::EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    if (policy.scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
+          policy, yield, sequant::make_no_scope_guard{}));
+    return run(cache);
+  };
+  auto summed = [&](Forest const& forest) {
+    return with_cache([&](auto& cache) {
+      return evaluate<Trace::On>(forest, policy, std::wstring{}, yield, cache);
+    });
+  };
+  auto each = [&](Forest const& forest) {
+    return with_cache([&](auto& cache) {
+      return evaluate_each<Trace::On>(forest, policy, yield, cache);
+    });
+  };
+  auto const flops_of = [](dr::MeterReport const& r) {
+    return r.flops_persistent + r.flops_volatile;
+  };
+  dr::MeterOptions steady;
+  steady.steady_iteration = true;
+
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+
+    SECTION(std::format("the summed entry refuses unlike roots ({})",
+                        static_cast<int>(scheduler))) {
+      // roots of different ranks, a scalar next to a tensor
+      REQUIRE_THROWS_WITH(summed(Forest{singles, doubles}),
+                          ContainsSubstring("evaluate_each"));
+      REQUIRE_THROWS_WITH(summed(Forest{energy, doubles}),
+                          ContainsSubstring("evaluate_each"));
+      REQUIRE_THROWS_WITH(summed(Forest{doubles, energy}),
+                          ContainsSubstring("evaluate_each"));
+    }
+
+    SECTION(std::format("one result per root, as built ({})",
+                        static_cast<int>(scheduler))) {
+      Forest const forest{singles, doubles, deexcitation, energy};
+      auto const results = each(forest);
+      REQUIRE(results.size() == forest.size());
+      for (std::size_t i = 0; i != forest.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE(results[i]);
+        auto const alone = each(Forest{forest[i]});
+        REQUIRE(alone.size() == 1);
+        CHECK(results[i]->size_in_bytes() == alone[0]->size_in_bytes());
+        if (forest[i]->is_scalar()) continue;
+        // a tensor root comes back whole, in its own shape
+        container::svector<Index> const idx(forest[i]->canon_indices().begin(),
+                                            forest[i]->canon_indices().end());
+        CHECK(results[i]->size_in_bytes() == cm->memsize(idx));
+      }
+    }
+
+    SECTION(std::format("metered together ({})", static_cast<int>(scheduler))) {
+      double flops_apart = 0;
+      double peak_apart = 0;
+      double held = 0;  // the results, all held at the end
+      for (auto const& root : {singles, doubles, deexcitation, energy}) {
+        auto const alone = dr::meter(Forest{root}, policy, regime, {});
+        flops_apart += flops_of(alone);
+        peak_apart = std::max(peak_apart, alone.peak_bytes);
+        held += static_cast<double>(each(Forest{root})[0]->size_in_bytes());
+      }
+      // the roots share no value, so together they cost what they cost
+      // apart, in any order
+      for (auto const& forest :
+           {Forest{singles, doubles, deexcitation, energy},
+            Forest{energy, deexcitation, doubles, singles},
+            Forest{doubles, energy, singles, deexcitation}}) {
+        dr::MeterReport together;
+        REQUIRE_NOTHROW(
+            together = dr::meter(forest, policy, regime, {}, nullptr, steady));
+        CHECK(flops_of(together) == Catch::Approx(flops_apart));
+        CHECK(together.peak_bytes >= peak_apart);
+        CHECK(together.peak_bytes >= held);
+        // nothing here is volatile: a second evaluation rebuilds nothing,
+        // and still holds every result
+        REQUIRE(together.peak_bytes_steady.has_value());
+        CHECK(*together.peak_bytes_steady >= held);
+        CHECK(*together.peak_bytes_steady <= together.peak_bytes);
+      }
+    }
+  }
+
+  // Two roots of one shape over virtual spaces of different extents (as the
+  // alpha and beta singles of an open shell). Nothing in their shapes tells
+  // the summed entry they are not summands; the meter keeps them apart.
+  SECTION("roots of one shape over spaces of different extents") {
+    auto const singles_g =
+        root_of(L"S{g_1;i_1}:N-N-N = f{g_1;g_2}:N-N-N * t{g_2;i_1}:N-N-N");
+    Forest const forest{singles, singles_g};
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto const results = each(forest);
+      REQUIRE(results.size() == 2);
+      CHECK(results[0]->size_in_bytes() == 16 * 8 * 8);
+      CHECK(results[1]->size_in_bytes() == 24 * 8 * 8);
+      dr::MeterReport report;
+      REQUIRE_NOTHROW(
+          report = dr::meter(forest, policy, regime, {}, nullptr, steady));
+      CHECK(report.peak_bytes >= (16 + 24) * 8 * 8);
+      REQUIRE(report.peak_bytes_steady.has_value());
+      CHECK(*report.peak_bytes_steady >= (16 + 24) * 8 * 8);
+    }
+  }
 }

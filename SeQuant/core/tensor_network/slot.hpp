@@ -1,6 +1,8 @@
 #ifndef SEQUANT_TENSOR_NETWORK_SLOT_H
 #define SEQUANT_TENSOR_NETWORK_SLOT_H
 
+#include <cstdint>
+
 namespace sequant {
 
 /// types of slots that can host an index
@@ -8,7 +10,7 @@ namespace sequant {
 /// @note the order orchestrated to produce intuitively "canonical" layout of
 /// named indices of tensor networks
 /// @sa TensorNetworkV3
-enum class IndexSlotType {
+enum class IndexSlotType : std::uint8_t {
   /// only part of proto index bundles
   IndexBundle,
   /// legacy alias for IndexBundle

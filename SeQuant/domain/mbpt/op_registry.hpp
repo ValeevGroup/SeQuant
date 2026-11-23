@@ -14,6 +14,7 @@
 
 #include <range/v3/view/map.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -51,7 +52,7 @@ inline std::wstring_view strip_pert_order(std::wstring_view label) {
 }  // namespace detail
 
 /// Operator character relative to Fermi vacuum
-enum class OpClass { Ex, Deex, Gen };
+enum class OpClass : std::uint8_t { Ex, Deex, Gen };
 
 /// @return the default Hermiticity for an operator of the given OpClass:
 /// general operators are matrix elements of (anti-)Hermitian operators and

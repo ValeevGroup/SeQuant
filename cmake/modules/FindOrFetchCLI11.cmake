@@ -1,6 +1,8 @@
 if (NOT TARGET CLI11::CLI11)
     include(FetchContent)
 
+    sequant_find_unless_fetching(CLI11 ${SEQUANT_OLDEST_CLI11_VERSION})
+
     FetchContent_Declare(
         CLI11
         GIT_REPOSITORY "https://github.com/CLIUtils/CLI11.git"

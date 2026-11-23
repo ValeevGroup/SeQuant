@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <stdexcept>
@@ -37,9 +38,8 @@ struct CellScope {
 
   /// true iff this scope is the root or a strict/equal prefix of \p inner
   /// (same loop instances and same passes along the prefix). Compares full
-  /// (LoopKey, latitude) entries -- layout -- by design: residency and
-  /// multiplicity instead compare loop identity alone via \c same_key,
-  /// ignoring latitude.
+  /// (LoopKey, latitude) entries -- layout -- by design: residency instead
+  /// compares loop identity alone via \c same_key, ignoring latitude.
   [[nodiscard]] bool encloses(CellScope const& inner) const noexcept {
     if (path.size() > inner.path.size()) return false;
     for (std::size_t i = 0; i < path.size(); ++i)
@@ -55,12 +55,12 @@ struct CellScope {
 /// How a cell's content comes to be: computed by a build step (\c Build),
 /// accumulated from another cell's per-batch partials (\c Assemble), or
 /// handed over by the leaf evaluator (\c Leaf).
-enum class ProductionKind { Build, Assemble, Leaf };
+enum class ProductionKind : std::uint8_t { Build, Assemble, Leaf };
 
 /// How an \c Assemble production combines the partials of its source: summing
 /// them into one value (\c Sum) or scattering each into its own block of the
 /// target (\c Scatter).
-enum class AssembleKind { Sum, Scatter };
+enum class AssembleKind : std::uint8_t { Sum, Scatter };
 
 /// How one cell is produced: its \c ProductionKind plus, for an \c Assemble,
 /// the source cell whose per-batch partials it consumes and how they combine.
@@ -92,21 +92,21 @@ struct TableCell {
   ///       (\c detail::bound_instances empty), so its content is identical
   ///       across every batch and across repeated evaluations of the same
   ///       schedule and may survive a cache reset between them; And
-  ///   (b) some consumer of it holds a volatile value, or it has no consumer
-  ///       at all (a forest root -- validator rule 4 admits a zero-consumer
-  ///       cell only at the root scope).
-  /// (b) is what makes this the frontier: a cell all of whose consumers are
-  /// non-volatile is never read again, because those consumers are themselves
-  /// skipped by cache-halt on every later evaluation -- holding it across
-  /// evaluations would cost its bytes and buy nothing. See \c
-  /// detail::apply_persistence_frontier (cell_table_builder.hpp), which
-  /// decides (b) once the table's reads exist.
+  ///   (b) some consumer of it is produced again on a later evaluation, or
+  ///       it has no consumer at all (a forest root -- validator rule 4
+  ///       admits a zero-consumer cell only at the root scope).
+  /// (b) is what makes this the frontier: a cell none of whose consumers is
+  /// produced again is never read again -- holding it across evaluations
+  /// would cost its bytes and buy nothing. A consumer is produced again if
+  /// it holds a volatile value, or if it is amplitude-independent but bound
+  /// to a loop (so it cannot persist) and something produced again reads it.
+  /// See \c detail::apply_persistence_frontier (cell_table_builder.hpp),
+  /// which decides (b) once the table's reads exist.
   ///
   /// This is distinct from the forest evaluator's per-scratch "survives the
   /// reset of its home scope" flag, which tests only the innermost home loop
   /// (a cell bound to an outer loop passes that test and fails this one).
   bool persistent = false;
-  std::size_t life = 0;
 };
 
 /// One per leg of a consumer cell's production tree -- not one per distinct
@@ -154,6 +154,53 @@ struct CellTable {
   container::svector<std::pair<CellId, std::size_t>> unresolved;
 };
 
+/// \brief The cells of \p table whose value the schedule can keep on disk
+///        between uses (see \c DiskSpill ).
+///
+/// A cell qualifies when its value is held whole, once, for readers:
+///   - it is at the root scope, whole (no sliced position) and complete (not
+///     a partial sum): a form inside a loop is rebuilt per batch, and is not
+///     idle long enough to be worth the I/O;
+///   - it is built, fetched as a leaf, or assembled by scattering its
+///     per-batch partials into disjoint blocks. A value assembled by summing
+///     its partials is updated in place by every batch, which a value on
+///     disk cannot be;
+///   - some other cell reads it: a cell nothing reads at the root scope is a
+///     result of the evaluation, which the caller takes;
+///   - it is not a volatile leaf (\p is_volatile_leaf, by value id): that is
+///     an input the caller owns and changes between evaluations.
+/// Size plays no part here; \c DiskSpill::min_bytes is applied to the value
+/// once it exists.
+///
+/// \param is_volatile_leaf whether the value with a given id is a volatile
+///        leaf; empty means no value is
+/// \return one flag per cell of \p table, nonzero for a qualifying cell
+[[nodiscard]] inline container::vector<char> disk_eligible_cells(
+    CellTable const& table,
+    std::function<bool(std::size_t value_id)> const& is_volatile_leaf = {}) {
+  container::vector<char> read_by_another(table.cells.size(), 0);
+  for (Read const& r : table.reads)
+    if (r.source != r.consumer && r.source < read_by_another.size())
+      read_by_another[r.source] = 1;
+
+  container::vector<char> eligible(table.cells.size(), 0);
+  for (CellId c = 0; c < table.cells.size(); ++c) {
+    TableCell const& cell = table.cells[c];
+    if (!cell.scope.path.empty() || !cell.sliced.empty() ||
+        !cell.partial_over.empty())
+      continue;
+    if (cell.production.kind == ProductionKind::Assemble &&
+        cell.production.assemble == AssembleKind::Sum)
+      continue;
+    if (!read_by_another[c]) continue;
+    if (cell.production.kind == ProductionKind::Leaf && is_volatile_leaf &&
+        is_volatile_leaf(cell.value_id))
+      continue;
+    eligible[c] = 1;
+  }
+  return eligible;
+}
+
 /// One violated table rule, as reported by \c validate_cell_table: the rule's
 /// name and a human-readable description of the offending cells.
 struct CellViolation {
@@ -162,6 +209,7 @@ struct CellViolation {
 };
 
 namespace detail {
+
 /// A one-line human-readable rendering of cell \p id, for diagnostics.
 [[nodiscard]] inline std::string cell_str(CellTable const& t, CellId id) {
   auto const& c = t.cells[id];
@@ -271,36 +319,6 @@ template <typename Candidates>
   return best;
 }
 
-/// Multiplicity of one read of a source cell by a consumer cell: one factor
-/// of \c max(1, n_batches_of(key)) per loop instance on the consumer's scope
-/// path that is not on the source's residency scope path (\c
-/// residency_scope(source), not its raw \c scope -- an Assemble's residency
-/// can extend past its own scope, and a read must be weighted against where
-/// the source actually still lives, not merely where it was produced) -- a
-/// consumer nested one extra (non-resident) loop deeper re-reads the source
-/// once per batch of each such loop. Takes the source \p source as a whole
-/// \c TableCell (never a bare scope) so this is the only place residency is
-/// applied to multiplicity; the single place both the builder (life
-/// bookkeeping) and the validator (rule 4) compute this, so they never
-/// drift apart. A null \p n_batches_of (the validator's default) is treated
-/// as returning 1 everywhere.
-[[nodiscard]] inline std::size_t read_multiplicity(
-    TableCell const& source, CellScope const& consumer_scope,
-    std::function<std::size_t(LoopKey const&)> const& n_batches_of) {
-  CellScope const source_residency = residency_scope(source);
-  std::size_t mult = 1;
-  for (auto const& [pk, lat] : consumer_scope.path) {
-    (void)lat;
-    bool in_source = false;
-    for (auto const& [sk, slat] : source_residency.path) {
-      (void)slat;
-      if (same_key(sk, pk)) in_source = true;
-    }
-    if (!in_source)
-      mult *= std::max<std::size_t>(1, n_batches_of ? n_batches_of(pk) : 1);
-  }
-  return mult;
-}
 }  // namespace detail
 
 /// Static validation of a cell table. Production order is
@@ -313,8 +331,7 @@ template <typename Candidates>
 /// cells' own scopes and their order in \p table.cells. It is named in the
 /// signature so adding that walk does not change every call site.
 [[nodiscard]] inline container::vector<CellViolation> validate_cell_table(
-    CellTable const& table, ScopeBlock const& /*root*/,
-    std::function<std::size_t(LoopKey const&)> const& n_batches_of = {}) {
+    CellTable const& table, ScopeBlock const& /*root*/) {
   container::vector<CellViolation> out;
   auto const n = table.cells.size();
   for (Read const& r : table.reads)
@@ -455,16 +472,7 @@ template <typename Candidates>
         out.push_back({"chain", detail::cell_str(table, id) +
                                     " scatters nothing: empty scatter map"});
     } else if (!s.scope.path.empty()) {
-      // The instance a Sum closes is the loop just below the Assemble's own
-      // scope along the source's path (the block that emitted the escape),
-      // not the source's innermost scope loop: loops of other terms may be
-      // interposed below it (the fused chain nests a term under loops it
-      // does not open). The source must be a partial over the closed
-      // instance, and must be bound to none of the deeper interposed loops
-      // -- it is then complete once per batch of the closed instance,
-      // produced in the first iteration of each interposed loop and
-      // resident across the rest (residency_scope + produce_if_absent), so
-      // the closing Sum reads one complete partial per batch.
+      // A Sum's source must be a partial over the instance it closes.
       std::size_t const at = c.scope.path.size();
       // (A source not nested below the Assemble is the link-direction
       // violation reported above; nothing to add here.)
@@ -477,14 +485,24 @@ template <typename Candidates>
           out.push_back({"chain", detail::cell_str(table, id) +
                                       " sums a source whose partial_over "
                                       "lacks the closing instance"});
-        for (std::size_t j = at + 1; j < s.scope.path.size(); ++j)
-          for (LoopKey const& b : detail::bound_instances(s))
-            if (detail::same_key(b, s.scope.path[j].first))
-              out.push_back({"chain", detail::cell_str(table, id) +
-                                          " sums a source still bound to an "
-                                          "instance inside the one it closes"});
       }
     }
+    // The instance an Assemble closes is the loop just below its own scope
+    // along the source's path (the block that emitted the escape), not the
+    // source's innermost scope loop: loops of other terms may be interposed
+    // below it (the fused chain nests a term under loops it does not open).
+    // The source must be bound to none of those deeper interposed loops -- it
+    // is then complete once per batch of the closed instance, produced in the
+    // first iteration of each interposed loop and resident across the rest
+    // (residency_scope + produce_if_absent), so the Assemble reads one
+    // complete partial per batch. A source still bound further in would hand
+    // it only that inner loop's current batch.
+    for (std::size_t j = c.scope.path.size() + 1; j < s.scope.path.size(); ++j)
+      for (LoopKey const& b : detail::bound_instances(s))
+        if (detail::same_key(b, s.scope.path[j].first))
+          out.push_back({"chain", detail::cell_str(table, id) +
+                                      " assembles a source still bound to an "
+                                      "instance inside the one it closes"});
   }
 
   // (3b) chain: a partial sum is consumed only by the Assemble that closes it
@@ -496,38 +514,30 @@ template <typename Candidates>
                                   detail::cell_str(table, r.source) +
                                   ", a partial sum"});
 
-  // (4) life: reads (weighted by the consumer's extra enclosing batches via
-  // detail::read_multiplicity, same rule the builder uses) plus one per
-  // Assemble that consumes the cell == life.
+  // (4) life: a produced cell nobody reads is dead work. Only at the root
+  // scope is an unread cell legitimate: those are the schedule's results,
+  // read by whoever asked for the evaluation. "At the root scope" is
+  // residency, not production: a complete form produced inside loops it is
+  // bound to none of (a term root reduced over its own loops, nested under
+  // another term's) is homed at root and is the schedule's result there.
   // Leaf cells are skipped: they are not produced by the table (an input is
-  // fetched on demand from outside it), so their lives are informational only
-  // and nothing here has to add up.
-  for (CellId id = 0; id < n; ++id) {
-    TableCell const& c = table.cells[id];
-    if (c.production.kind == ProductionKind::Leaf) continue;
-    std::size_t reads = 0;
-    for (Read const& r : table.reads)
-      if (r.source == id)
-        reads += detail::read_multiplicity(c, table.cells[r.consumer].scope,
-                                           n_batches_of);
+  // fetched on demand from outside it). How long a read cell lives is not
+  // declared here; it follows from where the schedule places its readers
+  // (\c ReleasePlan).
+  {
+    container::vector<char> read(n, 0);
+    for (Read const& r : table.reads) read[r.source] = 1;
     for (CellId o = 0; o < n; ++o)
       if (table.cells[o].production.kind == ProductionKind::Assemble &&
-          table.cells[o].production.source == id)
-        ++reads;
-    if (reads != c.life)
-      out.push_back({"life", detail::cell_str(table, id) + " life " +
-                                 std::to_string(c.life) + " != reads " +
-                                 std::to_string(reads)});
-    // A produced cell nobody reads is dead work. Only at the root scope is a
-    // zero-read cell legitimate: those are the schedule's results, read by
-    // whoever asked for the evaluation.
-    // "At the root scope" is residency, not production: a complete form
-    // produced inside loops it is bound to none of (a term root reduced over
-    // its own loops, nested under another term's) is homed at root and is
-    // the schedule's result there.
-    if (c.life == 0 && !detail::residency_scope(c).path.empty())
-      out.push_back({"life", detail::cell_str(table, id) +
-                                 " zero-read cell at a non-root scope"});
+          table.cells[o].production.source < n)
+        read[table.cells[o].production.source] = 1;
+    for (CellId id = 0; id < n; ++id) {
+      TableCell const& c = table.cells[id];
+      if (c.production.kind == ProductionKind::Leaf) continue;
+      if (!read[id] && !detail::residency_scope(c).path.empty())
+        out.push_back({"life", detail::cell_str(table, id) +
+                                   " unread cell at a non-root scope"});
+    }
   }
 
   // (5) uniqueness: one Build per (value, scope).
@@ -549,13 +559,10 @@ template <typename Candidates>
 ///
 /// \param table the cell table to check
 /// \param root the schedule's root block, walked for the visibility rules
-/// \param n_batches_of optional batch count per loop instance; when empty the
-///        multiplicity rule is skipped
 /// \throw Exception listing every violation \c validate_cell_table reports
-inline void assert_valid_cell_table(
-    CellTable const& table, ScopeBlock const& root,
-    std::function<std::size_t(LoopKey const&)> const& n_batches_of = {}) {
-  auto const v = validate_cell_table(table, root, n_batches_of);
+inline void assert_valid_cell_table(CellTable const& table,
+                                    ScopeBlock const& root) {
+  auto const v = validate_cell_table(table, root);
   if (v.empty()) return;
   std::string msg =
       "cell table invalid (" + std::to_string(v.size()) + " violation(s)):";

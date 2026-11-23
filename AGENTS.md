@@ -4,6 +4,73 @@ Conventions for automated contributors working in this repository. Human
 contributors: see `README.md` and `INSTALL.md`, which these notes do not
 replace.
 
+## Development priorities
+
+When making changes or extensions to the code, weigh the following priorities,
+from highest to lowest. They never override the "Never"/"Do not" rules below.
+
+1. **Correctness.** Never trade it for anything below. Sizable changes get an
+   independent review (see "Review sizable changes independently").
+2. **Readability/Maintainability.** Others will have to understand and modify
+   the code later. A key part of this is reuse: before implementing new
+   functionality, search the whole tree (any file, any part of SeQuant) for an
+   existing implementation of it. If one exists, or the same logic would end up
+   in two places, factor the shared part out into a function or utility that
+   both call instead of copying it. Extracting what is needed for this is in
+   scope even though it touches existing call sites; unrelated cleanup is not.
+3. **Performance.** Ranks just below readability, and wins over it only when
+   the readability loss buys a significant, measured speedup; say so in the
+   commit message. Asymptotic scaling is the exception: SeQuant is expected to
+   process very large expressions, so the difference between O(N^2) and
+   O(N log N) in the size of an expression (number of terms, factors, indices)
+   can be dramatic. Do not introduce a worse complexity class than necessary
+   on such paths, even if it is simpler. The benchmarks, integration tests and
+   external interface runs are examples of typical loads.
+
+   Object size is the other exception. Frequently instantiated types (those
+   created, copied and compared in very large numbers, e.g. Tensor, Index,
+   EvalExpr) have a `sizeof` and cache footprint that affect run time across
+   the whole library; shrinking them sped up the benchmarks by about 16% on
+   average. For such types:
+   - order data members to minimize padding (largest alignment first), and use
+     the smallest sufficient type for enums and counters as *storage*. Only the
+     storage type shrinks: the public API keeps the canonical type (e.g.
+     `std::size_t` for sizes and counts, ordinals), converting at the
+     accessor/constructor boundary, with a checked narrowing where the value
+     comes from the caller;
+   - do not add a member to such a type without checking `sizeof` before and
+     after. Wrappers such as `std::optional<T>` add a flag plus padding (often
+     doubling the size of a small `T`); prefer a sentinel value when the
+     storage type has one to spare. The sentinel must lie far outside any value
+     a caller can legitimately supply or the library can plausibly produce
+     (e.g. the maximum of the storage type, not `-1` or `0` in a type where
+     those are meaningful), be a named constant, and be enforced at the
+     boundary: inputs that could collide with it are rejected (see
+     `SEQUANT_ENFORCE`), not silently accepted, and it never leaks through the
+     public API (the accessor returns `std::optional` or the canonical type
+     as appropriate). Allocate rarely-used data lazily or share it
+     (interning) instead of storing it per object. If the growth is
+     unavoidable, say so in the commit message;
+   - member reordering and similar size reductions on these types count as
+     performance work under this item, so justify them in the commit message
+     with the before/after `sizeof` (and the benchmark timing, if measured).
+4. **Smallest diff.** Make the smallest change that gets the job done,
+   without compromising on correctness or code readability. Don't fold in
+   unrelated refactoring, cleanup, or new abstractions the change doesn't
+   strictly require, even if the surrounding code looks like it could use it
+   while you're in the area — propose that separately and let it be its own
+   change. This holds for performance opportunities too: first make the
+   minimal change, then, only for a measured and significant (non-trivial)
+   speedup, follow up with a dedicated performance commit.
+5. **Compile dependencies.** Keep compile-time coupling between components
+   small, to limit rebuild cost. Prefer non-templated implementations in a
+   `.cpp` file over inline ones in a header (LTO covers the call overhead;
+   inline only for a measured speedup, per 3), and prefer forward
+   declarations over includes in headers.
+
+If in doubt, whether about a priority trade-off, the intended behavior or the
+scope of a change, consult the user to make the decision instead of guessing.
+
 ## Never regenerate `*.expected` fixtures
 
 **Do not create, update, or regenerate any `*.expected` file, and do not run a
@@ -78,13 +145,19 @@ fix/refactor it depends on. Do not fold "fix A", "fix B", and "add feature C
 that uses the fixed code" into one commit just because they happened in the
 same session.
 
-## Prefer the smallest diff that achieves the change
+## Review sizable changes independently
 
-Make the smallest change that gets the job done, without compromising on
-correctness or code readability. Don't fold in unrelated refactoring, cleanup,
-or new abstractions the change doesn't strictly require, even if the
-surrounding code looks like it could use it while you're in the area
-— propose that separately and let it be its own change.
+Before reporting a change as done, have it reviewed for correctness by a
+reviewer that did not write it (a fresh subagent, or `/code-review` if
+available). Do this for changes that alter behavior in more than a few
+lines, touch symbolic/algebraic logic, symmetry or hashing, evaluation or
+export, or span several files. Skip it for docs, comments, formatting
+and mechanical renames.
+
+Give the reviewer the diff and the intent, not your reasoning, and ask for
+concrete failure scenarios rather than style remarks. Verify each finding
+yourself before acting on it, and report unresolved ones. If no independent
+reviewer is available, say so instead of skipping silently.
 
 ## Keep plans and specs out of the source tree
 
@@ -152,8 +225,8 @@ throw Exception("message");  // sequant::Exception outside namespace sequant
 `catch (const std::exception&)` handlers still work; it exists so that callers
 can catch SeQuant-originated failures distinctly. Where callers need to
 distinguish further, derive from it rather than reaching for a `std` type.
-`IndexSpace::bad_key`, `SerializationError`, `ConversionException` and
-`bad_any_comparable_cast` already do, and some code catches those by subtype —
+`IndexSpace::bad_key`, `SerializationError` and `ConversionException`
+already do, and some code catches those by subtype —
 do not flatten them back into plain `Exception`.
 
 For internal invariants prefer `SEQUANT_ASSERT` over throwing. What a tripped
@@ -218,7 +291,7 @@ Note the target names: `unit_tests-sequant` and `check-sequant`, not
 
 ### TiledArray-backed tests
 
-With `SEQUANT_TILEDARRAY=ON` the suite gains `test_eval_ta.cpp` (inside
+With `SEQUANT_TILEDARRAY=ON` the suite gains `test_eval_ta*.cpp` (inside
 `unit_tests-sequant`, tag `[eval]`) and the `sequant/integration/eval_ta`
 program, plus the backend under `SeQuant/core/eval/backends/tiledarray/`.
 Failures there often come down to TiledArray or MADWorld behaviour rather
@@ -264,6 +337,11 @@ bin/admin/clang-format.sh -i <files>                   # fix
 also rejects tabs (except in `.out`, `.cmake`, `.js`, `.xml`, `.css`), CRLF,
 U+00A0 and U+2013 in the files being committed — but only once
 `pre-commit install` has been run in the clone.
+
+Note: running the script **guarantees** formatting using the correct clang-format
+version as long as it exits successfully. It may output about a version mismatch
+with the version found in the environment but the docker fallback will then take
+over.
 
 ## Layout
 

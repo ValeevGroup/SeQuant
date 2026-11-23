@@ -8,12 +8,14 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <compare>
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -241,9 +243,18 @@ class AbstractTensor {
   virtual ColumnSymmetry _column_symmetry() const {
     throw missing_instantiation_for("_column_symmetry");
   }
+  /// @return the time-reversal (Kramers) symmetry of the tensor; the default
+  ///         (no override, e.g. operator-valued tensors) is Nonsymm
+  virtual KramersSymmetry _kramers_symmetry() const {
+    return KramersSymmetry::Nonsymm;
+  }
   virtual std::size_t _color() const {
     throw missing_instantiation_for("_color");
   }
+  /// @return a value mixed into the network vertex shade; distinguishes
+  /// decorations of one label, e.g. a power of a tensor from the tensor;
+  /// 0 (the default) is not mixed in
+  virtual std::size_t _color_salt() const { return 0; }
   /// @return true if this is a c-number; if false,
   /// @sa Expr::is_cnumber()
   virtual bool _is_cnumber() const {
@@ -273,7 +284,6 @@ class AbstractTensor {
   virtual bool _transform_indices(const container::map<Index, Index>&) {
     throw missing_instantiation_for("_transform_indices");
   }
-  virtual void _reset_tags() { throw missing_instantiation_for("_reset_tags"); }
 
   /// permutes bra slots according to @p perm
   /// @param perm from-permutation, i.e. Index in slot `permutation[i]` will be
@@ -427,9 +437,91 @@ inline auto base_field(const AbstractTensor& t) { return t._base_field(); }
 inline auto column_symmetry(const AbstractTensor& t) {
   return t._column_symmetry();
 }
+inline auto kramers_symmetry(const AbstractTensor& t) {
+  return t._kramers_symmetry();
+}
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
 inline auto label(const AbstractTensor& t) { return t._label(); }
+
+namespace detail {
+
+/// @return the order of tensor labels @p a and @p b : cardinal labels (see
+/// LexicographicCompareOptions::cardinal_tensor_labels) precede all others, in
+/// the order given there; all others are ordered lexicographically
+inline std::weak_ordering lexicographic_compare_tensor_labels(
+    std::wstring_view a, std::wstring_view b,
+    const LexicographicCompareOptions& opts) {
+  if (a == b) return std::weak_ordering::equivalent;
+  if (auto cmp = opts.cardinal_position(a) <=> opts.cardinal_position(b);
+      cmp != 0)
+    return cmp;
+  return a <=> b;
+}
+
+/// @return the lexicographic order of the Index ranges @p a and @p b
+/// @note takes forwarding references since some views (e.g.
+/// ranges::any_view) are not iterable when const
+template <typename Range1, typename Range2>
+std::weak_ordering lexicographic_compare_indices(Range1&& a, Range2&& b) {
+  using ranges::begin;
+  using ranges::end;
+  auto a_it = begin(a);
+  auto b_it = begin(b);
+  const auto a_end = end(a);
+  const auto b_end = end(b);
+  for (; a_it != a_end && b_it != b_end; ++a_it, ++b_it) {
+    if (auto cmp = *a_it <=> *b_it; cmp != 0) return cmp;
+  }
+  if (a_it != a_end) return std::weak_ordering::greater;
+  if (b_it != b_end) return std::weak_ordering::less;
+  return std::weak_ordering::equivalent;
+}
+
+/// Lexicographically compares tensors @p a and @p b : by label (see
+/// lexicographic_compare_tensor_labels), then by bra, ket and aux ranks, then
+/// by bra, ket and aux indices, then by symmetry, braket symmetry and column
+/// symmetry
+/// @param bra a callable returning the bra indices of a tensor
+/// @param ket a callable returning the ket indices of a tensor
+/// @param aux a callable returning the aux indices of a tensor
+template <typename T, typename Bra, typename Ket, typename Aux>
+std::weak_ordering lexicographic_compare_tensors(
+    const T& a, const T& b, const LexicographicCompareOptions& opts,
+    const Bra& bra, const Ket& ket, const Aux& aux) {
+  if (auto cmp = lexicographic_compare_tensor_labels(label(a), label(b), opts);
+      cmp != 0)
+    return cmp;
+  if (auto cmp = bra_rank(a) <=> bra_rank(b); cmp != 0) return cmp;
+  if (auto cmp = ket_rank(a) <=> ket_rank(b); cmp != 0) return cmp;
+  if (auto cmp = aux_rank(a) <=> aux_rank(b); cmp != 0) return cmp;
+  if (auto cmp = lexicographic_compare_indices(bra(a), bra(b)); cmp != 0)
+    return cmp;
+  if (auto cmp = lexicographic_compare_indices(ket(a), ket(b)); cmp != 0)
+    return cmp;
+  if (auto cmp = lexicographic_compare_indices(aux(a), aux(b)); cmp != 0)
+    return cmp;
+  if (auto cmp = symmetry(a) <=> symmetry(b); cmp != 0) return cmp;
+  if (auto cmp = braket_symmetry(a) <=> braket_symmetry(b); cmp != 0)
+    return cmp;
+  return column_symmetry(a) <=> column_symmetry(b);
+}
+
+}  // namespace detail
+
+/// Lexicographically compares tensors @p a and @p b : by label (cardinal
+/// labels, see LexicographicCompareOptions::cardinal_tensor_labels , first),
+/// then by bra, ket and aux ranks, then by bra, ket and aux indices, then by
+/// symmetry, braket symmetry and column symmetry
+/// @return the order of @p a relative to @p b
+inline std::weak_ordering lexicographic_compare(
+    const AbstractTensor& a, const AbstractTensor& b,
+    const LexicographicCompareOptions& opts) {
+  return detail::lexicographic_compare_tensors(
+      a, b, opts, [](const AbstractTensor& t) { return t._bra(); },
+      [](const AbstractTensor& t) { return t._ket(); },
+      [](const AbstractTensor& t) { return t._aux(); });
+}
 
 /// produces LaTeX representation typeset using <a
 /// href="https://ctan.org/pkg/tensor?lang=en">tensor package</a>
@@ -597,29 +689,16 @@ static_assert(is_tensor<AbstractTensor>,
 /// @param[in] index_map a const reference to an IndexMap object that specifies
 /// the transformation
 /// @return false if no indices were transformed, true otherwise
-/// @pre indices are not tagged, or (if want to protect them from replacement)
-/// tagged with (int)0
-/// @post transformed indices are tagged with (int)0
 template <typename IndexMap = container::map<Index, Index>>
 inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map) {
   if constexpr (std::is_same_v<IndexMap, container::map<Index, Index>>) {
     return t._transform_indices(index_map);
   } else {
     container::map<Index, Index> index_map_copy;
-    ranges::copy(index_map, index_map_copy);
+    for (auto&& [from, to] : index_map) index_map_copy.emplace(from, to);
     return t._transform_indices(index_map_copy);
   }
 }
-
-/// Removes tags from tensor indices
-/// @param[in,out] t an AbstractTensor object whose indices will be untagged
-inline void reset_tags(AbstractTensor& t) { t._reset_tags(); }
-
-/// Removes tags from the indices of every tensor in an expression
-/// @param[in,out] expr an expression whose tensors' indices will be untagged
-/// @note @p expr is taken by const reference since ExprPtr does not propagate
-/// constness to the expression it points to
-void reset_tags(const ExprPtr& expr);
 
 /// permutes bra slots of @p t according to @p perm
 /// @param t reference to an AbstractTensor object
@@ -654,6 +733,20 @@ inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
 ///@}
 
 using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
+
+/// @brief orders AbstractTensor objects of unlike concrete types
+///
+/// Compares label, then bra, ket and aux ranks, then the Expr type id of
+/// the two objects.
+/// @return true if @p a precedes @p b; false if they compare equal in all of
+///         these
+bool cross_type_less(const AbstractTensor& a, const AbstractTensor& b);
+
+/// @brief orders AbstractTensor objects by the Expr type id of their concrete
+/// types
+/// @return true if the Expr type id of @p a is less than that of @p b; false
+///         if both are of the same concrete type
+bool expr_type_id_less(const AbstractTensor& a, const AbstractTensor& b);
 
 /// @brief Check if a tensor with a certain label is present in an expression
 /// @param expr input expression

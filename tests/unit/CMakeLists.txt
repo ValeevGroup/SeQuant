@@ -16,6 +16,7 @@ set(symb_test_sources
     "test_index.cpp"
     "test_iterator.cpp"
     "test_latex.cpp"
+    "test_lexicographic_order.cpp"
     "test_macros.cpp"
     "test_math.cpp"
     "test_meta.cpp"
@@ -49,6 +50,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
+    "test_irreps.cpp"
     "test_basis.cpp"
     "test_lifetime_mask.cpp"
 )
@@ -69,6 +71,7 @@ target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
 set(optimize_test_sources
     "test_extract_subtrees.cpp"
     "test_fusion.cpp"
+    "test_name_recycling.cpp"
     "test_optimize.cpp"
 )
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
@@ -113,6 +116,7 @@ set(mbpt_test_sources
     "test_mbpt_cc.cpp"
     "test_pao_basis.cpp"
     "test_spin.cpp"
+    "test_spinor.cpp"
 )
 
 add_library(unit_tests-sequant-mbpt-obj OBJECT ${mbpt_test_sources})
@@ -129,13 +133,22 @@ target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE
 # OBJECT library: TiledArray backend tests (conditional)
 ##########################
 if (SEQUANT_HAS_TILEDARRAY)
+    # test_eval_ta*.cpp are separate translation units, each kept out of the
+    # unity build: all of them in one (or in a unity batch) need more compiler
+    # memory than a CI runner has
     set(eval_ta_test_sources
         "test_eval_ta.cpp"
+        "test_eval_ta_batched_external.cpp"
+        "test_eval_ta_evaluators.cpp"
+        "test_eval_ta_lazy_views.cpp"
+        "test_eval_ta_ordered.cpp"
+        "test_eval_ta_shapes.cpp"
         "test_cache_manager.cpp"
     )
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
     target_set_compiler_flags(unit_tests-sequant-eval-ta-obj)
     target_set_optimization_flags(unit_tests-sequant-eval-ta-obj)
+    sequant_heavy_compile(unit_tests-sequant-eval-ta-obj)
     set_target_properties(unit_tests-sequant-eval-ta-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-ta-obj
         PUBLIC SeQuant::eval::ta SeQuant::mbpt
@@ -144,6 +157,15 @@ if (SEQUANT_HAS_TILEDARRAY)
         SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_source_files_properties(${eval_ta_test_sources}
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+    # the water STO-3G integrals of the eval integration test, read with its
+    # own reader (data_info, eval_utils.hpp)
+    set(eval_data_dir "${CMAKE_CURRENT_SOURCE_DIR}/../integration/eval")
+    target_sources(unit_tests-sequant-eval-ta-obj PRIVATE
+        "${eval_data_dir}/data_info.cpp")
+    target_include_directories(unit_tests-sequant-eval-ta-obj PRIVATE
+        "${eval_data_dir}")
+    target_compile_definitions(unit_tests-sequant-eval-ta-obj PRIVATE
+        SEQUANT_EVAL_DATA_DIR="${eval_data_dir}")
 endif()
 
 ##########################
@@ -198,13 +220,16 @@ set(eval_dryrun_test_sources
     "test_eval_ordered.cpp"
     "test_legality.cpp"
     "test_ordered_executor.cpp"
+    "test_ordered_random.cpp"
     "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
+    "test_schedule_document.cpp"
     "test_slicing_signature.cpp"
 )
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
 target_set_compiler_flags(unit_tests-sequant-eval-dryrun-obj)
 target_set_optimization_flags(unit_tests-sequant-eval-dryrun-obj)
+sequant_heavy_compile(unit_tests-sequant-eval-dryrun-obj)
 set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-eval-dryrun-obj
     PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt
@@ -219,26 +244,18 @@ target_link_libraries(unit_tests-sequant-eval-dryrun-obj
 # own TU.
 set_source_files_properties("test_eval_ordered.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-# test_eval_dryrun.cpp opens with `#define SEQUANT_EVAL_TRACE 1` to flip
-# Trace::Default to Trace::On for its WHOLE translation unit (its
-# [dryrun][peak] cases need the compile-time-gated note_working_set() calls
-# inside the batched custom evaluator's nested evaluate_impl() re-entries;
-# those follow the evaluator's EvalTrace template parameter, which these cases
-# leave at its Trace::Default). Under a Unity build this file is concatenated
-# AFTER siblings that already pulled in SeQuant/core/eval/eval.hpp, so the
-# Trace enum is fixed at Off before the define is seen and the define silently
-# becomes a no-op. Give this file its own TU so the define is honoured.
-set_source_files_properties("test_eval_dryrun.cpp"
-    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # test_ordered_executor.cpp (~5.4 kLOC) and test_ordered_schedule.cpp (~3.2
 # kLOC) are by far the largest sources here and both instantiate deep
 # Catch2 + eval template stacks. Concatenated into one Unity translation unit
 # they make a single cc1plus invocation whose peak memory exceeds what a
 # 16 GB 2-core CI runner can afford next to a second parallel compile (the
 # GitHub ubuntu-24.04 Debug + CMAKE_UNITY_BUILD job was killed mid-compile of
-# this target's unity_0). Give each its own TU; the remaining seven sources
-# still share one.
+# this target's unity_0). Give each its own TU. test_eval_dryrun.cpp
+# (~5.2 kLOC) is as large and gets its own TU for the same reason: the
+# same job was killed again once it grew. The remaining sources still share
+# a TU.
 set_source_files_properties("test_ordered_executor.cpp" "test_ordered_schedule.cpp"
+    "test_eval_dryrun.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -341,9 +358,11 @@ endif()
 # Long cases in these objects (e.g. the water-20-sized eval fixtures) take
 # minutes each under ASan/UBSan, valgrind and MSVC's Debug STL; they are skipped
 # when SEQUANT_SKIP_LONG_TESTS is ON and in every Debug configuration.
-foreach(obj IN ITEMS symb mbpt eval-dryrun)
-    target_compile_definitions(unit_tests-sequant-${obj}-obj PRIVATE
-        $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)
+foreach(obj IN ITEMS symb mbpt eval-dryrun eval-ta)
+    if (TARGET unit_tests-sequant-${obj}-obj)
+        target_compile_definitions(unit_tests-sequant-${obj}-obj PRIVATE
+            $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)
+    endif()
 endforeach()
 
 target_set_compiler_flags(unit_tests-sequant)

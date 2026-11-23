@@ -10,7 +10,6 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -23,6 +22,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -48,6 +48,7 @@
 namespace sequant {
 
 class Index;
+
 using WstrList = std::initializer_list<std::wstring_view>;
 using IndexList = std::initializer_list<Index>;
 
@@ -90,7 +91,7 @@ concept range_of_castables_to_index =
 /// strings. For optimal efficiency and simplicity users are recommended to use
 /// wide strings until further notice.
 // clang-format on
-class Index : public Taggable {
+class Index {
  public:
   /// ordinals are represented by this type
   using ordinal_type = std::uint64_t;
@@ -100,6 +101,18 @@ class Index : public Taggable {
   const static IndexSpace::Attr default_space_attr;
 
  private:
+  /// the value of ordinal_ for an Index without an ordinal
+  static constexpr ordinal_type no_ordinal =
+      std::numeric_limits<ordinal_type>::max();
+
+  static ordinal_type pack_ordinal(std::optional<ordinal_type> ordinal) {
+    SEQUANT_ENFORCE(!ordinal || *ordinal != no_ordinal,
+                    "Index: ordinal collides with the reserved value");
+    return ordinal ? *ordinal : no_ordinal;
+  }
+
+  bool has_ordinal() const noexcept { return ordinal_ != no_ordinal; }
+
   static auto &tmp_index_accessor() {
     // initialized so that the first call to next_tmp_index will return
     // min_tmp_index()
@@ -148,8 +161,7 @@ class Index : public Taggable {
   /// copy constructor
   /// @note memoized data (label, full_label) is not copied
   Index(const Index &idx) noexcept
-      : Taggable(idx),
-        basis_(idx.basis_),
+      : basis_(idx.basis_),
         ordinal_(idx.ordinal_),
         proto_indices_(idx.proto_indices_),
         symmetric_proto_indices_(idx.symmetric_proto_indices_) {}
@@ -158,32 +170,27 @@ class Index : public Taggable {
   /// @param[in,out] idx on output: null Index
   /// @note memoized data (label, full_label) is moved
   Index(Index &&idx) noexcept
-      : Taggable(std::move(idx)),
-        basis_(std::move(idx.basis_)),
+      : basis_(idx.basis_),
         ordinal_(std::move(idx.ordinal_)),
         proto_indices_(std::move(idx.proto_indices_)),
         symmetric_proto_indices_(idx.symmetric_proto_indices_),
-        label_(std::move(idx.label_)),
-        full_label_(std::move(idx.full_label_)) {
+        labels_(std::move(idx.labels_)) {
+    idx.basis_ = &null_basis();
     idx.symmetric_proto_indices_ = true;
     // moving std::optional surprisingly leaves a nonnull std::optional in its
     // wake
-    idx.ordinal_ = std::nullopt;
-    idx.label_ = std::nullopt;
-    idx.full_label_ = std::nullopt;
+    idx.ordinal_ = no_ordinal;
   }
 
   /// copy assignment
   /// @note memoized data (label, full_label) is not copied
   Index &operator=(const Index &idx) {
-    Taggable::operator=(idx);
     basis_ = idx.basis_;
     ordinal_ = idx.ordinal_;
     proto_indices_ = idx.proto_indices_;
     symmetric_proto_indices_ = idx.symmetric_proto_indices_;
     // memoized data that is not copied must be reset or it might be wrong
-    label_.reset();
-    full_label_.reset();
+    labels_.reset();
     return *this;
   }
 
@@ -191,20 +198,17 @@ class Index : public Taggable {
   /// @param[in,out] idx on output: null Index
   /// @note memoized data (label, full_label) is moved
   Index &operator=(Index &&idx) noexcept {
-    static_cast<Taggable &>(*this) = static_cast<Taggable &&>(idx);
-    basis_ = std::move(idx.basis_);
+    basis_ = idx.basis_;
     ordinal_ = std::move(idx.ordinal_);
     proto_indices_ = std::move(idx.proto_indices_);
     symmetric_proto_indices_ = idx.symmetric_proto_indices_;
-    label_ = std::move(idx.label_);
-    full_label_ = std::move(idx.full_label_);
+    labels_ = std::move(idx.labels_);
 
+    idx.basis_ = &null_basis();
     idx.symmetric_proto_indices_ = true;
     // moving std::optional surprisingly leaves a nonnull std::optional in its
     // wake
-    idx.ordinal_ = std::nullopt;
-    idx.label_ = std::nullopt;
-    idx.full_label_ = std::nullopt;
+    idx.ordinal_ = no_ordinal;
     return *this;
   }
 
@@ -214,14 +218,14 @@ class Index : public Taggable {
   // clang-format on
 
   /// @param basis the IndexBasis
-  explicit Index(const IndexBasis &basis) : Taggable(), basis_(basis) {
+  explicit Index(const IndexBasis &basis) : basis_(&intern(basis)) {
     check_nonreserved();
   }
 
   /// @param basis the IndexBasis
   /// @param ord the index ordinal
   Index(const IndexBasis &basis, meta::integral auto ord)
-      : basis_(basis), ordinal_(to_ordinal(ord)) {
+      : basis_(&intern(basis)), ordinal_(pack_ordinal(to_ordinal(ord))) {
     check_nonreserved();
   }
 
@@ -229,7 +233,7 @@ class Index : public Taggable {
   /// @param ord the index ordinal
   template <meta::integral I>
   Index(const IndexBasis &basis, std::optional<I> ord)
-      : basis_(basis), ordinal_(ord) {
+      : basis_(&intern(basis)), ordinal_(pack_ordinal(ord)) {
     check_nonreserved();
   }
 
@@ -342,7 +346,7 @@ class Index : public Taggable {
               to_ordinal(label), {}) {
     check_nonreserved();
     if constexpr (std::is_same_v<String, std::wstring>) {
-      label_ = std::move(label);
+      label_cache().label = std::move(label);
     }
   }
 
@@ -371,7 +375,7 @@ class Index : public Taggable {
       basis_ = index.basis_;
       ordinal_ = index.ordinal_;
       if constexpr (!std::is_reference_v<IndexOrIndexLabel>)
-        label_ = std::move(index_or_index_label);
+        label_cache().label = std::move(index_or_index_label);
     } else {
       basis_ = index_or_index_label.basis_;
       ordinal_ = index_or_index_label.ordinal_;
@@ -414,7 +418,7 @@ class Index : public Taggable {
       basis_ = index.basis_;
       ordinal_ = index.ordinal_;
       if constexpr (!std::is_reference_v<IndexOrIndexLabel>)
-        label_ = std::move(index_or_index_label);
+        label_cache().label = std::move(index_or_index_label);
     } else {
       basis_ = index_or_index_label.basis_;
       ordinal_ = index_or_index_label.ordinal_;
@@ -438,8 +442,8 @@ class Index : public Taggable {
       *this = std::forward<IndexOrIndexLabel>(index_or_index_label);
       rebase(std::move(space));
     } else {
-      basis_ = IndexBasis(std::move(space));
-      ordinal_ = to_ordinal(index_or_index_label);
+      basis_ = &intern(IndexBasis(std::move(space)));
+      ordinal_ = pack_ordinal(to_ordinal(index_or_index_label));
       check_nonreserved();
     }
   }
@@ -465,19 +469,6 @@ class Index : public Taggable {
   [[nodiscard]] Index replace_qns(QuantumNumbersAttr qns) const {
     return Index(*this, IndexSpace(this->space().base_key(),
                                    this->space().attr(), std::move(qns)));
-  }
-
-  /// @return this cast to Taggable&
-  Taggable &tag() { return static_cast<Taggable &>(*this); }
-  /// @return this cast to const Taggable&
-  const Taggable &tag() const { return static_cast<const Taggable &>(*this); }
-  /// resets tag of this and its protoindices (if any)
-  /// @note do @c this->tag().reset() if you only want to reset tag on this (not
-  /// its protoindices)
-  void reset_tag() const {
-    this->tag().reset();
-    ranges::for_each(proto_indices_,
-                     [](const Index &idx) { idx.tag().reset(); });
   }
 
   /// creates a globally-unique temporary index in basis @c basis . The label of
@@ -588,18 +579,21 @@ class Index : public Taggable {
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const {
-    if (!label_) {
-      label_ = basis_.base_key();
-      if (ordinal_) {
-        *label_ += L'_';
-        *label_ += std::to_wstring(*ordinal_);
+    auto &label = label_cache().label;
+    if (!label) {
+      label = basis_->base_key();
+      if (has_ordinal()) {
+        *label += L'_';
+        *label += std::to_wstring(ordinal_);
       }
     }
-    return *label_;
+    return *label;
   }
 
   /// @return the ordinal
-  std::optional<ordinal_type> ordinal() const noexcept { return ordinal_; }
+  std::optional<ordinal_type> ordinal() const noexcept {
+    return has_ordinal() ? std::optional<ordinal_type>(ordinal_) : std::nullopt;
+  }
 
   /// @return A string label representable in ASCII encoding
   /// @warning not to be used with proto indices
@@ -621,8 +615,8 @@ class Index : public Taggable {
   /// @warning this includes the proto index labels (if any), use
   /// Index::label() instead if only want the label
   std::wstring_view full_label() const {
-    if (!has_proto_indices() && !basis_.unnamed_instance()) return label();
-    if (full_label_) return *full_label_;
+    if (!has_proto_indices() && !basis_->unnamed_instance()) return label();
+    if (labels_ && labels_->full_label) return *labels_->full_label;
     std::wstring result(label());
     result += L"<";
     using namespace std::literals;
@@ -632,10 +626,11 @@ class Index : public Taggable {
                                    return idx.full_label();
                                  }) |
         ranges::views::join(L", "sv) | ranges::to<std::wstring>();
-    if (basis_.unnamed_instance()) result += basis_.instance_suffix();
+    if (basis_->unnamed_instance()) result += basis_->instance_suffix();
     result += L">";
-    full_label_ = result;
-    return *full_label_;
+    auto &full_label = label_cache().full_label;
+    full_label = std::move(result);
+    return *full_label;
   }
 
   /// @brief makes a new label by appending a suffix to the label
@@ -737,10 +732,10 @@ class Index : public Taggable {
   }
 
   /// @return the IndexSpace object
-  const IndexSpace &space() const noexcept { return basis_.space(); }
+  const IndexSpace &space() const noexcept { return basis_->space(); }
 
   /// @return the IndexBasis object (the space plus the basis instance, if any)
-  const IndexBasis &basis() const noexcept { return basis_; }
+  const IndexBasis &basis() const noexcept { return *basis_; }
 
   /// @return a copy of this Index (same label, proto indices and their
   /// symmetry) with basis instance @p basis_instance as the default registry
@@ -763,8 +758,7 @@ class Index : public Taggable {
   Index drop_proto_indices() const noexcept {
     // the factory-tag constructor skips the reserved-ordinal check, which a
     // temporary index would trip
-    return ordinal_ ? Index(basis_, *ordinal_, IndexFactoryTag{})
-                    : Index(basis_);
+    return Index(basis_, ordinal(), IndexFactoryTag{});
   }
 
   std::wstring to_latex() const noexcept;
@@ -801,11 +795,38 @@ class Index : public Taggable {
     auto result = has_proto_indices() ? proto_indices_color()
                                       : hash::value(int64_t(space().attr()));
     if (has_proto_indices()) hash::combine(result, int64_t(space().attr()));
-    if (basis_.has_basis_instance()) {
-      hash::combine(result, int64_t(*basis_.basis_instance()));
-      if (basis_.has_name()) hash::combine(result, basis_.name());
+    if (basis_->has_basis_instance()) {
+      hash::combine(result, int64_t(*basis_->basis_instance()));
+      if (basis_->has_name()) hash::combine(result, basis_->name());
     }
     return result;
+  }
+
+  /// @brief re-homes this index into @p basis: same ordinal (a generated /
+  /// tmp ordinal is kept as-is, unlike the public ordinal ctor), same
+  /// proto-index bundle unless @p proto_indices is given, same bundle
+  /// symmetry
+  /// @return the re-homed index
+  Index with_basis(
+      const IndexBasis &basis,
+      std::optional<index_vector> proto_indices = std::nullopt) const {
+    Index result = has_ordinal() ? Index(basis, ordinal_, IndexFactoryTag{})
+                                 : Index(basis);
+    result.proto_indices_ =
+        proto_indices ? std::move(*proto_indices) : proto_indices_;
+    result.symmetric_proto_indices_ = symmetric_proto_indices_;
+    result.canonicalize_proto_indices();
+    result.validate_proto_indices();
+    return result;
+  }
+
+  /// @brief re-homes this index into @p space (its own basis, i.e. without a
+  /// basis instance), see with_basis()
+  /// @return the re-homed index
+  Index with_space(
+      const IndexSpace &space,
+      std::optional<index_vector> proto_indices = std::nullopt) const {
+    return with_basis(IndexBasis{space}, std::move(proto_indices));
   }
 
   /// @return the smallest index of a generated index
@@ -823,81 +844,55 @@ class Index : public Taggable {
   /// testing)
   static void reset_tmp_index() noexcept;
 
-  // clang-format off
   /// @brief index replacement
-  /// replaces this object with its image in the Index map.
-  /// If this object was not found in the map, tries replacing its subindices.
+  /// replaces this object with its image in the Index map, as a simultaneous
+  /// substitution: an image is not replaced further. If this object was not
+  /// found in the map, its protoindices are replaced, and then this object is
+  /// replaced if the result is in the map.
   /// @param index_map maps Index to Index
   /// @return false if no replacements were made
-  /// @pre
-  /// \code
-  /// this->tag().has_value() == false ||
-  /// (this->tag().has_value() == true && this->tag().value<int>() == 0)
-  /// \endcode
-  /// @post if return value is true:
-  /// \code
-  /// this->tag().has_value() == true &&
-  /// this->tag().value<int>() == 0
-  /// \endcode
-  // clang-format on
+  /// @sa replace_proto_indices_of_images
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
   bool transform(const Map<Index, Index, Args...> &index_map) noexcept {
-    bool mutated = false;
-
-    // outline:
-    // - try replacing this first
-    //   - if this is replaced by an index with protoindices, the protoindices
-    //   should not be tagged since they are original and may need to be
-    //   replaced also
-    // - if not found, try replacing protoindices
-    // - if protoindices mutated, try replacing this again
-
-    // is this tagged already? if yes, can't skip, the protoindices may need to
-    // be transformed also
-    const auto this_is_tagged = this->tag().has_value();
-    // sanity check that tag = 0
-    if (this_is_tagged) {
-      SEQUANT_ASSERT(this->tag().value<int>() == 0);
-    } else {  // only try replacing this if not already tagged
+    auto replace_this = [&]() {
       auto it = index_map.find(*this);
-      if (it != index_map.end()) {
-        *this = it->second;
-        this->tag().assign(0);
-        mutated = true;
-      }
-    }
+      if (it == index_map.end()) return false;
+      *this = it->second;
+      return true;
+    };
 
-    if (!mutated) {
-      bool proto_indices_transformed = false;
-      for (auto &&subidx : proto_indices_) {
-        SEQUANT_ASSERT(!subidx.has_proto_indices());
-        if (subidx.transform(index_map)) proto_indices_transformed = true;
-      }
-      if (proto_indices_transformed) {
-        mutated = true;
-        canonicalize_proto_indices();
-        if (!this_is_tagged) {  // if protoindices were mutated, try again, but
-          // only if no tag yet
-          auto it = index_map.find(*this);
-          if (it != index_map.end()) {
-            *this = it->second;
-            this->tag().assign(0);
-            mutated = true;
-          }
-        }
-      }
+    bool mutated = replace_this();
+    if (!mutated && transform_proto_indices(index_map)) {
+      // protoindices mutated, try replacing this again
+      mutated = true;
+      replace_this();
+    }
+    if (mutated) labels_.reset();
+    return mutated;
+  }
+
+  /// replaces each protoindex by its image in @p index_map (if any)
+  /// @param index_map maps Index to Index
+  /// @return true if any protoindex was replaced
+  template <template <typename, typename, typename... Args> class Map,
+            typename... Args>
+  bool transform_proto_indices(
+      const Map<Index, Index, Args...> &index_map) noexcept {
+    bool mutated = false;
+    for (auto &&subidx : proto_indices_) {
+      SEQUANT_ASSERT(!subidx.has_proto_indices());
+      if (subidx.transform(index_map)) mutated = true;
     }
     if (mutated) {
-      label_.reset();
-      full_label_.reset();
+      canonicalize_proto_indices();
+      labels_.reset();
     }
     return mutated;
   }
 
   /// compares Index objects by space and ordinal (the label up to the basis
-  /// name); protoindices, tags and the basis instance, named or not, are
-  /// ignored
+  /// name); protoindices and the basis instance, named or not, are ignored
   /// @sa Index::label()
   struct LabelCompare {
     bool operator()(const Index &first, const Index &second) const {
@@ -910,8 +905,8 @@ class Index : public Taggable {
 
   /// compares Index objects using full labels only
   /// @note since full label is defined by the space, ordinal,
-  /// protoindices and basis only (i.e. tags are ignored)
-  /// comparison uses them directly for efficiency
+  /// protoindices and basis only, comparison uses them directly for
+  /// efficiency
   /// @sa Index::full_label()
   struct FullLabelCompare {
     bool operator()(const Index &first, const Index &second) const {
@@ -952,16 +947,28 @@ class Index : public Taggable {
   };
 
  private:
-  IndexBasis basis_;
-  std::optional<ordinal_type> ordinal_;
+  /// points to an interned basis (see intern()), hence never null
+  const IndexBasis *basis_ = &null_basis();
+  /// stored unpacked, with no_ordinal for none, to leave room for the bool
+  /// below in what would be the padding of a std::optional
+  ordinal_type ordinal_ = no_ordinal;
   // an unordered set of unique indices on which this index depends on
   // whether proto_indices_ is symmetric w.r.t. permutations; if true,
   // proto_indices_ will be ordered
   index_vector proto_indices_{};
   bool symmetric_proto_indices_ = true;
 
-  mutable std::optional<std::wstring> label_;
-  mutable std::optional<std::wstring> full_label_;
+  /// memoized labels; allocated on first use
+  struct LabelCache {
+    std::optional<std::wstring> label;
+    std::optional<std::wstring> full_label;
+  };
+  mutable std::unique_ptr<LabelCache> labels_;
+
+  LabelCache &label_cache() const {
+    if (!labels_) labels_ = std::make_unique<LabelCache>();
+    return *labels_;
+  }
 
   /// sorts proto_indices_ if symmetric_proto_indices_
   inline void canonicalize_proto_indices() noexcept;
@@ -975,7 +982,7 @@ class Index : public Taggable {
   /// throws std::invalid_argument if the ordinal is among reserved for
   /// generated Index objects
   inline void check_nonreserved() const {
-    if (ordinal_ && *ordinal_ >= min_tmp_index()) {
+    if (has_ordinal() && ordinal_ >= min_tmp_index()) {
       throw Exception(
           "Index ctor: ordinal must be less than the value returned by "
           "min_tmp_index()");
@@ -1021,17 +1028,24 @@ class Index : public Taggable {
 
   // this ctor is only used by make_tmp_index and IndexFactory and bypasses
   // check for nontmp index
-  Index(const IndexBasis &basis, ordinal_type ordinal, IndexFactoryTag) noexcept
-      : basis_(basis), ordinal_(ordinal), proto_indices_() {}
+  Index(const IndexBasis &basis, ordinal_type ordinal, IndexFactoryTag)
+      : basis_(&intern(basis)), ordinal_(ordinal), proto_indices_() {}
+
+  /// @param interned_basis a basis returned by intern()
+  Index(const IndexBasis *interned_basis, std::optional<ordinal_type> ordinal,
+        IndexFactoryTag)
+      : basis_(interned_basis),
+        ordinal_(pack_ordinal(ordinal)),
+        proto_indices_() {}
 
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
   /// the same space, they have the same label, the same proto-indices (if
   /// any), and the same basis (instance and name, or none)
   friend bool operator==(const Index &i1, const Index &i2) noexcept {
-    return i1.basis() == i2.basis() &&
+    return (i1.basis_ == i2.basis_ || i1.basis() == i2.basis()) &&
            (i1.space().attr() != default_space_attr ||
             i1.space().base_key() == i2.space().base_key()) &&
-           i1.ordinal() == i2.ordinal() &&
+           i1.ordinal_ == i2.ordinal_ &&
            i1.proto_indices() == i2.proto_indices();
   }
 
@@ -1045,38 +1059,24 @@ class Index : public Taggable {
   /// @brief The ordering operator
 
   /// The canonical order of Index objects is
-  /// lexicographical, first by qns, followed by tags (if defined
-  /// for both), then by space, then by ordinal, then by protoindices (if any),
-  /// then by basis (instance, then name, if any)
+  /// lexicographical, first by qns, then by space, then by ordinal, then by
+  /// protoindices (if any), then by basis (instance, then name, if any)
   friend std::strong_ordering operator<=>(const Index &i1,
                                           const Index &i2) noexcept {
     using SO = std::strong_ordering;
 
-    auto compare_sans_tag = [&i1, &i2]() {
-      const auto cmp_space = i1.space() <=> i2.space();
-      if (cmp_space != SO::equal) return cmp_space;
-      if (i1.ordinal_ != i2.ordinal_) {
-        return i1.ordinal_ < i2.ordinal_ ? SO::less : SO::greater;
-      } else if (i1.proto_indices() == i2.proto_indices())
-        return i1.basis_ <=> i2.basis_;
-      else
-        return i1.proto_indices() < i2.proto_indices() ? SO::less : SO::greater;
-    };
-
     const auto i1_Q = i1.space().qns();
     const auto i2_Q = i2.space().qns();
+    if (i1_Q != i2_Q) return i1_Q < i2_Q ? SO::less : SO::greater;
 
-    if (i1_Q == i2_Q) {
-      const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
-
-      if (!have_tags || i1.tag() == i2.tag()) {
-        return compare_sans_tag();
-      }
-
-      return i1.tag() < i2.tag() ? SO::less : SO::greater;
-    }
-
-    return i1_Q < i2_Q ? SO::less : SO::greater;
+    const auto cmp_space = i1.space() <=> i2.space();
+    if (cmp_space != SO::equal) return cmp_space;
+    if (i1.ordinal_ != i2.ordinal_) {
+      return i1.ordinal() < i2.ordinal() ? SO::less : SO::greater;
+    } else if (i1.proto_indices() == i2.proto_indices())
+      return i1.basis_ == i2.basis_ ? SO::equal : *i1.basis_ <=> *i2.basis_;
+    else
+      return i1.proto_indices() < i2.proto_indices() ? SO::less : SO::greater;
   }
 
   static std::shared_ptr<const IndexBasisRegistry>
@@ -1230,6 +1230,18 @@ class IndexFactory {
 
 /// @param[in] idx a const reference to an Index object
 /// @return the hash value of the object referred to by idx
+/// @param index_map maps Index to Index
+/// @return copy of @p index_map in which the protoindices of each image are
+/// replaced by their images in @p index_map ; transforming an Index with the
+/// result also renames the protoindices of its image, e.g. for images made by
+/// IndexFactory, which keep the original protoindices
+template <typename Map>
+Map replace_proto_indices_of_images(const Map &index_map) {
+  Map result(index_map);
+  for (auto &&[from, to] : result) to.transform_proto_indices(index_map);
+  return result;
+}
+
 inline auto hash_value(const Index &idx) {
   const auto &proto_indices = idx.proto_indices();
   using std::begin;
@@ -1270,6 +1282,75 @@ Field base_field(BraRange bra, KetRange ket) {
     return false;
   };
   return (has_complex(bra) || has_complex(ket)) ? Field::Complex : Field::Real;
+}
+
+/// @brief the basis of the Kramers image of an index over @p basis: the
+/// partner space registered in @p isr, with the basis instance kept and
+/// resolved against @p isr (a named basis, e.g. the flavoured PAO basis μ̃↑,
+/// is an instance over the flavoured particle space a↑, so its image is the
+/// registry's entry for that instance over the partner space, μ̃↓)
+/// @return the image basis, or nullopt if @p basis's space has no partner
+inline std::optional<IndexBasis> kramers_partner_basis(
+    const IndexBasis &basis, const IndexBasisRegistry &isr) {
+  auto partner = isr.kramers_partner(basis.space());
+  if (!partner) return std::nullopt;
+  return isr.resolve(IndexBasis{*partner, basis.basis_instance()});
+}
+
+/// @brief the Kramers (time-reversal) image of @p idx: same ordinal in the
+/// partner space registered in @p isr (basis instance kept, see
+/// kramers_partner_basis), proto indices flipped recursively (proto indices
+/// without a partner are kept)
+/// @return the flipped index, or nullopt if @p idx's space has no partner
+inline std::optional<Index> kramers_flipped(const Index &idx,
+                                            const IndexBasisRegistry &isr) {
+  auto partner = kramers_partner_basis(idx.basis(), isr);
+  if (!partner) return std::nullopt;
+  if (!idx.has_proto_indices()) return idx.with_basis(*partner);
+  Index::index_vector protos;
+  for (const auto &p : idx.proto_indices()) {
+    auto fp = kramers_flipped(p, isr);
+    protos.push_back(fp ? *fp : p);
+  }
+  return idx.with_basis(*partner, std::move(protos));
+}
+
+/// @brief the DEEP Kramers image of @p idx: kramers_flipped when @p idx's
+/// space has a partner; otherwise @p idx itself with its proto indices
+/// flipped recursively (kramers_flipped leaves a composite of an unflavoured
+/// space untouched even when its protos are flavoured -- e.g. a Kramers-union
+/// CSV composite a<i↓,j> carrying flavoured pair labels; the deep image is
+/// what a whole-expression time-reversal flip needs, so the pair labels inside
+/// such a composite follow their plain-slot occurrences)
+inline Index kramers_flipped_deep(const Index &idx,
+                                  const IndexBasisRegistry &isr) {
+  auto partner = kramers_partner_basis(idx.basis(), isr);
+  if (!idx.has_proto_indices()) return partner ? idx.with_basis(*partner) : idx;
+  Index::index_vector protos;
+  for (const auto &p : idx.proto_indices())
+    protos.push_back(kramers_flipped_deep(p, isr));
+  return idx.with_basis(partner ? *partner : idx.basis(), std::move(protos));
+}
+
+/// @brief replaces every index of @p ixs by its deep Kramers image (see
+/// kramers_flipped_deep) in place; ordinals and order are kept
+inline void kramers_flip_deep(Index::index_vector &ixs,
+                              const IndexBasisRegistry &isr) {
+  for (auto &ix : ixs) ix = kramers_flipped_deep(ix, isr);
+}
+
+/// @brief flips every index of @p ixs that has a Kramers partner to its
+/// image (see kramers_flipped) in place; ordinals and order are kept
+/// @return whether any index was flipped
+inline bool kramers_flip(Index::index_vector &ixs,
+                         const IndexBasisRegistry &isr) {
+  bool flipped = false;
+  for (auto &ix : ixs)
+    if (auto f = kramers_flipped(ix, isr)) {
+      ix = std::move(*f);
+      flipped = true;
+    }
+  return flipped;
 }
 
 }  // namespace sequant

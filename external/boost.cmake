@@ -25,9 +25,8 @@ set(required_components
         hana
         locale
         multiprecision
-        #          numeric_conversion
-        #          numeric_interval
-        accumulators      # including numeric_* as targets is broken, instead include accumulators to ensure that numeric_{conversion,interval,ublas} are included
+        numeric_conversion
+        numeric_interval
         range
         regex
         spirit
@@ -51,17 +50,12 @@ else ()
     set(Boost_OPTIONAL_COMPONENTS "${optional_components}" CACHE STRING "Optional components of Boost to discovered or built")
 endif ()
 
-if (NOT DEFINED Boost_FETCH_IF_MISSING)
+if (NOT SEQUANT_FETCH_MISSING_DEPENDENCIES)
+    # normal variable (shadows any cache entry) so that nothing persists in the cache
+    set(Boost_FETCH_IF_MISSING 0)
+    message(STATUS "Boost_FETCH_IF_MISSING forced OFF by SEQUANT_FETCH_MISSING_DEPENDENCIES=OFF")
+elseif (NOT DEFINED Boost_FETCH_IF_MISSING)
     set(Boost_FETCH_IF_MISSING 1)
 endif ()
 
 include(${vg_cmake_kit_SOURCE_DIR}/modules/FindOrFetchBoost.cmake)
-
-if (Boost_BUILT_FROM_SOURCE)
-    if ("${PROJECT_NAME}" STREQUAL "${CMAKE_PROJECT_NAME}")
-        add_custom_target(build-boost-in-SeQuant)
-        foreach(_target IN LISTS Boost_FOUND_TARGETS Boost_MODULAR_TARGETS_NOT_BUILT_BY_INSTALL)
-            add_dependencies(build-boost-in-SeQuant Boost::${_target})
-        endforeach()
-    endif()
-endif()

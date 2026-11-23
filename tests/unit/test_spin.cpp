@@ -17,8 +17,10 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -57,7 +59,7 @@ TEST_CASE("spin", "[spin]") {
   auto _ = set_scoped_default_context(ctx);
 
   SECTION("protoindices supported") {
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
     Index i1(L"i_1");
     Index a1(L"a_1", {i1});
 
@@ -110,10 +112,11 @@ TEST_CASE("spin", "[spin]") {
     auto p2 = Index(L"p_2", {L"p", 0b11, mbpt::Spin::any});
     auto p2_b = Index(L"p↓_2", {L"p↓", 0b11, mbpt::Spin::beta});
 
-    auto p_i = Index({L"p", 0b11, mbpt::Spin::any}, {i});
-    auto p1_i = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i});
-    auto p_i1 = Index({L"p", 0b11, mbpt::Spin::any}, {i1});
-    auto p1_i1 = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i1});
+    const IndexSpace P{L"p", 0b11, mbpt::Spin::any};
+    auto p_i = Index(P, {i});
+    auto p1_i = Index(P, 1, {i});
+    auto p_i1 = Index(P, {i1});
+    auto p1_i1 = Index(P, 1, {i1});
 
     // make_spinalpha
     {
@@ -911,6 +914,21 @@ SECTION("Closed-shell spintrace CCD") {
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
     }
+    {  // compact = v2, two summands, both tracers
+      for (bool naive : {false, true}) {
+        const auto input = ex<Sum>(ExprPtrList{
+            deserialize(L"3/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                        {.def_perm_symm = Symmetry::Antisymm}),
+            deserialize(L"-1/2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                        {.def_perm_symm = Symmetry::Antisymm})});
+
+        auto result =
+            closed_shell_CC_spintrace_v2(input, {.naive_spintrace = naive});
+        REQUIRE_THAT(result,
+                     EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                                  L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
+      }
+    }
     {  // CSV (aka PNO) for regular cs
       const auto pno_ccd_energy_so = deserialize(
           L"1/4 g{a1<i1,i2>, a2<i1,i2>;i1, i2}:A-C t{i1,i2;a1<i1,i2>, "
@@ -1198,7 +1216,7 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
 }
 
 SECTION("Closed-shell spintrace CCSDT terms") {
-  SECTION("A3 * f * t3, , spintracing with partial-expansion") {
+  SECTION("A3-f-t3 partial") {
     auto input = ex<Constant>(3) *
                  ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
@@ -1225,9 +1243,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                      "t{a_1,a_2,a_3;i_1,i_3,i_4}:N-N-S "));
   }
 
-  SECTION(
-      "the most expensive term in CCSDT: A3 * g * t3, spintracing with direct "
-      "full-expansion") {
+  SECTION("A3-g-t3-full") {
     auto input = ex<Constant>(rational{3, 2}) *
                  ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
@@ -1327,14 +1343,46 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"-6/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * "
+            L"-1 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * "
             "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-N-S + "
-            "3 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
+            "5/2 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
             " t{a_3,a_4,a_5;i_3,i_1,i_2}:N-N-S -"
-            " 3/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
+            " 1/2 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
             " t{a_3,a_4,a_5;i_3,i_2,i_1}:N-N-S -"
-            " 6/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
+            " Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
             " t{a_3,a_4,a_5;i_2,i_1,i_3}:N-N-S"));
+  }
+
+  SECTION("NNS projection of the v2 term rebuilds the v1 terms") {
+    const auto input = ex<Sum>(ExprPtrList{
+        deserialize(L"3/2 Â{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
+                    "t{a_3,a_4,a_5;i_1,i_2,i_3}",
+                    {.def_perm_symm = Symmetry::Antisymm})});
+    const auto v1 = closed_shell_CC_spintrace_v1(input);
+    const auto v2 = closed_shell_CC_spintrace_v2(input);
+
+    // mirror biorthogonal_nns_project: R'(a;i) = sum_p w_p R(a;p(i)), with the
+    // kets permuted and weighted exactly as in the numerical backends
+    const container::svector<Index> kets{Index(L"i_1"), Index(L"i_2"),
+                                         Index(L"i_3")};
+    const auto& weights =
+        mbpt::detail::nns_projection_weights<double>(kets.size());
+    REQUIRE(weights.size() == 6);
+    Sum projected;
+    for (std::size_t p = 0; p < weights.size(); ++p) {
+      const auto permuted =
+          mbpt::detail::compute_permuted_indices({0, 1, 2}, p, kets.size());
+      container::map<Index, Index> replacements;
+      for (std::size_t k = 0; k < kets.size(); ++k)
+        replacements.emplace(kets[k], kets[permuted[k]]);
+      projected.append(
+          transform_expr(v2, replacements, to_rational(weights[p])));
+    }
+
+    // the permuted symmetrizers are merged modulo the symmetrizer, as the
+    // v2 pipeline does
+    REQUIRE_THAT(S_maps(ex<Sum>(std::move(projected))),
+                 EquivalentTo(S_maps(v1)));
   }
 
   SECTION("f * t3") {
@@ -1497,7 +1545,6 @@ SECTION("Relation in spin P operators") {
   auto p6_input = p_aab * input;
   expand(p6_input);
   auto p6_result = expand_P_op(p6_input);
-  reset_tags(p6_result);
   simplify(p6_result);
 
   auto A_12 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
@@ -1511,24 +1558,20 @@ SECTION("Relation in spin P operators") {
   expand(p6_result);
   canonicalize(p6_result);
   p6_result = expand_A_op(p6_result);
-  reset_tags(p6_result);
   simplify(p6_result);
 
   auto p7_input = p_abb * input;
   expand(p7_input);
   auto p7_result = expand_P_op(p7_input);
-  reset_tags(p7_result);
   simplify(p7_result);
 
   p7_result = A_23 * p7_result;
   expand(p7_result);
   p7_result = expand_A_op(p7_result);
-  reset_tags(p7_result);
   simplify(p7_result);
 
   auto expanded_A = A3 * input;
   expanded_A = expand_A_op(expanded_A);
-  reset_tags(expanded_A);
   simplify(expanded_A);
   REQUIRE(p6_result == p7_result);
   REQUIRE(p6_result == expanded_A);
@@ -1722,7 +1765,6 @@ SECTION("Open-shell spin-tracing") {
 
     auto input = ex<Tensor>(A2_aab) * ex<Tensor>(g) * ex<Tensor>(t3);
     auto result = expand_A_op(input);
-    reset_tags(result);
     REQUIRE_THAT(result,
                  EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-N-S * "
                               "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-N-S"));
@@ -1733,7 +1775,6 @@ SECTION("Open-shell spin-tracing") {
 
     input = ex<Tensor>(A2_aab) * ex<Tensor>(g) * ex<Tensor>(t3);
     result = expand_A_op(input);
-    reset_tags(result);
     REQUIRE_THAT(result,
                  EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-N-S * "
                               "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-N-S"));
@@ -1758,7 +1799,6 @@ SECTION("Open-shell spin-tracing") {
     auto result2 = ex<Tensor>(A3_aaa) * result[0];
     expand(result2);
     result2 = expand_A_op(result2);
-    reset_tags(result2);
     canonicalize(result2);
     rapid_simplify(result2);
     REQUIRE(result2->size() == 27);
@@ -1768,7 +1808,6 @@ SECTION("Open-shell spin-tracing") {
     auto result3 = ex<Tensor>(A3_bbb) * result[3];
     expand(result3);
     result3 = expand_A_op(result3);
-    reset_tags(result3);
     canonicalize(result3);
     rapid_simplify(result3);
     REQUIRE(result3->size() == 27);
@@ -1797,7 +1836,6 @@ SECTION("Open-shell spin-tracing") {
                        ket{L"i_3", L"i_4", L"i_5"}, Symmetry::Antisymm);
 
     input = expand_P_op(input);
-    reset_tags(input);
     auto result = open_shell_spintrace(
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
@@ -1807,7 +1845,6 @@ SECTION("Open-shell spin-tracing") {
                       result[1];
     expand(result_aab);
     result_aab = expand_A_op(result_aab);
-    reset_tags(result_aab);
     canonicalize(result_aab);
     rapid_simplify(result_aab);
     REQUIRE(result_aab->size() == 18);
@@ -1948,7 +1985,7 @@ SECTION("ResultExpr") {
   REQUIRE(inputs.size() == expected_outputs.size());
 
   for (std::size_t i = 0; i < inputs.size(); ++i) {
-    CAPTURE(inputs.at(i));
+    CAPTURE(toUtf8(inputs.at(i)));
     const ResultExpr input = deserialize<ResultExpr>(inputs.at(i));
 
     container::svector<ResultExpr> expected;
@@ -2054,11 +2091,31 @@ TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
   }
 }
 
+TEST_CASE("spincase-index-keeps-generated-ordinal", "[spin]") {
+  using namespace sequant;
+
+  // a generated (temporary) index, e.g. the composite a CSV transform or the
+  // Kramers flip mints: its ordinal is in the range the public ordinal ctor
+  // reserves, and spin-casing must keep it rather than throw
+  const Index i1(L"i_1"), i2(L"i_2");
+  const Index a1(L"a_1", {i1, i2});
+  const Index x =
+      Index::make_tmp_index(a1.basis(), Index::index_vector{i1, i2});
+  REQUIRE(*x.ordinal() >= Index::min_tmp_index());
+  for (auto make :
+       {&mbpt::make_spinalpha, &mbpt::make_spinbeta, &mbpt::make_spinfree}) {
+    Index s;
+    REQUIRE_NOTHROW(s = make(x));
+    CHECK(s.ordinal() == x.ordinal());
+    CHECK(s.proto_indices().size() == 2);
+  }
+}
+
 // a named basis instance and a generic index of the same ordinal are two
 // indices with one label up to the basis name; the index lists of the spin
 // tracers must keep both, else the named one is never assigned a spin
 namespace {
-sequant::IndexSpace isr_space_of(const sequant::Index& idx) {
+sequant::IndexSpace ibr_space_of(const sequant::Index& idx) {
   return sequant::get_default_context().index_basis_registry()->retrieve_space(
       idx.space().type(), idx.space().qns());
 }
@@ -2070,15 +2127,15 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   using sequant::mbpt::make_spinbeta;
   using sequant::mbpt::make_spinfree;
   using sequant::mbpt::spintrace;
-  auto isr = mbpt::make_sr_spaces();
-  const IndexSpace uocc = isr->retrieve_space(L"a");
-  isr->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
+  auto ibr = mbpt::make_sr_spaces();
+  const IndexSpace uocc = ibr->retrieve_space(L"a");
+  ibr->add(L"μ̃", uocc, 77, {.extent = 120});
   // the spin-cased counterparts are bases of their own, e.g. of different
   // extents in a spin-polarized state
-  isr->add(L"μ̃↑", IndexBasis{isr->retrieve_space(L"a↑"), 77}, 60ul);
-  isr->add(L"μ̃↓", IndexBasis{isr->retrieve_space(L"a↓"), 77}, 50ul);
+  ibr->add(L"μ̃↑", L"a↑", 77, {.extent = 60});
+  ibr->add(L"μ̃↓", L"a↓", 77, {.extent = 50});
   auto ctx = set_scoped_default_context(
-      Context({.index_basis_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
   const IndexBasis pao =
       get_default_context().index_basis_registry()->retrieve(L"μ̃");
@@ -2093,7 +2150,7 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   CHECK(m1b.label() == L"μ̃↓_1");
   CHECK(m1b.basis().basis_instance() == 77);
   CHECK(m1b.basis().extent() == 50);
-  CHECK(m1b.space() == isr_space_of(m1b));  // sanity: a↓ with the same attr
+  CHECK(m1b.space() == ibr_space_of(m1b));  // sanity: a↓ with the same attr
   CHECK(make_spinfree(m1a) == m1);
   CHECK(make_spinfree(m1b) == m1);
   CHECK(make_spinfree(m1b).basis().extent() == 120);
@@ -2117,8 +2174,8 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   // a missing counterpart is an error, not derived from the index's own basis
   {
     auto half = mbpt::make_sr_spaces();
-    half->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
-    half->add(L"μ̃↑", IndexBasis{half->retrieve_space(L"a↑"), 77}, 60ul);
+    half->add(L"μ̃", uocc, 77, {.extent = 120});
+    half->add(L"μ̃↑", L"a↑", 77, {.extent = 60});
     auto half_ctx = set_scoped_default_context(
         Context({.index_basis_registry_shared_ptr = std::move(half),
                  .vacuum = Vacuum::SingleProduct}));

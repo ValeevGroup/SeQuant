@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
+#include <SeQuant/core/eval/kramers_blind.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -16,9 +17,14 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace sequant {
@@ -28,7 +34,7 @@ class Tensor;
 ///
 /// \brief defines types of binary
 ///        operations that can be performed on two EvalExpr objects.
-enum class EvalOp {
+enum class EvalOp : std::uint8_t {
 
   ///
   /// \brief Represents the sum of two EvalExpr objects. Such as a tensor plus
@@ -53,7 +59,53 @@ enum class EvalOp {
   /// \brief The imaginary part of a scalar-valued EvalExpr; see RealPart.
   ImagPart,
 
+  ///
+  /// \brief The time-reversal flip of a tensor-valued EvalExpr over its
+  ///        Kramers-union modes: a unary node over the canonical ↑ partner
+  ///        (the right child is a Constant{1} sentinel) denoting
+  ///        kramers_flip_phase() · F(left), with F per union mode
+  ///        out[⇑] = +conj in[⇓], out[⇓] = −conj in[⇑]. F∘F = −1, so like
+  ///        Re/Im it is an IR node and not a CanonTransform channel.
+  KramersFlip,
+
+  /// \brief Represents the adjoint (conjugate transpose) of one EvalExpr
+  ///        object. The result equals the bra/ket-swapped, complex-conjugated
+  ///        operand. The IR representation is "structurally binary, lexically
+  ///        unary": an Adjoint node holds the bare-label operand as its left
+  ///        child and a Constant(1) sentinel as its right child (so the
+  ///        FullBinaryNode invariant — every non-leaf has both children —
+  ///        is preserved). Evaluate dispatches on this op_type and only uses
+  ///        the left operand; the right is ignored.
+  Adjoint,
+
+  ///
+  /// \brief Represents the element-wise rational power of one tensor-valued
+  ///        EvalExpr object (the evaluation of a TensorPower). Unary like
+  ///        Adjoint: the left child is the operand subtree and the right child
+  ///        is a Constant sentinel holding the rational exponent (see
+  ///        power_exponent()). The node's expression is a symmetry-free
+  ///        Tensor over the operand's slots; the result is
+  ///        operand^exponent, element by element.
+  Power,
+
+  ///
+  /// \brief Represents the expansion of one EvalExpr object (a summand of a
+  ///        broadcast Sum under a result head, see is_valid(const
+  ///        ResultExpr&)) over the head modes it lacks. Unary like Power: the
+  ///        left child is the operand subtree, a tensor or a scalar, and the
+  ///        right child is a Constant(1) sentinel. The node's expression is a
+  ///        symmetry-free Tensor over the head's slots and its canon indices
+  ///        are the head's indices in slot order; the result is constant
+  ///        along every mode the operand lacks and equals the operand along
+  ///        the others.
+  Broadcast
 };
+
+///
+/// \return True if \p op is unary, i.e. a node of this type evaluates its left
+///         child only and its right child is a sentinel leaf.
+///
+[[nodiscard]] bool is_unary(EvalOp op) noexcept;
 
 ///
 /// \brief The ResultType enum.
@@ -61,9 +113,27 @@ enum class EvalOp {
 /// \details Represents the type of the result of @c EvalOp on two EvalExpr
 ///          objects (or, single EvalExpr object if `this->is_primary()`).
 ///
-enum class ResultType { Tensor, Scalar };
+enum class ResultType : std::uint8_t { Tensor, Scalar };
 
 struct EvalOpSetter;
+
+/// Per-node batching state of an EvalExpr. Almost all nodes carry none of
+/// it, hence EvalExpr stores it out of line and only on demand. The inline
+/// capacities cover the typical number of batched indices per node.
+struct EvalBatchInfo {
+  static constexpr std::size_t inline_capacity = 4;
+  using mode_vector =
+      container::svector<std::pair<Index, BatchModeType>, inline_capacity>;
+  using index_vector = container::svector<Index, inline_capacity>;
+
+  mode_vector node_slice_mask{};
+  mode_vector batch_loops_opened_here{};
+  index_vector sliced_modes{};
+  index_vector occurrence_home{};
+  std::size_t value_key = 0;
+  std::size_t batch_effective_count = 1;
+  bool batch_order_aware = false;
+};
 
 ///
 /// \brief The EvalExpr is a building block of binary trees used to evaluate
@@ -80,7 +150,20 @@ class EvalExpr {
   ///
   /// \brief Construct an EvalExpr object from a tensor.
   ///
-  explicit EvalExpr(Tensor const& tnsr);
+  /// \param tnsr The tensor to wrap as a leaf. The two bra<->ket
+  ///        orientations of a BraKetSymmetry::Conjugate tensor fold onto one
+  ///        canonical spelling: expr() carries the canonical orientation with
+  ///        the core states ('⁺', a real-basis '꙳') decoded into the leaf's
+  ///        CanonTransform (see decode_leaf_states in eval_expr.cpp), so the
+  ///        orientations and conjugates of one array share a cache slot and
+  ///        are served through the transform on retrieval.
+  ///
+  /// \param blindness optional Kramers blindness (kramers_blind.hpp): the
+  ///        leaf's identity (hash, connectivity graph, layout fingerprint,
+  ///        block comparison) is then read from its flavour-erased spelling;
+  ///        null or inactive => identity exactly as without the hook
+  explicit EvalExpr(Tensor const& tnsr,
+                    eval::KramersBlindness const* blindness = nullptr);
 
   ///
   /// \brief Construct an EvalExpr object from a Constant.
@@ -207,6 +290,25 @@ class EvalExpr {
   [[nodiscard]] bool is_sum() const noexcept;
 
   ///
+  /// \return whether this is a unary IR op (RealPart / ImagPart /
+  ///         KramersFlip): only the left child is an operand; the right child
+  ///         is the Constant(1) sentinel that keeps FullBinaryNode's
+  ///         two-children invariant and is never evaluated, scheduled or
+  ///         counted as an operand
+  ///
+  [[nodiscard]] bool is_unary_op() const noexcept;
+
+  ///
+  /// \return True if this expression is an element-wise power (unary) node.
+  ///
+  [[nodiscard]] bool is_elementwise_power() const noexcept;
+
+  ///
+  /// \return True if this expression is a broadcast (unary) node.
+  ///
+  [[nodiscard]] bool is_broadcast() const noexcept;
+
+  ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
   ///
   /// \return Tensor const&, the stored spelling (see expr()); a leaf's bra
@@ -253,6 +355,55 @@ class EvalExpr {
   ///
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
+  /// \return the canonical indices the IDENTITY (layout fingerprint) is read
+  ///         from: canon_indices() with Kramers-blind erasure applied, or
+  ///         canon_indices() itself when nothing was erased
+  [[nodiscard]] index_vector const& identity_indices() const noexcept {
+    return identity_indices_.empty() ? canon_indices_ : identity_indices_;
+  }
+
+  /// \return for a tensor leaf whose identity was Kramers-blind erased, the
+  ///         erased spelling the block comparator reads; null otherwise
+  [[nodiscard]] Tensor const* identity_tensor() const noexcept {
+    return identity_tensor_ ? &*identity_tensor_ : nullptr;
+  }
+
+  /// \return whether Kramers blindness erased something in this node's
+  ///         identity (identity_indices() then differs from canon_indices())
+  [[nodiscard]] bool has_identity_erasure() const noexcept {
+    return !identity_indices_.empty();
+  }
+
+  /// sets identity_indices() (product / sum node construction under Kramers
+  /// blindness) and, for a tensor-valued node, derives identity_tensor() from
+  /// expr() by the positional canon->identity index correspondence; an empty
+  /// vector means "same as canon_indices()"
+  void set_identity_indices(index_vector ixs);
+
+  /// re-derives identity_tensor() from the current expr() (call after expr()
+  /// was respelled in place, e.g. the head overwrite in binarize(ResultExpr));
+  /// no-op without identity erasure
+  void refresh_identity_tensor();
+
+  /// \return for an EvalOp::KramersFlip node, the positions (in the left
+  ///         child's canon_indices()) of the Kramers-union modes F acts on
+  [[nodiscard]] container::svector<std::size_t> const& kramers_flip_modes()
+      const noexcept {
+    return kramers_flip_modes_;
+  }
+
+  /// \return for an EvalOp::KramersFlip node, the phase multiplying F(left)
+  [[nodiscard]] std::int8_t kramers_flip_phase() const noexcept {
+    return kramers_flip_phase_;
+  }
+
+  /// sets the flip modes and phase (EvalOp::KramersFlip node construction)
+  void set_kramers_flip(container::svector<std::size_t> modes,
+                        std::int8_t phase) {
+    kramers_flip_modes_ = std::move(modes);
+    kramers_flip_phase_ = phase;
+  }
+
   ///
   /// \brief Rename-invariant fingerprint of this node's result _layout_: which
   ///        canonical slot each result mode holds, and how the proto bundles
@@ -284,6 +435,13 @@ class EvalExpr {
   [[nodiscard]] static std::size_t layout_fingerprint_of(
       index_vector const& modes) noexcept;
 
+  /// @return whether this leaf's stored spelling is its Kramers-folded
+  ///         (up-row) partner of the as-written one (T19 layer 2): expr()
+  ///         is what a provider fetches, canon_indices() carries the
+  ///         as-written labels, and the {conj, phase} of the transform maps
+  ///         the served block to the as-written value
+  [[nodiscard]] bool kramers_folded() const noexcept { return kramers_folded_; }
+
   ///
   /// \return The canonicalization phase (+1 or -1).
   ///
@@ -308,6 +466,8 @@ class EvalExpr {
   /// placeholder is built in the spelling it denotes and holds no state,
   /// even where it inherits a child's transform. The phase, a scalar, is
   /// not spelled (see to_expr for the value a leaf denotes).
+  /// For a Kramers-folded leaf (see kramers_folded()) the stored spelling is
+  /// the up-row partner and the Kramers flavors are flipped back here.
   [[nodiscard]] ExprPtr denoted_expr() const;
 
   ///
@@ -338,17 +498,17 @@ class EvalExpr {
   /// optimizer). The runtime batched evaluator slices exactly these indices
   /// at this node.
   ///
-  [[nodiscard]] container::svector<std::pair<Index, BatchModeType>> const&
+  [[nodiscard]] container::svector_base<std::pair<Index, BatchModeType>> const&
   node_slice_mask() const noexcept {
-    return node_slice_mask_;
+    return batch_info().node_slice_mask;
   }
 
   ///
   /// \brief Sets the batch modes for this node; see \c node_slice_mask.
   ///
   void set_node_slice_mask(
-      container::svector<std::pair<Index, BatchModeType>> modes) noexcept {
-    node_slice_mask_ = std::move(modes);
+      container::svector<std::pair<Index, BatchModeType>> modes) {
+    assign_batch_field(&EvalBatchInfo::node_slice_mask, std::move(modes));
   }
 
   ///
@@ -363,9 +523,9 @@ class EvalExpr {
   /// \c peak_profile's \c OccurrenceRec::ectx) does not multi-count one loop as
   /// one-per-carrying-node.
   ///
-  [[nodiscard]] container::svector<std::pair<Index, BatchModeType>> const&
+  [[nodiscard]] container::svector_base<std::pair<Index, BatchModeType>> const&
   batch_loops_opened_here() const noexcept {
-    return batch_loops_opened_here_;
+    return batch_info().batch_loops_opened_here;
   }
 
   ///
@@ -373,9 +533,20 @@ class EvalExpr {
   /// \c batch_loops_opened_here.
   ///
   void set_batch_loops_opened_here(
-      container::svector<std::pair<Index, BatchModeType>> modes) noexcept {
-    batch_loops_opened_here_ = std::move(modes);
+      container::svector<std::pair<Index, BatchModeType>> modes) {
+    assign_batch_field(&EvalBatchInfo::batch_loops_opened_here,
+                       std::move(modes));
   }
+
+  ///
+  /// \return true iff this node is produced at the root scope whatever loops
+  /// are opened above it (\c NodeBatchAnnotation::root_scope): the loops of
+  /// its ancestors do not enclose it or its subtree.
+  ///
+  [[nodiscard]] bool root_scope() const noexcept { return root_scope_; }
+
+  /// \brief Sets \c root_scope.
+  void set_root_scope(bool v) noexcept { root_scope_ = v; }
 
   ///
   /// \brief Canonical batch modes that slice this node in every occurrence
@@ -384,15 +555,16 @@ class EvalExpr {
   /// contributes its proto indices. Set by \c stamp_lifetime_masks; empty by
   /// default (off path).
   ///
-  [[nodiscard]] container::svector<Index> const& sliced_modes() const noexcept {
-    return sliced_modes_;
+  [[nodiscard]] container::svector_base<Index> const& sliced_modes()
+      const noexcept {
+    return batch_info().sliced_modes;
   }
 
   ///
   /// \brief Sets the cross-occurrence sliced-mode mask; see \c sliced_modes.
   ///
-  void set_sliced_modes(container::svector<Index> m) noexcept {
-    sliced_modes_ = std::move(m);
+  void set_sliced_modes(container::svector<Index> m) {
+    assign_batch_field(&EvalBatchInfo::sliced_modes, std::move(m));
   }
 
   ///
@@ -400,7 +572,7 @@ class EvalExpr {
   /// block-agnostic). Equivalent to \c sliced_modes().empty().
   ///
   [[nodiscard]] bool mask_all_full() const noexcept {
-    return sliced_modes_.empty();
+    return sliced_modes().empty();
   }
 
   ///
@@ -412,14 +584,14 @@ class EvalExpr {
   /// sliced_modes), which folds occurrences by node identity and by label and
   /// serves the forest-descent path's residency. Empty = whole.
   ///
-  [[nodiscard]] container::svector<Index> const& occurrence_home()
+  [[nodiscard]] container::svector_base<Index> const& occurrence_home()
       const noexcept {
-    return occurrence_home_;
+    return batch_info().occurrence_home;
   }
 
   /// \brief Sets this occurrence's home; see \c occurrence_home.
-  void set_occurrence_home(container::svector<Index> m) noexcept {
-    occurrence_home_ = std::move(m);
+  void set_occurrence_home(container::svector<Index> m) {
+    assign_batch_field(&EvalBatchInfo::occurrence_home, std::move(m));
   }
 
   ///
@@ -429,10 +601,14 @@ class EvalExpr {
   /// are numbered; 0 = not stamped (\c value_key_of then falls back to the
   /// structural key).
   ///
-  [[nodiscard]] std::size_t value_key() const noexcept { return value_key_; }
+  [[nodiscard]] std::size_t value_key() const noexcept {
+    return batch_info().value_key;
+  }
 
   /// \brief Sets this occurrence's value key; see \c value_key.
-  void set_value_key(std::size_t k) noexcept { value_key_ = k; }
+  void set_value_key(std::size_t k) {
+    assign_batch_field(&EvalBatchInfo::value_key, k);
+  }
 
   ///
   /// \brief Whether this \c Sum node's result should be accumulated in place
@@ -454,6 +630,26 @@ class EvalExpr {
   void set_accumulate_in_place(bool v) noexcept { accumulate_in_place_ = v; }
 
   ///
+  /// \brief Whether this node is the root of an equation inlined by
+  /// binarize(std::span<const ResultExpr>, const BinarizationOptions&): its
+  /// payload is the (renamed) head of that equation, and a consumer's factor
+  /// collection treats it as one factor instead of descending into it, so the
+  /// head's layout and symmetry are what the consumer contracts with. Not part
+  /// of the hash. Default \c false, also for the root of a top-level tree,
+  /// except for an alias equation such as `E = ℓ` whose whole rhs is one
+  /// inlined definition: its root is that definition's root and keeps the
+  /// flag, harmlessly, since no product encloses it.
+  ///
+  [[nodiscard]] bool is_equation_boundary() const noexcept {
+    return equation_boundary_;
+  }
+
+  ///
+  /// \brief Sets the equation-boundary flag; see \c is_equation_boundary.
+  ///
+  void set_equation_boundary(bool v) noexcept { equation_boundary_ = v; }
+
+  ///
   /// \brief Emitted effective use count of this contraction node: the number of
   /// times its value is (re)referenced across the enclosing batch loops it does
   /// not carry. \c 1 (the default and the order-blind / off-path value) means
@@ -461,7 +657,7 @@ class EvalExpr {
   /// \c NodeBatchAnnotation::effective_count.
   ///
   [[nodiscard]] std::size_t batch_effective_count() const noexcept {
-    return batch_effective_count_;
+    return batch_info().batch_effective_count;
   }
 
   ///
@@ -471,19 +667,21 @@ class EvalExpr {
   /// \c NodeBatchAnnotation::order_aware.
   ///
   [[nodiscard]] bool batch_order_aware() const noexcept {
-    return batch_order_aware_;
+    return batch_info().batch_order_aware;
   }
 
   ///
   /// \brief Sets the order-aware placement gate; see \c batch_order_aware.
   ///
-  void set_batch_order_aware(bool v) noexcept { batch_order_aware_ = v; }
+  void set_batch_order_aware(bool v) {
+    assign_batch_field(&EvalBatchInfo::batch_order_aware, v);
+  }
 
   ///
   /// \brief Sets the effective use count; see \c batch_effective_count.
   ///
-  void set_batch_effective_count(std::size_t count) noexcept {
-    batch_effective_count_ = count;
+  void set_batch_effective_count(std::size_t count) {
+    assign_batch_field(&EvalBatchInfo::batch_effective_count, count);
   }
 
  protected:
@@ -491,41 +689,96 @@ class EvalExpr {
 
   ResultType result_type_;
 
-  ExprPtr expr_;
-
-  index_vector canon_indices_;
+  /// see identity_indices(): empty unless Kramers blindness erased something
+  index_vector identity_indices_;
+  /// see identity_tensor(): leaves only, set iff erasure changed the spelling
+  std::optional<Tensor> identity_tensor_;
   mutable std::optional<std::size_t> layout_fingerprint_;
+  /// see kramers_flip_modes() / kramers_flip_phase(): EvalOp::KramersFlip only
+  container::svector<std::size_t> kramers_flip_modes_;
+  std::int8_t kramers_flip_phase_ = 1;
 
   /// folds layout_fingerprint() into hash_value_ for a tensor-valued node;
   /// called once canon_indices_ is final (see the definition)
   void fold_layout_into_hash() noexcept;
 
   CanonTransform canon_transform_{};
+  bool kramers_folded_ = false;
+
+  /// See \c accumulate_in_place.
+  bool accumulate_in_place_ = false;
+
+  /// See \c is_equation_boundary.
+  bool equation_boundary_ = false;
+
+  /// See \c root_scope.
+  bool root_scope_ = false;
+
+  ExprPtr expr_;
+
+  index_vector canon_indices_;
 
   size_t hash_value_;
 
   std::shared_ptr<bliss::Graph> connectivity_;
 
-  /// See \c node_slice_mask.
-  container::svector<std::pair<Index, BatchModeType>> node_slice_mask_{};
+  /// Copyable owner of the lazily allocated EvalBatchInfo; null while all
+  /// batching state has its default value.
+  class BatchInfoPtr {
+   public:
+    BatchInfoPtr() = default;
+    BatchInfoPtr(const BatchInfoPtr& other)
+        : ptr_(other.ptr_ ? std::make_unique<EvalBatchInfo>(*other.ptr_)
+                          : nullptr) {}
+    BatchInfoPtr(BatchInfoPtr&&) noexcept = default;
+    BatchInfoPtr& operator=(const BatchInfoPtr& other) {
+      if (this != &other) {
+        ptr_ =
+            other.ptr_ ? std::make_unique<EvalBatchInfo>(*other.ptr_) : nullptr;
+      }
+      return *this;
+    }
+    BatchInfoPtr& operator=(BatchInfoPtr&&) noexcept = default;
 
-  /// See \c batch_loops_opened_here.
-  container::svector<std::pair<Index, BatchModeType>>
-      batch_loops_opened_here_{};
+    const EvalBatchInfo* get() const noexcept { return ptr_.get(); }
+    EvalBatchInfo& get_or_create() {
+      if (!ptr_) ptr_ = std::make_unique<EvalBatchInfo>();
+      return *ptr_;
+    }
 
-  /// See \c sliced_modes.
-  container::svector<Index> sliced_modes_{};
-  container::svector<Index> occurrence_home_{};
-  std::size_t value_key_ = 0;
+   private:
+    std::unique_ptr<EvalBatchInfo> ptr_;
+  };
 
-  /// See \c batch_order_aware.
-  bool batch_order_aware_ = false;
+  /// @return the batching state, or its defaults if none was ever set
+  const EvalBatchInfo& batch_info() const noexcept;
 
-  /// See \c batch_effective_count.
-  std::size_t batch_effective_count_ = 1;
+  /// Moves the elements of @p values into the container @p field; the
+  /// batching state is allocated only if @p values is non-empty (the default
+  /// is empty).
+  template <typename Container, typename Values>
+    requires(!std::is_arithmetic_v<Container>)
+  void assign_batch_field(Container EvalBatchInfo::*field, Values&& values) {
+    if (values.empty() && !batch_.get()) return;
+    (batch_.get_or_create().*field)
+        .assign(std::make_move_iterator(values.begin()),
+                std::make_move_iterator(values.end()));
+  }
 
-  /// See \c accumulate_in_place.
-  bool accumulate_in_place_ = false;
+  /// Sets the scalar @p field to @p value; the batching state is allocated only
+  /// if @p value differs from the default.
+  template <typename T>
+  void assign_batch_field(T EvalBatchInfo::*field, T value)
+    requires std::is_arithmetic_v<T>
+  {
+    if (!batch_.get() && value == batch_info().*field) return;
+    batch_.get_or_create().*field = value;
+  }
+
+  /// See \c node_slice_mask, \c batch_loops_opened_here, \c sliced_modes,
+  /// \c occurrence_home, \c value_key, \c batch_effective_count and
+  /// \c batch_order_aware.
+  BatchInfoPtr batch_;
 };
 
 struct EvalOpSetter {
@@ -546,6 +799,29 @@ struct BinarizationOptions {
   /// summand being binarized. Empty (default) => no stamping, no behavior
   /// change. See \c EvalExpr::node_slice_mask.
   container::vector<NodeBatchAnnotation> node_batch_axes = {};
+
+  /// Kramers-blind node identity (see kramers_blind.hpp): inactive by default,
+  /// in which case node identities are exactly those of a hook-less
+  /// binarization.
+  eval::KramersBlindness kramers_blindness = {};
+  /// Phase 2a of the union-axis time-reversal fold (mpqc
+  /// doc/dev/specs/2026-09-18-union-axis-time-reversal-fold.md): a Product /
+  /// Sum whose flavoured externals (after the Kramers-blind erasure) are
+  /// down-majority and whose leaves are all time-reversal symmetric is
+  /// binarized as an EvalOp::KramersFlip over its flipped (canonical) spelling,
+  /// so the two Kramers-partner families share one contraction and differ by
+  /// an O(size) flip. Off by default.
+  bool kramers_fold_intermediates = false;
+  /// Internal to the fold: whether the expression handed to binarize may
+  /// itself be folded as a whole. A Sum's direct summands are added
+  /// elementwise and must keep the Sum's index labels, so binarize(Sum)
+  /// clears it for them (the Sum folds as one, or not at all); binarize(
+  /// Product) restores it for the factors, which are contracted through
+  /// their own denoted labels; binarize(ResultExpr) clears it for the root,
+  /// whose spelling is the head's (a folded root would respell a residual
+  /// block's terms and lose their t-dependent intermediates' sharing with
+  /// the other blocks of the same pair). Callers leave it at its default.
+  bool kramers_fold_this = true;
 };
 
 namespace meta {
@@ -632,6 +908,12 @@ concept leaf_node_evaluator =
 
 }  // namespace meta
 
+namespace detail {
+/// the definitions a system binarization inlines; see
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+struct InlineContext;
+}  // namespace detail
+
 namespace impl {
 
 /// \param node_counter Running left-first-post-order count of contraction
@@ -640,16 +922,64 @@ namespace impl {
 ///        it can be checked against \c opts.node_batch_axes.size() by the
 ///        caller. Must be the same counter object across the entire call
 ///        tree of a single top-level invocation; do not reset per subtree.
+/// \param inline_ctx the definitions to inline into the leaves of the
+///        expression; null for none
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
                                   const BinarizationOptions& opts,
-                                  std::size_t& node_counter);
+                                  std::size_t& node_counter,
+                                  detail::InlineContext* inline_ctx = nullptr);
+
+/// The head-aware binarization behind binarize(ResultExpr const&, ...):
+/// binarizes the rhs with the head's indices uncontracted, wrapping each
+/// short summand of a broadcast Sum in an EvalOp::Broadcast node, and stamps
+/// the root with the head.
+/// \param node_counter see binarize(ExprPtr const&, ...) above
+/// \param inline_ctx see binarize(ExprPtr const&, ...) above
+FullBinaryNode<EvalExpr> binarize(ResultExpr const& res,
+                                  const BinarizationOptions& opts,
+                                  std::size_t& node_counter,
+                                  detail::InlineContext* inline_ctx = nullptr);
+
+/// The non-template part of
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+/// \param[out] consumed see InlinedSystem::consumed
+container::svector<FullBinaryNode<EvalExpr>> binarize_system(
+    std::span<const ResultExpr> system, const BinarizationOptions& opts,
+    container::svector<bool>& consumed);
 }  // namespace impl
+
+///
+/// \brief An EvalOp::KramersFlip wrapper over \p inner: denotes
+///        \p phase · F(inner) with F the time-reversal flip over the
+///        Kramers-union modes \p modes (positions in inner->canon_indices());
+///        \p denoted is the wrapper's own result tensor (the flipped-flavour
+///        spelling). Identity = the child's salted hash, the op, the modes,
+///        the phase and the flipped layout; the child's phase / conj channels
+///        hoist into the wrapper's transform (F is linear and commutes with
+///        conjugation), as for Re/Im.
+///
+FullBinaryNode<EvalExpr> make_kramers_flip_node(
+    FullBinaryNode<EvalExpr> inner, container::svector<std::size_t> modes,
+    std::int8_t phase, Tensor denoted);
 
 ///
 /// \brief A type alias for the types that satisfy the eval_node concept.
 ///
 template <meta::eval_expr T>
 using EvalNode = FullBinaryNode<T>;
+
+namespace detail {
+/// \return \p tree with every payload converted to \c ExprT
+template <typename ExprT>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+FullBinaryNode<ExprT> to_eval_node(FullBinaryNode<EvalExpr>&& tree) {
+  if constexpr (std::is_same_v<ExprT, EvalExpr>)
+    return std::move(tree);
+  else
+    return transform_node(std::move(tree),
+                          [](auto&& val) { return ExprT{val}; });
+}
+}  // namespace detail
 
 static_assert(meta::eval_node<EvalNode<EvalExpr>>);
 static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
@@ -695,64 +1025,92 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
   if (!opts.node_batch_axes.empty()) {
     SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
   }
-  if constexpr (std::is_same_v<ExprT, EvalExpr>)
-    return tree;
-  else
-    return transform_node(std::move(tree),
-                          [](auto&& val) { return ExprT{val}; });
+  return detail::to_eval_node<ExprT>(std::move(tree));
 }
 
 /// Creates a binary tree for evaluation from a ResultExpr.
-/// External indices are deduced from @p res (its non-null slots).
+/// External indices are deduced from @p res (its non-null slots). Each
+/// summand of a broadcast Sum on the rhs (see is_valid(const ResultExpr&))
+/// that lacks some of the head's indices becomes an EvalOp::Broadcast node
+/// over the head's indices.
+/// @throw Exception if a summand of a Sum on the rhs lacks an aux index of
+///        the head
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ResultExpr const& res,
                                const BinarizationOptions& opts = {}) {
-  // collect result indices so they are not contracted in the expression tree
-  IndexSet uncontract;
-  for (auto&& ix : res.indices()) uncontract.emplace(ix);
-
-  // The recursive calls below dispatch to the (now deprecated)
-  // binarize(ExprPtr) overload — the head's bra/ket would be positional, but
-  // we overwrite it below with res.result_as_tensor() so the layout is
-  // caller-determined and the deprecation does not apply.
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  FullBinaryNode<ExprT> tree =
-      binarize<ExprT>(res.expression(), uncontract, opts);
-
-  const bool is_scalar =
-      res.bra().empty() && res.ket().empty() && res.aux().empty();
-
-  if (tree.size() < 2) {
-    // We want to have a result node with the result from the ResultExpr.
-    // In order for that to work, we need a dedicated result node in the first
-    // place. Hence, we adapt the represented expression for terminals to be
-    // that terminal multiplied by 1.
-    ExprT result = [&]() {
-      if (is_scalar) {
-        return *binarize<ExprT>(ex<Variable>(res.result_as_variable()));
-      }
-      return *binarize<ExprT>(ex<Tensor>(res.result_as_tensor()));
-    }();
-    EvalOpSetter{}.set(result, EvalOp::Product);
-
-    tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
-                                 binarize<ExprT>(ex<Constant>(1)));
+  std::size_t node_counter = 0;
+  auto tree = impl::binarize(res, opts, node_counter);
+  // see binarize(ExprPtr const&, ...)
+  if (!opts.node_batch_axes.empty()) {
+    SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
   }
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  SEQUANT_ASSERT(tree.size() > 1);
+  return detail::to_eval_node<ExprT>(std::move(tree));
+}
 
-  if (is_scalar) {
-    if (res.has_label()) {
-      tree->expr().template as<Variable>().set_label(res.label());
-    }
-  } else {
-    Tensor& tensor = tree->expr().template as<Tensor>();
+/// The evaluation trees of a system of ResultExprs, see
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+template <typename ExprT = EvalExpr>
+struct InlinedSystem {
+  /// one tree per equation, in input order
+  container::svector<FullBinaryNode<ExprT>> trees;
+  /// true for an equation whose head another equation inlined
+  container::svector<bool> consumed;
 
-    tensor = res.result_as_tensor();
+  /// \return the trees of the equations no other equation inlined, in input
+  ///         order
+  auto roots() const {
+    container::svector<std::reference_wrapper<const FullBinaryNode<ExprT>>>
+        result;
+    for (std::size_t k = 0; k != trees.size(); ++k)
+      if (!consumed[k]) result.emplace_back(trees[k]);
+    return result;
   }
+};
 
-  return tree;
+/// Creates the evaluation trees of a system of equations, inlining each
+/// definition into its uses.
+///
+/// A Tensor leaf whose label, bra/ket/aux ranks and per-slot index spaces
+/// and proto-index counts match the head of an equation, or match it with bra
+/// and ket swapped if the head is bra-ket symmetric (BraKetSymmetry::Symm), and
+/// a Variable leaf whose label matches a scalar head, is replaced by that
+/// equation's tree, binarized as by binarize(ResultExpr const&) after renaming
+/// the head's indices to the leaf's and the other indices of its rhs to fresh
+/// ones. The subtree enters the consumer as one factor; its root carries the
+/// (renamed) head. Definitions inline recursively and may appear in any order.
+/// @param system the equations; every head must be labelled
+/// @param opts the options of every equation; \c opts.node_batch_axes must
+///        be empty: it annotates the nodes of a single term, so stamp the
+///        returned trees instead
+/// @throw Exception if \c opts.node_batch_axes is not empty, a head is
+///        unlabelled, two equations share a label and a shape (for a bra-ket
+///        symmetric head, also with bra and ket swapped), a matching
+///        leaf declares symmetries different from its head's, a conjugated
+///        Variable leaf names a scalar head, a scalar head is the base of a
+///        scalar Power, a leaf spells a conjugate-symmetric
+///        (BraKetSymmetry::Conjugate) head with bra and ket swapped, or a
+///        definition reaches its own head
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+InlinedSystem<ExprT> binarize(std::span<const ResultExpr> system,
+                              const BinarizationOptions& opts = {}) {
+  InlinedSystem<ExprT> result;
+  for (auto&& tree : impl::binarize_system(system, opts, result.consumed))
+    result.trees.emplace_back(detail::to_eval_node<ExprT>(std::move(tree)));
+  return result;
+}
+
+///
+/// \return The exponent of the element-wise power node \p node, read off its
+///         Constant sentinel right child.
+/// \pre \p node is an EvalOp::Power node
+///
+rational power_exponent(meta::eval_node auto const& node) {
+  SEQUANT_ASSERT(!node.leaf() && node->op_type() == EvalOp::Power);
+  auto const value = node.right()->as_constant().value();
+  SEQUANT_ASSERT(value.imag() == 0);
+  return value.real();
 }
 
 ///
@@ -767,28 +1125,57 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
 /// and the value the tree denotes is the product or sum of what its leaves
 /// denote.
 ///
-ExprPtr to_expr(meta::eval_node auto const& node) {
+/// The expression of every terminal passes through @p leaf_map.
+///
+/// An inlined equation below @p node (see EvalExpr::is_equation_boundary) is a
+/// terminal: it contributes its head, not its rhs; @p node itself, boundary or
+/// not, is always expanded.
+///
+/// @param leaf_map Callable mapping the (shared) expression of a terminal to
+/// the expression that shall represent it in the result. It must not mutate its
+/// argument as that is shared with @p node.
+///
+template <typename LeafMap>
+  requires std::is_invocable_r_v<ExprPtr, LeafMap&, ExprPtr const&>
+ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
   if (node.leaf()) {
-    ExprPtr e = evxpr.denoted_expr();
+    ExprPtr e = leaf_map(evxpr.denoted_expr());
     if (evxpr.canon_phase() == 1) return e;
     return ex<Product>(evxpr.canon_phase(), ExprPtrList{std::move(e)},
                        Product::Flatten::No);
   }
 
+  // a KramersFlip wrapper denotes its own (flipped-flavour) tensor; the
+  // flip it applies to its child is not an expression
+  if (op == EvalOp::KramersFlip) return leaf_map(evxpr.expr());
+
+  auto const child = [&leaf_map](auto const& c) {
+    return c->is_equation_boundary() ? leaf_map(c->expr())
+                                     : to_expr(c, leaf_map);
+  };
+
+  if (op == EvalOp::Power) return pow(child(node.left()), power_exponent(node));
+
+  // the broadcast is implied by the Sum under a head that holds the node
+  if (op == EvalOp::Broadcast) return child(node.left());
+
   if (op == EvalOp::Product) {
     auto prod = Product{};
 
     // a leaf child's phase scales this product rather than nesting a signed
-    // one-factor product as an operand
-    auto append = [&prod](auto const& child) {
-      if (child.leaf()) {
-        prod.scale(child->canon_phase());
-        prod.append(1, child->denoted_expr(), Product::Flatten::No);
+    // one-factor product as an operand; an inlined equation below a child is a
+    // terminal that enters as its result tensor
+    auto append = [&prod, &leaf_map](auto const& c) {
+      if (c.leaf()) {
+        prod.scale(c->canon_phase());
+        prod.append(1, leaf_map(c->denoted_expr()), Product::Flatten::No);
+      } else if (c->is_equation_boundary()) {
+        prod.append(1, c->expr(), Product::Flatten::No);
       } else {
-        prod.append(1, to_expr(child), Product::Flatten::No);
+        prod.append(1, to_expr(c, leaf_map), Product::Flatten::No);
       }
     };
     append(node.left());
@@ -811,8 +1198,31 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
 
   } else {
     SEQUANT_ASSERT(op == EvalOp::Sum && "unsupported operation type");
-    return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
+    // Collect the operands of the entire chain of sums, since Sum flattens
+    // (and thereby copies) its summands on construction; an inlined equation
+    // ends the chain
+    container::svector<ExprPtr> summands;
+    auto collect = [&](const auto& current, const auto& self) -> void {
+      if (!current.leaf() && current->op_type() == EvalOp::Sum &&
+          !current->is_equation_boundary()) {
+        self(current.left(), self);
+        self(current.right(), self);
+      } else {
+        summands.push_back(child(current));
+      }
+    };
+    collect(node.left(), collect);
+    collect(node.right(), collect);
+
+    return ex<Sum>(Sum(summands.begin(), summands.end()));
   }
+}
+
+///
+/// Converts an `EvalExpr` to `ExprPtr`.
+///
+ExprPtr to_expr(meta::eval_node auto const& node) {
+  return to_expr(node, std::identity{});
 }
 
 /// \brief The indices contracted at a binary evaluation node.

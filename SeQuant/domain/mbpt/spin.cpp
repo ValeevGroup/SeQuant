@@ -69,8 +69,8 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   IndexSpace space;
   // try looking up space in registry
   const auto label = mbpt::spinannotation_replacе(idx.space().base_key(), s);
-  if (auto isr = get_default_context().index_basis_registry()) {
-    auto* space_ptr = isr->retrieve_space_ptr(label);
+  if (auto ibr = get_default_context().index_basis_registry()) {
+    auto* space_ptr = ibr->retrieve_space_ptr(label);
     // the field is part of the match: a registered space of another field is a
     // basis the source index is not over, so it falls through to the mint path
     // below, which carries the source space's field
@@ -104,8 +104,10 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
         ") before spin-casing");
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
-  return Index{std::move(basis), idx.ordinal(), protoindices,
-               idx.symmetric_proto_indices()};
+  // with_basis keeps the ordinal as is: a generated (tmp) ordinal, which the
+  // public ordinal ctor rejects, stays the index's own; the proto-index bundle
+  // symmetry carries over
+  return idx.with_basis(basis, std::move(protoindices));
 }
 
 template <typename Container, typename TraceFunction, typename... Args>
@@ -592,8 +594,6 @@ ExprPtr expand_A_op(const ProductPtr& product) {
     new_result->append(new_product);
   }  // map_list
 
-  reset_tags(new_result);
-
   return new_result;
 }
 
@@ -648,7 +648,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   // ket)
   // Uses a permuted list of int to generate permutations
   // TODO factor out for reuse
-  auto maps_from_list = [](const container::svector<Index>& list) {
+  auto maps_from_list = [](const container::svector_base<Index>& list) {
     container::svector<std::size_t> int_list(list.size());
     std::iota(int_list.begin(), int_list.end(), 0);
     container::svector<container::map<Index, Index>> result;
@@ -715,8 +715,6 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
 
     result->append(ex<Product>(new_product));
   }
-
-  reset_tags(result);
 
   return result;
 }
@@ -863,8 +861,6 @@ ExprPtr S_maps(const ExprPtr& expr) {
   // Check if S operator is present
   if (!has_tensor(expr, reserved::symm_label())) return expr;
 
-  reset_tags(expr);
-
   // Lambda for applying S on products
   auto expand_S_product = [](const ProductPtr& product) -> ExprPtr {
     // check if S is present
@@ -919,7 +915,6 @@ ExprPtr S_maps(const ExprPtr& expr) {
     }
   }
 
-  reset_tags(result);
   return result;
 }
 
@@ -1117,9 +1112,23 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V2);
   using ranges::views::transform;
   auto const ext_idxs = external_indices(expr);
-  auto st_expr = options.naive_spintrace
-                     ? spintrace(expr, ext_idxs)
-                     : closed_shell_spintrace(expr, ext_idxs);
+  ExprPtr st_expr;
+  if (expr->is<Sum>()) {
+    // Canonicalize and merge each traced contribution before retaining the
+    // next one, so equivalent terms do not accumulate across input summands.
+    st_expr = transform_sum_expr(
+        *expr,
+        [&](const ExprPtr& term) {
+          auto contribution = options.naive_spintrace
+                                  ? spintrace(term, ext_idxs)
+                                  : closed_shell_spintrace(term, ext_idxs);
+          return canonicalize(std::move(contribution));
+        },
+        {.canonicalize = false});
+  } else {
+    st_expr = options.naive_spintrace ? spintrace(expr, ext_idxs)
+                                      : closed_shell_spintrace(expr, ext_idxs);
+  }
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
@@ -1256,8 +1265,6 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
                    make_spinbeta);
     std::transform(spin_ket.end() - i, spin_ket.end(), spin_ket.end() - i,
                    make_spinbeta);
-    ranges::for_each(spin_bra, [](const Index& i) { i.reset_tag(); });
-    ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
     result.at(i) = ex<Tensor>(Tensor(reserved::antisymm_label(), spin_bra,
                                      spin_ket, A.aux(), Symmetry::Antisymm));
     // std::wcout << to_latex(result.at(i)) << " ";
@@ -1379,7 +1386,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   // Expand 'A' operator and 'antisymm' tensors; the indices are collected
   // from the result, since simplify() renumbers the dummies
   auto expanded_expr = expand_A_op(expr);
-  reset_tags(expanded_expr);
   expand(expanded_expr);
   simplify(expanded_expr);
 
@@ -1393,11 +1399,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
 
   container::set<Index> ext_idxlist;
   for (const auto& idxgrp : ext_index_groups) {
-    for (const Index& current : idxgrp) {
-      Index idx = current;
-      idx.reset_tag();
-      ext_idxlist.insert(std::move(idx));
-    }
+    for (const Index& idx : idxgrp) ext_idxlist.insert(idx);
   }
   grand_idxlist.insert(ext_idxlist.begin(), ext_idxlist.end());
 
@@ -1510,7 +1512,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   for (auto& e : e_rep) {
     // Add spin labels to external indices
     auto spin_expr = append_spin(expanded_expr, e);
-    reset_tags(spin_expr);
     Sum e_result{};
 
     // Loop over internal index replacement maps
@@ -1519,7 +1520,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       ExprPtr spin_expr_i = append_spin(spin_expr, i);
       spin_expr_i = expand_antisymm(spin_expr_i, true);
       expand(spin_expr_i);
-      reset_tags(spin_expr_i);
       Sum i_result{};
 
       if (spin_expr_i->is<Tensor>() || spin_expr_i->is<Constant>() ||
@@ -1553,7 +1553,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
 
   // Canonicalize and simplify all expressions
   for (auto& expression : result) {
-    reset_tags(expression);
     canonicalize(expression);
     rapid_simplify(expression);
   }
@@ -1743,11 +1742,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
     // style (indices that are not repeated in an expression)
     container::set<Index> ext_idxlist;
     for (const auto& idxgrp : ext_index_groups) {
-      for (const Index& current : idxgrp) {
-        Index idx = current;
-        idx.reset_tag();
-        ext_idxlist.insert(std::move(idx));
-      }
+      for (const Index& idx : idxgrp) ext_idxlist.insert(idx);
     }
 
     // List of internal indices, i.e. indices that are contracted over
@@ -1866,8 +1861,6 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
   }
 
   SEQUANT_ASSERT(result);
-
-  reset_tags(result);
 
   simplify(result);
 

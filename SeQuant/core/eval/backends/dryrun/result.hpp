@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+#include <SeQuant/core/eval/op_counts.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -225,6 +226,18 @@ inline void check_accumulate_ranges(
 /// mode_batches bodies are one-line forwards, not near-duplicated logic.
 ///
 struct DryRunOps {
+  /// Publish one op's realized-extent \p flops / \p exec: to the eval loop's
+  /// build tally (through last_op_flops/last_op_exec), to the eval trace, and
+  /// to the replay cost sink if one is attached to \p cm. Called only when
+  /// the eval trace is on.
+  static void record_op_cost(CostModel const& cm, double flops, double exec) {
+    sequant::eval::detail::last_op_flops() = flops;
+    sequant::eval::detail::last_op_exec() = exec;
+    write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
+              std::format(" | {}", exec), '\n');
+    cm.tally_op(flops, exec);
+  }
+
   [[nodiscard]] static ResultPtr sum(container::svector<Index> const&,
                                      ExtentOverrides const& ov,
                                      std::shared_ptr<CostModel const> const& cm,
@@ -310,7 +323,6 @@ struct DryRunOps {
       for (auto const& [lbl, w] : extents_by_label(other_ov, a.rannot))
         label_extents.emplace(lbl, w);
       double const flops = cm->flops(out, contracted, label_extents);
-      sequant::eval::detail::last_op_flops() = flops;  // for the Build event
       // Roofline traffic == the op's compulsory single-pass data movement:
       // read both operands, write the result -- each at its realized (sliced)
       // extent. This is the same footprint the optimizer's DP charges (S[lp] +
@@ -326,26 +338,20 @@ struct DryRunOps {
       // finite-cache re-read effect is the separate Hong-Kung term inside
       // roofline_op_cost, not this one.
       double const exec = cm->exec_cost(
-          flops, cm->memsize(idx, ov), cm->memsize(indices_of(other), other_ov),
-          cm->memsize(out, merged));
-      sequant::eval::detail::last_op_exec() = exec;  // for the Build event
-      write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
-                std::format(" | {}", exec), '\n');
-      // Fold this op's sliced-extent cost into the replay cost sink, if one is
-      // attached (the replay's recompute-aware tally). merged/ov carry the
-      // runtime slicing, so a contraction re-executed once per occ block is
-      // charged once per block at its sliced size -- the same numbers already
-      // logged above, summed here. A no-op when no sink is attached.
-      cm->tally_op(flops, exec);
-      // last_op_flops (set above) is this build's actual realized-extent cost.
-      // The eval loop's build choke point reads it and records it against the
-      // node's identity, at the (value, slice) granularity, in the (root)
-      // cache's recompute tally -- so avoidable recompute is the actual FLOPs a
-      // slice was rebuilt beyond once, with no ill-defined "full extent"
-      // denominator (slicing is non-uniform). prod cannot form the node
-      // identity here (it has no node, and the include cycle
-      // dryrun/eval_expr.hpp -> cost_model_object.hpp keeps the node type out
-      // of the CostSink), so the rollup is done there. See
+          flops, sequant::base_field(out, contracted), cm->memsize(idx, ov),
+          cm->memsize(indices_of(other), other_ov), cm->memsize(out, merged));
+      // merged/ov carry the runtime slicing, so a contraction re-executed once
+      // per occ block is charged once per block at its sliced size.
+      record_op_cost(*cm, flops, exec);
+      // last_op_flops (set by record_op_cost) is this build's actual
+      // realized-extent cost. The eval loop's build choke point reads it and
+      // records it against the node's identity, at the (value, slice)
+      // granularity, in the (root) cache's recompute tally -- so avoidable
+      // recompute is the actual FLOPs a slice was rebuilt beyond once, with no
+      // ill-defined "full extent" denominator (slicing is non-uniform). prod
+      // cannot form the node identity here (it has no node, and the include
+      // cycle dryrun/eval_expr.hpp -> cost_model_object.hpp keeps the node type
+      // out of the CostSink), so the rollup is done there. See
       // CacheManager::tally_build / recompute_tally().
     }
 
@@ -360,18 +366,72 @@ struct DryRunOps {
         std::move(merged), std::move(merged_lob));
   }
 
-  [[nodiscard]] static ResultPtr permute(
+  /// Element-wise power: the result has the operand's shape (and slicing).
+  /// Its cost, one operation per element, is recorded like a product's.
+  [[nodiscard]] static ResultPtr pow(container::svector<Index> const& idx,
+                                     ExtentOverrides const& ov,
+                                     std::shared_ptr<CostModel const> const& cm,
+                                     ExtentOverrides const& lob = {}) {
+    if (Logger::instance().eval.level > 0) {
+      double const flops = cm->flops(idx, {}, extents_by_label(ov, idx));
+      auto const bytes = cm->memsize(idx, ov);
+      record_op_cost(
+          *cm, flops,
+          cm->exec_cost(flops, sequant::base_field(idx, idx), bytes, 0, bytes));
+    }
+    return make_dryrun_result(idx, cm, ov, lob);
+  }
+
+  /// Broadcast: the result is shaped by the result annotation \p ann[1];
+  /// a mode of the operand annotation \p ann[0] keeps the operand's slicing
+  /// (\p ov, \p lob), every other mode takes that of its rank-1 range in
+  /// \p new_mode_ranges (in result mode order). Its cost, one write per
+  /// result element, is recorded like a product's.
+  [[nodiscard]] static ResultPtr broadcast(
       container::svector<Index> const& idx, ExtentOverrides const& ov,
       std::shared_ptr<CostModel const> const& cm,
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges,
+      ExtentOverrides const& lob = {}) {
+    auto const pre = std::any_cast<annot_t>(ann[0]);
+    auto const post = std::any_cast<annot_t>(ann[1]);
+    auto merged = remap_overrides_by_annot(ov, pre, post);
+    auto merged_lob = remap_overrides_by_annot(lob, pre, post);
+    std::size_t k = 0;
+    for (std::size_t p = 0; p < post.size(); ++p) {
+      if (find_position(pre, post[p])) continue;
+      SEQUANT_ASSERT(k < new_mode_ranges.size());
+      Result const& range = *new_mode_ranges[k++];
+      if (auto const w = overrides_of(range); w.count(0)) merged[p] = w.at(0);
+      if (auto const lo = lobounds_of(range); lo.count(0))
+        merged_lob[p] = lo.at(0);
+    }
+    SEQUANT_ASSERT(k == new_mode_ranges.size());
+    container::svector<Index> out(post.begin(), post.end());
+    if (Logger::instance().eval.level > 0) {
+      double const flops = cm->flops(out, {}, extents_by_label(merged, post));
+      record_op_cost(
+          *cm, flops,
+          cm->exec_cost(flops, sequant::base_field(out, out),
+                        cm->memsize(idx, ov), 0, cm->memsize(out, merged)));
+    }
+    return make_dryrun_result(std::move(out), cm, std::move(merged),
+                              std::move(merged_lob));
+  }
+
+  [[nodiscard]] static ResultPtr permute(
+      ExtentOverrides const& ov, std::shared_ptr<CostModel const> const& cm,
       std::array<std::any, 2> const& ann, ExtentOverrides const& lob = {}) {
+    auto const pre = std::any_cast<annot_t>(ann[0]);
     auto const post = std::any_cast<annot_t>(ann[1]);
     // Reordering modes moves each mode's position, so the positional overrides
-    // must move with them: `ov` is positional against `idx` (the pre-permute
-    // canon order); project it onto `post` by label.
+    // must move with them: project them from `pre` onto `post` by label. The
+    // value's own index list cannot stand in for `pre`: a CSE-shared value
+    // keeps the labels of whichever occurrence produced it.
     return make_dryrun_result(
         container::svector<Index>(post.begin(), post.end()), cm,
-        remap_overrides_by_annot(ov, idx, post),
-        remap_overrides_by_annot(lob, idx, post));
+        remap_overrides_by_annot(ov, pre, post),
+        remap_overrides_by_annot(lob, pre, post));
   }
 
   [[nodiscard]] static ResultPtr slice_mode(
@@ -391,26 +451,29 @@ struct DryRunOps {
   /// Scatter \p block into the `[block_lo, block_hi)` element slice of the
   /// destination's mode \p mode -- the inverse of slice_mode(). Zero-data:
   /// updates only the destination's modelled size and assembled-coverage
-  /// bookkeeping. \p ov and \p cov are the destination's (mutated in place).
+  /// bookkeeping. \p ov and \p cov are the destination's (mutated in place),
+  /// \p lob its lobounds.
   static void write_into_slice(container::svector<Index> const& idx,
                                ExtentOverrides& ov, AssembledCoverage& cov,
                                std::shared_ptr<CostModel const> const& cm,
                                Result const& block, std::size_t mode,
-                               std::size_t block_lo, std::size_t block_hi) {
+                               std::size_t block_lo, std::size_t block_hi,
+                               ExtentOverrides const& lob) {
     SEQUANT_ASSERT(mode < idx.size());
     SEQUANT_ASSERT(block_lo < block_hi);
     Index const& mix = idx[mode];
-    // Tile/width consistency: the block's own modelled extent on the shared
-    // mode index must equal the slice width it is being written into. The
-    // block's overrides are positional against its own index list, so locate
-    // the shared index there (its mode need not equal the dest's `mode`).
+    // The block is a per-batch form of this same value, so its modes are this
+    // result's modes position for position (as the TA backend requires). Its
+    // labels may be another occurrence's -- a shared value passed through by
+    // pow or a scalar product keeps the producer's -- so they are never
+    // matched against \p idx.
     auto const bov = overrides_of(block);
     auto const bidx = indices_of(block);
+    SEQUANT_ASSERT(bidx.size() == idx.size());
+    // Tile/width consistency: the block's modelled extent on `mode` must equal
+    // the slice width it is being written into.
     std::size_t const block_extent = [&] {
-      if (auto const bpos = find_position(bidx, mix)) {
-        if (auto ov_it = bov.find(*bpos); ov_it != bov.end())
-          return ov_it->second;
-      }
+      if (auto ov_it = bov.find(mode); ov_it != bov.end()) return ov_it->second;
       return cm->regime().extent(mix);
     }();
     if (block_extent != block_hi - block_lo) {
@@ -434,16 +497,29 @@ struct DryRunOps {
           block_extent, mode, toUtf8(mix.full_label()), block_lo, block_hi));
     // The block's absolute position on this mode (if it is a slice) must be
     // the destination slice it is written into.
+    auto const blob = lobounds_of(block);
+    if (auto lit = blob.find(mode);
+        lit != blob.end() && lit->second != block_lo)
+      throw Exception(std::format(
+          "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
+          "destination slice lobound {}",
+          lit->second, mode, toUtf8(mix.full_label()), block_lo));
+    // Every other mode the block shares with the destination must realize the
+    // destination's range there (e.g. the same enclosing batch): the scatter
+    // places the block along `mode` only. Compare the block with the
+    // destination's view of the written region, which on `mode` is the range
+    // just checked above.
     {
-      auto const blob = lobounds_of(block);
-      if (auto const bpos = find_position(bidx, mix)) {
-        if (auto lit = blob.find(*bpos);
-            lit != blob.end() && lit->second != block_lo)
-          throw Exception(std::format(
-              "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
-              "destination slice lobound {}",
-              lit->second, mode, toUtf8(mix.full_label()), block_lo));
-      }
+      auto view_ov = ov;
+      auto view_lob = lob;
+      view_ov[mode] = block_extent;
+      if (blob.count(mode))
+        view_lob[mode] = block_lo;
+      else
+        view_lob.erase(mode);
+      // both sides spelled by `idx`: a positional comparison
+      check_shared_ranges("write_into_slice", idx, view_ov, view_lob, idx, bov,
+                          blob, cm);
     }
     // Merge the block's range into the assembled coverage, requiring
     // contiguity: a block that neither appends after nor prepends before the
@@ -606,18 +682,32 @@ class ResultDryRun final : public Result {
                                    lobounds_);
   }
 
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& ann) const override {
+    // The phase and the elementwise conjugation move no data in the size
+    // model; only the relabeling can reorder modes, exactly as permute does.
+    return permute(ann);
+  }
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
-  [[nodiscard]] ResultPtr apply_transform(
-      CanonTransform, std::array<std::any, 2> const& ann) const override {
-    // a dry run tracks shapes only: phase and elementwise conjugation are
-    // invisible, the relabeling is the permute
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+  [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
+    return detail::DryRunOps::pow(indices_, overrides_, cm_, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast(indices_, overrides_, cm_, ann,
+                                        new_mode_ranges, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast({}, {}, cm_, ann, new_mode_ranges);
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
@@ -629,7 +719,8 @@ class ResultDryRun final : public Result {
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
-                                        block, mode, block_lo, block_hi);
+                                        block, mode, block_lo, block_hi,
+                                        lobounds_);
   }
 
   void add_inplace(Result const& other) override {
@@ -764,18 +855,32 @@ class ResultDryRunNested final : public Result {
                                    lobounds_);
   }
 
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& ann) const override {
+    // The phase and the elementwise conjugation move no data in the size
+    // model; only the relabeling can reorder modes, exactly as permute does.
+    return permute(ann);
+  }
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
-  [[nodiscard]] ResultPtr apply_transform(
-      CanonTransform, std::array<std::any, 2> const& ann) const override {
-    // a dry run tracks shapes only: phase and elementwise conjugation are
-    // invisible, the relabeling is the permute
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+  [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
+    return detail::DryRunOps::pow(indices_, overrides_, cm_, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast(indices_, overrides_, cm_, ann,
+                                        new_mode_ranges, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast({}, {}, cm_, ann, new_mode_ranges);
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
@@ -787,7 +892,8 @@ class ResultDryRunNested final : public Result {
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
-                                        block, mode, block_lo, block_hi);
+                                        block, mode, block_lo, block_hi,
+                                        lobounds_);
   }
 
   void add_inplace(Result const& other) override {
@@ -889,6 +995,12 @@ namespace detail {
       [cm](container::vector<Index> const& descriptor) -> ResultPtr {
     return make_dryrun_result(
         container::svector<Index>(descriptor.begin(), descriptor.end()), cm);
+  };
+  // a same-shape unary op with no flops: the token is the operand's copy
+  aops.kramers_flip = [](Result const& operand,
+                         container::svector<std::size_t> const& /*modes*/,
+                         std::int8_t /*phase*/) -> ResultPtr {
+    return operand.clone();
   };
   return aops;
 }

@@ -53,6 +53,11 @@ struct ExportTreeData {
 
 using ProcessingData = std::variant<ExpressionData, ExportTreeData>;
 
+/// @returns A copy of @p data that shares no mutable state with it (i.e. is
+/// safe to modify without affecting the original)
+ExpressionData clone(const ExpressionData &data);
+ExportTreeData clone(const ExportTreeData &data);
+
 template <typename Target, typename Input>
   requires(std::is_assignable_v<std::remove_cvref_t<Input>, Target>)
 decltype(auto) convert_data(Input &&input) {

@@ -4,6 +4,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/complex.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -93,6 +94,17 @@ std::wstring serialize_symm(ConjugationParity parity,
     case ConjugationParity::Odd:
       return L"O";
     case ConjugationParity::None:
+      return L"N";
+  }
+
+  SEQUANT_UNREACHABLE;
+}
+
+std::wstring serialize_symm(KramersSymmetry symm, const SerializationOptions&) {
+  switch (symm) {
+    case KramersSymmetry::TimeReversal:
+      return L"T";
+    case KramersSymmetry::Nonsymm:
       return L"N";
   }
 
@@ -191,6 +203,12 @@ std::wstring to_string(const Variable& variable, const SerializationOptions&) {
   return variable.decorated_label();
 }
 
+static std::wstring serialize_exponent(const rational& exponent,
+                                       const SerializationOptions& options) {
+  return L"^(" + serialize_scalar(Constant::scalar_type{exponent}, options) +
+         L")";
+}
+
 std::wstring to_string(const Power& power,
                        const SerializationOptions& options) {
   std::wstring core;
@@ -202,9 +220,7 @@ std::wstring to_string(const Power& power,
   if (parenthesize_base) core += L"(";
   core += v1::to_string(*base, options);
   if (parenthesize_base) core += L")";
-  core += L"^(";
-  core += serialize_scalar(Constant::scalar_type{power.exponent()}, options);
-  core += L")";
+  core += serialize_exponent(power.exponent(), options);
   if (power.conjugated()) return L"(" + std::move(core) + L")^*";
   return core;
 }
@@ -246,6 +262,12 @@ std::wstring to_string(const RealPart& part,
 std::wstring to_string(const ImagPart& part,
                        const SerializationOptions& options) {
   return serialize_wrapper(L"Im", part.inner(), options);
+}
+
+std::wstring to_string(const TensorPower& power,
+                       const SerializationOptions& options) {
+  return v1::to_string(*power.base(), options) +
+         serialize_exponent(power.exponent(), options);
 }
 
 std::wstring to_string(Product const& prod,
@@ -348,6 +370,8 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
     return detail::to_string(expr.as<RealPart>(), options);
   else if (expr.is<ImagPart>())
     return detail::to_string(expr.as<ImagPart>(), options);
+  else if (expr.is<TensorPower>())
+    return detail::to_string(expr.as<TensorPower>(), options);
   else
     throw Exception(
         expr.type_name() +
@@ -420,9 +444,18 @@ std::wstring to_string(AbstractTensor const& tensor,
         hermiticity == Hermiticity::NonHermitian
             ? to_conjugation_parity(braket_symmetry, tensor._base_field())
             : Tensor::Defaults::conjugation_parity;
-    if (tensor._conjugation_parity() != implied_parity) {
+    // the fifth letter, the Kramers symmetry, is emitted only for a tensor
+    // that has one; the letters are positional, so it brings the parity
+    // letter with it
+    const bool spell_kramers =
+        tensor._kramers_symmetry() != Tensor::Defaults::kramers_symmetry;
+    if (tensor._conjugation_parity() != implied_parity || spell_kramers) {
       serialized +=
           L"-" + detail::serialize_symm(tensor._conjugation_parity(), options);
+    }
+    if (spell_kramers) {
+      serialized +=
+          L"-" + detail::serialize_symm(tensor._kramers_symmetry(), options);
     }
   }
 

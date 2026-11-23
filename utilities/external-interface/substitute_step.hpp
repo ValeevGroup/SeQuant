@@ -19,7 +19,8 @@
 
 namespace sequant::util::extint {
 
-class SubstituteStep : public OneByOneProcessingStep<ExpressionData, false> {
+class SubstituteStep : public OneByOneProcessingStep<ExpressionData, false,
+                                                     InputAccess::WorkingCopy> {
  public:
   std::string kind() const override;
 
@@ -30,11 +31,16 @@ class SubstituteStep : public OneByOneProcessingStep<ExpressionData, false> {
  protected:
   std::size_t process(std::string_view id_prefix, std::size_t id_start,
                       ExecutionContext &ctx,
-                      const ExpressionData &data) override;
+                      WorkingCopy<ExpressionData> &input) override;
+
+  // Unless keep_unchanged is set, inputs left unchanged by the substitutions
+  // are dropped
+  bool needs_original_input() const override;
 
  private:
   std::vector<std::pair<ExprPtr, ExprPtr>> substitutions_;
   TensorComparison tensor_mode_ = TensorComparison::Block;
+  bool keep_unchanged_ = false;
   std::map<std::string, std::string, std::less<>> result_labels_;
 };
 

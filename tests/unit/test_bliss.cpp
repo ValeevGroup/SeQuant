@@ -194,4 +194,26 @@ TEST_CASE("bliss", "[elements]") {
             L"}\n"
             L"}\n");
   }
+
+  SECTION("is_automorphism") {
+    // hub v0 -- v1 -- v3 and v0 -- v2 -- v4: swapping both branches is an
+    // automorphism that fixes v0, swapping one is not
+    bliss::Graph g(5);
+    g.add_edge(0, 1);
+    g.add_edge(0, 2);
+    g.add_edge(1, 3);
+    g.add_edge(2, 4);
+    REQUIRE(g.is_automorphism({0, 1, 2, 3, 4}));
+    REQUIRE(g.is_automorphism({0, 2, 1, 4, 3}));
+    REQUIRE_FALSE(g.is_automorphism({0, 2, 1, 3, 4}));
+    REQUIRE_FALSE(g.is_automorphism({0, 1, 2, 4, 3}));
+    REQUIRE_FALSE(g.is_automorphism({0, 1, 2, 3}));
+    REQUIRE_FALSE(g.is_automorphism({0, 1, 2, 3, 3}));
+
+    // an edge between a fixed vertex and a moved one must map onto an edge
+    g.add_edge(0, 3);
+    REQUIRE_FALSE(g.is_automorphism({0, 2, 1, 4, 3}));
+    g.add_edge(0, 4);
+    REQUIRE(g.is_automorphism({0, 2, 1, 4, 3}));
+  }
 }

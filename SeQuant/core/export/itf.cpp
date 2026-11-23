@@ -69,6 +69,12 @@ std::string ItfContext::get_tag(const IndexSpace &space) const {
   return it->second;
 }
 
+std::string ItfContext::irrep_name(const AnyIrrep &irrep) const {
+  return irrep.to_string();
+}
+
+std::string ItfContext::any_irreps_name() const { return "*"; }
+
 std::optional<std::string> ItfContext::import_name(const Tensor &tensor) const {
   // the map is keyed the way the pipeline looks it up: every rewrite folds a
   // tensor's marks into its label before the name is asked for
@@ -134,8 +140,8 @@ bool ItfContext::rewrite(Tensor &tensor) const {
     // SeQuant, so we have to use this hacky approach in order to make use of
     // it.
 
-    container::svector<Index> bra = tensor.bra();
-    container::svector<Index> ket = tensor.ket();
+    container::svector<Index> bra(tensor.bra().begin(), tensor.bra().end());
+    container::svector<Index> ket(tensor.ket().begin(), tensor.ket().end());
 
     for (std::size_t i = 0; i < 2; ++i) {
       if (needs_swap(bra.at(i).basis(), ket.at(i).basis())) {

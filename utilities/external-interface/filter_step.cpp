@@ -2,91 +2,30 @@
 #include "processing_data.hpp"
 #include "processing_step_factory.hpp"
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/expr_filter.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <initializer_list>
+#include <memory>
 #include <regex>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace sequant::util::extint {
-
-bool ExpressionFilter::matches(const Expr &expr) const {
-  for (const std::unique_ptr<Rule> &current : rules_) {
-    if (current->matches(expr) == !current->negate) {
-      if (!require_all_) {
-        return true;
-      }
-    } else if (require_all_) {
-      return false;
-    }
-  }
-
-  // In "any" mode, getting here means that no rule matched
-  return require_all_;
-}
-
-void ExpressionFilter::set_require_all(bool require) { require_all_ = require; }
-
-void ExpressionFilter::add_rule(std::unique_ptr<Rule> rule) {
-  rules_.emplace_back(std::move(rule));
-}
-
-/// Checks @p expr and, recursively, every descendant subexpression against
-/// @p predicate, stopping at the first match.
-template <typename Predicate>
-bool matches_recursively(const Expr &expr, Predicate &&predicate) {
-  if (predicate(expr)) {
-    return true;
-  }
-
-  for (const ExprPtr &sub : expr) {
-    if (matches_recursively(*sub, predicate)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-struct ContainsRule : ExpressionFilter::Rule {
-  ContainsRule(ExprMatcher matcher) : matcher_(std::move(matcher)) {}
-
-  bool matches(const Expr &expr) const override {
-    return matches_recursively(
-        expr, [&](const Expr &sub) { return sub == matcher_; });
-  }
-
-  ExprMatcher matcher_;
-};
-
-struct LabelRule : ExpressionFilter::Rule {
-  LabelRule(std::vector<std::wregex> patterns)
-      : patterns_(std::move(patterns)) {}
-
-  bool matches(const Expr &expr) const override {
-    return matches_recursively(expr, [&](const Expr &sub) {
-      if (!sub.is<Labeled>()) {
-        return false;
-      }
-
-      std::wstring_view label = sub.as<Labeled>().label();
-
-      return std::ranges::any_of(patterns_, [&](const std::wregex &pattern) {
-        return std::regex_match(label.begin(), label.end(), pattern);
-      });
-    });
-  }
-
-  std::vector<std::wregex> patterns_;
-};
 
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(FilterStep);
 
@@ -149,8 +88,8 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
   return rule;
 }
 
-std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
-    const nlohmann::json &spec) {
+/// Parses one or several full-match regular expressions from @p labels
+std::vector<std::wregex> parse_label_patterns(const nlohmann::json &labels) {
   std::vector<std::wregex> patterns;
 
   auto add_pattern = [&](const nlohmann::json &value) {
@@ -166,7 +105,6 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
     }
   };
 
-  const nlohmann::json &labels = spec.at("label");
   if (labels.is_string()) {
     add_pattern(labels);
   } else if (labels.is_array()) {
@@ -181,7 +119,101 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
     throw Exception("\"label\" filter rule requires at least one label");
   }
 
-  auto rule = std::make_unique<LabelRule>(std::move(patterns));
+  return patterns;
+}
+
+std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
+    const nlohmann::json &spec) {
+  auto rule =
+      std::make_unique<LabelRule>(parse_label_patterns(spec.at("label")));
+  apply_negate(*rule, spec);
+
+  return rule;
+}
+
+/// Throws if @p spec contains any of @p keys, which don't apply to the rule
+/// type @p type
+void reject_keys(const nlohmann::json &spec, std::string_view type,
+                 std::initializer_list<std::string_view> keys) {
+  for (std::string_view key : keys) {
+    if (spec.contains(key)) {
+      throw Exception("\"" + std::string(key) + "\" is not supported by \"" +
+                      std::string(type) + "\" filter rules");
+    }
+  }
+}
+
+/// Reads a non-negative integer from @p value, using @p what in errors
+std::size_t parse_count(const nlohmann::json &value, const std::string &what) {
+  if (!value.is_number_integer() || value.get<long long>() < 0) {
+    throw Exception(what + " must be a non-negative integer");
+  }
+
+  return value.get<std::size_t>();
+}
+
+std::unique_ptr<ExpressionFilter::Rule> parse_index_spaces(
+    const nlohmann::json &spec) {
+  reject_keys(spec, "index_spaces", {"expr", "count", "tensor_equality_mode"});
+
+  const nlohmann::json &spaces = spec.at("spaces");
+  if (!spaces.is_object() || spaces.empty()) {
+    throw Exception(
+        "\"spaces\" must be a non-empty object mapping space labels to "
+        "index counts");
+  }
+
+  std::vector<IndexSpaceCount> counts;
+  for (const auto &[label, count] : spaces.items()) {
+    IndexSpaceCount bounds{
+        .space = get_default_context().index_basis_registry()->retrieve_space(
+            label)};
+    const std::string what = "Index count for space \"" + label + "\"";
+
+    if (count.is_object()) {
+      for (const auto &[key, bound] : count.items()) {
+        if (key == "min") {
+          bounds.min = parse_count(bound, what);
+        } else if (key == "max") {
+          bounds.max = parse_count(bound, what);
+        } else {
+          throw Exception(what + " has unknown key \"" + key + "\"");
+        }
+      }
+    } else {
+      bounds.min = bounds.max = parse_count(count, what);
+    }
+
+    if (bounds.min > bounds.max) {
+      throw Exception(what + " has min larger than max");
+    }
+
+    counts.push_back(std::move(bounds));
+  }
+
+  std::vector<std::wregex> label_patterns;
+  if (spec.contains("label")) {
+    label_patterns = parse_label_patterns(spec.at("label"));
+  }
+
+  auto rule = std::make_unique<IndexSpaceCountRule>(std::move(counts),
+                                                    std::move(label_patterns));
+  apply_negate(*rule, spec);
+
+  return rule;
+}
+
+std::unique_ptr<ExpressionFilter::Rule> parse_index_count(
+    const nlohmann::json &spec) {
+  reject_keys(spec, "index_count",
+              {"expr", "label", "spaces", "tensor_equality_mode"});
+
+  const nlohmann::json &count = spec.at("count");
+  if (!count.is_number_integer() || count.get<long long>() < 0) {
+    throw Exception("\"count\" must be a non-negative integer");
+  }
+
+  auto rule = std::make_unique<IndexCountRule>(count.get<std::size_t>());
   apply_negate(*rule, spec);
 
   return rule;
@@ -223,6 +255,10 @@ ExpressionFilter parse_filter(const nlohmann::json &filter) {
         throw Exception(
             "contains filter must only contain either 'expr' or 'label'");
       }
+    } else if (current.at("type") == "index_spaces") {
+      res.add_rule(parse_index_spaces(current));
+    } else if (current.at("type") == "index_count") {
+      res.add_rule(parse_index_count(current));
     } else {
       throw Exception("Unknown filter rule type \"" +
                       current.at("type").get<std::string>() + "\"");
@@ -262,40 +298,6 @@ void FilterStep::set_options(const nlohmann::json &options) {
   if (groups_.empty()) {
     throw Exception("Option 'groups' for " + kind() + " is mandatory");
   }
-}
-
-/// Recursively rebuilds @p expr, keeping only the parts relevant to
-/// @p filter: for a Sum, keeps (and further prunes) only those summands
-/// that (recursively) contain a match, dropping the rest; for a Product,
-/// keeps every factor (dropping one would change what the product
-/// computes), pruning each factor in turn; leaves are returned unchanged.
-ExprPtr prune_to_matches(const Expr &expr, const ExpressionFilter &filter) {
-  if (expr.is<Sum>()) {
-    Sum::summands_type kept;
-
-    for (const ExprPtr &summand : expr.as<Sum>().summands()) {
-      if (filter.matches(*summand)) {
-        kept.push_back(prune_to_matches(*summand, filter));
-      }
-    }
-
-    return ex<Sum>(std::move(kept));
-  }
-
-  if (expr.is<Product>()) {
-    const Product &prod = expr.as<Product>();
-    Product::factors_type pruned_factors;
-    pruned_factors.reserve(prod.factors().size());
-
-    for (const ExprPtr &factor : prod.factors()) {
-      pruned_factors.push_back(prune_to_matches(*factor, filter));
-    }
-
-    return ex<Product>(prod.scalar(), std::move(pruned_factors),
-                       Product::Flatten::No);
-  }
-
-  return expr.clone();
 }
 
 /// Filters a single input item's expressions into per-group accumulators,

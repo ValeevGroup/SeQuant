@@ -1,0 +1,244 @@
+{
+ "format": "sequant-dry-run",
+ "version": 1,
+ "producer": "MPQC 4.0.0, CCk; Kramers-restricted PNS-CCD, particle-particle ladder only; 1,3-hexatriene (6-31G), planned with its own sizes",
+ "context": {
+  "convention": "mpqc-sr",
+  "vbs": false,
+  "field": "complex",
+  "strict_braket_symmetry": true,
+  "first_dummy_index_ordinal": 100
+ },
+ "spaces": [
+  {
+   "key": "a",
+   "type": 2,
+   "qns": 3,
+   "size": 108
+  },
+  {
+   "key": "a↑",
+   "type": 2,
+   "qns": 1,
+   "size": 54
+  },
+  {
+   "key": "a↓",
+   "type": 2,
+   "qns": 2,
+   "size": 54
+  },
+  {
+   "key": "i",
+   "type": 1,
+   "qns": 3,
+   "size": 44
+  },
+  {
+   "key": "i↑",
+   "type": 1,
+   "qns": 1,
+   "size": 22
+  },
+  {
+   "key": "i↓",
+   "type": 1,
+   "qns": 2,
+   "size": 22
+  },
+  {
+   "key": "p",
+   "type": 3,
+   "qns": 3,
+   "size": 184
+  },
+  {
+   "key": "p↑",
+   "type": 3,
+   "qns": 1,
+   "size": 92
+  },
+  {
+   "key": "p↓",
+   "type": 3,
+   "qns": 2,
+   "size": 92
+  },
+  {
+   "key": "Κ",
+   "type": 1,
+   "qns": 16,
+   "size": 792
+  }
+ ],
+ "slices": {
+  "i↑": [
+   4,
+   4,
+   4,
+   4,
+   3,
+   3
+  ],
+  "i↓": [
+   4,
+   4,
+   4,
+   4,
+   3,
+   3
+  ],
+  "Κ": [
+   132,
+   132,
+   131,
+   131,
+   131,
+   131
+  ]
+ },
+ "csv": {
+  "union_composites": true,
+  "moments": {
+   "1": [
+    1,
+    54,
+    54,
+    53.999999999999986,
+    54,
+    54.000000000000014,
+    53.999999999999986,
+    53.999999999999986,
+    54
+   ],
+   "2": [
+    1,
+    15.8,
+    16.31852069420077,
+    16.866199828053034,
+    17.453974222734033,
+    18.091476045317926,
+    18.7810269296359,
+    19.51312386552712,
+    20.267156682799886
+   ]
+  },
+  "occupancy": {
+   "1": 1,
+   "2": 0.7024793388429752
+  }
+ },
+ "optimize": {
+  "enabled": true,
+  "objective_function": "dense_time_space_batched",
+  "volatile_weight": 20,
+  "cse_subnet": false,
+  "peak_flops_tolerance": 0.1,
+  "footprint_weight": 0,
+  "prune_outer_products": true,
+  "term_batch_axes": true,
+  "roofline": {
+   "machine_balance": 200,
+   "fast_mem_elems": 1000000,
+   "block_tiles": 3,
+   "block_prefactor": 1
+  }
+ },
+ "batch": {
+  "enabled": true,
+  "scheduler": "ordered",
+  "peak_threshold": 703375539.2348562,
+  "accumulation_factor": 1,
+  "persistent_only": false,
+  "spectator_indices": true,
+  "spaces": {
+   "i↑": {
+    "target_size": 4,
+    "contracted": true,
+    "external": true
+   },
+   "i↓": {
+    "target_size": 4,
+    "contracted": true,
+    "external": true
+   },
+   "Κ": {
+    "target_size": 100,
+    "contracted": true,
+    "external": true
+   }
+  }
+ },
+ "cache": {
+  "enabled": true,
+  "min_repeats": 2,
+  "max_footprint": 0
+ },
+ "binarize": {
+  "volatile_label": "t",
+  "fold_kramers_eval_leaves": true,
+  "kramers_blind_leaf_label": "C",
+  "kramers_blind_loop_fusion": true,
+  "kramers_fold_intermediates": true
+ },
+ "equations": [
+  {
+   "name": "equation 0 block 0",
+   "roundtrip": true,
+   "head": "E{}:N-N-N",
+   "rhs": "g{i_1;a_2309;Κ_1}:N-H-S-E-T * C{a_2309;a_1<i_1,i_2>}:N-H-S-E-T * g{i_2;a_2310;Κ_1}:N-H-S-E-T * C{a_2310;a_2<i_1,i_2>}:N-H-S-E-T * t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S-E-T"
+  },
+  {
+   "name": "equation 1 block 0",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↑_1>;i↑_1}:N-N-S",
+   "rhs": "f{a_2311;i↑_1}:A-H-S-E-T * C{a↑_1<i↑_1>;a_2311}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 1 block 1",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↓_1>;i↓_1}:N-N-S",
+   "rhs": "f{a_2312;i↓_1}:A-H-S-E-T * C{a↑_1<i↓_1>;a_2312}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 2 block 0",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↑_1,i↑_2>,a↑_2<i↑_1,i↑_2>;i↑_1,i↑_2}:N-N-S",
+   "rhs": "g{a_2315;a_2316;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_1,i↑_2>;a_2315}:N-H-S-E-T * C{a_2316;a_1<i↑_1,i↑_2>}:N-H-S-E-T * g{a_2317;a_2318;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_1,i↑_2>;a_2317}:N-H-S-E-T * C{a_2318;a_2<i↑_1,i↑_2>}:N-H-S-E-T * t{a_1<i↑_1,i↑_2>,a_2<i↑_1,i↑_2>;i↑_1,i↑_2}:A-N-S-E-T + g{a_2313;i↑_1;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_1,i↑_2>;a_2313}:N-H-S-E-T * g{a_2314;i↑_2;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_1,i↑_2>;a_2314}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 2 block 1",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↑_2,i↓_1>,a↑_2<i↑_2,i↓_1>;i↓_1,i↑_2}:N-N-S",
+   "rhs": "g{a_2321;a_2322;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_2,i↓_1>;a_2321}:N-H-S-E-T * C{a_2322;a_2<i↑_2,i↓_1>}:N-H-S-E-T * g{a_2323;a_2324;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2323}:N-H-S-E-T * C{a_2324;a_1<i↑_2,i↓_1>}:N-H-S-E-T * t{a_1<i↑_2,i↓_1>,a_2<i↑_2,i↓_1>;i↑_2,i↓_1}:A-N-S-E-T - g{a_2319;i↑_2;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_2,i↓_1>;a_2319}:N-H-S-E-T * g{a_2320;i↓_1;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2320}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 2 block 2",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↓_1,i↓_2>,a↑_2<i↓_1,i↓_2>;i↓_1,i↓_2}:N-N-S",
+   "rhs": "g{a_2329;i↓_1;Κ_1}:N-H-S-E-T * C{a↑_1<i↓_1,i↓_2>;a_2329}:N-H-S-E-T * g{a_2330;i↓_2;Κ_1}:N-H-S-E-T * C{a↑_2<i↓_1,i↓_2>;a_2330}:N-H-S-E-T + g{a_2325;a_2326;Κ_1}:N-H-S-E-T * C{a↑_1<i↓_1,i↓_2>;a_2325}:N-H-S-E-T * C{a_2326;a_1<i↓_1,i↓_2>}:N-H-S-E-T * g{a_2327;a_2328;Κ_1}:N-H-S-E-T * C{a↑_2<i↓_1,i↓_2>;a_2327}:N-H-S-E-T * C{a_2328;a_2<i↓_1,i↓_2>}:N-H-S-E-T * t{a_1<i↓_1,i↓_2>,a_2<i↓_1,i↓_2>;i↓_1,i↓_2}:A-N-S-E-T"
+  },
+  {
+   "name": "equation 2 block 3",
+   "roundtrip": true,
+   "head": "R{a↓_1<i↑_1,i↑_2>,a↑_2<i↑_1,i↑_2>;i↑_1,i↑_2}:N-N-S",
+   "rhs": "-g{a_2333;a_2334;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_1,i↑_2>;a_2333}:N-H-S-E-T * C{a_2334;a_1<i↑_1,i↑_2>}:N-H-S-E-T * g{a_2335;a_2336;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_1,i↑_2>;a_2335}:N-H-S-E-T * C{a_2336;a_2<i↑_1,i↑_2>}:N-H-S-E-T * t{a_1<i↑_1,i↑_2>,a_2<i↑_1,i↑_2>;i↑_1,i↑_2}:A-N-S-E-T - g{a_2331;i↑_1;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_1,i↑_2>;a_2331}:N-H-S-E-T * g{a_2332;i↑_2;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_1,i↑_2>;a_2332}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 2 block 4",
+   "roundtrip": true,
+   "head": "R{a↓_1<i↑_2,i↓_1>,a↑_2<i↑_2,i↓_1>;i↓_1,i↑_2}:N-N-S",
+   "rhs": "-1/4 g{a_2341;i↓_1;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2341}:N-H-S-E-T * g{a_2342;i↑_2;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_2,i↓_1>;a_2342}:N-H-S-E-T + 1/2 g{a_2337;a_2338;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2337}:N-H-S-E-T * C{a_2338;a_1<i↑_2,i↓_1>}:N-H-S-E-T * g{a_2339;a_2340;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_2,i↓_1>;a_2339}:N-H-S-E-T * C{a_2340;a_2<i↑_2,i↓_1>}:N-H-S-E-T * t{a_1<i↑_2,i↓_1>,a_2<i↑_2,i↓_1>;i↑_2,i↓_1}:A-N-S-E-T + 1/4 g{a_2343;i↑_2;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2343}:N-H-S-E-T * g{a_2344;i↓_1;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_2,i↓_1>;a_2344}:N-H-S-E-T"
+  }
+ ],
+ "expected": {
+  "meter": {
+   "peak_bytes": 793976692,
+   "flops_persistent": 591884819935.8073,
+   "flops_volatile": 1019996103593.2959,
+   "cost_persistent": 1189110816675,
+   "cost_volatile": 1786152646500,
+   "builds": 705
+  }
+ }
+}

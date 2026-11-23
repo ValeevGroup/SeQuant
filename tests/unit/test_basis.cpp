@@ -52,14 +52,14 @@ auto scoped_min_sr_context(CanonicalizeOptions canonicalization_options =
 
 // μ̃ = {a, INT32_MAX} registered by name: the PAO basis of ibr-spec.md §3.3
 auto scoped_pao_context() {
-  auto isr = mbpt::make_min_sr_spaces();
-  const IndexSpace uocc = isr->retrieve_space(L"a");
+  auto ibr = mbpt::make_min_sr_spaces();
+  const IndexSpace uocc = ibr->retrieve_space(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  isr->add(L"μ̃", IndexBasis{uocc, P},
-           120ul);  // before the Context adopts the registry (#665)
+  ibr->add(L"μ̃", uocc, P,
+           {.extent = 120});  // before the Context adopts the registry (#665)
   return set_scoped_default_context(
-      Context({.index_basis_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
 }
 
@@ -69,9 +69,9 @@ auto scoped_pao_context() {
 // y = a_7<;1> a CSV::No-granted leg, i_1<;5> an occupied leg under a grant
 TEST_CASE("index-basis", "[elements][index][basis]") {
   auto ctx = scoped_min_sr_context();
-  const auto& isr = get_default_context().index_basis_registry();
-  const IndexSpace occ = isr->retrieve_space(L"i");
-  const IndexSpace uocc = isr->retrieve_space(L"a");
+  const auto& ibr = get_default_context().index_basis_registry();
+  const IndexSpace occ = ibr->retrieve_space(L"i");
+  const IndexSpace uocc = ibr->retrieve_space(L"a");
   const Index i1(occ, 1), i2(occ, 2), i3(occ, 3), i4(occ, 4);
   const Index a1(uocc, 1, {i1, i2}), a2(uocc, 2, {i1, i2}),
       a1_34(uocc, 1, {i3, i4});
@@ -134,12 +134,17 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
   // carries its own unless registered without, which identity ignores. The
   // name is part of the identity, so a named basis is not the unnamed basis
   // of its space and instance (same_instance() relates the two)
+  auto custom_ibr = mbpt::make_min_sr_spaces();
+  custom_ibr->add(L"ã", uocc, 1,
+                  {.extent = 77,
+                   .metric = IndexBasisMetric::General,
+                   .field = Field::Real});
+  const IndexBasis custom = custom_ibr->retrieve(L"ã");
   const std::vector<std::pair<IndexBasis, bool>> bases = {
       {IndexBasis{uocc}, false},
       {IndexBasis{uocc, 1}, false},
       {IndexBasis{uocc, 1, L"ã"}, false},
-      {IndexBasis{uocc, 1, L"ã", 77, IndexBasisMetric::General, Field::Real},
-       true}};
+      {custom, true}};
   for (const auto& [b, is_custom] : bases) {
     CHECK(b.extent() == (is_custom ? 77 : uocc.dimension()));
     CHECK(b.metric() ==
@@ -189,7 +194,7 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
       CHECK(idx == x);
     CHECK(Index(x, {i2}) == I(Index(uocc, 1, {i2}), 1));
     CHECK(Index(x, container::vector<Index>{i2}) == I(Index(uocc, 1, {i2}), 1));
-    const IndexSpace uocc_alpha = isr->retrieve_space(L"a↑");
+    const IndexSpace uocc_alpha = ibr->retrieve_space(L"a↑");
     const Index x_alpha = x.replace_space(uocc_alpha);
     CHECK(x_alpha.space() == uocc_alpha);
     CHECK(x_alpha.basis().basis_instance() == 1);
@@ -318,9 +323,9 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
     auto ctx = scoped_min_sr_context(
         CanonicalizeOptions::default_options().copy_and_set(
             CanonicalizationMethod::Complete));
-    const auto& isr = get_default_context().index_basis_registry();
-    const IndexSpace occ = isr->retrieve_space(L"i");
-    const IndexSpace uocc = isr->retrieve_space(L"a");
+    const auto& ibr = get_default_context().index_basis_registry();
+    const IndexSpace occ = ibr->retrieve_space(L"i");
+    const IndexSpace uocc = ibr->retrieve_space(L"a");
     const Index i1(occ, 1), i2(occ, 2);
     const Index a1 = Index(uocc, 1, {i1}).replace_basis_instance(1);
 
@@ -345,9 +350,9 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
 
   SECTION("no dummy takes a named index's label in another basis") {
     auto ctx = scoped_min_sr_context();
-    const auto& isr = get_default_context().index_basis_registry();
-    const IndexSpace occ = isr->retrieve_space(L"i");
-    const IndexSpace uocc = isr->retrieve_space(L"a");
+    const auto& ibr = get_default_context().index_basis_registry();
+    const IndexSpace occ = ibr->retrieve_space(L"i");
+    const IndexSpace uocc = ibr->retrieve_space(L"a");
     const Index i1(occ, 1), i2(occ, 2);
     // the tʼ R1 term of CC{2}.tʼ(1,1) (t granted 1, t¹ granted 10) with its
     // symmetrizer stripped: i_1 and a_1<i_1;10> are named
@@ -383,9 +388,9 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
 
 TEST_CASE("index-basis-annotation-and-hash", "[EvalExpr][basis]") {
   auto ctx = scoped_min_sr_context();
-  const auto& isr = get_default_context().index_basis_registry();
-  const IndexSpace occ = isr->retrieve_space(L"i");
-  const IndexSpace uocc = isr->retrieve_space(L"a");
+  const auto& ibr = get_default_context().index_basis_registry();
+  const IndexSpace occ = ibr->retrieve_space(L"i");
+  const IndexSpace uocc = ibr->retrieve_space(L"a");
   const Index i1(occ, 1), i2(occ, 2);
   const Index a1(uocc, 1, {i1, i2}), a2(uocc, 2, {i1, i2});
   const Index y = Index(uocc, 7).replace_basis_instance(1);
@@ -503,20 +508,20 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
   }
 
   SECTION("a named basis instance round-trips by its label") {
-    auto isr = mbpt::make_min_sr_spaces();
-    mbpt::add_df_spaces(isr);
-    const IndexSpace a = isr->retrieve_space(L"a"),
-                     i = isr->retrieve_space(L"i");
+    auto ibr = mbpt::make_min_sr_spaces();
+    mbpt::add_df_spaces(ibr);
+    const IndexSpace a = ibr->retrieve_space(L"a"),
+                     i = ibr->retrieve_space(L"i");
     constexpr IndexBasis::instance_type P =
         std::numeric_limits<IndexBasis::instance_type>::max();
-    isr->add(L"μ̃", IndexBasis{a, P}, 120ul);
+    ibr->add(L"μ̃", a, P, {.extent = 120});
     // a named occupied basis (localized occupieds), so a proto can be named
     // too; written with the combining tilde U+0303 the v1 BaseKey alphabet
     // admits
-    isr->add(L"ĩ", IndexBasis{i, 1});
+    ibr->add(L"ĩ", i, 1);
     // a copy shares the registry until set() moves the populated one in
     auto named = get_default_context_snapshot();
-    named.set(std::move(isr));
+    named.set(std::move(ibr));
     // fixtures and tmp indices carry ordinals >= 100
     named.set_first_dummy_index_ordinal(1000000);
     auto named_ctx = set_scoped_default_context(std::move(named));
@@ -585,10 +590,10 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
 // the new space
 TEST_CASE("index-move-into-space-resets-label", "[elements][index]") {
   auto ctx = scoped_min_sr_context();
-  const auto& isr = get_default_context().index_basis_registry();
-  const IndexSpace occ = isr->retrieve_space(L"i"),
-                   uocc = isr->retrieve_space(L"a"),
-                   uocc_alpha = isr->retrieve_space(L"a↑");
+  const auto& ibr = get_default_context().index_basis_registry();
+  const IndexSpace occ = ibr->retrieve_space(L"i"),
+                   uocc = ibr->retrieve_space(L"a"),
+                   uocc_alpha = ibr->retrieve_space(L"a↑");
   Index a3(uocc, 3);
   (void)a3.label();
   (void)a3.full_label();
@@ -608,9 +613,9 @@ TEST_CASE("index-move-into-space-resets-label", "[elements][index]") {
 
 TEST_CASE("index-basis-named", "[elements][index][basis]") {
   auto ctx = scoped_pao_context();
-  const auto& isr = get_default_context().index_basis_registry();
-  const IndexSpace uocc = isr->retrieve_space(L"a");
-  const IndexBasis pao = isr->retrieve(L"μ̃");
+  const auto& ibr = get_default_context().index_basis_registry();
+  const IndexSpace uocc = ibr->retrieve_space(L"a");
+  const IndexBasis pao = ibr->retrieve(L"μ̃");
   const IndexBasis::instance_type P = *pao.basis_instance();
 
   // the registry's entry carries its name, which is part of the identity:
@@ -621,8 +626,8 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(IndexBasis(uocc, P) != pao);
   CHECK(hash_value(IndexBasis(uocc, P)) != hash_value(pao));
   CHECK(same_instance(IndexBasis(uocc, P), pao));
-  CHECK(isr->resolve(IndexBasis(uocc, P)) == pao);
-  CHECK(isr->resolve(IndexBasis(uocc, P)).name() == L"μ̃");
+  CHECK(ibr->resolve(IndexBasis(uocc, P)) == pao);
+  CHECK(ibr->resolve(IndexBasis(uocc, P)).name() == L"μ̃");
 
   // labels: the name, no instance suffix anywhere
   const Index m3(pao, 3);
@@ -670,10 +675,10 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(Index(m3, uocc).full_label() == L"μ̃_3");
   CHECK(Index(m3, uocc).basis() == pao);
   CHECK(Index(m3, uocc).basis().extent() == 120);
-  CHECK(Index(m3, isr->retrieve_space(L"p")).full_label() ==
+  CHECK(Index(m3, ibr->retrieve_space(L"p")).full_label() ==
         L"p_3<;" + std::to_wstring(P) + L">");
-  CHECK(Index(m3, isr->retrieve_space(L"p")).basis().extent() ==
-        isr->retrieve_space(L"p").dimension());
+  CHECK(Index(m3, ibr->retrieve_space(L"p")).basis().extent() ==
+        ibr->retrieve_space(L"p").dimension());
   // the instance dropped: the space's own basis, sized as the space
   CHECK(m3.replace_basis_instance(std::nullopt) == Index(uocc, 3));
   CHECK(m3.replace_basis_instance(std::nullopt).basis().extent() ==
@@ -721,10 +726,10 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
 // after the context switched to a registry without the name still prints it
 TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
   auto ctx = scoped_pao_context();
-  const auto& isr = get_default_context().index_basis_registry();
-  const IndexSpace occ = isr->retrieve_space(L"i"),
-                   uocc = isr->retrieve_space(L"a");
-  const IndexBasis pao = isr->retrieve(L"μ̃");
+  const auto& ibr = get_default_context().index_basis_registry();
+  const IndexSpace occ = ibr->retrieve_space(L"i"),
+                   uocc = ibr->retrieve_space(L"a");
+  const IndexBasis pao = ibr->retrieve(L"μ̃");
   const Index i1(occ, 1), i2(occ, 2);
 
   // minted, never labelled here
@@ -770,10 +775,10 @@ TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
 // what OpMaker mints, μ̃ the PAO basis
 TEST_CASE("index-basis-copy-while-labelling", "[elements][index][basis]") {
   auto ctx = scoped_pao_context();
-  const auto& isr = get_default_context().index_basis_registry();
-  const IndexSpace occ = isr->retrieve_space(L"i"),
-                   uocc = isr->retrieve_space(L"a");
-  const IndexBasis pao = isr->retrieve(L"μ̃");
+  const auto& ibr = get_default_context().index_basis_registry();
+  const IndexSpace occ = ibr->retrieve_space(L"i"),
+                   uocc = ibr->retrieve_space(L"a");
+  const IndexBasis pao = ibr->retrieve(L"μ̃");
   const Index i1(occ, 1), i2(occ, 2);
   IndexFactory factory;
   const std::vector<Index> minted = {
@@ -827,10 +832,10 @@ concept csv_transform_callable = requires(ExprPtr e, Basis b, Args... args) {
   mbpt::csv_transform(e, b, args...);
 };
 
-// a space, or a braced initializer of one, is its own basis; a label alone is
-// not
+// a space is its own basis; a label alone is not, and neither is a label with
+// an instance, which would read as a space
 static_assert(std::is_convertible_v<IndexSpace, IndexBasis>);
-static_assert(std::is_constructible_v<IndexBasis, const wchar_t*, int>);
+static_assert(!std::is_constructible_v<IndexBasis, const wchar_t*, int>);
 static_assert(!std::is_convertible_v<const wchar_t*, IndexBasis>);
 static_assert(!std::is_convertible_v<std::wstring, IndexBasis>);
 
@@ -852,19 +857,18 @@ static_assert(csv_transform_callable<IndexSpace, const wchar_t*,
 }  // namespace
 
 TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
-  auto isr = mbpt::make_min_sr_spaces();
-  const IndexSpace occ = isr->retrieve_space(L"i"),
-                   uocc = isr->retrieve_space(L"a");
+  auto ibr = mbpt::make_min_sr_spaces();
+  const IndexSpace occ = ibr->retrieve_space(L"i"),
+                   uocc = ibr->retrieve_space(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  isr->add(L"μ̃", IndexBasis{uocc, P}, 120ul,
-           IndexBasisMetric::General);  // before the Context adopts the
-                                        // registry (#665)
+  // before the Context adopts the registry (#665)
+  ibr->add(L"μ̃", uocc, P, {.extent = 120, .metric = IndexBasisMetric::General});
   // an orthonormal unoccupied basis other than the canonical one, e.g.
   // localized virtuals
-  isr->add(L"ã", IndexBasis{uocc, 2});
+  ibr->add(L"ã", uocc, 2);
   auto ctx = set_scoped_default_context(
-      Context({.index_basis_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
   const auto& registry = *get_default_context().index_basis_registry();
   const Index i1(occ, 1), i2(occ, 2);
@@ -915,7 +919,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     REQUIRE(s->is<Product>());
     CHECK(s->as<Product>().factors().size() == 3);
   }
-  SECTION("named orthonormal target: the overlap's dummy is in that basis") {
+  SECTION("named-target-dummy") {
     const ExprPtr s = mbpt::csv_transform(
         make_overlap(x, Index(uocc, 3, {i1}).replace_basis_instance(0)),
         registry.retrieve(L"ã"));
@@ -956,5 +960,61 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
   }
   SECTION("an unnamed instance basis as target throws") {
     CHECK_THROWS_AS(mbpt::csv_transform(f, IndexBasis{uocc, 5}), Exception);
+  }
+}
+
+TEST_CASE("index-basis-intern", "[elements][basis]") {
+  // more distinct bases than a thread caches in front of the intern table, so
+  // that cycling through them both hits and misses that cache
+  std::vector<IndexBasis> bases;
+  for (unsigned k = 0; k != 12; ++k) {
+    const IndexSpace space(L"x" + std::to_wstring(k), TypeAttr(1u << k));
+    bases.emplace_back(space);
+    bases.emplace_back(space, 1);
+  }
+  std::vector<const IndexBasis*> interned;
+  for (const auto& basis : bases) interned.push_back(&intern(basis));
+
+  SECTION("one address per basis") {
+    std::set<const IndexBasis*> distinct(interned.begin(), interned.end());
+    CHECK(distinct.size() == bases.size());
+    for (int pass = 0; pass != 3; ++pass)
+      for (std::size_t k = 0; k != bases.size(); ++k) {
+        const IndexBasis copy = bases[k];
+        CHECK(&intern(copy) == interned[k]);
+        CHECK(&intern(*interned[k]) == interned[k]);
+      }
+  }
+
+  SECTION("bases that differ only in metadata are interned apart") {
+    // the same named basis, registered with two extents
+    auto registered = [](std::size_t extent) {
+      auto ibr = mbpt::make_min_sr_spaces();
+      ibr->add(L"Y", ibr->retrieve_space(L"a"), 7, {.extent = extent});
+      return ibr->retrieve(L"Y");
+    };
+    const IndexBasis b10 = registered(10), b20 = registered(20);
+    REQUIRE(b10 == b20);  // the extent is not part of a basis's identity
+    const IndexBasis* p10 = &intern(b10);
+    const IndexBasis* p20 = &intern(b20);
+    CHECK(p10 != p20);
+    CHECK(p10->own_extent() == 10);
+    CHECK(p20->own_extent() == 20);
+    CHECK(&intern(b10) == p10);
+    CHECK(&intern(b20) == p20);
+  }
+
+  SECTION("threads agree") {
+    std::atomic<std::size_t> mismatches = 0;
+    std::vector<std::thread> threads;
+    for (std::size_t t = 0; t != 4; ++t)
+      threads.emplace_back([&, t] {
+        for (std::size_t n = 0; n != 50 * bases.size(); ++n) {
+          const std::size_t k = (n * (t + 1)) % bases.size();
+          if (&intern(bases[k]) != interned[k]) ++mismatches;
+        }
+      });
+    for (auto& thread : threads) thread.join();
+    CHECK(mismatches == 0);
   }
 }

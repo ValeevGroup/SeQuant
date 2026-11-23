@@ -1,5 +1,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
@@ -8,7 +9,9 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/view/concat.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <algorithm>
 #include <bitset>
@@ -155,10 +158,6 @@ std::string toplevel_diff(const Index &lhs, const Index &rhs) {
            diff_indices(lhs.proto_indices(), rhs.proto_indices());
   }
 
-  if (lhs.tag() != rhs.tag()) {
-    return "Different tags";
-  }
-
   // We have run out of ideas of what to check
   SEQUANT_ABORT("Unexpected difference between indices");
 }
@@ -206,6 +205,19 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
   // Really, this shouldn't produce an empty diff as the objects compare as
   // non-equal but we have run out of ideas of what to check
   SEQUANT_ABORT("Unhandled difference between tensors");
+}
+
+std::string toplevel_diff(const TensorPower &lhs, const TensorPower &rhs) {
+  if (lhs == rhs) {
+    return {};
+  }
+
+  if (lhs.exponent() != rhs.exponent()) {
+    return "Exponents differ: " + to_string(lhs.exponent()) + " vs. " +
+           to_string(rhs.exponent());
+  }
+
+  return "Bases differ: " + diff(*lhs.base(), *rhs.base());
 }
 
 std::string toplevel_diff(const Sum & /*lhs*/, const Sum & /*rhs*/) {
@@ -277,6 +289,8 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
     diff_str = toplevel_diff(lhs.as<Product>(), rhs.as<Product>());
   } else if (lhs.is<Tensor>()) {
     diff_str = toplevel_diff(lhs.as<Tensor>(), rhs.as<Tensor>());
+  } else if (lhs.is<TensorPower>()) {
+    diff_str = toplevel_diff(lhs.as<TensorPower>(), rhs.as<TensorPower>());
   } else if (lhs.is<Constant>()) {
     diff_str = toplevel_diff(lhs.as<Constant>(), rhs.as<Constant>());
   } else if (lhs.is<Variable>()) {
@@ -299,15 +313,26 @@ namespace {
 /// Counts every index occurrence in @p expr, treating a proto-index of a
 /// composite (CSV) index as an occurrence of that (bare) index in addition to
 /// counting the composite index itself. The recursion descends through
-/// Products/Sums down to the Tensor leaves.
+/// Products down to the Tensor leaves; a nested Sum contributes the counts of
+/// ONE summand (its first): a Sum's summands all carry the same external
+/// indices (is_valid checks every nested Sum before its parent) and its value
+/// occupies the slots of one summand, whereas adding up all summands counts a
+/// two- or four-flavor CSV projection bracket's externals an even number of
+/// times and drops them from the parity-based external set.
+/// Products/Sums down to the Tensor leaves; the indices of a TensorPower are
+/// those of its base.
 container::map<Index, std::size_t> index_occurrence_counts(const Expr &expr) {
   container::map<Index, std::size_t> counts;
   auto visit = [&counts](const Expr &e, auto &self) -> void {
-    if (e.is<Tensor>()) {
+    if (e.is<TensorPower>()) {
+      self(*e.as<TensorPower>().base(), self);
+    } else if (e.is<Tensor>()) {
       for (const Index &ix : e.as<Tensor>().const_braketaux()) {
         ++counts[ix];
         for (const Index &p : ix.proto_indices()) ++counts[p];
       }
+    } else if (e.is<Sum>()) {
+      if (e.size() > 0) self(*e.as<Sum>().summand(0), self);
     } else if (!e.is_atom()) {
       for (const ExprPtr &sub : e) self(*sub, self);
     }
@@ -329,6 +354,110 @@ container::set<Index> proto_aware_externals(
   for (const auto &[ix, n] : counts)
     if (n % 2 == 1) ext.insert(ix);
   return ext;
+}
+
+/// A proto-indexed (CSV) summand carries occ indices both as tensor slots
+/// and inside composite indices' proto-index lists; the slot-only
+/// get_unique_indices is then not invariant across summands and
+/// false-positives in has_uniform_externals. Detected from the reference
+/// (first) summand.
+bool is_proto_indexed(const Sum &sum) {
+  const auto ref_counts = index_occurrence_counts(*sum.summand(0));
+  return std::ranges::any_of(
+      ref_counts, [](const auto &kv) { return kv.first.has_proto_indices(); });
+}
+
+/// @return whether all summands of @p sum have the same external indices,
+/// compared as proto-aware externals if is_proto_indexed(sum)
+bool has_uniform_externals(const Sum &sum) {
+  if (is_proto_indexed(sum)) {
+    const container::set<Index> ref =
+        proto_aware_externals(index_occurrence_counts(*sum.summand(0)));
+    return std::ranges::all_of(sum.summands(), [&ref](const ExprPtr &s) {
+      return proto_aware_externals(index_occurrence_counts(*s)) == ref;
+    });
+  }
+
+  auto extractor = [](const ExprPtr &expr) { return get_unique_indices(expr); };
+
+  const IndexGroups<> ref = extractor(sum.summand(0));
+
+  auto compare = [&ref](const IndexGroups<> &grps) {
+    const bool bra_ok = std::ranges::is_permutation(ref.bra, grps.bra);
+    const bool ket_ok = std::ranges::is_permutation(ref.ket, grps.ket);
+    const bool aux_ok = std::ranges::is_permutation(ref.aux, grps.aux);
+
+    if (bra_ok && ket_ok && aux_ok) {
+      return true;
+    }
+
+    if (aux_ok && !bra_ok && !ket_ok) {
+      // Bra and ket indices might have been swapped in case of braket
+      // symmetry Let's just allow for that here without explicitly checking
+      // the summand's symmetry
+      auto combined_ref = ranges::views::concat(ref.bra, ref.ket);
+      auto combined_cmp = ranges::views::concat(grps.bra, grps.ket);
+
+      return std::ranges::is_permutation(combined_ref, combined_cmp);
+    }
+
+    return false;
+  };
+
+  return std::ranges::all_of(sum.summands(), compare, extractor);
+}
+
+/// Under a result head the summands of @p sum may broadcast: each must supply
+/// a subset of the result's indices, every one of its aux indices, and
+/// together all of them. A result index
+/// is never contracted, so a summand that uses it in several slots supplies
+/// it. The (anti)symmetrizers of the summands are disregarded. As for a whole
+/// rhs, bra and ket indices are pooled, since a bra-ket symmetric summand may
+/// present them swapped.
+/// @pre every summand of @p sum is valid
+bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
+                        std::string *msg) {
+  const auto result_braket = ranges::views::concat(result.bra(), result.ket());
+  container::set<Index> covered;
+  for (const ExprPtr &summand : sum.summands()) {
+    const ExprPtr term = detail::without_symmetrizers(summand);
+    const IndexGroups<> externals = get_unique_indices(term);
+
+    auto check = [&](const Index &idx, const auto &allowed) {
+      if (!ranges::contains(allowed, idx)) {
+        SEQUANT_EXPR_INVALID("Summand index " + toUtf8(idx.full_label()) +
+                             " is not an index of the result");
+      }
+      return true;
+    };
+    for (const Index &idx :
+         ranges::views::concat(externals.bra, externals.ket)) {
+      if (!check(idx, result_braket)) return false;
+    }
+    for (const Index &idx : externals.aux) {
+      if (!check(idx, result.aux())) return false;
+    }
+
+    const auto supplied = detail::supplied_result_indices(result, *term);
+    // broadcast is over bra and ket modes only
+    for (const Index &idx : result.aux()) {
+      if (idx.nonnull() && !supplied.contains(idx)) {
+        SEQUANT_EXPR_INVALID("Summand does not supply result aux index " +
+                             toUtf8(idx.full_label()));
+      }
+    }
+    covered.insert(supplied.begin(), supplied.end());
+  }
+
+  for (const Index &idx :
+       ranges::views::concat(result.bra(), result.ket(), result.aux())) {
+    if (!covered.contains(idx)) {
+      SEQUANT_EXPR_INVALID("Result index " + toUtf8(idx.full_label()) +
+                           " appears in no summand");
+    }
+  }
+
+  return true;
 }
 
 }  // namespace
@@ -393,59 +522,7 @@ bool is_valid(const Expr &expr, std::string *msg) {
       }
     }
   } else if (expr.is<Sum>()) {
-    // Verify that all summands have the same external indices
-    const Sum &sum = expr.as<Sum>();
-
-    // A proto-indexed (CSV) summand carries occ indices both as tensor slots
-    // and inside composite indices' proto-index lists; the slot-only
-    // get_unique_indices is then not invariant across summands and
-    // false-positives here. Detect this from the reference summand and, when
-    // present, validate with the proto-aware external-index set instead.
-    const auto ref_counts = index_occurrence_counts(*sum.summand(0));
-    const bool proto_indexed = std::ranges::any_of(
-        ref_counts,
-        [](const auto &kv) { return kv.first.has_proto_indices(); });
-
-    bool consistent;
-    if (proto_indexed) {
-      const container::set<Index> ref = proto_aware_externals(ref_counts);
-      consistent =
-          std::ranges::all_of(sum.summands(), [&ref](const ExprPtr &s) {
-            return proto_aware_externals(index_occurrence_counts(*s)) == ref;
-          });
-    } else {
-      auto extractor = [](const ExprPtr &expr) {
-        return get_unique_indices(expr);
-      };
-
-      const IndexGroups<> ref = extractor(sum.summand(0));
-
-      auto compare = [&ref](const IndexGroups<> &grps) {
-        const bool bra_ok = std::ranges::is_permutation(ref.bra, grps.bra);
-        const bool ket_ok = std::ranges::is_permutation(ref.ket, grps.ket);
-        const bool aux_ok = std::ranges::is_permutation(ref.aux, grps.aux);
-
-        if (bra_ok && ket_ok && aux_ok) {
-          return true;
-        }
-
-        if (aux_ok && !bra_ok && !ket_ok) {
-          // Bra and ket indices might have been swapped in case of braket
-          // symmetry Let's just allow for that here without explicitly checking
-          // the summand's symmetry
-          auto combined_ref = ranges::views::concat(ref.bra, ref.ket);
-          auto combined_cmp = ranges::views::concat(grps.bra, grps.ket);
-
-          return std::ranges::is_permutation(combined_ref, combined_cmp);
-        }
-
-        return false;
-      };
-
-      consistent = std::ranges::all_of(sum.summands(), compare, extractor);
-    }
-
-    if (!consistent) {
+    if (!has_uniform_externals(expr.as<Sum>())) {
       SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
     }
   } else if (expr.is<Power>()) {
@@ -453,6 +530,15 @@ bool is_valid(const Expr &expr, std::string *msg) {
     // rational and is always well-formed. Power is atomic (it exposes no
     // subexpressions to the children loop above), so validate the base here.
     if (!is_valid(expr.as<Power>().base(), msg)) return false;
+  } else if (expr.is<RealPart>()) {
+    // Re(x) / Im(x) are valid iff x is; like Power they are atomic (the inner
+    // expression is not exposed to the children loop above), so validate it
+    // here. The time-reversal fold of a complex network emits these.
+    if (!is_valid(expr.as<RealPart>().inner(), msg)) return false;
+  } else if (expr.is<ImagPart>()) {
+    if (!is_valid(expr.as<ImagPart>().inner(), msg)) return false;
+  } else if (expr.is<TensorPower>()) {
+    if (!is_valid(expr.as<TensorPower>().base(), msg)) return false;
   } else {
     SEQUANT_ASSERT(false, "Unsupported expression type in is_valid");
   }
@@ -461,15 +547,28 @@ bool is_valid(const Expr &expr, std::string *msg) {
 }
 
 bool is_valid(const ResultExpr &expr, std::string *msg) {
-  if (!is_valid(expr.expression(), msg)) {
+  if (expr.expression()->is<Sum>()) {
+    // validated as is_valid(Expr) does, except that the summands may broadcast
+    const Sum &sum = expr.expression()->as<Sum>();
+    for (const ExprPtr &summand : sum.summands()) {
+      if (!is_valid(summand, msg)) {
+        return false;
+      }
+    }
+    if (!has_uniform_externals(sum)) {
+      // a proto-indexed sum does not broadcast
+      if (is_proto_indexed(sum)) {
+        SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
+      }
+      return is_valid_broadcast(expr, sum, msg);
+    }
+  } else if (!is_valid(expr.expression(), msg)) {
     return false;
   }
 
   // We need to make sure to remove any symmetrizers from the expression in
   // order to not mess up the determination of external indices
-  ExprPtr rhs = expr.expression().clone();
-  pop_tensor(rhs, reserved::antisymm_label());
-  pop_tensor(rhs, reserved::symm_label());
+  const ExprPtr rhs = detail::without_symmetrizers(expr.expression());
 
   IndexGroups<> externals = get_unique_indices(rhs);
 
@@ -519,7 +618,8 @@ ExprPtr transform_expr(const ExprPtr &expr,
 ExprPtr transform_expr(const Expr &expr,
                        const container::map<Index, Index> &index_replacements,
                        Constant::scalar_type scaling_factor) {
-  if (expr.is<Constant>() || expr.is<Variable>()) {
+  // a scalar Power's base is a Constant or Variable: it carries no indices
+  if (expr.is<Constant>() || expr.is<Variable>() || expr.is<Power>()) {
     if (scaling_factor != 1) {
       return ex<Constant>(scaling_factor) * expr.clone();
     }
@@ -531,7 +631,6 @@ ExprPtr transform_expr(const Expr &expr,
     ExprPtr result = tensor.clone();
     auto &result_tensor = result->as<AbstractTensor>();
     transform_indices(result_tensor, index_replacements);
-    reset_tags(result_tensor);
     return result;
   };
 
@@ -542,7 +641,8 @@ ExprPtr transform_expr(const Expr &expr,
     for (auto &&term : product) {
       if (term->is<AbstractTensor>()) {
         result->append(1, transform_tensor(*term));
-      } else if (term->is<Variable>() || term->is<Constant>()) {
+      } else if (term->is<Variable>() || term->is<Constant>() ||
+                 term->is<Power>()) {
         result->append(1, term->clone());
       } else if (term->is<Sum>() || term->is<Product>()) {
         result->append(1, transform_expr(term, index_replacements),
@@ -574,6 +674,22 @@ ExprPtr transform_expr(const Expr &expr,
     throw Exception("Invalid Expr type in transform_expr");
   }
 }
+
+namespace {
+
+/// @return true if pop_tensor(@p expression, @p label) would find a tensor,
+/// i.e. one labeled @p label is reached through Sums and Products
+bool has_poppable_tensor(const Expr &expression, std::wstring_view label) {
+  if (expression.is<Sum>() || expression.is<Product>()) {
+    for (const ExprPtr &e : expression) {
+      if (has_poppable_tensor(*e, label)) return true;
+    }
+    return false;
+  }
+  return expression.is<Tensor>() && expression.as<Tensor>().label() == label;
+}
+
+}  // namespace
 
 std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
                                   std::wstring_view label) {
@@ -633,7 +749,8 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
     return tensor;
   }
 
-  if (expression->is_scalar()) {
+  // the base of a TensorPower is not a factor of the expression
+  if (expression->is_scalar() || expression->is<TensorPower>()) {
     return tensor;
   }
 
@@ -653,6 +770,111 @@ std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression) {
 
 std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression) {
   return pop_symmetrizer(expression.expression());
+}
+
+void push_symmetrizer(ResultExpr &expression,
+                      std::optional<ExprPtr> symmetrizer) {
+  if (symmetrizer.has_value()) {
+    expression.expression() =
+        ex<Product>(ExprPtrList{std::move(symmetrizer.value()),
+                                std::move(expression.expression())},
+                    Product::Flatten::No);
+  }
+}
+
+bool has_symmetrizer(const ExprPtr &expression) {
+  bool contains_symmetrizer = false;
+  expression->visit(
+      [&contains_symmetrizer](const ExprPtr &expr) {
+        // Symmetrizer operators are represented as tensors with a reserved name
+        if (expr.is<Tensor>() &&
+            expr.as<Tensor>().label() == reserved::symm_label()) {
+          contains_symmetrizer = true;
+        }
+      },
+      true);
+
+  return contains_symmetrizer;
+}
+
+namespace {
+
+ExprPtr result_symmetrization(
+    std::wstring_view precursor_name,
+    const IndexGroups<container::svector<Index>> &externals,
+    const Tensor &ref) {
+  SEQUANT_ASSERT(externals.bra.size() == externals.ket.size());
+
+  // Note: we're only symmetrizing over bra-ket, not over auxiliary indices
+  ExprPtr symmetrization = ex<Sum>(ExprPtrList{});
+  for (std::size_t i = 0; i < externals.bra.size(); ++i) {
+    container::svector<Index> sym_bra;
+    container::svector<Index> sym_ket;
+
+    for (std::size_t j = 0; j < externals.ket.size(); ++j) {
+      sym_bra.push_back(externals.bra[(i + j) % externals.bra.size()]);
+      sym_ket.push_back(externals.ket[(i + j) % externals.ket.size()]);
+    }
+
+    symmetrization +=
+        rational(1, externals.bra.size()) *
+        ex<Tensor>(precursor_name, bra(std::move(sym_bra)),
+                   ket(std::move(sym_ket)), aux(externals.aux), ref.symmetry(),
+                   ref.braket_symmetry(), ref.column_symmetry());
+  }
+
+  return symmetrization;
+}
+
+}  // namespace
+
+ExprPtr result_symmetrization(const Tensor &result,
+                              std::wstring_view precursor_name) {
+  SEQUANT_ASSERT(result.bra_rank() == result.ket_rank());
+
+  IndexGroups<container::svector<Index>> externals;
+  for (const auto [bra, ket] : ranges::views::zip(result.bra(), result.ket())) {
+    externals.bra.push_back(bra);
+    externals.ket.push_back(ket);
+  }
+
+  return result_symmetrization(precursor_name, externals, result);
+}
+
+ExprPtr result_symmetrization(const ResultExpr &result,
+                              std::wstring_view precursor_name) {
+  IndexGroups<container::svector<Index>> externals;
+  for (const auto &[bra, ket] :
+       result.index_particle_grouping<std::pair<Index, Index>>()) {
+    externals.bra.push_back(bra);
+    externals.ket.push_back(ket);
+  }
+
+  return result_symmetrization(precursor_name, externals,
+                               result.result_as_tensor());
+}
+
+container::set<Index> detail::supplied_result_indices(const ResultExpr &result,
+                                                      const Expr &term) {
+  const auto used =
+      get_used_indices<container::set<Index>,
+                       SlotType::Bra | SlotType::Ket | SlotType::Aux>(term);
+  container::set<Index> supplied;
+  for (const Index &idx : result.indices()) {
+    if (used.contains(idx)) supplied.insert(idx);
+  }
+  return supplied;
+}
+
+ExprPtr detail::without_symmetrizers(const ExprPtr &expression) {
+  if (!has_poppable_tensor(*expression, reserved::antisymm_label()) &&
+      !has_poppable_tensor(*expression, reserved::symm_label())) {
+    return expression;
+  }
+  ExprPtr result = expression.clone();
+  pop_tensor(result, reserved::antisymm_label());
+  pop_tensor(result, reserved::symm_label());
+  return result;
 }
 
 ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
@@ -729,15 +951,20 @@ ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
 
 ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
                     const Expr &replacement) {
+  const IndexGroups<> externals_before = get_unique_indices(expr.expression());
+
   replace(expr.expression(), target, replacement);
 
   // We have to check whether the external indices have been modified by the
-  // replacement and if they did, adapt the indices in the result
+  // replacement and if they did, adapt the indices in the result. The
+  // comparison is against the externals before the replacement (instead of
+  // the result's indices) since the result need not coincide with what
+  // get_unique_indices deduces (e.g. in the presence of antisymmetrizers).
   IndexGroups<> externals = get_unique_indices(expr.expression());
 
-  if (!std::ranges::equal(externals.bra, expr.bra()) ||
-      !std::ranges::equal(externals.ket, expr.ket()) ||
-      !std::ranges::equal(externals.aux, expr.aux())) {
+  if (!std::ranges::equal(externals.bra, externals_before.bra) ||
+      !std::ranges::equal(externals.ket, externals_before.ket) ||
+      !std::ranges::equal(externals.aux, externals_before.aux)) {
     // Externals have changed -> update result
     // TODO: Is retaining result symmetry a reasonable thing to do? Generally
     // speaking, replacements could also change the result symmetry so in

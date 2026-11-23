@@ -18,7 +18,7 @@
 namespace sequant {
 
 /// whether a basis (IndexBasis::metric()) is orthonormal
-enum class IndexBasisMetric { Unit, General };
+enum class IndexBasisMetric : std::uint8_t { Unit, General };
 /// @deprecated the metric is a property of a basis, use IndexBasisMetric
 using IndexSpaceMetric [[deprecated("use IndexBasisMetric")]] =
     IndexBasisMetric;
@@ -37,20 +37,28 @@ using IndexSpaceMetric [[deprecated("use IndexBasisMetric")]] =
 /// the tensor's #BraKetSymmetry.
 /// @sa Hermiticity, BraKetSymmetry, to_braket_symmetry, IndexBasis::field,
 ///     sequant::base_field
-enum class Field { Real, Complex };
+enum class Field : std::uint8_t { Real, Complex };
 
 // clang-format off
 /// describes supported symmetries of tensorial objects with respect to permutations of columns (in tensor notation), i.e., pairs of {bra[i],ket[i]} slots
 // clang-format on
 /// @note `Nonsymm` is an alias of `NonSymm`
-enum class ColumnSymmetry { Symm, NonSymm, Nonsymm = NonSymm };
+enum class ColumnSymmetry : std::uint8_t { Symm, NonSymm, Nonsymm = NonSymm };
+
+/// describes whether a tensorial object whose slot indices carry Kramers
+/// flavors obeys the time-reversal identity: the spelling with EVERY flavored
+/// slot index flavor-flipped equals `phase * conj(T)` elementwise, with
+/// `phase = (-1)^(number of slots flipped from the down flavor)`. Orthogonal
+/// to #BraKetSymmetry (the two folds compose); slots in spaces without a
+/// Kramers partner (e.g. a density-fitting auxiliary) are never flipped.
+enum class KramersSymmetry : std::uint8_t { Nonsymm, TimeReversal };
 
 // clang-format off
 /// describes supported symmetries of bra or ket of _particle-symmetric_ tensorial objects
 /// @note bra or ket can be symmetric or antisymmetric only if the tensor is particle-symmetric, otherwise it does not make sense to permute indices corresponding to distinguishable particles
 // clang-format on
 /// @note `Antisymm`/`Nonsymm` are aliases of `AntiSymm`/`NonSymm`
-enum class Symmetry {
+enum class Symmetry : std::uint8_t {
   Symm,
   AntiSymm,
   NonSymm,
@@ -67,7 +75,7 @@ enum class Symmetry {
 /// to_conjugation_symmetry(). Over a complex basis conjugation maps the array
 /// to the array in the conjugated basis, which is not an elementwise
 /// relation, so only a real basis exposes the parity.
-enum class ConjugationParity { Even, Odd, None };
+enum class ConjugationParity : std::uint8_t { Even, Odd, None };
 
 /// relation between the array read with bra and ket exchanged and the array
 /// as written: `T{q;p} = +T{p;q}` (`Symm`), `−T{p;q}` (`AntiSymm`),
@@ -79,7 +87,7 @@ enum class ConjugationParity { Even, Odd, None };
 /// @note The enumerator values enter hashes that decide canonical tie-breaks;
 ///       new states are appended so the existing values stay fixed.
 /// @note `Antisymm`/`Nonsymm` are aliases of `AntiSymm`/`NonSymm`
-enum class BraKetSymmetry {
+enum class BraKetSymmetry : std::uint8_t {
   Symm = 0,
   Conjugate = 1,
   NonSymm = 2,
@@ -94,7 +102,7 @@ enum class BraKetSymmetry {
 /// Derived from #ConjugationParity and the #Field, see
 /// to_conjugation_symmetry().
 /// @note `Antisymm`/`Nonsymm` are aliases of `AntiSymm`/`NonSymm`
-enum class ConjugationSymmetry {
+enum class ConjugationSymmetry : std::uint8_t {
   Symm,
   AntiSymm,
   NonSymm,
@@ -112,7 +120,11 @@ enum class ConjugationSymmetry {
 /// observable bra<->ket exchange symmetry (#BraKetSymmetry) is the *derived*
 /// composition of this trait with the ambient #Field -- see
 /// to_braket_symmetry().
-enum class Hermiticity { Hermitian, AntiHermitian, NonHermitian };
+enum class Hermiticity : std::uint8_t {
+  Hermitian,
+  AntiHermitian,
+  NonHermitian
+};
 
 /// @return the elementwise conjugation symmetry of an array of @p parity over
 ///         a basis of the given @p field
@@ -232,10 +244,10 @@ constexpr std::optional<std::int8_t> conjugation_sign(
 /// describes whether to SEQUANT_ASSERT the vector space semantics of bra/ket
 /// slots in tensor networks
 /// @sa Context::assert_strict_braket_symmetry
-enum class AssertStrictBraKetSymmetry { Yes, No };
+enum class AssertStrictBraKetSymmetry : std::uint8_t { Yes, No };
 
 /// describes type of single-particle basis
-enum class SPBasis { Spinor, Spinfree };
+enum class SPBasis : std::uint8_t { Spinor, Spinfree };
 
 inline std::wstring to_wstring(Symmetry sym) {
   switch (sym) {
@@ -250,7 +262,7 @@ inline std::wstring to_wstring(Symmetry sym) {
   SEQUANT_UNREACHABLE;
 }
 
-enum class BraKetPos {
+enum class BraKetPos : std::uint8_t {
   Bra,
   Ket,
 };
@@ -258,7 +270,7 @@ enum class BraKetPos {
 /// index slot types
 ///
 /// @note This does not include slot bundles, like braket, etc.
-enum class SlotType {
+enum class SlotType : std::uint8_t {
   Bra = 0b1,
   Ket = 0b10,
   Aux = 0b100,
@@ -300,32 +312,34 @@ struct SlotTypes {
   }
 
   constexpr SlotTypes operator|(SlotType type) const {
-    return {active | static_cast<decltype(active)>(type)};
+    return {static_cast<decltype(active)>(active |
+                                          static_cast<decltype(active)>(type))};
   }
 };
 
 constexpr SlotTypes operator|(SlotType lhs, SlotType rhs) {
   using IntType = std::underlying_type_t<SlotType>;
-  return {static_cast<IntType>(lhs) | static_cast<IntType>(rhs)};
+  return {static_cast<IntType>(static_cast<IntType>(lhs) |
+                               static_cast<IntType>(rhs))};
 }
 
 static constexpr const SlotTypes AnySlotType =
     SlotType::Bra | SlotType::Ket | SlotType::Aux | SlotType::Proto;
 
-enum class Statistics {
+enum class Statistics : std::uint8_t {
   FermiDirac,
   BoseEinstein,
   Arbitrary,
 };
 
-enum class Action { Create, Annihilate };
+enum class Action : std::uint8_t { Create, Annihilate };
 
 /// applies (Hermitian) adjoint to @c action
 inline Action adjoint(Action action) {
   return action == Action::Create ? Action::Annihilate : Action::Create;
 }
 
-enum class Vacuum { Physical, SingleProduct, MultiProduct };
+enum class Vacuum : std::uint8_t { Physical, SingleProduct, MultiProduct };
 
 inline std::wstring to_string(Vacuum V) {
   switch (V) {
@@ -342,7 +356,7 @@ inline std::wstring to_string(Vacuum V) {
 
 /// describes LaTeX typesetting convention for contravariant (bra, annihilation)
 /// and covariant (ket, creation) indices
-enum class BraKetTypesetting {
+enum class BraKetTypesetting : std::uint8_t {
   /// contravariants as subscripts
   ContraSub,
   CoSuper = ContraSub,
@@ -356,7 +370,7 @@ enum class BraKetTypesetting {
 };
 
 /// describes typesetting convention for bra/ket tensor slots
-enum class BraKetSlotTypesetting {
+enum class BraKetSlotTypesetting : std::uint8_t {
   /// all indices are typeset naively, with empty slots indicated by
   /// `\testvisiblespace`
   Naive,

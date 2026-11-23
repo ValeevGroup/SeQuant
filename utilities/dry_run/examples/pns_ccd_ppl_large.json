@@ -1,0 +1,260 @@
+{
+ "format": "sequant-dry-run",
+ "version": 1,
+ "producer": "MPQC 4.0.0, CCk; Kramers-restricted PNS-CCD, particle-particle ladder only; the same equations planned with the sizes of [UO2(H2O)5]2+ (dyall-v3z), under a 600 GB peak budget",
+ "context": {
+  "convention": "mpqc-sr",
+  "vbs": false,
+  "field": "complex",
+  "strict_braket_symmetry": true,
+  "first_dummy_index_ordinal": 100
+ },
+ "spaces": [
+  {
+   "key": "a",
+   "type": 2,
+   "qns": 3,
+   "size": 1752
+  },
+  {
+   "key": "a↑",
+   "type": 2,
+   "qns": 1,
+   "size": 876
+  },
+  {
+   "key": "a↓",
+   "type": 2,
+   "qns": 2,
+   "size": 876
+  },
+  {
+   "key": "i",
+   "type": 1,
+   "qns": 3,
+   "size": 156
+  },
+  {
+   "key": "i↑",
+   "type": 1,
+   "qns": 1,
+   "size": 78
+  },
+  {
+   "key": "i↓",
+   "type": 1,
+   "qns": 2,
+   "size": 78
+  },
+  {
+   "key": "p",
+   "type": 3,
+   "qns": 3,
+   "size": 1908
+  },
+  {
+   "key": "p↑",
+   "type": 3,
+   "qns": 1,
+   "size": 954
+  },
+  {
+   "key": "p↓",
+   "type": 3,
+   "qns": 2,
+   "size": 954
+  },
+  {
+   "key": "Κ",
+   "type": 1,
+   "qns": 16,
+   "size": 3383
+  }
+ ],
+ "slices": {
+  "i↑": [
+   8,
+   8,
+   8,
+   8,
+   8,
+   8,
+   8,
+   8,
+   7,
+   7
+  ],
+  "i↓": [
+   8,
+   8,
+   8,
+   8,
+   8,
+   8,
+   8,
+   8,
+   7,
+   7
+  ],
+  "Κ": [
+   231,
+   231,
+   230,
+   230,
+   230,
+   230,
+   230,
+   230,
+   230,
+   230,
+   230,
+   230,
+   230,
+   230
+  ]
+ },
+ "csv": {
+  "union_composites": true,
+  "moments": {
+   "1": [
+    1,
+    52.26923076923077,
+    65.7191967427541,
+    77.60258460846447,
+    88.02293348425962,
+    97.18447035195115,
+    105.17772556563526,
+    112.09487350710641,
+    118.0609305481393
+   ],
+   "2": [
+    1,
+    16.694901960784314,
+    23.991975782765042,
+    30.262889858779918,
+    35.38184959412757,
+    39.62409272158099,
+    43.228825467702755,
+    46.3586005676687,
+    49.12170515401358
+   ]
+  },
+  "occupancy": {
+   "1": 1,
+   "2": 0.41913214990138065
+  }
+ },
+ "optimize": {
+  "enabled": true,
+  "objective_function": "dense_time_space_batched",
+  "volatile_weight": 20,
+  "cse_subnet": false,
+  "peak_flops_tolerance": 0.1,
+  "footprint_weight": 0,
+  "prune_outer_products": true,
+  "term_batch_axes": true,
+  "roofline": {
+   "machine_balance": 200,
+   "fast_mem_elems": 1000000,
+   "block_tiles": 3,
+   "block_prefactor": 1
+  }
+ },
+ "batch": {
+  "enabled": true,
+  "scheduler": "ordered",
+  "peak_threshold": 252961314221.829,
+  "accumulation_factor": 1,
+  "persistent_only": false,
+  "spectator_indices": true,
+  "spaces": {
+   "i↑": {
+    "target_size": 8,
+    "contracted": true,
+    "external": true
+   },
+   "i↓": {
+    "target_size": 8,
+    "contracted": true,
+    "external": true
+   },
+   "Κ": {
+    "target_size": 64,
+    "contracted": true,
+    "external": true
+   }
+  }
+ },
+ "cache": {
+  "enabled": true,
+  "min_repeats": 2,
+  "max_footprint": 0
+ },
+ "binarize": {
+  "volatile_label": "t",
+  "fold_kramers_eval_leaves": true,
+  "kramers_blind_leaf_label": "C",
+  "kramers_blind_loop_fusion": true,
+  "kramers_fold_intermediates": true
+ },
+ "equations": [
+  {
+   "name": "equation 0 block 0",
+   "roundtrip": true,
+   "head": "E{}:N-N-N",
+   "rhs": "g{i_1;a_2309;Κ_1}:N-H-S-E-T * C{a_2309;a_1<i_1,i_2>}:N-H-S-E-T * g{i_2;a_2310;Κ_1}:N-H-S-E-T * C{a_2310;a_2<i_1,i_2>}:N-H-S-E-T * t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S-E-T"
+  },
+  {
+   "name": "equation 1 block 0",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↑_1>;i↑_1}:N-N-S",
+   "rhs": "f{a_2311;i↑_1}:A-H-S-E-T * C{a↑_1<i↑_1>;a_2311}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 1 block 1",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↓_1>;i↓_1}:N-N-S",
+   "rhs": "f{a_2312;i↓_1}:A-H-S-E-T * C{a↑_1<i↓_1>;a_2312}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 2 block 0",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↑_1,i↑_2>,a↑_2<i↑_1,i↑_2>;i↑_1,i↑_2}:N-N-S",
+   "rhs": "g{a_2315;a_2316;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_1,i↑_2>;a_2315}:N-H-S-E-T * C{a_2316;a_1<i↑_1,i↑_2>}:N-H-S-E-T * g{a_2317;a_2318;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_1,i↑_2>;a_2317}:N-H-S-E-T * C{a_2318;a_2<i↑_1,i↑_2>}:N-H-S-E-T * t{a_1<i↑_1,i↑_2>,a_2<i↑_1,i↑_2>;i↑_1,i↑_2}:A-N-S-E-T + g{a_2313;i↑_1;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_1,i↑_2>;a_2313}:N-H-S-E-T * g{a_2314;i↑_2;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_1,i↑_2>;a_2314}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 2 block 1",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↑_2,i↓_1>,a↑_2<i↑_2,i↓_1>;i↓_1,i↑_2}:N-N-S",
+   "rhs": "g{a_2321;a_2322;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_2,i↓_1>;a_2321}:N-H-S-E-T * C{a_2322;a_2<i↑_2,i↓_1>}:N-H-S-E-T * g{a_2323;a_2324;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2323}:N-H-S-E-T * C{a_2324;a_1<i↑_2,i↓_1>}:N-H-S-E-T * t{a_1<i↑_2,i↓_1>,a_2<i↑_2,i↓_1>;i↑_2,i↓_1}:A-N-S-E-T - g{a_2319;i↑_2;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_2,i↓_1>;a_2319}:N-H-S-E-T * g{a_2320;i↓_1;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2320}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 2 block 2",
+   "roundtrip": true,
+   "head": "R{a↑_1<i↓_1,i↓_2>,a↑_2<i↓_1,i↓_2>;i↓_1,i↓_2}:N-N-S",
+   "rhs": "g{a_2329;i↓_1;Κ_1}:N-H-S-E-T * C{a↑_1<i↓_1,i↓_2>;a_2329}:N-H-S-E-T * g{a_2330;i↓_2;Κ_1}:N-H-S-E-T * C{a↑_2<i↓_1,i↓_2>;a_2330}:N-H-S-E-T + g{a_2325;a_2326;Κ_1}:N-H-S-E-T * C{a↑_1<i↓_1,i↓_2>;a_2325}:N-H-S-E-T * C{a_2326;a_1<i↓_1,i↓_2>}:N-H-S-E-T * g{a_2327;a_2328;Κ_1}:N-H-S-E-T * C{a↑_2<i↓_1,i↓_2>;a_2327}:N-H-S-E-T * C{a_2328;a_2<i↓_1,i↓_2>}:N-H-S-E-T * t{a_1<i↓_1,i↓_2>,a_2<i↓_1,i↓_2>;i↓_1,i↓_2}:A-N-S-E-T"
+  },
+  {
+   "name": "equation 2 block 3",
+   "roundtrip": true,
+   "head": "R{a↓_1<i↑_1,i↑_2>,a↑_2<i↑_1,i↑_2>;i↑_1,i↑_2}:N-N-S",
+   "rhs": "-g{a_2333;a_2334;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_1,i↑_2>;a_2333}:N-H-S-E-T * C{a_2334;a_1<i↑_1,i↑_2>}:N-H-S-E-T * g{a_2335;a_2336;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_1,i↑_2>;a_2335}:N-H-S-E-T * C{a_2336;a_2<i↑_1,i↑_2>}:N-H-S-E-T * t{a_1<i↑_1,i↑_2>,a_2<i↑_1,i↑_2>;i↑_1,i↑_2}:A-N-S-E-T - g{a_2331;i↑_1;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_1,i↑_2>;a_2331}:N-H-S-E-T * g{a_2332;i↑_2;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_1,i↑_2>;a_2332}:N-H-S-E-T"
+  },
+  {
+   "name": "equation 2 block 4",
+   "roundtrip": true,
+   "head": "R{a↓_1<i↑_2,i↓_1>,a↑_2<i↑_2,i↓_1>;i↓_1,i↑_2}:N-N-S",
+   "rhs": "-1/4 g{a_2341;i↓_1;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2341}:N-H-S-E-T * g{a_2342;i↑_2;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_2,i↓_1>;a_2342}:N-H-S-E-T + 1/2 g{a_2337;a_2338;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2337}:N-H-S-E-T * C{a_2338;a_1<i↑_2,i↓_1>}:N-H-S-E-T * g{a_2339;a_2340;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_2,i↓_1>;a_2339}:N-H-S-E-T * C{a_2340;a_2<i↑_2,i↓_1>}:N-H-S-E-T * t{a_1<i↑_2,i↓_1>,a_2<i↑_2,i↓_1>;i↑_2,i↓_1}:A-N-S-E-T + 1/4 g{a_2343;i↑_2;Κ_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_2343}:N-H-S-E-T * g{a_2344;i↓_1;Κ_1}:N-H-S-E-T * C{a↓_1<i↑_2,i↓_1>;a_2344}:N-H-S-E-T"
+  }
+ ],
+ "expected": {
+  "meter": {
+   "peak_bytes": 380357662562,
+   "flops_persistent": 14883748657744446,
+   "flops_volatile": 543086016532803.06,
+   "cost_persistent": 21280588030249852,
+   "cost_volatile": 1428501694301450,
+   "builds": 43419
+  }
+ }
+}

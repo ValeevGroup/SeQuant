@@ -8,6 +8,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -46,6 +47,10 @@ std::wstring to_string(const rational& t) {
   return result;
 }
 
+static std::wstring latex_exponent(const rational& exponent) {
+  return L"^" + to_string(exponent);
+}
+
 std::wstring to_string(const Power& power) {
   std::wstring result;
   const auto& base = power.base();
@@ -65,12 +70,17 @@ std::wstring to_string(const Power& power) {
              to_wstring(denominator(base->as<Constant>().value().real())) +
              L"^" + to_string(exp) + L"}}";
   } else {
-    result = base->to_latex() + L"^" + to_string(exp);
+    result = base->to_latex() + latex_exponent(exp);
   }
   // the power is braced before the superscript, so that a base that already
   // carries one does not leave a group with two
   if (power.conjugated()) result = L"{{" + result + L"}^{*}}";
   return result;
+}
+
+std::wstring to_string(const TensorPower& power) {
+  return L"{" + power.base()->to_latex() + L"}" +
+         latex_exponent(power.exponent());
 }
 
 std::wstring to_string(const ResultExpr& expr) {

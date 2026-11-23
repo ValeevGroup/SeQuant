@@ -12,6 +12,7 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -128,7 +129,9 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
   std::size_t slot = 0;
   for (Index const& x : tnsr._braket()) {
     const bool bra_leg = slot++ < tnsr._bra_rank();
-    if (is_occupied(x) || ranges::contains(scope.externals, x)) continue;
+    if (is_occupied(x) ||
+        (!opts.move_externals && ranges::contains(scope.externals, x)))
+      continue;
     auto const& target_pair = own_pair ? pair : x.proto_indices();
     auto const& target_instance = opts.basis == ProjectionBasis::Integral
                                       ? cell_instance
@@ -138,15 +141,28 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
              idx.basis().basis_instance() == target_instance;
     };
     if (on_target(x)) continue;
+    // a leg on a cluster that shares no occupied index with the own pair
+    // stays: its overlap would join two unrelated clusters
+    if (opts.connected_legs_only && own_pair && !x.proto_indices().empty() &&
+        !ranges::any_of(x.proto_indices(), [&pair](Index const& p) {
+          return ranges::contains(pair, p);
+        }))
+      continue;
     // sibling summands share a leg's replacement; two integrals of one
     // product do not (x' s{x';x} ... s{x;x''} x''), nor do two targets
     auto it = scope.moved.find(x);
     const bool reuse = it != scope.moved.end() && on_target(it->second) &&
                        !scope.moved_here.contains(x);
+    // the caller's leg basis: as given under `Amplitude`; under `Integral`
+    // only its space, the instance is the cell's
+    const IndexBasis minted_in =
+        !opts.leg_basis ? IndexBasis{x.space(), target_instance}
+        : opts.basis == ProjectionBasis::Amplitude
+            ? *opts.leg_basis
+            : IndexBasis{opts.leg_basis->space(), target_instance};
     const Index replacement =
         reuse ? it->second
-              : Index::make_tmp_index(default_registry_resolved(IndexBasis{
-                                          x.space(), target_instance}),
+              : Index::make_tmp_index(default_registry_resolved(minted_in),
                                       target_pair,
                                       own_pair || x.symmetric_proto_indices());
     if (it == scope.moved.end()) scope.moved.emplace(x, replacement);
@@ -204,6 +220,7 @@ ExprPtr projection_rewrite(ExprPtr const& x, projection_scope& scope) {
 ExprPtr projection_term(ExprPtr const& term, ProjectionOptions const& opts) {
   projection_scope scope{.opts = opts};
   std::size_t rank = 0;
+  bool symmetrizer = false;
   auto const& registry = *get_default_mbpt_context().op_registry();
   term->visit(
       [&](ExprPtr const& x) {
@@ -211,12 +228,22 @@ ExprPtr projection_term(ExprPtr const& term, ProjectionOptions const& opts) {
         auto const& t = x->as<AbstractTensor>();
         if (t._label() == reserved::symm_label() ||
             t._label() == reserved::antisymm_label()) {
+          symmetrizer = true;
           rank = t._bra_rank();
           for (Index const& idx : t._slots()) scope.externals.push_back(idx);
         } else if (is_amplitude_tensor(t, registry))
           ++scope.order;
       },
       /* atoms_only = */ true);
+  // a block whose symmetrizer the caller expanded or stripped: its externals
+  // are the term's own, the rank the number of unoccupied ones
+  if (!symmetrizer)
+    for (auto const& group : external_indices(*term))
+      for (auto const& si : group) {
+        if (si.slot_type() == SlotType::Proto) continue;
+        scope.externals.push_back(si.index());
+        if (!is_occupied(si.index())) ++rank;
+      }
   if (rank != 2) return term;
   return projection_rewrite(term, scope);
 }

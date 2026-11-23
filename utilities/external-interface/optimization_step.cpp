@@ -8,17 +8,21 @@
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <iterator>
 #include <map>
+#include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -38,6 +42,8 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
     throw Exception(kind() + " expects a JSON object for its options!");
   }
 
+  bool batch_given = false;
+
   for (const auto &[key, value] : options.items()) {
     if (key == "objective") {
       if (!value.is_string()) {
@@ -47,12 +53,10 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
 
       if (value == "DenseFLOPs") {
         options_.objective_function = ObjectiveFunction::DenseFLOPs;
-      } else if (value == "DenseSize") {
-        options_.objective_function = ObjectiveFunction::DenseSize;
-      } else if (value == "DensePeakSize") {
-        options_.objective_function = ObjectiveFunction::DensePeakSize;
-      } else if (value == "DensePeakSizeBatched") {
-        options_.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+      } else if (value == "DenseTimeSpace") {
+        options_.objective_function = ObjectiveFunction::DenseTimeSpace;
+      } else if (value == "DenseTimeSpaceBatched") {
+        options_.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
       } else {
         throw Exception("Invalid value for " + kind() + " option '" + key +
                         "': '" + value.get<std::string>() + "'");
@@ -88,6 +92,9 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
       options_.footprint_weight = value.get<double>();
     } else if (key == "replay") {
       set_replay_options(value);
+    } else if (key == "batch") {
+      set_batch_options(value);
+      batch_given = true;
     } else if (key == "prune_outer_products") {
       if (!value.is_boolean()) {
         throw Exception("Value for " + kind() + " option '" + key +
@@ -97,6 +104,205 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
       options_.prune_outer_products = value.get<bool>();
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
+    }
+  }
+
+  const ObjectiveFunction objective = options_.objective_function;
+  const bool batched = objective == ObjectiveFunction::DenseTimeSpaceBatched;
+
+  if (options_.footprint_weight != 0.0 &&
+      objective != ObjectiveFunction::DenseFLOPs) {
+    throw Exception(kind() +
+                    " option 'intermediate_size_penalty' requires the "
+                    "'DenseFLOPs' objective");
+  }
+  if (options_.CSE.subnet && objective != ObjectiveFunction::DenseFLOPs) {
+    throw Exception(kind() +
+                    " option 'cse' = 'subnet' requires the 'DenseFLOPs' "
+                    "objective");
+  }
+  if (options_.batch_policy.persistent_only && !replay_.has_value()) {
+    throw Exception(kind() +
+                    " option 'batch.persistent_only' requires the 'replay' "
+                    "option");
+  }
+  if (batch_given && !batched) {
+    throw Exception(kind() +
+                    " option 'batch' requires the 'DenseTimeSpaceBatched' "
+                    "objective");
+  }
+  if (batched && !batch_given) {
+    throw Exception(kind() +
+                    " objective 'DenseTimeSpaceBatched' requires the 'batch' "
+                    "option");
+  }
+}
+
+OptimizationStep::OptimizationStep() {
+  options_.objective_function = ObjectiveFunction::DenseTimeSpace;
+}
+
+void OptimizationStep::set_batch_options(const nlohmann::json &options) {
+  const std::string name = kind() + ".batch";
+
+  if (!options.is_object()) {
+    throw Exception(name + " expects a JSON object");
+  }
+
+  auto get_labels = [&](const std::string &key, const nlohmann::json &value) {
+    std::set<std::string> labels;
+    const std::string where = "Value for " + name + " option '" + key + "'";
+    if (!value.is_array()) {
+      throw Exception(where + " must be an array of index space labels");
+    }
+    for (const nlohmann::json &entry : value) {
+      if (!entry.is_string() || entry.get<std::string>().empty()) {
+        throw Exception(where + " must only contain non-empty strings");
+      }
+      labels.insert(entry.get<std::string>());
+    }
+    return labels;
+  };
+  auto get_size = [&](const std::string &key, const nlohmann::json &value) {
+    if (!value.is_number_integer() || value.get<long long>() <= 0) {
+      throw Exception("Value for " + name + " option '" + key +
+                      "' must be a positive integer");
+    }
+    return value.get<std::size_t>();
+  };
+  auto get_bool = [&](const std::string &key, const nlohmann::json &value) {
+    if (!value.is_boolean()) {
+      throw Exception("Value for " + name + " option '" + key +
+                      "' must be a boolean");
+    }
+    return value.get<bool>();
+  };
+
+  BatchPolicy &policy = options_.batch_policy;
+  std::set<std::string> contracted;
+  std::set<std::string> external;
+  std::map<std::string, std::size_t> target_sizes;
+  std::optional<std::size_t> uniform_target_size;
+  bool threshold_given = false;
+
+  for (const auto &[key, value] : options.items()) {
+    if (key == "peak_threshold") {
+      if (!value.is_number() || !(value.get<double>() > 0.0)) {
+        throw Exception("Value for " + name + " option '" + key +
+                        "' must be a positive number (bytes)");
+      }
+      policy.peak_threshold = value.get<double>();
+      threshold_given = true;
+    } else if (key == "contracted") {
+      contracted = get_labels(key, value);
+    } else if (key == "external") {
+      external = get_labels(key, value);
+    } else if (key == "target_size") {
+      if (value.is_object()) {
+        for (const auto &[label, size] : value.items()) {
+          target_sizes[label] = get_size(key + "." + label, size);
+        }
+      } else {
+        uniform_target_size = get_size(key, value);
+      }
+    } else if (key == "spectator_indices") {
+      policy.batch_spectator_indices = get_bool(key, value);
+    } else if (key == "persistent_only") {
+      policy.persistent_only = get_bool(key, value);
+    } else if (key == "accumulation_factor") {
+      if (!value.is_number() || value.get<double>() < 0.0) {
+        throw Exception("Value for " + name + " option '" + key +
+                        "' must be a non-negative number");
+      }
+      policy.accumulation_factor = value.get<double>();
+    } else {
+      throw Exception("Unknown option key for " + name + ": '" + key + "'");
+    }
+  }
+
+  if (!threshold_given) {
+    throw Exception("The 'peak_threshold' option for " + name +
+                    " is mandatory");
+  }
+  if (contracted.empty() && external.empty()) {
+    throw Exception(name +
+                    " requires at least one of 'contracted' and 'external'");
+  }
+  if (!uniform_target_size && target_sizes.empty()) {
+    throw Exception("The 'target_size' option for " + name + " is mandatory");
+  }
+  for (const std::set<std::string> *labels : {&contracted, &external}) {
+    for (const std::string &label : *labels) {
+      if (!uniform_target_size && !target_sizes.contains(label)) {
+        throw Exception("No 'target_size' given for batchable space '" + label +
+                        "' in " + name);
+      }
+    }
+  }
+
+  if (!external.empty() && !policy.batch_spectator_indices) {
+    throw Exception(name +
+                    " option 'external' has no effect without "
+                    "'spectator_indices'");
+  }
+  if (policy.batch_spectator_indices && external.empty()) {
+    throw Exception(name +
+                    " option 'spectator_indices' requires batchable "
+                    "'external' spaces");
+  }
+
+  batch_labels_.clear();
+  batch_labels_.insert(contracted.begin(), contracted.end());
+  batch_labels_.insert(external.begin(), external.end());
+  for (const auto &entry : target_sizes) {
+    batch_labels_.insert(entry.first);
+  }
+
+  using WLabelSet = std::set<std::wstring, std::less<>>;
+  auto to_wide = [](const std::set<std::string> &labels) {
+    WLabelSet res;
+    for (const std::string &label : labels) {
+      res.insert(toUtf16(label));
+    }
+    return res;
+  };
+  policy.is_batchable_contracted_index =
+      [labels = to_wide(contracted)](const Index &ix) {
+        return labels.contains(ix.space().base_key());
+      };
+  policy.is_batchable_external_index =
+      [labels = to_wide(external)](const Index &ix) {
+        return labels.contains(ix.space().base_key());
+      };
+  std::map<std::wstring, std::size_t, std::less<>> wide_sizes;
+  for (const auto &[label, size] : target_sizes) {
+    wide_sizes.emplace(toUtf16(label), size);
+  }
+  policy.batch_target_size =
+      [wide_sizes = std::move(wide_sizes),
+       uniform_target_size](const Index &ix) -> std::size_t {
+    if (uniform_target_size) {
+      return *uniform_target_size;
+    }
+    auto it = wide_sizes.find(ix.space().base_key());
+    return it != wide_sizes.end() ? it->second : ix.space().dimension();
+  };
+}
+
+void OptimizationStep::check_batch_spaces() const {
+  if (batch_labels_.empty()) {
+    return;
+  }
+
+  std::set<std::wstring> known;
+  for (const IndexSpace &space :
+       get_default_context().index_basis_registry()->spaces()) {
+    known.insert(std::wstring(space.base_key()));
+  }
+  for (const std::string &label : batch_labels_) {
+    if (!known.contains(toUtf16(label))) {
+      throw Exception("Unknown index space '" + label + "' in " + kind() +
+                      ".batch");
     }
   }
 }
@@ -195,7 +401,7 @@ void OptimizationStep::set_replay_options(const nlohmann::json &options) {
 }
 
 /// Optimizes @p expr, returning the result symmetrizer that has been split
-/// off beforehand (see reattach_symmetrizer)
+/// off beforehand (see push_symmetrizer)
 std::optional<ExprPtr> optimize_unsymmetrized(ResultExpr &expr,
                                               const OptimizeOptions &options) {
   std::optional<ExprPtr> symmetrizer = pop_symmetrizer(expr);
@@ -205,35 +411,15 @@ std::optional<ExprPtr> optimize_unsymmetrized(ResultExpr &expr,
   return symmetrizer;
 }
 
-void reattach_symmetrizer(ResultExpr &expr,
-                          std::optional<ExprPtr> symmetrizer) {
-  if (symmetrizer.has_value()) {
-    expr.expression() = ex<Product>(ExprPtrList{std::move(symmetrizer.value()),
-                                                std::move(expr.expression())},
-                                    Product::Flatten::No);
-  }
-}
-
-/// Adds the number of tensor leaves of @p node to @p num_tensors and returns
-/// whether none of its leaves is volatile.
-// Note: visit_leaf can't be used as it doesn't stop at non-root nodes
-bool count_tensors_if_persistent(const ExportNode<> &node,
-                                 const ExpressionFilter &is_volatile,
-                                 std::size_t &num_tensors) {
-  if (node.leaf()) {
-    num_tensors += node->is_tensor();
-    return !is_volatile.matches(*node->expr());
-  }
-
-  return count_tensors_if_persistent(node.left(), is_volatile, num_tensors) &&
-         count_tensors_if_persistent(node.right(), is_volatile, num_tensors);
-}
-
 std::size_t OptimizationStep::run(std::string_view step_id,
                                   ExecutionContext &ctx,
                                   const std::vector<std::string_view> &inputs) {
+  check_batch_spaces();
+
   if (!replay_.has_value()) {
-    return OneByOneProcessingStep<ExpressionData>::run(step_id, ctx, inputs);
+    return OneByOneProcessingStep<ExpressionData, true,
+                                  InputAccess::WorkingCopy>::run(step_id, ctx,
+                                                                 inputs);
   }
 
   using Node = ExportNode<>;
@@ -253,60 +439,43 @@ std::size_t OptimizationStep::run(std::string_view step_id,
   std::vector<Node> trees;
   std::vector<std::size_t> tree_to_input;
   std::vector<std::optional<ExprPtr>> symmetrizers;
-  std::size_t n_inputs = 0;
+  // The inputs, which may have been consumed by now (their IDs are still valid)
+  std::vector<ExecutionContext::Data<ProcessingData>> input_data;
   for (std::string_view input : inputs) {
-    for (const ExecutionContext::Data<const ProcessingData> &current :
-         std::as_const(ctx).get_data(input)) {
-      for (const ResultExpr &expr :
-           convert_data<ExpressionData>(current.data.get()).expressions) {
-        ResultExpr copy = expr.clone();
-        symmetrizers.push_back(optimize_unsymmetrized(copy, options_));
-        trees.push_back(to_tree(copy));
-        tree_to_input.push_back(n_inputs);
+    for (const ExecutionContext::Data<ProcessingData> &current :
+         ctx.get_data(input)) {
+      SEQUANT_ASSERT(!current.associated_ids.empty());
+
+      try {
+        WorkingCopy<ExpressionData> working =
+            ctx.working_copy<ExpressionData>(current);
+
+        for (ResultExpr &expr : working.data.expressions) {
+          symmetrizers.push_back(optimize_unsymmetrized(expr, options_));
+          trees.push_back(to_tree(expr));
+          tree_to_input.push_back(input_data.size());
+        }
+      } catch (const std::exception &e) {
+        throw Exception("Error in " + kind() + " on input " +
+                        std::string(current.associated_ids.front()) + ": " +
+                        e.what());
       }
 
-      ++n_inputs;
+      input_data.push_back(current);
     }
   }
+  const std::size_t n_inputs = input_data.size();
 
-  auto is_persistent = [this](const Node &node) {
-    std::size_t num_tensors = 0;
-    if (!count_tensors_if_persistent(node, *replay_->is_volatile,
-                                     num_tensors)) {
-      return false;
-    }
-
-    // Same threshold as in the cse step: extracting a single tensor is not
-    // worth it
-    return num_tensors >= 2;
-  };
-
-  // Maximal persistent subtrees (their subtrees are not visited)
-  SubexpressionUsageCounts<Node> persistent;
-  for (const Node &tree : trees) {
-    tree.visit_internal([&](const Node &node) {
-      if (!is_persistent(node)) {
-        return true;
-      }
-
-      ++persistent[node];
-      return false;
-    });
-  }
-
-  std::vector<std::size_t> definitions;
-  if (!persistent.empty()) {
-    auto label_gen = [this](const Node &, std::size_t counter) {
-      return replay_->intermediate_label + std::to_string(counter);
-    };
-
-    opt::cse::SubexpressionReplacer<std::vector<Node>, Node, decltype(to_tree),
-                                    decltype(label_gen)>
-        replacer(trees, persistent, to_tree, label_gen);
-    replacer.perform_replacements(0, trees.size());
-
-    definitions = replacer.cse_indices();
-  }
+  const std::vector<std::size_t> definitions =
+      opt::extract_persistent_subexpressions(
+          trees, std::function<bool(const Node &)>([this](const Node &leaf) {
+            return replay_->is_volatile->matches(*leaf->expr());
+          }),
+          to_tree,
+          std::function<std::string(const Node &, std::size_t)>(
+              [this](const Node &, std::size_t counter) {
+                return replay_->intermediate_label + std::to_string(counter);
+              }));
 
   // Definitions are inserted right before their first use and are assigned
   // to the persistent part of the input that use belongs to
@@ -330,7 +499,7 @@ std::size_t OptimizationStep::run(std::string_view step_id,
     unassigned.clear();
 
     ResultExpr result = to_result(trees[i]);
-    reattach_symmetrizer(result, std::move(symmetrizers.at(expr_idx)));
+    push_symmetrizer(result, std::move(symmetrizers.at(expr_idx)));
     volatile_part.expressions.push_back(std::move(result));
 
     ++expr_idx;
@@ -338,38 +507,40 @@ std::size_t OptimizationStep::run(std::string_view step_id,
   SEQUANT_ASSERT(unassigned.empty());
   SEQUANT_ASSERT(expr_idx == tree_to_input.size());
 
-  pending_.assign(std::make_move_iterator(parts.begin()),
-                  std::make_move_iterator(parts.end()));
+  detail::AliasPropagator propagator(ctx, step_id);
+  for (std::size_t i = 0; i < n_inputs; ++i) {
+    ctx.set_data(step_id, 2 * i, std::move(parts[i].first));
+    ctx.set_data(step_id, 2 * i + 1, std::move(parts[i].second));
 
-  const std::size_t n_outputs =
-      OneByOneProcessingStep<ExpressionData>::run(step_id, ctx, inputs);
-  SEQUANT_ASSERT(pending_.empty());
-  SEQUANT_ASSERT(n_outputs == 2 * n_inputs);
+    propagator.record(input_data[i].associated_ids,
+                      input_data[i].associated_group_ids, 2 * i, 2,
+                      /* alias_source = */ false);
+  }
+  propagator.flush();
+
+  const std::size_t n_outputs = 2 * n_inputs;
 
   // Expose the two parts of every alias created above as sub-IDs
   std::map<std::string, std::vector<std::size_t>> alias_inputs;
-  std::size_t input_idx = 0;
-  for (std::string_view input : inputs) {
-    for (const ExecutionContext::Data<const ProcessingData> &current :
-         std::as_const(ctx).get_data(input)) {
-      std::vector<std::string> aliases = {std::string(step_id)};
-      for (std::string_view id : current.associated_ids) {
-        if (std::optional<std::string_view> suffix =
-                detail::strip_autogenerated_id(id)) {
-          aliases.push_back(std::string(step_id) + std::string(*suffix));
-        }
-      }
-      for (std::string_view id : current.associated_group_ids) {
-        aliases.push_back(detail::make_group_alias(step_id, id));
-      }
+  for (std::size_t input_idx = 0; input_idx < n_inputs; ++input_idx) {
+    const ExecutionContext::Data<ProcessingData> &current =
+        input_data[input_idx];
 
-      for (std::string &alias : aliases) {
-        if (alias == step_id || ctx.has_data(alias)) {
-          alias_inputs[std::move(alias)].push_back(input_idx);
-        }
+    std::vector<std::string> aliases = {std::string(step_id)};
+    for (std::string_view id : current.associated_ids) {
+      if (std::optional<std::string_view> suffix =
+              detail::strip_autogenerated_id(id)) {
+        aliases.push_back(std::string(step_id) + std::string(*suffix));
       }
+    }
+    for (std::string_view id : current.associated_group_ids) {
+      aliases.push_back(detail::make_group_alias(step_id, id));
+    }
 
-      ++input_idx;
+    for (std::string &alias : aliases) {
+      if (alias == step_id || ctx.has_data(alias)) {
+        alias_inputs[std::move(alias)].push_back(input_idx);
+      }
     }
   }
 
@@ -398,29 +569,15 @@ std::size_t OptimizationStep::run(std::string_view step_id,
 std::size_t OptimizationStep::process(std::string_view id_prefix,
                                       std::size_t id_start,
                                       ExecutionContext &ctx,
-                                      const ExpressionData &data) {
-  if (replay_.has_value()) {
-    SEQUANT_ASSERT(!pending_.empty());
-    auto [persistent_part, volatile_part] = std::move(pending_.front());
-    pending_.pop_front();
+                                      WorkingCopy<ExpressionData> &input) {
+  SEQUANT_ASSERT(!replay_.has_value());
 
-    ctx.set_data(id_prefix, id_start, std::move(persistent_part));
-    ctx.set_data(id_prefix, id_start + 1, std::move(volatile_part));
-
-    return 2;
+  for (ResultExpr &expr : input.data.expressions) {
+    std::optional<ExprPtr> symmetrizer = optimize_unsymmetrized(expr, options_);
+    push_symmetrizer(expr, std::move(symmetrizer));
   }
 
-  ExpressionData result;
-  result.expressions.reserve(data.expressions.size());
-  for (const ResultExpr &input : data.expressions) {
-    result.expressions.emplace_back(input.clone());
-
-    std::optional<ExprPtr> symmetrizer =
-        optimize_unsymmetrized(result.expressions.back(), options_);
-    reattach_symmetrizer(result.expressions.back(), std::move(symmetrizer));
-  }
-
-  ctx.set_data(id_prefix, id_start, std::move(result));
+  ctx.set_data(id_prefix, id_start, std::move(input.data));
 
   return 1;
 }
