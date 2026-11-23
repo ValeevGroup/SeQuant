@@ -514,6 +514,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/rules/pno.hpp
         SeQuant/domain/mbpt/rules/thc.cpp
         SeQuant/domain/mbpt/rules/thc.hpp
+        SeQuant/domain/mbpt/rotation_gradient.cpp
+        SeQuant/domain/mbpt/rotation_gradient.hpp
         SeQuant/domain/mbpt/series.cpp
         SeQuant/domain/mbpt/series.hpp
         SeQuant/domain/mbpt/space_qns.hpp
