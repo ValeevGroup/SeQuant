@@ -37,9 +37,9 @@ what its producer's own planning made and this replay made something else.
 ## Output
 
 ```
-equations: 8  roots: 8  metered trees: 7
+equations: 8  roots: 8  metered trees: 8
 eval trees: fingerprint 0xc55895f902cf6e95
-dry-run meter [ordered, combined 7 trees]: peak=… GB (dense model) | flops persistent=… volatile=… | time persistent=… volatile=… | builds=…
+dry-run meter [ordered, combined 8 trees]: peak=… GB (dense model) | flops persistent=… volatile=… | time persistent=… volatile=… | builds=…
 
 products by class (flops summed over every execution of the replay; * = depends on t):
        flops   share     runs   max result  class

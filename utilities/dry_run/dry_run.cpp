@@ -907,9 +907,10 @@ int main(int argc, char** argv) {
           print(root, 0, print);
         }
       n_roots += planned.roots.size();
-      // a scalar root (an observable) is not part of the summed replay
-      for (auto& r : planned.roots)
-        if (!r->canon_indices().empty()) forest.push_back(std::move(r));
+      // every root is replayed, a scalar one (an observable) included: its
+      // producer evaluates the observable through the same scheduled driver
+      // and meters it with the residual trees
+      for (auto& r : planned.roots) forest.push_back(std::move(r));
     }
 
     std::cout << std::format("equations: {}  roots: {}  metered trees: {}\n",
