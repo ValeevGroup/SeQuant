@@ -200,9 +200,10 @@ kinds:
   protoindices, and one list where the spelling has one. A protoindex label of an occurrence that is not one of its
   slots is summed in its term, over at least the index space of the variable's label; a term whose Kronecker delta
   joins disjoint index spaces is zero and is dropped before this check.
-- **A valid function.** No index of a term of ``E`` stands in more than two slots, those of ``Â`` and ``Ŝ`` aside and
-  auxiliary slots counted like bra and ket slots, since SeQuant reads an index in exactly two slots as summed and one in
-  a single slot as external; the exception is a protoindex of an external index, a label its carrier fixes.
+- **A valid function.** For a tensor variable, no index of a term of ``E`` stands in more than two slots, those of ``Â``
+  and ``Ŝ`` aside and auxiliary slots counted like bra and ket slots, since SeQuant reads an index in exactly two slots
+  as summed and one in a single slot as external; the exception is a protoindex of an external index, a label its
+  carrier fixes. The derivative by a scalar ``Variable`` reads no index, so it takes such a term.
 - **The scope above.** ``E`` holds operators, or the variable stands under a ``TensorPower``. Also rejected is a
   variable written with the name of an external index of ``E``, as happens when a result is differentiated again by
   the variable under the same index names; write the second variable with other index names.

@@ -133,12 +133,15 @@ container::set<Index> externals_of(const container::svector<ExprPtr>& factors) {
 using Term = std::tuple<Constant::scalar_type, container::svector<ExprPtr>,
                         container::set<Index>>;
 
-/// the terms of the expanded @p E
-container::svector<Term> split_terms(const ExprPtr& E) {
+/// the terms of the expanded @p E ; their external indices are found only if
+/// @p with_externals : the scalar rule needs none, so it also takes a term
+/// with an index in more than two slots
+container::svector<Term> split_terms(const ExprPtr& E, bool with_externals) {
   container::svector<Term> result;
   for (const auto& term : terms_of(E)) {
     auto [scalar, factors] = split(term);
-    auto externals = externals_of(factors);
+    auto externals =
+        with_externals ? externals_of(factors) : container::set<Index>{};
     result.emplace_back(scalar, std::move(factors), std::move(externals));
   }
   return result;
@@ -666,7 +669,7 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
   expand(e);
   check_variable(x, where);
   if (!e->is_cnumber()) throw Exception(where + "the function holds operators");
-  auto terms = split_terms(e);
+  auto terms = split_terms(e, /*with_externals=*/x->is<Tensor>());
   ExprPtr result;
   if (x->is<Variable>()) {
     result = one_way(terms, x);

@@ -639,9 +639,12 @@ TEST_CASE("deriv/rules/rejections", "[deriv][rules]") {
       L"s{a_3<i_3,i_4>;a_1<i_1,i_2>}:N-N-N"),
     T(L"t{a_5<i_5,i_6>,a_6<i_5,i_6>;i_5,i_6}:N-N-S"),
     "deriv::diff: an index of the function stands in more than two slots");
-  X(T(L"x f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N s{a_1;i_2}:N-N-N"),
-    ex<Variable>(L"x"),
-    "deriv::diff: an index of the function stands in more than two slots");
+  // ... which the scalar rule, needing no external indices, accepts
+  REQUIRE_THAT(
+      diff(T(L"x^(2) B{a_1;i_1;i_3}:N-N-N C{i_1;a_1;i_3}:N-N-N D{;;i_3}:N-N-N"),
+           ex<Variable>(L"x")),
+      EquivalentTo(
+          L"2 x B{a_1;i_1;i_3}:N-N-N C{i_1;a_1;i_3}:N-N-N D{;;i_3}:N-N-N"));
   X(nullptr, ex<Variable>(L"x"), "deriv::diff: null argument");
   X(E, nullptr, "deriv::diff: null argument");
   REQUIRE_THROWS_WITH(
