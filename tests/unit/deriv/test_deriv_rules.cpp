@@ -634,14 +634,7 @@ TEST_CASE("deriv/rules/rejections", "[deriv][rules]") {
   X(E, T(L"w{i_1,i_2,a_1,a_2;i_3,i_4,a_3,a_4}:A-N-S"),
     "the variable has two groups of like slots");
   X(mbpt::op::H(1), T(L"t{a_2;i_2}:N-N-N"), "the function holds operators");
-  // a_1<i_1,i_2> in three slots; a trace, an index in two slots of one
-  // tensor, is accepted (deriv/rules/tensors)
-  X(T(L"W{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-N-N "
-      L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:N-N-S "
-      L"s{a_3<i_3,i_4>;a_1<i_1,i_2>}:N-N-N"),
-    T(L"t{a_5<i_5,i_6>,a_6<i_5,i_6>;i_5,i_6}:N-N-S"),
-    "deriv::diff: an index of the function stands in more than two slots");
-  // ... which the scalar rule, needing no external indices, accepts
+  // a hyperindex, by the scalar rule (by a tensor: deriv/rules/hadamard)
   REQUIRE_THAT(
       diff(T(L"x^(2) B{a_1;i_1;i_3}:N-N-N C{i_1;a_1;i_3}:N-N-N D{;;i_3}:N-N-N"),
            ex<Variable>(L"x")),
@@ -890,6 +883,62 @@ TEST_CASE("deriv/rules/powers-and-definitions", "[deriv][rules]") {
     rejects({ResultExpr(Variable(L"z"), T(L"e{;a_9}:N-N-S"))},
             "a definition's head is not a labeled tensor");
   }
+}
+
+TEST_CASE("deriv/rules/hadamard", "[deriv][rules]") {
+  using sequant::deriv::diff;
+  using sequant::deriv::test::group_order;
+  using sequant::deriv::test::require_same;
+  auto T = [](std::wstring_view s) { return deserialize(s); };
+  auto ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  const auto scope = set_scoped_default_context(ctx);
+  // f homogeneous of @p degree in the variable x, every index summed:
+  // Euler's identity, r = diff(f, x) contracted with x is degree times f
+  // times the number of operations of x; the evaluator reads an index in
+  // three slots as free, so the arrays are compared with their free labels
+  // given (none)
+  const auto R = [&](const ExprPtr& f, const ExprPtr& x,
+                     const ExprPtr& expected, int degree = 1) {
+    const auto r = diff(f, {x});
+    if (expected) REQUIRE_THAT(r, EquivalentTo(expected));
+    require_same(r * x,
+                 ex<Constant>(degree * static_cast<int>(group_order(x))) * f,
+                 {}, {});
+  };
+  // an index in three slots is summed: a Hadamard product under a contraction
+  R(T(L"B{a_1;i_1;i_3}:N-N-N C{i_1;a_1;i_3}:N-N-N D{;;i_3}:N-N-N"),
+    T(L"B{a_2;i_2;i_4}:N-N-N"), T(L"C{i_2;a_2;i_4}:N-N-N D{;;i_4}:N-N-N"));
+  // the shape of a perturbative correction, L ⊙ D⁻² · R, every index summed
+  // over three slots (nonsymmetric: the evaluator applies no symmetrizer to
+  // a Hadamard product)
+  R(T(L"L{i_1,i_2;a_1,a_2}:N-N-N R{a_1,a_2;i_1,i_2}:N-N-N") *
+        pow(T(L"D{i_1,i_2;a_1,a_2}:N-N-N"), -2),
+    T(L"R{a_3,a_4;i_3,i_4}:N-N-N"),
+    T(L"L{i_3,i_4;a_3,a_4}:N-N-N") * pow(T(L"D{i_3,i_4;a_3,a_4}:N-N-N"), -2));
+  R(T(L"L{i_1,i_2;a_1,a_2}:N-N-N R{a_1,a_2;i_1,i_2}:N-N-N") *
+        pow(T(L"D{i_1,i_2;a_1,a_2}:N-N-N"), -2),
+    T(L"D{i_3,i_4;a_3,a_4}:N-N-N"),
+    ex<Constant>(-2) * T(L"L{i_3,i_4;a_3,a_4}:N-N-N R{a_3,a_4;i_3,i_4}:N-N-N") *
+        pow(T(L"D{i_3,i_4;a_3,a_4}:N-N-N"), -3),
+    -2);
+  // antisymmetric: the spellings of the variable are summed by Â
+  REQUIRE_THAT(diff(T(L"L{i_1,i_2;a_1,a_2}:A-S-S R{a_1,a_2;i_1,i_2}:A-S-S") *
+                        pow(T(L"D{i_1,i_2;a_1,a_2}:N-N-N"), -2),
+                    {T(L"R{a_3,a_4;i_3,i_4}:A-S-S")}),
+               EquivalentTo(ex<Constant>(4) * T(L"Â{a_3,a_4;i_3,i_4}:A-N-S") *
+                            T(L"L{i_3,i_4;a_3,a_4}:A-S-S") *
+                            pow(T(L"D{i_3,i_4;a_3,a_4}:N-N-N"), -2)));
+  // the indices of the variable stay free in a second derivative, though the
+  // first holds them in two slots
+  const auto f = pow(T(L"X{i_1;a_1}:N-N-N"), -1) * T(L"r{a_1;i_1}:N-N-N");
+  REQUIRE_THAT(diff(f, {T(L"X{i_2;a_2}:N-N-N"), T(L"X{i_3;a_3}:N-N-N")}),
+               EquivalentTo(ex<Constant>(2) * pow(T(L"X{i_2;a_2}:N-N-N"), -3) *
+                            T(L"r{a_2;i_2}:N-N-N") * T(L"δ{i_2;i_3}:N-S-S") *
+                            T(L"δ{a_3;a_2}:N-S-S")));
+  REQUIRE_THAT(diff(f, {T(L"r{a_2;i_2}:N-N-N"), T(L"X{i_3;a_3}:N-N-N")}),
+               EquivalentTo(ex<Constant>(-1) * pow(T(L"X{i_2;a_2}:N-N-N"), -2) *
+                            T(L"δ{i_2;i_3}:N-S-S") * T(L"δ{a_3;a_2}:N-S-S")));
 }
 
 TEST_CASE("deriv/rules/open-shell", "[deriv][rules]") {

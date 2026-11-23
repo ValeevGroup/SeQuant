@@ -201,10 +201,7 @@ kinds:
   protoindices, and one list where the spelling has one. A protoindex label of an occurrence that is not one of its
   slots is summed in its term, over at least the index space of the variable's label; a term whose Kronecker delta
   joins disjoint index spaces is zero and is dropped before this check.
-- **A valid function.** For a tensor variable, no index of a term of ``E`` stands in more than two slots, those of ``Â``
-  and ``Ŝ`` aside and auxiliary slots counted like bra and ket slots, since SeQuant reads an index in exactly two slots
-  as summed and one in a single slot as external; the exception is a protoindex of an external index, a label its
-  carrier fixes. The derivative by a scalar ``Variable`` reads no index, so it takes such a term.
+- **A valid function.** ``E`` is a c-number expression (see `Scope`_).
 - **Definitions.** A definition's head is not a labeled tensor, has protoindices, or has the variable's label; two
   definitions have one head; or a definition depends on itself, directly or through others. The leaves of the
   definitions are checked as those of ``E`` are.
@@ -230,6 +227,12 @@ A leaf of the variable under a :class:`sequant::TensorPower` of exponent :math:`
 element, :math:`\partial (x^e)/\partial x = e\, x^{e-1}`. The derivative of a function of elementwise powers is
 itself an elementwise (Hadamard) product: its free indices stand in two slots, as in ``-D{i_2;a_2}^(-2) r{a_2;i_2}``,
 and core's canonicalizer accepts that only with ``AssertStrictBraKetSymmetry::No``.
+
+``diff`` reads the external indices of a term from the term: an index in one slot is external, one in two slots is
+summed, and so is one in three or more, as in a Hadamard product under a contraction such as
+:math:`\sum L_{ijab} R_{abij} D_{ijab}^{-1}`. The indices of a variable stay external in the derivatives by later
+variables wherever they stand, so a derivative of a Hadamard product can be differentiated again. A free index of
+``E`` itself must stand in one slot.
 
 A leaf may also depend on the variable through a definition: ``diff(E, variables, definitions)`` takes a list of
 :class:`sequant::ResultExpr`, each a head tensor and its expression. A leaf with the label and ranks of a head, alone or

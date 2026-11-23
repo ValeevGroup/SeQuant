@@ -103,12 +103,12 @@ Spelling spelled(const ExprPtr& x) {
           phase ? phase->as<Constant>().value() : Constant::scalar_type{1}};
 }
 
-/// the external indices of a term of the function of diff(): those not in
-/// exactly two slots of the factors other than Â and Ŝ, and the protoindices
-/// of those
-/// @throw Exception for an index in more than two such slots that is not
-/// external
-container::set<Index> externals_of(const container::svector<ExprPtr>& factors) {
+/// the external indices of a term of the function of diff(): those in one
+/// slot of the factors other than Â and Ŝ, those of @p known that the term
+/// holds, and the protoindices of those. An index in more slots that is not
+/// known is summed: in two, a contraction; in more, a Hadamard product
+container::set<Index> externals_of(const container::svector<ExprPtr>& factors,
+                                   const container::set<Index>& known) {
   container::map<Index, std::int64_t> slots;
   for (const auto& f : factors) {
     if (is_symmetrizer(f)) continue;
@@ -117,15 +117,10 @@ container::set<Index> externals_of(const container::svector<ExprPtr>& factors) {
   }
   container::set<Index> result;
   for (const auto& [i, n] : slots) {
-    if (n >= 2) continue;
+    if (n >= 2 && !known.contains(i)) continue;
     result.insert(i);
     for (const auto& p : i.proto_indices()) result.insert(p);
   }
-  for (const auto& [i, n] : slots)
-    if (n > 2 && !result.contains(i))
-      throw Exception(
-          "deriv::diff: an index of the function stands in more than two "
-          "slots");
   return result;
 }
 
@@ -134,15 +129,16 @@ container::set<Index> externals_of(const container::svector<ExprPtr>& factors) {
 using Term = std::tuple<Constant::scalar_type, container::svector<ExprPtr>,
                         container::set<Index>>;
 
-/// the terms of the expanded @p E ; their external indices are found only if
-/// @p with_externals : the scalar rule needs none, so it also takes a term
-/// with an index in more than two slots
-container::svector<Term> split_terms(const ExprPtr& E, bool with_externals) {
+/// the terms of the expanded @p E ; their external indices (externals_of(),
+/// with the indices @p known to be external) are found only if
+/// @p with_externals : the scalar rule needs none
+container::svector<Term> split_terms(const ExprPtr& E, bool with_externals,
+                                     const container::set<Index>& known = {}) {
   container::svector<Term> result;
   for (const auto& term : terms_of(E)) {
     auto [scalar, factors] = split(term);
     auto externals =
-        with_externals ? externals_of(factors) : container::set<Index>{};
+        with_externals ? externals_of(factors, known) : container::set<Index>{};
     result.emplace_back(scalar, std::move(factors), std::move(externals));
   }
   return result;
@@ -408,9 +404,11 @@ ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y,
       }
       const auto* def = definition_of(leaf, defs);
       if (!def) continue;
+      container::set<Index> leaf_slots;
+      for (const auto& i : leaf.slots()) leaf_slots.insert(i);
       const auto inner_terms =
           split_terms(instantiate(*def, leaf, labels_of(factors, y)),
-                      /*with_externals=*/y->is<Tensor>());
+                      /*with_externals=*/y->is<Tensor>(), leaf_slots);
       auto inner = one_way(inner_terms, y, defs);
       expand(inner);
       // per term of the derivative of the definition, a Kronecker delta of a
@@ -830,15 +828,17 @@ void check_definitions(const Definitions& defs, const ExprPtr& x,
 
 /// the derivative of @p E by the one variable @p x : the sum over the
 /// spellings of x of their phase times the derivative by each, through the
-/// definitions @p defs
-ExprPtr by_one(const ExprPtr& E, const ExprPtr& x, const Definitions& defs) {
+/// definitions @p defs ; the indices @p known are external wherever they
+/// stand
+ExprPtr by_one(const ExprPtr& E, const ExprPtr& x, const Definitions& defs,
+               const container::set<Index>& known) {
   const std::string where = "deriv::diff: ";
   auto e = E->clone();
   expand(e);
   check_variable(x, where);
   check_definitions(defs, x, where);
   if (!e->is_cnumber()) throw Exception(where + "the function holds operators");
-  auto terms = split_terms(e, /*with_externals=*/x->is<Tensor>());
+  auto terms = split_terms(e, /*with_externals=*/x->is<Tensor>(), known);
   ExprPtr result;
   if (x->is<Variable>()) {
     result = one_way(terms, x, defs);
@@ -879,9 +879,14 @@ ExprPtr diff(const ExprPtr& E, const container::svector<ExprPtr>& variables,
   if (!E || std::ranges::any_of(variables, [](const auto& x) { return !x; }))
     throw Exception("deriv::diff: null argument");
   if (variables.empty()) return E->clone();
-  // by_one() works on a clone of its input
+  // by_one() works on a clone of its input; the indices of each variable are
+  // free in the derivatives by it, even where they stand in two slots or more
   auto result = E;
-  for (const auto& x : variables) result = by_one(result, x, definitions);
+  container::set<Index> known;
+  for (const auto& x : variables) {
+    result = by_one(result, x, definitions, known);
+    for (const auto& i : get_used_indices(x)) known.insert(i);
+  }
   return result;
 }
 

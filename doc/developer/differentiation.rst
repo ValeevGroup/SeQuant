@@ -81,14 +81,15 @@ Summed and external indices
 -----------------------------
 
 Whether a label of a leaf is renamed or keeps a Kronecker delta depends on whether it is summed in its term, and the
-engine reads that from the term alone, with no list of external indices from the caller. Over the factors of the term
-other than ``Â`` and ``Ŝ``, an index is summed if it stands in exactly two slots (bra, ket and auxiliary counted
-together). An index in fewer slots is external: one in a single slot, and one that stands in no slot and appears only
-as a protoindex, such as the pair label of a trace over that pair's virtual space. A protoindex of an external index is
-external too, in however many slots it stands. An index in more than two slots that is not external makes the term no
-valid expression, and the input is rejected (the scalar rule reads no index and skips this); one that is external, a
-protoindex of an external index, is a label its carrier fixes, as in a first derivative differentiated again. An
-auxiliary index counts like any other. The symmetrizers are left out because their indices are the external indices of
+engine reads that from the term, with no list of external indices from the caller. Over the factors of the term
+other than ``Â`` and ``Ŝ``, an index is summed if it stands in two slots or more (bra, ket and auxiliary counted
+together): two for a contraction, more for a Hadamard product, as in a perturbative correction
+:math:`\sum L \odot D^{-1} \cdot R` or a hyperindex of a factorized integral. An index in fewer slots is external:
+one in a single slot, and one that stands in no slot and appears only as a protoindex, such as the pair label of a
+trace over that pair's virtual space. A protoindex of an external index is external too, in however many slots it
+stands. ``diff`` also passes the indices of each variable to the derivatives by the later ones as known external
+indices: a derivative of a Hadamard product holds them in two slots (``-D{i_2;a_2}^(-2) r{a_2;i_2}``), where the count
+alone would read them as summed. An auxiliary index counts like any other. The symmetrizers are left out because their indices are the external indices of
 a residual: counted, they would make each
 external index of ``Â{i_1;a_1} v{a_1,i_2;i_1,a_2}`` look summed.
 

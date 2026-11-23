@@ -47,8 +47,11 @@ namespace sequant::deriv {
 /// element: its derivative is e times the leaf raised to e − 1, and the result
 /// is then a Hadamard product.
 ///
-/// The free indices of the result are those of @p E plus those of each
-/// variable, under the names the variable is spelled with. The result is a
+/// The free indices of @p E are those in one slot of a term (Â and Ŝ aside);
+/// an index in two or more slots is summed, in more than two as in a Hadamard
+/// product. The free indices of the result are those of @p E plus those of
+/// each variable, under the names the variable is spelled with; those of a
+/// variable stay free in the derivatives by the later ones. The result is a
 /// flat sum of products with its scalars combined; it is not canonicalized.
 /// With no variables, the result is @p E as it is.
 /// Symmetrizers are never expanded: those of @p E stay factors, and that of
