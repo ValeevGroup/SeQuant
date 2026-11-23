@@ -1602,7 +1602,9 @@ class ResultTensorTA final : public Result {
   /// the extents of the value, for a failure message (no materialization)
   [[nodiscard]] std::string extents() const {
     std::string s = "[";
-    for (auto const& e : logical_trange().elements_range().extent())
+    // logical_trange() returns by value: keep it alive for the loop
+    const auto trange = logical_trange();
+    for (auto const& e : trange.elements_range().extent())
       s += std::to_string(e) + ",";
     return s + "]";
   }
@@ -2287,7 +2289,9 @@ class ResultTensorOfTensorTA final : public Result {
 
   [[nodiscard]] std::string extents() const {
     std::string s = "[";
-    for (auto const& e : logical_trange().elements_range().extent())
+    // logical_trange() returns by value: keep it alive for the loop
+    const auto trange = logical_trange();
+    for (auto const& e : trange.elements_range().extent())
       s += std::to_string(e) + ",";
     return s + "]";
   }
