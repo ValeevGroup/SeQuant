@@ -252,4 +252,7 @@ jobs:
       if: ${{ matrix.valgrind }}
       working-directory: ${{github.workspace}}/build
       shell: bash
-      run: valgrind --error-exitcode=1 --leak-check=full ./tests/unit/unit_tests-sequant '~[valgrind_skip]'
+      run: |
+        valgrind --error-exitcode=1 --leak-check=full ./tests/unit/unit_tests-sequant '~[valgrind_skip]'
+        # the rule and series tests of SeQuant-deriv; its identity and finite-difference tests take too long here
+        valgrind --error-exitcode=1 --leak-check=full ./tests/unit/deriv/unit_tests-sequant-deriv '[rules],[series]~deriv/series/cc-lagrangian'
