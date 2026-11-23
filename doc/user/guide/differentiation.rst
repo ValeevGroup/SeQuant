@@ -202,8 +202,9 @@ kinds:
   slots is summed in its term, over at least the index space of the variable's label; a term whose Kronecker delta
   joins disjoint index spaces is zero and is dropped before this check.
 - **A valid function.** ``E`` is a c-number expression (see `Scope`_).
-- **Definitions.** A definition's head is not a labeled tensor, has protoindices, or has the variable's label; two
-  definitions have one head; or a definition depends on itself, directly or through others. The leaves of the
+- **Definitions.** A definition's head is not a labeled tensor, has protoindices, repeats an index, or has the
+  variable's label; its expression has a free index the head lacks; two definitions have one head; a definition
+  depends on itself, directly or through others; or a leaf with a definition has protoindices. The leaves of the
   definitions are checked as those of ``E`` are.
 - **The scope above.** ``E`` holds operators. Also rejected is a
   variable written with the name of an external index of ``E``, as happens when a result is differentiated again by

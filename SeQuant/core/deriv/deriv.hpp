@@ -74,9 +74,10 @@ namespace sequant::deriv {
 /// Definitions may use others, but not themselves.
 /// @throw Exception for what diff(E, variables) rejects, also in the
 /// expressions of @p definitions ; for a definition whose head is not a
-/// labeled tensor, has protoindices, or has the variable's label; for two
-/// definitions of one head; for one that holds operators; and for one that
-/// depends on itself
+/// labeled tensor, has protoindices, repeats an index or has the variable's
+/// label; for an expression with a free index its head lacks; for two
+/// definitions of one head; for one that holds operators; for one that
+/// depends on itself; and for a leaf with a definition that has protoindices
 [[nodiscard]] ExprPtr diff(const ExprPtr& E,
                            const container::svector<ExprPtr>& variables,
                            const container::svector<ResultExpr>& definitions);

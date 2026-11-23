@@ -862,7 +862,37 @@ TEST_CASE("deriv/rules/powers-and-definitions", "[deriv][rules]") {
                  EquivalentTo(x * T(L"d{i_1;a_1}:N-N-N")));
   }
 
+  SECTION("definitions written like the function") {
+    const auto E = T(L"X{a_1;i_1}:N-N-N") * P(L"d{i_1;a_1}:N-N-N", -1);
+    const auto expected =
+        ex<Constant>(-1) * T(L"X{a_2;i_1}:N-N-N") * P(L"d{i_1;a_2}:N-N-N", -2);
+    // the head named like the variable: its names are dummies
+    REQUIRE_THAT(diff(E, {T(L"e{;a_2}:N-N-S")},
+                      {ResultExpr(d(L"i_2", L"a_2"),
+                                  T(L"e{;a_2}:N-N-S - e{i_2;}:N-N-S"))}),
+                 EquivalentTo(expected));
+    // an expression that is not expanded
+    auto twice = ex<Product>(ExprPtrList{});
+    twice->as<Product>().append(2, T(L"e{;a_9}:N-N-S - e{i_9;}:N-N-S"),
+                                Product::Flatten::No);
+    REQUIRE_THAT(
+        diff(E, {T(L"e{;a_2}:N-N-S")}, {ResultExpr(d(L"i_9", L"a_9"), twice)}),
+        EquivalentTo(ex<Constant>(2) * expected));
+    // a summed index of the expression whose protoindex is a slot of the head
+    REQUIRE_THAT(
+        diff(T(L"X{a_1;i_1}:N-N-N d{i_1;a_1}:N-N-N"), {ex<Variable>(L"s")},
+             {ResultExpr(d(L"i_9", L"a_9"),
+                         T(L"s h{i_9;a_8<i_9>}:N-N-N k{a_8<i_9>;a_9}:N-N-N"))}),
+        EquivalentTo(T(L"X{a_1;i_1}:N-N-N h{i_1;a_8<i_1>}:N-N-N "
+                       L"k{a_8<i_1>;a_1}:N-N-N")));
+  }
+
   SECTION("rejected definitions") {
+    REQUIRE_THROWS_WITH(
+        diff(T(L"X{a_1<i_1>;i_1}:N-N-N Z{i_1;}:N-N-N") *
+                 P(L"d{i_1;a_1<i_1>}:N-N-N", -1),
+             {T(L"e{;a_2<i_2>}:N-N-S")}, defs),
+        "deriv::diff: a leaf with a definition has protoindices");
     const auto E = T(L"X{a_1;i_1}:N-N-N") * P(L"d{i_1;a_1}:N-N-N", -1);
     const auto e = T(L"e{;a_2}:N-N-S");
     const auto rejects = [&](const container::svector<ResultExpr>& defs,
@@ -882,6 +912,12 @@ TEST_CASE("deriv/rules/powers-and-definitions", "[deriv][rules]") {
             "a definition's head has the label of the variable");
     rejects({ResultExpr(Variable(L"z"), T(L"e{;a_9}:N-N-S"))},
             "a definition's head is not a labeled tensor");
+    rejects(
+        {ResultExpr(Tensor(L"d", bra{L"i_9"}, ket{L"i_9"}, Symmetry::Nonsymm),
+                    T(L"e{i_9;}:N-N-S"))},
+        "a definition's head repeats an index");
+    rejects({ResultExpr(d(L"i_9", L"a_9"), T(L"e{;a_8}:N-N-S"))},
+            "a definition's expression has a free index its head lacks");
   }
 }
 

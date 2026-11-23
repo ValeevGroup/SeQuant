@@ -336,7 +336,8 @@ ExprPtr instantiate(const ResultExpr& def, const Tensor& leaf,
   const auto unused = unused_label_validator(std::move(taken));
   for (const auto& i : used)
     if (!renames.contains(i)) renames.emplace(i, temporary(i, unused));
-  auto result = transform_expr(def.expression(), renames);
+  auto result = transform_expr(def.expression(),
+                               replace_proto_indices_of_images(renames));
   expand(result);
   return result;
 }
@@ -404,6 +405,9 @@ ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y,
       }
       const auto* def = definition_of(leaf, defs);
       if (!def) continue;
+      if (std::ranges::any_of(leaf.slots(), &Index::has_proto_indices))
+        throw Exception(
+            "deriv::diff: a leaf with a definition has protoindices");
       container::set<Index> leaf_slots;
       for (const auto& i : leaf.slots()) leaf_slots.insert(i);
       const auto inner_terms =
@@ -798,12 +802,21 @@ void check_definitions(const Definitions& defs, const ExprPtr& x,
     if (!d.expression() || !d.expression()->is_cnumber())
       reject("a definition holds operators");
     const auto head = d.result_as_tensor();
+    container::set<Index> head_slots;
+    for (const auto& i : head.slots())
+      if (!head_slots.insert(i).second)
+        reject("a definition's head repeats an index");
     if (x->is<Tensor>() && x->as<Tensor>().label() == head.label())
       reject("a definition's head has the label of the variable");
     if (definition_of(head, Definitions(defs.begin(), defs.begin() + k)))
       reject("two definitions have one head");
     auto e = d.expression()->clone();
     expand(e);
+    for (const auto& term : terms_of(e)) {
+      for (const auto& i : externals_of(split(term).second, head_slots))
+        if (!head_slots.contains(i))
+          reject("a definition's expression has a free index its head lacks");
+    }
     for (const auto& term : terms_of(e))
       for (const auto& f : split(term).second) {
         const auto& base =
@@ -853,7 +866,18 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x, const Definitions& defs,
     // the leaves the definitions differentiate through are checked as those
     // of the function are
     for (const auto& d : defs) {
-      auto d_terms = split_terms(d.expression()->clone(), true);
+      // the head's names are dummies: renamed apart from x like the rest
+      auto head = d.result_as_tensor();
+      container::set<std::wstring> taken;
+      for (const auto& i : get_used_indices(x)) taken.emplace(i.label());
+      for (const auto& i : get_used_indices(d.expression()))
+        taken.emplace(i.label());
+      for (const auto& i : head.slots()) taken.emplace(i.label());
+      const auto unused = unused_label_validator(taken);
+      container::map<Index, Index> fresh;
+      for (const auto& i : head.slots()) fresh.emplace(i, temporary(i, unused));
+      head.transform_indices(fresh);
+      auto d_terms = split_terms(instantiate(d, head, std::move(taken)), true);
       rename_apart(d_terms, x);
       check(d_terms, x, ys, where);
     }
