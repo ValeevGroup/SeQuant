@@ -47,7 +47,8 @@ namespace sequant::deriv {
 /// element: its derivative is e times the leaf raised to e − 1, and the result
 /// is then a Hadamard product.
 ///
-/// The free indices of @p E are those in one slot of a term (Â and Ŝ aside);
+/// The free indices of @p E are those in one slot of a term (Â and Ŝ aside)
+/// and those of its Â and Ŝ;
 /// an index in two or more slots is summed, in more than two as in a Hadamard
 /// product. The free indices of the result are those of @p E plus those of
 /// each variable, under the names the variable is spelled with; those of a

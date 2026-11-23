@@ -110,14 +110,20 @@ Spelling spelled(const ExprPtr& x) {
 container::set<Index> externals_of(const container::svector<ExprPtr>& factors,
                                    const container::set<Index>& known) {
   container::map<Index, std::int64_t> slots;
+  // the indices of a symmetrizer are those of a residual: external, whatever
+  // the slots of the other factors that hold them
+  container::set<Index> symmetrized;
   for (const auto& f : factors) {
-    if (is_symmetrizer(f)) continue;
+    if (is_symmetrizer(f)) {
+      for (const auto& i : get_used_indices(f)) symmetrized.insert(i);
+      continue;
+    }
     for (const auto& [i, count] : get_used_indices_with_counts(*f))
       slots[i] += count.nonproto();
   }
   container::set<Index> result;
   for (const auto& [i, n] : slots) {
-    if (n >= 2 && !known.contains(i)) continue;
+    if (n >= 2 && !known.contains(i) && !symmetrized.contains(i)) continue;
     result.insert(i);
     for (const auto& p : i.proto_indices()) result.insert(p);
   }

@@ -965,6 +965,16 @@ TEST_CASE("deriv/rules/hadamard", "[deriv][rules]") {
                EquivalentTo(ex<Constant>(4) * T(L"Â{a_3,a_4;i_3,i_4}:A-N-S") *
                             T(L"L{i_3,i_4;a_3,a_4}:A-S-S") *
                             pow(T(L"D{i_3,i_4;a_3,a_4}:N-N-N"), -2)));
+  // a residual under Â whose indices stand in two other slots each: they are
+  // its external indices, kept with Kronecker deltas
+  REQUIRE_THAT(diff(T(L"Â{i_1,i_2;a_1,a_2}:A-N-S t{a_1,a_2;i_1,i_2}:A-S-S") *
+                        pow(T(L"D{i_1,i_2;a_1,a_2}:N-N-N"), -1),
+                    {T(L"t{a_3,a_4;i_3,i_4}:A-S-S")}),
+               EquivalentTo(ex<Constant>(4) * T(L"Â{a_3,a_4;i_3,i_4}:A-N-S") *
+                            T(L"Â{i_1,i_2;a_1,a_2}:A-N-S") *
+                            pow(T(L"D{i_1,i_2;a_1,a_2}:N-N-N"), -1) *
+                            T(L"δ{i_1;i_3}:N-S-S δ{i_2;i_4}:N-S-S "
+                              L"δ{a_3;a_1}:N-S-S δ{a_4;a_2}:N-S-S")));
   // the indices of the variable stay free in a second derivative, though the
   // first holds them in two slots
   const auto f = pow(T(L"X{i_1;a_1}:N-N-N"), -1) * T(L"r{a_1;i_1}:N-N-N");

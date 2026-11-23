@@ -89,7 +89,8 @@ one in a single slot, and one that stands in no slot and appears only as a proto
 trace over that pair's virtual space. A protoindex of an external index is external too, in however many slots it
 stands. ``diff`` also passes the indices of each variable to the derivatives by the later ones as known external
 indices: a derivative of a Hadamard product holds them in two slots (``-D{i_2;a_2}^(-2) r{a_2;i_2}``), where the count
-alone would read them as summed. An auxiliary index counts like any other. The symmetrizers are left out because their indices are the external indices of
+alone would read them as summed. An index of ``Â`` or ``Ŝ`` is external, in however many other slots it stands. An auxiliary index counts like any
+other. The symmetrizers are left out because their indices are the external indices of
 a residual: counted, they would make each
 external index of ``Â{i_1;a_1} v{a_1,i_2;i_1,a_2}`` look summed.
 
