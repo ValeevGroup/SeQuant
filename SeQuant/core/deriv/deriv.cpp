@@ -11,6 +11,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/tensor_power.hpp>
@@ -147,6 +148,20 @@ container::svector<Term> split_terms(const ExprPtr& E, bool with_externals) {
   return result;
 }
 
+/// @return a temporary index of the basis (and protoindices) of @p i whose
+/// label @p unused accepts
+template <typename Validator>
+Index temporary(const Index& i, const Validator& unused) {
+  Index result;
+  do
+    result = i.has_proto_indices()
+                 ? Index::make_tmp_index(i.basis(), i.proto_indices(),
+                                         i.symmetric_proto_indices())
+                 : Index::make_tmp_index(i.basis());
+  while (!unused(result));
+  return result;
+}
+
 /// renames the summed indices of each of @p terms that are named like an
 /// index of @p x to temporary ones named unlike any index of x and of the term
 void rename_apart(container::svector<Term>& terms, const ExprPtr& x) {
@@ -161,20 +176,10 @@ void rename_apart(container::svector<Term>& terms, const ExprPtr& x) {
     auto taken = in_x;
     for (const auto& i : used) taken.emplace(i.label());
     const auto unused = unused_label_validator(std::move(taken));
-    const auto temporary = [&unused](const Index& i) {
-      Index result;
-      do
-        result = i.has_proto_indices()
-                     ? Index::make_tmp_index(i.basis(), i.proto_indices(),
-                                             i.symmetric_proto_indices())
-                     : Index::make_tmp_index(i.basis());
-      while (!unused(result));
-      return result;
-    };
     container::map<Index, Index> fresh;
     for (const auto& i : used)
       if (!externals.contains(i) && in_x.contains(std::wstring(i.label())))
-        fresh.emplace(i, temporary(i));
+        fresh.emplace(i, temporary(i, unused));
     if (fresh.empty()) continue;
     const auto renames = replace_proto_indices_of_images(fresh);
     for (auto& f : factors) f = transform_expr(f, renames);
@@ -303,10 +308,60 @@ container::svector<Elementary> elementary(
   return result;
 }
 
+/// the definitions of tensor leaves that diff() differentiates through
+using Definitions = container::svector<ResultExpr>;
+
+/// @return the definition in @p defs of a leaf @p t : the one whose head has
+/// t's label and ranks, or nullptr if there is none
+const ResultExpr* definition_of(const Tensor& t, const Definitions& defs) {
+  for (const auto& d : defs)
+    if (d.label() == t.label() && d.bra().size() == t.bra_rank() &&
+        d.ket().size() == t.ket_rank() && d.aux().size() == t.aux_rank())
+      return &d;
+  return nullptr;
+}
+
+/// @return the expression of the definition @p def of the leaf @p leaf ,
+/// with the slots of the head renamed to those of the leaf, slot by slot, and
+/// the summed indices to temporary ones whose labels are not in @p taken
+ExprPtr instantiate(const ResultExpr& def, const Tensor& leaf,
+                    container::set<std::wstring> taken) {
+  container::map<Index, Index> renames;
+  const auto map_slots = [&renames](const auto& from, const auto& to) {
+    for (std::size_t k = 0; k != from.size(); ++k)
+      renames.emplace(from[k], to[k]);
+  };
+  map_slots(def.bra(), leaf.bra());
+  map_slots(def.ket(), leaf.ket());
+  map_slots(def.aux(), leaf.aux());
+  const auto used = get_used_indices(def.expression());
+  for (const auto& i : used) taken.emplace(i.label());
+  for (const auto& i : leaf.slots()) taken.emplace(i.label());
+  const auto unused = unused_label_validator(std::move(taken));
+  for (const auto& i : used)
+    if (!renames.contains(i)) renames.emplace(i, temporary(i, unused));
+  auto result = transform_expr(def.expression(), renames);
+  expand(result);
+  return result;
+}
+
+/// the labels of the indices of the @p factors of a term and of @p y
+container::set<std::wstring> labels_of(
+    const container::svector<ExprPtr>& factors, const ExprPtr& y) {
+  container::set<std::wstring> result;
+  for (const auto& i : get_used_indices(y)) result.emplace(i.label());
+  for (const auto& f : factors)
+    for (const auto& i : get_used_indices(f)) result.emplace(i.label());
+  return result;
+}
+
 /// D_y(E): the product rule over the factors of each of the @p terms of E,
-/// with elementary() for a leaf of y's label and the scalar rule for a scalar
-/// @p y
-ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y) {
+/// with elementary() for a leaf of y's label, the scalar rule for a scalar
+/// @p y , the power rule for a TensorPower of a leaf of y's label, and the
+/// chain rule through the definitions @p defs for a leaf (or a TensorPower of
+/// one) that has one
+ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y,
+                const Definitions& defs) {
   container::vector<ExprPtr> result;
   for (const auto& [scalar, factors, externals] : terms) {
     const auto product = [&](std::size_t skip,
@@ -322,19 +377,80 @@ ExprPtr one_way(const container::svector<Term>& terms, const ExprPtr& y) {
     for (std::size_t k = 0; k != factors.size(); ++k) {
       const auto& f = factors[k];
       if (y->is<Variable>()) {
-        auto d = scalar_rule(f, y);
-        if (!d) continue;
-        auto p = product(k, {});
-        p->as<Product>().append(1, d);
-        result.push_back(p);
+        if (auto d = scalar_rule(f, y)) {
+          auto p = product(k, {});
+          p->as<Product>().append(1, d);
+          result.push_back(p);
+          continue;
+        }
+      }
+      const bool power = f->is<TensorPower>();
+      const auto& base = power ? f->as<TensorPower>().base() : f;
+      if (!base->is<Tensor>()) continue;
+      const auto& leaf = base->as<Tensor>();
+      // the power rule: e base^(e-1), its indices renamed by @p renames
+      const auto lowered =
+          [&](const container::map<Index, Index>& renames) -> ExprPtr {
+        const auto e = f->as<TensorPower>().exponent();
+        const auto b = renames.empty() ? base : transform_expr(base, renames);
+        return e == 1 ? ex<Constant>(1)
+                      : ex<Constant>(e) * pow(b->clone(), e - 1);
+      };
+      if (y->is<Tensor>() && leaf_of(base, y->as<Tensor>())) {
+        for (const auto& r : elementary(leaf, y->as<Tensor>(), externals)) {
+          SEQUANT_ASSERT(!r.unrenamed);
+          auto p = product(k, r.renames);
+          if (power) p->as<Product>().append(1, lowered(r.renames));
+          for (const auto& delta : r.deltas) p->as<Product>().append(1, delta);
+          result.push_back(p);
+        }
         continue;
       }
-      if (!leaf_of(f, y->as<Tensor>())) continue;
-      for (const auto& r :
-           elementary(f->as<Tensor>(), y->as<Tensor>(), externals)) {
-        SEQUANT_ASSERT(!r.unrenamed);
-        auto p = product(k, r.renames);
-        for (const auto& delta : r.deltas) p->as<Product>().append(1, delta);
+      const auto* def = definition_of(leaf, defs);
+      if (!def) continue;
+      const auto inner_terms =
+          split_terms(instantiate(*def, leaf, labels_of(factors, y)),
+                      /*with_externals=*/y->is<Tensor>());
+      auto inner = one_way(inner_terms, y, defs);
+      expand(inner);
+      // per term of the derivative of the definition, a Kronecker delta of a
+      // summed index of this term with an index of y is summed away, as
+      // elementary() does for a leaf of y's block
+      const auto in_y = get_used_indices(y);
+      for (const auto& term : terms_of(inner)) {
+        if (term->is_zero()) continue;
+        auto [inner_scalar, inner_factors] = split(term);
+        container::map<Index, Index> renames;
+        container::svector<ExprPtr> rest;
+        for (const auto& g : inner_factors) {
+          if (g->is<Tensor>() &&
+              g->as<Tensor>().label() == reserved::kronecker_label()) {
+            const auto& delta = g->as<Tensor>();
+            const auto& u = delta.bra()[0];
+            const auto& v = delta.ket()[0];
+            const auto summed = [&](const Index& l) {
+              return !externals.contains(l) && !l.has_proto_indices() &&
+                     !renames.contains(l) && slot_of(leaf, l) >= 0;
+            };
+            if (summed(u) && in_y.contains(v) &&
+                includes(u.basis(), v.basis())) {
+              renames.emplace(u, v);
+              continue;
+            }
+            if (summed(v) && in_y.contains(u) &&
+                includes(v.basis(), u.basis())) {
+              renames.emplace(v, u);
+              continue;
+            }
+          }
+          rest.push_back(g);
+        }
+        auto p = product(k, renames);
+        p->as<Product>().scale(inner_scalar);
+        if (power) p->as<Product>().append(1, lowered(renames));
+        for (const auto& g : rest)
+          p->as<Product>().append(
+              1, renames.empty() ? g : transform_expr(g, renames));
         result.push_back(p);
       }
     }
@@ -647,7 +763,6 @@ void check(const container::svector<Term>& terms, const ExprPtr& x,
         const auto& y_t = y.first->as<Tensor>();
         if (!leaf_of(base, y_t)) continue;
         check_layout(b, y_t, where);
-        if (power) reject("the variable stands under a TensorPower");
         if (std::ranges::any_of(elementary(b, y_t, externals),
                                 &Elementary::unrenamed))
           reject(
@@ -663,18 +778,70 @@ void check(const container::svector<Term>& terms, const ExprPtr& x,
     reject("a column-symmetric variable with unequal ranks is not supported");
 }
 
+/// throws, with the message starting with @p where , for definitions @p defs
+/// that diff() cannot differentiate through by the variable @p x : a head
+/// that is not a labeled tensor, has protoindices, has the label of @p x or
+/// of another head with its ranks; an expression that holds operators; or a
+/// definition that depends on itself, directly or through others
+void check_definitions(const Definitions& defs, const ExprPtr& x,
+                       const std::string& where) {
+  const auto reject = [&where](const char* text) {
+    throw Exception(where + text);
+  };
+  // the leaves of each definition's expression that have a definition
+  container::svector<container::svector<std::size_t>> uses(defs.size());
+  for (std::size_t k = 0; k != defs.size(); ++k) {
+    const auto& d = defs[k];
+    if (!d.has_label() || !d.produces_tensor())
+      reject("a definition's head is not a labeled tensor");
+    for (const auto& side : {d.bra(), d.ket(), d.aux()})
+      if (std::ranges::any_of(side, &Index::has_proto_indices))
+        reject("a definition's head has protoindices");
+    if (!d.expression() || !d.expression()->is_cnumber())
+      reject("a definition holds operators");
+    const auto head = d.result_as_tensor();
+    if (x->is<Tensor>() && x->as<Tensor>().label() == head.label())
+      reject("a definition's head has the label of the variable");
+    if (definition_of(head, Definitions(defs.begin(), defs.begin() + k)))
+      reject("two definitions have one head");
+    auto e = d.expression()->clone();
+    expand(e);
+    for (const auto& term : terms_of(e))
+      for (const auto& f : split(term).second) {
+        const auto& base =
+            f->is<TensorPower>() ? f->as<TensorPower>().base() : f;
+        if (!base->is<Tensor>()) continue;
+        for (std::size_t l = 0; l != defs.size(); ++l)
+          if (definition_of(base->as<Tensor>(), Definitions{defs[l]}))
+            uses[k].push_back(l);
+      }
+  }
+  // depth-first search for a cycle
+  container::svector<int> state(defs.size(), 0);  // 0 new, 1 open, 2 done
+  const auto visit = [&](const auto& self, std::size_t k) -> void {
+    if (state[k] == 2) return;
+    if (state[k] == 1) reject("a definition depends on itself");
+    state[k] = 1;
+    for (const auto l : uses[k]) self(self, l);
+    state[k] = 2;
+  };
+  for (std::size_t k = 0; k != defs.size(); ++k) visit(visit, k);
+}
+
 /// the derivative of @p E by the one variable @p x : the sum over the
-/// spellings of x of their phase times the derivative by each
-ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
+/// spellings of x of their phase times the derivative by each, through the
+/// definitions @p defs
+ExprPtr by_one(const ExprPtr& E, const ExprPtr& x, const Definitions& defs) {
   const std::string where = "deriv::diff: ";
   auto e = E->clone();
   expand(e);
   check_variable(x, where);
+  check_definitions(defs, x, where);
   if (!e->is_cnumber()) throw Exception(where + "the function holds operators");
   auto terms = split_terms(e, /*with_externals=*/x->is<Tensor>());
   ExprPtr result;
   if (x->is<Variable>()) {
-    result = one_way(terms, x);
+    result = one_way(terms, x, defs);
   } else {
     // the spellings of x, and those of its adjoint where that holds the same
     // elements and the bra-ket exchange is no operation of x
@@ -683,13 +850,20 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
         all_spellings(x, adjoint_holds_elements(t) && !exchanges(t));
     rename_apart(terms, x);
     check(terms, x, ys, where);
+    // the leaves the definitions differentiate through are checked as those
+    // of the function are
+    for (const auto& d : defs) {
+      auto d_terms = split_terms(d.expression()->clone(), true);
+      rename_apart(d_terms, x);
+      check(d_terms, x, ys, where);
+    }
     for (const auto& [y, phase] : ys) {
-      auto by_y =
-          ex<Constant>(phase) * block_sum(one_way(terms, y), y->as<Tensor>());
+      auto by_y = ex<Constant>(phase) *
+                  block_sum(one_way(terms, y, defs), y->as<Tensor>());
       result = result ? result + by_y : by_y;
     }
-    expand(result);
   }
+  expand(result);
   rapid_simplify(result);
   return result;
 }
@@ -697,12 +871,17 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
 }  // namespace
 
 ExprPtr diff(const ExprPtr& E, const container::svector<ExprPtr>& variables) {
+  return diff(E, variables, Definitions{});
+}
+
+ExprPtr diff(const ExprPtr& E, const container::svector<ExprPtr>& variables,
+             const container::svector<ResultExpr>& definitions) {
   if (!E || std::ranges::any_of(variables, [](const auto& x) { return !x; }))
     throw Exception("deriv::diff: null argument");
   if (variables.empty()) return E->clone();
   // by_one() works on a clone of its input
   auto result = E;
-  for (const auto& x : variables) result = by_one(result, x);
+  for (const auto& x : variables) result = by_one(result, x, definitions);
   return result;
 }
 

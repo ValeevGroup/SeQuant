@@ -43,6 +43,10 @@ namespace sequant::deriv {
 /// ket have one nonzero rank; otherwise the result is the derivative by x plus
 /// the derivative by x^+.
 ///
+/// A leaf of x under a TensorPower of exponent e is differentiated element by
+/// element: its derivative is e times the leaf raised to e − 1, and the result
+/// is then a Hadamard product.
+///
 /// The free indices of the result are those of @p E plus those of each
 /// variable, under the names the variable is spelled with. The result is a
 /// flat sum of products with its scalars combined; it is not canonicalized.
@@ -52,6 +56,27 @@ namespace sequant::deriv {
 /// @throw Exception for a null argument and for an input that is rejected
 [[nodiscard]] ExprPtr diff(const ExprPtr& E,
                            const container::svector<ExprPtr>& variables);
+
+/// @return diff(E, variables), with the chain rule taken through the
+/// leaves of @p E that @p definitions define
+///
+/// A leaf whose label and ranks are those of the head of one of
+/// @p definitions , alone or as the base of a TensorPower, is the expression
+/// of that definition, with the head's slots renamed to the leaf's, slot by
+/// slot: its derivative is that of the expression, times e·leaf^(e−1) under a
+/// TensorPower of exponent e. The definition holds for every element of the
+/// head, so a broadcast sum, such as `D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2}
+/// − ε{i_1;} − ε{i_2;}`, is a definition. A leaf of the variable's own block
+/// under a TensorPower is differentiated by the power rule, elementwise.
+/// Definitions may use others, but not themselves.
+/// @throw Exception for what diff(E, variables) rejects, also in the
+/// expressions of @p definitions ; for a definition whose head is not a
+/// labeled tensor, has protoindices, or has the variable's label; for two
+/// definitions of one head; for one that holds operators; and for one that
+/// depends on itself
+[[nodiscard]] ExprPtr diff(const ExprPtr& E,
+                           const container::svector<ExprPtr>& variables,
+                           const container::svector<ResultExpr>& definitions);
 
 /// @return @p E where every one of @p variables is zero: the terms that hold
 /// one of them, in one of its spellings or those of its adjoint, are dropped.

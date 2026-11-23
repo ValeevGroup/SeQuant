@@ -117,6 +117,19 @@ in a trace, keep their deltas; when it is renamed through none, because it is ex
 :math:`y`'s label, the input is rejected (see below). A Kronecker delta between two disjoint index spaces is zero, and
 so is the term that would carry it: the trace ``h{p_1;p_1}`` by ``h{i;a}`` is zero.
 
+Powers and definitions
+------------------------
+
+A leaf of :math:`y`'s block under a ``TensorPower`` of exponent :math:`e` is paired by ``elementary`` as a bare leaf
+would be, and the term gains :math:`e` times the base raised to :math:`e - 1`, under the same renames: the leaf's
+summed labels become :math:`y`'s, so the result is a Hadamard product whose free indices stand in two slots. A leaf
+that has a definition (a ``ResultExpr`` passed to ``diff``) is replaced, for the derivative of its own factor only, by
+the definition's expression with the head's slots renamed to the leaf's and its summed indices to temporaries; that
+expression is differentiated recursively, the leaf's slots counted as its external indices, and a Kronecker delta it
+leaves between a slot that is summed in the outer term and an index of :math:`y` is summed away there, as
+``elementary`` would. Under a ``TensorPower`` the power rule's factor multiplies the result. The definitions are checked
+once per variable, for a cycle among them and for the leaves the checks below apply to.
+
 A derivative is not a contraction
 -----------------------------------
 

@@ -169,12 +169,12 @@ Scope
 
 Three rules keep every input within what ``diff`` defines:
 
-1. **Explicit dependence only.** A leaf with another label is a constant. If a quantity depends on the variable through
-   a definition or a series, substitute it before calling ``diff``, as in the response example above.
-2. **No variable under an inverse.** A :class:`sequant::TensorPower` of a leaf of the variable is rejected; a
-   ``TensorPower`` of a tensor that does not depend on the variable, such as a denominator of orbital energies, is a
-   constant factor. Where a variable enters through an inverse or an eigenvalue condition, keep the condition as a
-   residual with a multiplier.
+1. **Explicit dependence only.** A leaf with another label is a constant, unless ``diff`` is given its definition (see
+   `Powers and definitions`_). If a quantity depends on the variable through a series, substitute it before calling
+   ``diff``, as in the response example above.
+2. **Elementwise powers only.** A :class:`sequant::TensorPower` is an element-by-element power, and ``diff`` takes its
+   derivative element by element. Where a variable enters through a matrix inverse or an eigenvalue condition, keep the
+   condition as a residual with a multiplier.
 3. **A protoindex is a label of the element.** A pair-specific tensor, such as an amplitude, a per-pair rotation or a
    multiplier, of pair ``(i, j)`` and the same tensor of pair ``(k, l)`` are different variables. A tensor that is one
    object expanded in pair-specific bases (an integral, the Fock matrix, the overlap) is not; differentiate by it after
@@ -205,7 +205,10 @@ kinds:
   and ``Ŝ`` aside and auxiliary slots counted like bra and ket slots, since SeQuant reads an index in exactly two slots
   as summed and one in a single slot as external; the exception is a protoindex of an external index, a label its
   carrier fixes. The derivative by a scalar ``Variable`` reads no index, so it takes such a term.
-- **The scope above.** ``E`` holds operators, or the variable stands under a ``TensorPower``. Also rejected is a
+- **Definitions.** A definition's head is not a labeled tensor, has protoindices, or has the variable's label; two
+  definitions have one head; or a definition depends on itself, directly or through others. The leaves of the
+  definitions are checked as those of ``E`` are.
+- **The scope above.** ``E`` holds operators. Also rejected is a
   variable written with the name of an external index of ``E``, as happens when a result is differentiated again by
   the variable under the same index names; write the second variable with other index names.
 
@@ -218,6 +221,29 @@ it to zero is undefined, and a leaf that holds elements of a variable and lies i
    :language: cpp
    :start-after: start-snippet-6
    :end-before: end-snippet-6
+   :dedent: 4
+
+Powers and definitions
+------------------------
+
+A leaf of the variable under a :class:`sequant::TensorPower` of exponent :math:`e` is differentiated element by
+element, :math:`\partial (x^e)/\partial x = e\, x^{e-1}`. The derivative of a function of elementwise powers is
+itself an elementwise (Hadamard) product: its free indices stand in two slots, as in ``-D{i_2;a_2}^(-2) r{a_2;i_2}``,
+and core's canonicalizer accepts that only with ``AssertStrictBraKetSymmetry::No``.
+
+A leaf may also depend on the variable through a definition: ``diff(E, variables, definitions)`` takes a list of
+:class:`sequant::ResultExpr`, each a head tensor and its expression. A leaf with the label and ranks of a head, alone or
+under a ``TensorPower``, stands for the expression with the head's slots renamed to the leaf's, and ``diff`` applies the
+chain rule through it. The definition holds for every element of its head, so it may be a broadcast sum such as the
+denominator :math:`D_{ia} = \varepsilon_a - \varepsilon_i` of perturbation theory, and a function of :math:`D^{-1}` can
+be differentiated by the orbital energies without ``D`` being a variable. Definitions may use one another, but not
+themselves. A Kronecker delta between a summed index of the term and an index of the variable is summed away, as for a
+leaf of the variable itself.
+
+.. literalinclude:: /examples/user/differentiation.cpp
+   :language: cpp
+   :start-after: start-snippet-12
+   :end-before: end-snippet-12
    :dedent: 4
 
 The form of the result

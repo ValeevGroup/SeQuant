@@ -1,6 +1,8 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/deriv/deriv.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -153,17 +155,17 @@ int main() {
 
   {
     // start-snippet-6
-    // a variable under an inverse: D⁻¹ r by D
-    const auto E =
-        ex<TensorPower>(deserialize(L"D{i_1;a_1}:N-N-N"), rational(-1)) *
-        deserialize(L"r{a_1;i_1}:N-N-N");
+    // a variable whose bra slots are symmetric: no symmetrizer sums them
     std::string message;
     try {
-      (void)diff(E, {deserialize(L"D{i_2;a_2}:N-N-N")});
+      (void)diff(deserialize(L"r{a_1,a_2;i_1,i_2}:N-N-N "
+                             L"D{i_1,i_2;a_1,a_2}:S-S-S"),
+                 {deserialize(L"D{i_3,i_4;a_3,a_4}:S-S-S")});
     } catch (const Exception& error) {
       message = error.what();
     }
-    if (message != "deriv::diff: the variable stands under a TensorPower")
+    if (message !=
+        "deriv::diff: a variable with Symmetry::Symm is not supported")
       throw Exception("unexpected message: " + message);
     // at_zero: a leaf over all orbitals, with a variable over the virtual
     // ones, would be neither zero nor unchanged
@@ -288,6 +290,32 @@ int main() {
         /*atoms_only=*/true);
     if (gradient->is_zero() || !κ2) throw Exception("unexpected Hessian");
     // end-snippet-11
+  }
+
+  {
+    // start-snippet-12
+    // an elementwise derivative is a Hadamard product, whose free indices
+    // stand in two slots
+    auto context = get_default_context();
+    context.set(AssertStrictBraKetSymmetry::No);
+    const auto lax = set_scoped_default_context(context);
+    // the power rule: d(D⁻¹ r)/dD = -D⁻² r, element by element
+    const auto D = deserialize(L"D{i_1;a_1}:N-N-N");
+    const auto r = deserialize(L"r{a_1;i_1}:N-N-N");
+    require_equivalent(diff(pow(D, -1) * r, {deserialize(L"D{i_2;a_2}:N-N-N")}),
+                       ex<Constant>(-1) *
+                           pow(deserialize(L"D{i_2;a_2}:N-N-N"), -2) *
+                           deserialize(L"r{a_2;i_2}:N-N-N"));
+    // the chain rule through a definition: D{i;a} = ε{;a} - ε{i;}, a
+    // broadcast sum, so that D⁻¹ r depends on the orbital energies ε
+    const container::svector<ResultExpr> definitions{
+        ResultExpr(Tensor(L"D", bra{L"i_9"}, ket{L"a_9"}, Symmetry::Nonsymm),
+                   deserialize(L"ε{;a_9}:N-N-S - ε{i_9;}:N-N-S"))};
+    require_equivalent(
+        diff(pow(D, -1) * r, {deserialize(L"ε{;a_2}:N-N-S")}, definitions),
+        ex<Constant>(-1) * pow(deserialize(L"D{i_1;a_2}:N-N-N"), -2) *
+            deserialize(L"r{a_2;i_1}:N-N-N"));
+    // end-snippet-12
   }
 
   return 0;

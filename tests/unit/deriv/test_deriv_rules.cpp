@@ -1,6 +1,8 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/deriv/deriv.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -682,9 +684,6 @@ TEST_CASE("deriv/rules/rejections", "[deriv][rules]") {
       L"t{a_1<i_1>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"),
     T(L"t{a_5<i_5>,a_6<i_5,i_6>;i_5,i_6}:A-N-S"),
     "a leaf's protoindices do not follow its slots as the variable's do");
-  X(ex<TensorPower>(T(L"D{i_1;a_1}:N-N-N"), rational(-1)) *
-        T(L"r{a_1;i_1}:N-N-N"),
-    T(L"D{i_2;a_2}:N-N-N"), "the variable stands under a TensorPower");
   X(T(L"Â{i_1;a_1}:A-N-S v{a_1,i_2;i_1,a_2}:N-N-N t{a_2;i_2}:N-N-N"),
     T(L"t{a_1;i_1}:N-N-N"),
     "the variable names an external index of the function");
@@ -788,6 +787,109 @@ TEST_CASE("deriv/rules/rejections", "[deriv][rules]") {
                        L"h{a_4<i_4>;a_3<i_3>}:N-S-N Z{i_3,i_4;}:N-N-N"),
                      T(L"h{a_5<i_5>;a_6<i_6>}:N-S-N"))
                     ->is_zero());
+}
+
+TEST_CASE("deriv/rules/powers-and-definitions", "[deriv][rules]") {
+  using sequant::deriv::diff;
+  using sequant::deriv::test::compare_tangents;
+  using sequant::deriv::test::require_same;
+  auto T = [](std::wstring_view s) { return deserialize(s); };
+  const auto P = [&](std::wstring_view s, int e) {
+    return pow(T(s), rational(e));
+  };
+  // an elementwise derivative is a Hadamard product: its free indices stand
+  // in two slots, which core's strict bra-ket check rejects
+  auto ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  const auto scope = set_scoped_default_context(ctx);
+  // the head d{i;a} of a definition, nonsymmetric
+  const auto d = [](std::wstring_view i, std::wstring_view a) {
+    return Tensor(L"d", bra{i}, ket{a}, Symmetry::Nonsymm);
+  };
+  // d{i;a} = e{;a} - e{i;}, a broadcast sum
+  const container::svector<ResultExpr> defs{
+      ResultExpr(d(L"i_9", L"a_9"), T(L"e{;a_9}:N-N-S - e{i_9;}:N-N-S"))};
+
+  SECTION("power rule") {
+    // elementwise: d(X^e)/dX = e X^(e-1), at the variable's element; checked
+    // against the evaluator, as check_rule() does, but for the slot counts of
+    // a Hadamard product
+    const auto R = [](const ExprPtr& f, const ExprPtr& x,
+                      const ExprPtr& expected) {
+      const auto r = diff(f, {x});
+      if (expected) REQUIRE_THAT(r, EquivalentTo(expected));
+      const auto c = compare_tangents(f, r, x, {}, {.count = 256, .seed = 1});
+      INFO(c.difference);
+      REQUIRE(c.difference.empty());
+      REQUIRE(c.nonzero != 0);
+    };
+    R(P(L"X{i_1;a_1}:N-N-N", -1) * T(L"r{a_1;i_1}:N-N-N"),
+      T(L"X{i_2;a_2}:N-N-N"),
+      ex<Constant>(-1) * P(L"X{i_2;a_2}:N-N-N", -2) * T(L"r{a_2;i_2}:N-N-N"));
+    R(P(L"X{i_1;a_1}:N-N-N", 3) * T(L"r{a_1;i_1}:N-N-N"),
+      T(L"X{i_2;a_2}:N-N-N"),
+      ex<Constant>(3) * P(L"X{i_2;a_2}:N-N-N", 2) * T(L"r{a_2;i_2}:N-N-N"));
+    // an antisymmetric base: the spellings of the variable are summed by Â
+    R(P(L"t{a_1,a_2;i_1,i_2}:A-N-S", 2) * T(L"r{i_1,i_2;a_1,a_2}:N-N-N"),
+      T(L"t{a_3,a_4;i_3,i_4}:A-N-S"), nullptr);
+  }
+
+  SECTION("chain rule through a definition") {
+    // a leaf defined alone: as the expression substituted for it
+    const auto x = T(L"X{a_1;i_1}:N-N-N");
+    require_same(
+        diff(x * T(L"d{i_1;a_1}:N-N-N"), {T(L"e{;a_2}:N-N-S")}, defs),
+        diff(x * T(L"e{;a_1}:N-N-S - e{i_1;}:N-N-S"), {T(L"e{;a_2}:N-N-S")}),
+        {Index(L"a_2")}, {});
+    // under a TensorPower: e d^(e-1) times the derivative of the definition
+    REQUIRE_THAT(
+        diff(x * P(L"d{i_1;a_1}:N-N-N", -1), {T(L"e{;a_2}:N-N-S")}, defs),
+        EquivalentTo(ex<Constant>(-1) * T(L"X{a_2;i_1}:N-N-N") *
+                     P(L"d{i_1;a_2}:N-N-N", -2)));
+    REQUIRE_THAT(
+        diff(x * P(L"d{i_1;a_1}:N-N-N", -1), {T(L"e{i_2;}:N-N-S")}, defs),
+        EquivalentTo(T(L"X{a_1;i_2}:N-N-N") * P(L"d{i_2;a_1}:N-N-N", -2)));
+    // the leaf's own variable is not reached through the definition
+    REQUIRE_THAT(
+        diff(x * P(L"d{i_1;a_1}:N-N-N", -1), {T(L"X{a_2;i_2}:N-N-N")}, defs),
+        EquivalentTo(P(L"d{i_2;a_2}:N-N-N", -1)));
+    // without the definition, d is a constant
+    REQUIRE(
+        diff(x * P(L"d{i_1;a_1}:N-N-N", -1), {T(L"e{;a_2}:N-N-S")})->is_zero());
+    // definitions nest: c{i;a} = s d{i;a}, by a scalar variable through both
+    const container::svector<ResultExpr> nested{
+        defs.front(),
+        ResultExpr(Tensor(L"c", bra{L"i_8"}, ket{L"a_8"}, Symmetry::Nonsymm),
+                   ex<Variable>(L"s") * T(L"d{i_8;a_8}:N-N-N"))};
+    REQUIRE_THAT(
+        diff(x * P(L"c{i_1;a_1}:N-N-N", 2), {T(L"e{;a_2}:N-N-S")}, nested),
+        EquivalentTo(ex<Constant>(2) * T(L"X{a_2;i_1}:N-N-N") *
+                     T(L"c{i_1;a_2}:N-N-N") * ex<Variable>(L"s")));
+    REQUIRE_THAT(diff(x * T(L"c{i_1;a_1}:N-N-N"), {ex<Variable>(L"s")}, nested),
+                 EquivalentTo(x * T(L"d{i_1;a_1}:N-N-N")));
+  }
+
+  SECTION("rejected definitions") {
+    const auto E = T(L"X{a_1;i_1}:N-N-N") * P(L"d{i_1;a_1}:N-N-N", -1);
+    const auto e = T(L"e{;a_2}:N-N-S");
+    const auto rejects = [&](const container::svector<ResultExpr>& defs,
+                             std::string text) {
+      REQUIRE_THROWS_WITH(diff(E, {e}, defs), "deriv::diff: " + text);
+    };
+    rejects({ResultExpr(d(L"i_9", L"a_9"), T(L"e{;a_9}:N-N-S")),
+             ResultExpr(d(L"i_8", L"a_8"), T(L"e{i_8;}:N-N-S"))},
+            "two definitions have one head");
+    rejects(
+        {ResultExpr(d(L"i_9", L"a_9"), T(L"c{i_9;a_9}:N-N-N")),
+         ResultExpr(Tensor(L"c", bra{L"i_8"}, ket{L"a_8"}, Symmetry::Nonsymm),
+                    T(L"d{i_8;a_8}:N-N-N"))},
+        "a definition depends on itself");
+    rejects({ResultExpr(Tensor(L"e", bra{}, ket{L"a_9"}, Symmetry::Nonsymm),
+                        T(L"d{i_9;a_9}:N-N-N"))},
+            "a definition's head has the label of the variable");
+    rejects({ResultExpr(Variable(L"z"), T(L"e{;a_9}:N-N-S"))},
+            "a definition's head is not a labeled tensor");
+  }
 }
 
 TEST_CASE("deriv/rules/open-shell", "[deriv][rules]") {
