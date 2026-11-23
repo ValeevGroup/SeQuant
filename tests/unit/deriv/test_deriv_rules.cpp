@@ -642,6 +642,14 @@ TEST_CASE("deriv/rules/rejections", "[deriv][rules]") {
   X(T(L"x f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N s{a_1;i_2}:N-N-N"),
     ex<Variable>(L"x"),
     "deriv::diff: an index of the function stands in more than two slots");
+  X(nullptr, ex<Variable>(L"x"), "deriv::diff: null argument");
+  X(E, nullptr, "deriv::diff: null argument");
+  REQUIRE_THROWS_WITH(
+      sequant::deriv::at_zero(nullptr, {ex<Variable>(L"x")}),
+      Catch::Matchers::ContainsSubstring("deriv::at_zero: null argument"));
+  REQUIRE_THROWS_WITH(
+      sequant::deriv::at_zero(E, {nullptr}),
+      Catch::Matchers::ContainsSubstring("deriv::at_zero: null argument"));
   X(T(L"t{a_1,a_2;i_1,i_2}:N-N-S"), T(L"t{a_3,a_4;i_3,i_4}:A-N-S"),
     "a leaf declares other symmetries than the variable");
   // the leaf's own symmetry spells it in another slot order than the variable's

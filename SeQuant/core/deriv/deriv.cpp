@@ -692,6 +692,8 @@ ExprPtr by_one(const ExprPtr& E, const ExprPtr& x) {
 }  // namespace
 
 ExprPtr diff(const ExprPtr& E, const container::svector<ExprPtr>& variables) {
+  if (!E || std::ranges::any_of(variables, [](const auto& x) { return !x; }))
+    throw Exception("deriv::diff: null argument");
   if (variables.empty()) return E->clone();
   // by_one() works on a clone of its input
   auto result = E;
@@ -702,6 +704,8 @@ ExprPtr diff(const ExprPtr& E, const container::svector<ExprPtr>& variables) {
 ExprPtr at_zero(const ExprPtr& E,
                 const container::svector<ExprPtr>& variables) {
   const std::string where = "deriv::at_zero: ";
+  if (!E || std::ranges::any_of(variables, [](const auto& x) { return !x; }))
+    throw Exception(where + "null argument");
   // the scalar variables, and the spellings of each tensor and of its
   // adjoint; and each tensor and its adjoint
   container::svector<ExprPtr> ys, tensors;

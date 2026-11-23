@@ -49,7 +49,7 @@ namespace sequant::deriv {
 /// With no variables, the result is @p E as it is.
 /// Symmetrizers are never expanded: those of @p E stay factors, and that of
 /// x is put on the result as a factor.
-/// @throw Exception for an input that is rejected
+/// @throw Exception for a null argument and for an input that is rejected
 [[nodiscard]] ExprPtr diff(const ExprPtr& E,
                            const container::svector<ExprPtr>& variables);
 
@@ -58,14 +58,14 @@ namespace sequant::deriv {
 /// A leaf with a tensor variable's label vanishes if it lies inside that one
 /// variable: a leaf that meets a spelling vanishes if each of its slots lies
 /// within the index space of that spelling's slot
-/// @throw Exception if a variable is not a Variable or a tensor leaf (such as a
-/// sum, a product, a symmetrizer or a Kronecker delta), repeats an index, has
-/// an index whose protoindices mix its slots with other labels, or declares
-/// Symmetry::Symm; if a variable stands under a non-positive power; or if a
-/// leaf holds elements of a variable and lies inside none of the variables
-/// (also where it lies inside their union), or declares other symmetries than
-/// the variable whose elements it may hold, or its protoindices do not follow
-/// its slots as the variable's do
+/// @throw Exception for a null argument; if a variable is not a Variable or a
+/// tensor leaf (such as a sum, a product, a symmetrizer or a Kronecker delta),
+/// repeats an index, has an index whose protoindices mix its slots with other
+/// labels, or declares Symmetry::Symm; if a variable stands under a
+/// non-positive power; or if a leaf holds elements of a variable and lies
+/// inside none of the variables (also where it lies inside their union), or
+/// declares other symmetries than the variable whose elements it may hold, or
+/// its protoindices do not follow its slots as the variable's do
 [[nodiscard]] ExprPtr at_zero(const ExprPtr& E,
                               const container::svector<ExprPtr>& variables);
 
