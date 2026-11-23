@@ -939,12 +939,15 @@ Block block_of(const Tensor& t) {
 /// the images of the block @p b of the tensor @p t under the operations of
 /// t, one per operation: the permutations of the slots of each side
 /// (Symmetry::Antisymm) or of the columns (column symmetry, equal ranks),
-/// each also followed by the exchange of bra and ket if that is an operation
-/// (exchanges())
+/// each also followed by the exchange of bra and ket where diff() reads the
+/// leaves at the exchanged position as elements of t: as an operation
+/// (exchanges()), or as the adjoint spelling of a tensor with bra-ket
+/// symmetry
 container::svector<Block> images(const Tensor& t, const Block& b) {
   const bool antisymm = t.symmetry() == Symmetry::Antisymm;
   const bool columns = column_symmetric(t) && b.bra.size() == b.ket.size();
-  const bool exchange = exchanges(t);
+  const bool exchange = t.braket_symmetry() != BraKetSymmetry::Nonsymm &&
+                        adjoint_holds_elements(t);
   container::svector<std::size_t> order_B(b.bra.size()), order_K(b.ket.size());
   std::iota(order_B.begin(), order_B.end(), std::size_t{0});
   std::iota(order_K.begin(), order_K.end(), std::size_t{0});
@@ -991,35 +994,51 @@ container::svector<BlockGradient> block_gradients(
     const container::svector<ResultExpr>& definitions) {
   const std::string where = "deriv::block_gradients: ";
   if (!E) throw Exception(where + "null argument");
-  auto e = E->clone();
-  expand(e);
-  // the leaves with the label, one per class of blocks, and the labels in use
+  // the leaves with the label, one per class of blocks, and the labels in
+  // use; a leaf spelled as the adjoint, where that holds the elements of the
+  // tensor with the label, counts as its adjoint
   container::svector<ExprPtr> leaves;
   container::svector<container::svector<Block>> classes;
   container::set<std::wstring> taken;
-  for (const auto& term : terms_of(e))
-    for (const auto& f : split(term).second) {
-      for (const auto& i : get_used_indices(f)) taken.emplace(i.label());
-      const auto& base = f->is<TensorPower>() ? f->as<TensorPower>().base() : f;
-      if (!base->is<Tensor>() || base->as<Tensor>().label() != label) continue;
-      const auto& t = base->as<Tensor>();
-      if (std::ranges::any_of(t.slots(), &Index::has_proto_indices))
-        throw Exception(where + "a leaf with the label has protoindices");
-      const auto b = block_of(t);
-      bool known = false;
-      for (const auto& c : classes) {
-        if (std::ranges::find(c, b) != c.end()) {
-          known = true;
-          break;
+  const auto visit = [&](const ExprPtr& expr) {
+    auto e = expr->clone();
+    expand(e);
+    for (const auto& term : terms_of(e))
+      for (const auto& f : split(term).second) {
+        for (const auto& i : get_used_indices(f)) taken.emplace(i.label());
+        auto base = f->is<TensorPower>() ? f->as<TensorPower>().base() : f;
+        if (!base->is<Tensor>()) continue;
+        if (base->as<Tensor>().label() != label) {
+          auto flipped = adjoint(base);
+          if (flipped->as<Tensor>().label() != label ||
+              !adjoint_holds_elements(flipped->as<Tensor>()))
+            continue;
+          base = flipped;
         }
-        if (std::ranges::any_of(
-                c, [&b](const Block& other) { return overlap(b, other); }))
-          throw Exception(where + "two blocks overlap without being one block");
+        const auto& t = base->as<Tensor>();
+        if (std::ranges::any_of(t.slots(), &Index::has_proto_indices))
+          throw Exception(where + "a leaf with the label has protoindices");
+        const auto b = block_of(t);
+        bool known = false;
+        for (const auto& c : classes) {
+          if (std::ranges::find(c, b) != c.end()) {
+            known = true;
+            break;
+          }
+          if (std::ranges::any_of(
+                  c, [&b](const Block& other) { return overlap(b, other); }))
+            throw Exception(where +
+                            "two blocks overlap without being one block");
+        }
+        if (known) continue;
+        leaves.push_back(base);
+        classes.push_back(images(t, b));
       }
-      if (known) continue;
-      leaves.push_back(base);
-      classes.push_back(images(t, b));
-    }
+  };
+  visit(E);
+  // the leaves that E holds through its definitions
+  for (const auto& d : definitions)
+    if (d.expression()) visit(d.expression());
 
   container::svector<BlockGradient> result;
   const auto unused = unused_label_validator(std::move(taken));

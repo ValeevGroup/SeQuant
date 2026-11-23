@@ -1,6 +1,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/deriv/deriv.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -161,6 +162,63 @@ TEST_CASE("deriv/gradients/blocks", "[deriv][gradients]") {
         blocks[0].gradient,
         transform_expr(T(L"1/4 t{a_1,a_2;i_1,i_2}:A-N-S"), to_x),
         {x.bra()[0], x.bra()[1], x.ket()[0], x.ket()[1]}, {.projectors = true});
+  }
+
+  // Euler's identity for E homogeneous of @p degree in the leaves labelled
+  // @p label : the gradients contracted with their blocks are degree times E
+  const auto euler = [](const ExprPtr& E, std::wstring_view label,
+                        std::size_t entries, int degree = 1,
+                        const deriv::test::Data& data = {}) {
+    const auto blocks = block_gradients(E, label);
+    REQUIRE(blocks.size() == entries);
+    ExprPtr sum = ex<Constant>(0);
+    for (const auto& [x, G] : blocks) sum = sum + projected(G) * x;
+    deriv::test::require_same(sum, ex<Constant>(degree) * E, {}, data);
+  };
+
+  SECTION("blocks that hold the same elements are one entry") {
+    // a bra-ket symmetric tensor of unequal ranks: the exchange is no
+    // operation, and the exchanged block still holds the same elements
+    euler(T(L"W{a_1,a_2;i_1}:N-N-N g{i_1;a_1,a_2}:N-S-N + "
+            L"V{i_1;a_1,a_2}:N-N-N g{a_1,a_2;i_1}:N-S-N"),
+          L"g", 1);
+    // equal ranks, antisymmetric: mixed blocks and a quadratic function
+    euler(T(L"W{a_1,i_2;i_1,a_2}:N-N-N g{i_1,a_2;a_1,i_2}:A-N-S"), L"g", 1);
+    euler(T(L"g{i_1,i_2;i_3,a_1}:A-N-S g{i_3,a_1;i_1,i_2}:A-N-S"), L"g", 2, 2);
+    {
+      const auto scope = deriv::test::real_spaces();
+      // the evaluator's data of these symbols is real, as their field is
+      const deriv::test::Data real{
+          .real = {L"g", L"W", L"V", L"t", L"w", L"f"}};
+      euler(T(L"W{a_1,a_2;i_1}:N-N-N g{i_1;a_1,a_2}:N-C-N + "
+              L"V{i_1;a_1,a_2}:N-N-N g{a_1,a_2;i_1}:N-C-N"),
+            L"g", 1, 1, real);
+      // over a real field t⁺ holds the elements of t
+      euler(T(L"w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N"), L"t", 1, 1, real);
+      euler(T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
+              L"w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N"),
+            L"t", 1, 1, real);
+    }
+    // over a complex field t⁺ is another variable
+    REQUIRE(block_gradients(T(L"w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N"), L"t")
+                .empty());
+  }
+
+  SECTION("leaves held through a definition") {
+    const container::svector<ResultExpr> defs{
+        ResultExpr(Tensor(L"D", bra{L"i_7"}, ket{L"a_7"}, Symmetry::Nonsymm),
+                   T(L"2 f{i_7;a_7}:N-N-N"))};
+    const auto blocks =
+        block_gradients(T(L"D{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
+                          L"f{i_1;i_2}:N-N-N U{i_2;i_1}:N-N-N"),
+                        L"f", defs);
+    REQUIRE(blocks.size() == 2);
+    // the block met first is that of E itself, then that of the definition
+    const auto& x = blocks[1].variable->as<Tensor>();
+    const container::map<Index, Index> to_x{{Index(L"i_1"), x.bra()[0]},
+                                            {Index(L"a_1"), x.ket()[0]}};
+    REQUIRE_THAT(blocks[1].gradient,
+                 EquivalentTo(transform_expr(T(L"2 t{a_1;i_1}:N-N-N"), to_x)));
   }
 
   SECTION("rejections") {

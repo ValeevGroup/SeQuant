@@ -104,7 +104,12 @@ struct BlockGradient {
 /// J running over every element of the block (not only the independent
 /// ones). A block is the list of the spaces of the slots of a leaf; blocks
 /// that an operation of the leaves (see diff()) maps onto one another hold
-/// the same elements and are one entry, spelled as the block met first.
+/// the same elements and are one entry, spelled as the block met first; so
+/// are a block and its bra-ket exchange where the adjoint spelling of a leaf
+/// holds the elements of the leaf. The leaves include those in the
+/// expressions of @p definitions , and those spelled as the adjoint
+/// (`t⁺`) where that holds the elements of the tensor labelled @p label :
+/// pass the label of the tensor, not that of its adjoint.
 /// Each gradient is `diff(E, {variable}, definitions)` divided by the number
 /// of operations that keep the block.
 ///
