@@ -329,7 +329,7 @@ int main() {
         L"1/4 λ{i_1,i_2;a_1,a_2}:A-N-S g{a_1,a_2;i_1,i_2}:A-N-S");
     // one gradient per block of g: g{i,i;a,a} and g{a,a;i,i}; g has no
     // bra-ket symmetry here, so these are different elements
-    const auto blocks = deriv::block_gradients(E, L"g");
+    const auto blocks = deriv::tensor_derivatives(E, L"g");
     if (blocks.size() != 2) throw Exception("unexpected blocks");
     // dE = Σ_J gradient(J) dg(J) over every element J of the block
     const auto& x = blocks[0].variable->as<Tensor>();
@@ -338,7 +338,7 @@ int main() {
                                             {Index(L"a_1"), x.ket()[0]},
                                             {Index(L"a_2"), x.ket()[1]}};
     require_equivalent(
-        blocks[0].gradient,
+        blocks[0].derivative,
         transform_expr(deserialize(L"1/4 Â{i_1,i_2;a_1,a_2}:A-N-S "
                                    L"t{a_1,a_2;i_1,i_2}:A-N-S"),
                        to_x));

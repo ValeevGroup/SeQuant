@@ -87,20 +87,21 @@ namespace sequant::deriv {
                            const container::svector<ExprPtr>& variables,
                            const container::svector<ResultExpr>& definitions);
 
-/// the gradient of a function by the elements of a block of its leaves
-struct BlockGradient {
+/// the derivative of a function by the elements of one block of a tensor:
+/// the leaves of one list of slot spaces
+struct TensorDerivative {
   /// the block: a tensor with the label, symmetries and slot spaces of the
   /// leaves, under index names of its own
   ExprPtr variable;
   /// the derivative by the element of the block at the indices of @c variable
-  ExprPtr gradient;
+  ExprPtr derivative;
 };
 
-/// @return the gradients of @p E by the blocks of its leaves labelled
-/// @p label , such that the first-order change of @p E under any change δ of
-/// those leaves that has their symmetries is
+/// @return the derivatives of @p E by the tensor labelled @p label , one per
+/// block of its leaves in @p E , such that the first-order change of @p E under
+/// any change δ of those leaves that has their symmetries is
 ///
-///   δE = Σ_blocks Σ_J gradient(J) δ(J),
+///   δE = Σ_blocks Σ_J derivative(J) δ(J),
 ///
 /// J running over every element of the block (not only the independent
 /// ones). A block is the list of the spaces of the slots of a leaf; blocks
@@ -111,7 +112,7 @@ struct BlockGradient {
 /// expressions of @p definitions , and those spelled as the adjoint
 /// (`t⁺`) where that holds the elements of the tensor labelled @p label :
 /// pass the label of the tensor, not that of its adjoint.
-/// Each gradient is `diff(E, {variable}, definitions)` divided by the number
+/// Each derivative is `diff(E, {variable}, definitions)` divided by the number
 /// of operations that keep the block.
 ///
 /// This is the density that multiplies the derivative of the leaves in the
@@ -120,12 +121,12 @@ struct BlockGradient {
 /// blocks are entries of their own.
 /// @throw Exception what diff() throws; for a leaf with the label that has
 /// protoindices; and for two blocks that overlap without being one block
-[[nodiscard]] container::svector<BlockGradient> block_gradients(
+[[nodiscard]] container::svector<TensorDerivative> tensor_derivatives(
     const ExprPtr& E, std::wstring_view label,
     const container::svector<ResultExpr>& definitions);
 
-/// block_gradients() with no definitions
-[[nodiscard]] container::svector<BlockGradient> block_gradients(
+/// tensor_derivatives() with no definitions
+[[nodiscard]] container::svector<TensorDerivative> tensor_derivatives(
     const ExprPtr& E, std::wstring_view label);
 
 /// @return @p E where every one of @p variables is zero: the terms that hold

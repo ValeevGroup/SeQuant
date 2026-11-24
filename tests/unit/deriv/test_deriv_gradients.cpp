@@ -97,16 +97,16 @@ ExprPtr projected(const ExprPtr& e) {
   return result;
 }
 
-/// the rotation gradient of @p L by way of its block gradients: for each
-/// block x of the leaves labelled as one of @p labels , and each bra or ket
-/// slot of x over the space of @p p , the gradient at p in that slot times x
-/// with @p q there, the other indices of x summed
-ExprPtr via_block_gradients(const ExprPtr& L,
-                            const container::svector<std::wstring>& labels,
-                            const Index& p, const Index& q) {
+/// the rotation gradient of @p L by way of its derivatives by the tensors: for
+/// each block x of the leaves labelled as one of @p labels , and each bra or
+/// ket slot of x over the space of @p p , the gradient at p in that slot times
+/// x with @p q there, the other indices of x summed
+ExprPtr via_tensor_derivatives(const ExprPtr& L,
+                               const container::svector<std::wstring>& labels,
+                               const Index& p, const Index& q) {
   ExprPtr result = ex<Constant>(0);
   for (const auto& label : labels)
-    for (const auto& [x, G] : deriv::block_gradients(L, label)) {
+    for (const auto& [x, G] : deriv::tensor_derivatives(L, label)) {
       // the evaluator applies a symmetrizer over free labels only
       const auto g = projected(G);
       const auto& t = x->as<Tensor>();
@@ -124,8 +124,8 @@ ExprPtr via_block_gradients(const ExprPtr& L,
 
 }  // namespace
 
-TEST_CASE("deriv/gradients/blocks", "[deriv][gradients]") {
-  using deriv::block_gradients;
+TEST_CASE("deriv/gradients/tensors", "[deriv][gradients]") {
+  using deriv::tensor_derivatives;
   auto T = [](std::wstring_view s) { return deserialize(s); };
 
   SECTION("one entry per class of blocks") {
@@ -134,24 +134,24 @@ TEST_CASE("deriv/gradients/blocks", "[deriv][gradients]") {
         T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
           L"f{a_1;i_1}:N-N-N u{i_1;a_1}:N-N-N + "
           L"f{i_2;a_2}:N-N-N w{a_2;i_2}:N-N-N");
-    const auto blocks = block_gradients(E, L"f");
+    const auto blocks = tensor_derivatives(E, L"f");
     REQUIRE(blocks.size() == 2);
     const auto& x = blocks[0].variable->as<Tensor>();
     REQUIRE(x.label() == L"f");
     const container::map<Index, Index> to_x{{Index(L"a_1"), x.ket()[0]},
                                             {Index(L"i_1"), x.bra()[0]}};
-    REQUIRE_THAT(blocks[0].gradient,
+    REQUIRE_THAT(blocks[0].derivative,
                  EquivalentTo(transform_expr(
                      T(L"t{a_1;i_1}:N-N-N + w{a_1;i_1}:N-N-N"), to_x)));
-    REQUIRE(block_gradients(E, L"t").size() == 1);
-    REQUIRE(block_gradients(E, L"z").empty());
+    REQUIRE(tensor_derivatives(E, L"t").size() == 1);
+    REQUIRE(tensor_derivatives(E, L"z").empty());
   }
 
   SECTION("an antisymmetric block: the gradient of every element") {
     // E = 1/4 g t: dE = 1/4 Σ_J t(J) dg(J) over all J, so the gradient is
     // 1/4 t, antisymmetrized (t is antisymmetric already)
     const auto E = T(L"1/4 g{i_1,i_2;a_1,a_2}:A-N-S t{a_1,a_2;i_1,i_2}:A-N-S");
-    const auto blocks = block_gradients(E, L"g");
+    const auto blocks = tensor_derivatives(E, L"g");
     REQUIRE(blocks.size() == 1);
     const auto& x = blocks[0].variable->as<Tensor>();
     const container::map<Index, Index> to_x{{Index(L"i_1"), x.bra()[0]},
@@ -159,7 +159,7 @@ TEST_CASE("deriv/gradients/blocks", "[deriv][gradients]") {
                                             {Index(L"a_1"), x.ket()[0]},
                                             {Index(L"a_2"), x.ket()[1]}};
     deriv::test::require_same(
-        blocks[0].gradient,
+        blocks[0].derivative,
         transform_expr(T(L"1/4 t{a_1,a_2;i_1,i_2}:A-N-S"), to_x),
         {x.bra()[0], x.bra()[1], x.ket()[0], x.ket()[1]}, {.projectors = true});
   }
@@ -169,7 +169,7 @@ TEST_CASE("deriv/gradients/blocks", "[deriv][gradients]") {
   const auto euler = [](const ExprPtr& E, std::wstring_view label,
                         std::size_t entries, int degree = 1,
                         const deriv::test::Data& data = {}) {
-    const auto blocks = block_gradients(E, label);
+    const auto blocks = tensor_derivatives(E, label);
     REQUIRE(blocks.size() == entries);
     ExprPtr sum = ex<Constant>(0);
     for (const auto& [x, G] : blocks) sum = sum + projected(G) * x;
@@ -200,7 +200,7 @@ TEST_CASE("deriv/gradients/blocks", "[deriv][gradients]") {
             L"t", 1, 1, real);
     }
     // over a complex field t⁺ is another variable
-    REQUIRE(block_gradients(T(L"w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N"), L"t")
+    REQUIRE(tensor_derivatives(T(L"w{a_1;i_1}:N-N-N t⁺{i_1;a_1}:N-N-N"), L"t")
                 .empty());
   }
 
@@ -209,30 +209,31 @@ TEST_CASE("deriv/gradients/blocks", "[deriv][gradients]") {
         ResultExpr(Tensor(L"D", bra{L"i_7"}, ket{L"a_7"}, Symmetry::Nonsymm),
                    T(L"2 f{i_7;a_7}:N-N-N"))};
     const auto blocks =
-        block_gradients(T(L"D{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
-                          L"f{i_1;i_2}:N-N-N U{i_2;i_1}:N-N-N"),
-                        L"f", defs);
+        tensor_derivatives(T(L"D{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
+                             L"f{i_1;i_2}:N-N-N U{i_2;i_1}:N-N-N"),
+                           L"f", defs);
     REQUIRE(blocks.size() == 2);
     // the block met first is that of E itself, then that of the definition
     const auto& x = blocks[1].variable->as<Tensor>();
     const container::map<Index, Index> to_x{{Index(L"i_1"), x.bra()[0]},
                                             {Index(L"a_1"), x.ket()[0]}};
-    REQUIRE_THAT(blocks[1].gradient,
+    REQUIRE_THAT(blocks[1].derivative,
                  EquivalentTo(transform_expr(T(L"2 t{a_1;i_1}:N-N-N"), to_x)));
   }
 
   SECTION("rejections") {
     REQUIRE_THROWS_WITH(
-        block_gradients(T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
-                          L"f{p_1;a_1}:N-N-N u{a_1;p_1}:N-N-N"),
-                        L"f"),
-        "deriv::block_gradients: two blocks overlap without being one block");
+        tensor_derivatives(T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
+                             L"f{p_1;a_1}:N-N-N u{a_1;p_1}:N-N-N"),
+                           L"f"),
+        "deriv::tensor_derivatives: two blocks overlap without being one "
+        "block");
     REQUIRE_THROWS_WITH(
-        block_gradients(T(L"f{i_1;a_1<i_1>}:N-N-N t{a_1<i_1>;i_1}:N-N-N"),
-                        L"f"),
-        "deriv::block_gradients: a leaf with the label has protoindices");
-    REQUIRE_THROWS_WITH(block_gradients(nullptr, L"f"),
-                        "deriv::block_gradients: null argument");
+        tensor_derivatives(T(L"f{i_1;a_1<i_1>}:N-N-N t{a_1<i_1>;i_1}:N-N-N"),
+                           L"f"),
+        "deriv::tensor_derivatives: a leaf with the label has protoindices");
+    REQUIRE_THROWS_WITH(tensor_derivatives(nullptr, L"f"),
+                        "deriv::tensor_derivatives: null argument");
   }
 }
 
@@ -277,7 +278,7 @@ TEST_CASE("deriv/gradients/rotation", "[deriv][gradients]") {
         {});
   }
 
-  SECTION("the CCSD Lagrangian: the block gradients contracted") {
+  SECTION("the CCSD Lagrangian: the derivatives by the tensors contracted") {
     // two routes to one array: the slots of the leaves substituted, and the
     // gradients by the blocks of f and g contracted with the rotated blocks
     for (const bool traced : {false, true}) {
@@ -290,7 +291,7 @@ TEST_CASE("deriv/gradients/rotation", "[deriv][gradients]") {
                                  std::pair{i, j}, std::pair{a, b}}) {
         const auto X = spbasis_rotation_gradient(L, fg, p, q);
         REQUIRE_FALSE(X->is_zero());
-        require_same(X, via_block_gradients(L, fg, p, q), {p, q}, {});
+        require_same(X, via_tensor_derivatives(L, fg, p, q), {p, q}, {});
       }
     }
   }
