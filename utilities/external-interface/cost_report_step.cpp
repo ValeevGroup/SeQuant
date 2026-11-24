@@ -241,46 +241,54 @@ double bytes_per_element(const std::vector<ExpressionCost> &costs) {
   return 8.0;
 }
 
+/// A table row: the sort key, the construction string (built once, as the
+/// sort compares it often) and the catalog entry
+struct Row {
+  double key;
+  std::string construction;
+  const Record *rec;
+};
+
+/// Sorts @p rows by decreasing key, ties broken on the construction string so
+/// that the order does not depend on unordered_map iteration
+void sort_rows(std::vector<Row> &rows) {
+  std::ranges::sort(rows, [](const Row &a, const Row &b) {
+    if (a.key != b.key) return b.key < a.key;
+    return a.construction < b.construction;
+  });
+}
+
 void report_largest(const ExpressionCost &cost, std::size_t top_n,
                     double bytes_per_elem, std::ostream &out) {
-  std::vector<std::pair<const TreeNode *, const Record *>> rows;
+  std::vector<Row> rows;
   for (const auto &[node, rec] : cost.catalog)
-    if (rec.memory != AsyCost::zero()) rows.emplace_back(&node, &rec);
-  // Largest first; ties broken on the construction string so that the order
-  // does not depend on unordered_map iteration
-  std::ranges::sort(rows, [bytes_per_elem](const auto &a, const auto &b) {
-    const double sa = mb(a.second->memory, bytes_per_elem),
-                 sb = mb(b.second->memory, bytes_per_elem);
-    if (sa != sb) return sb < sa;
-    return full_expr(*a.first) < full_expr(*b.first);
-  });
+    if (rec.memory != AsyCost::zero())
+      rows.push_back({mb(rec.memory, bytes_per_elem), full_expr(node), &rec});
+  sort_rows(rows);
   out << "| Rank | Result | Spaces | Memory (MB) | Uses | Construction | "
          "Local ops |\n|---|---|---|---|---|---|---|\n";
   for (std::size_t i = 0; i < rows.size() && i < top_n; ++i) {
-    const auto &[node, rec] = rows[i];
+    const Row &row = rows[i];
     out << std::format("| {} | {} | {} | {:.4f} | {} | {} | {} |\n", i + 1,
-                       rec->label, rec->spaces, mb(rec->memory, bytes_per_elem),
-                       rec->uses, full_expr(*node), rec->flops.text());
+                       row.rec->label, row.rec->spaces, row.key, row.rec->uses,
+                       row.construction, row.rec->flops.text());
   }
 }
 
 void report_expensive(const ExpressionCost &cost, std::size_t top_n,
                       std::ostream &out) {
-  std::vector<std::pair<const TreeNode *, const Record *>> rows;
+  std::vector<Row> rows;
   for (const auto &[node, rec] : cost.catalog)
-    if (rec.flops != AsyCost::zero()) rows.emplace_back(&node, &rec);
-  std::ranges::sort(rows, [](const auto &a, const auto &b) {
-    const double fa = a.second->flops.ops(), fb = b.second->flops.ops();
-    if (fa != fb) return fb < fa;
-    return full_expr(*a.first) < full_expr(*b.first);
-  });
+    if (rec.flops != AsyCost::zero())
+      rows.push_back({rec.flops.ops(), full_expr(node), &rec});
+  sort_rows(rows);
   out << "| Rank | Result | Spaces | Uses | Construction | "
          "Operations |\n|---|---|---|---|---|---|\n";
   for (std::size_t i = 0; i < rows.size() && i < top_n; ++i) {
-    const auto &[node, rec] = rows[i];
-    out << std::format("| {} | {} | {} | {} | {} | {} |\n", i + 1, rec->label,
-                       rec->spaces, rec->uses, full_expr(*node),
-                       rec->flops.text());
+    const Row &row = rows[i];
+    out << std::format("| {} | {} | {} | {} | {} | {} |\n", i + 1,
+                       row.rec->label, row.rec->spaces, row.rec->uses,
+                       row.construction, row.rec->flops.text());
   }
 }
 
