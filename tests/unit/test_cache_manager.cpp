@@ -493,6 +493,8 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
   REQUIRE(rp);
   REQUIRE(rp->get<int>() == 20);
   REQUIRE(man.alive(p));
+  // The residency queries still see the surviving entry.
+  REQUIRE(man.chain_holds(rp));
 }
 
 // Regression tripwire: after the combined single-DAG evaluation
