@@ -300,9 +300,7 @@ class CellRegistry {
   /// \return whether some slot currently holds \p value (pointer identity).
   /// Read-only: spends no life.
   [[nodiscard]] bool holds(ResultPtr const& value) const {
-    if (!value) return false;
-    return std::any_of(live_.begin(), live_.end(),
-                       [&](CellId c) { return slots_[c].value == value; });
+    return value && held_.contains(value.get());
   }
 
   /// \return whether cell \p c is a non-persistent cell holding no value:
@@ -392,8 +390,9 @@ class CellRegistry {
     if (hooks_.on_bytes_changed) hooks_.on_bytes_changed(live_bytes_);
   }
 
-  /// Charges \p s's (just stored) value to \c live_bytes_.
+  /// Charges \p s's (just stored) value to \c live_bytes_ and \c held_.
   void charge(Slot& s) {
+    if (s.value) ++held_[s.value.get()];
     s.charged_bytes = s.value ? s.value->size_in_bytes() : 0;
     account(static_cast<std::ptrdiff_t>(s.charged_bytes));
   }
@@ -402,6 +401,10 @@ class CellRegistry {
   void discharge(Slot& s) {
     account(-static_cast<std::ptrdiff_t>(s.charged_bytes));
     s.charged_bytes = 0;
+    if (!s.value) return;
+    // Missing only if a set() threw between discharging and charging.
+    auto it = held_.find(s.value.get());
+    if (it != held_.end() && --it->second == 0) held_.erase(it);
   }
 
   CellTable const* table_;
@@ -413,6 +416,8 @@ class CellRegistry {
   std::size_t live_bytes_ = 0;
   /// The cells whose slot holds a value, in cell order.
   std::set<CellId> live_;
+  /// For every buffer some slot holds, the number of slots holding it.
+  std::unordered_map<Result const*, std::size_t> held_;
 };
 
 /// Resolves one consumer cell's operand fetches to table reads. Installed on
