@@ -1560,3 +1560,118 @@ TEST_CASE("eval_adjoint_of_reordered_leaf_btas", "[eval_btas]") {
       }
     }
 }
+
+TEST_CASE("eval_inlined_equation_phase_btas", "[eval_btas][inline]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+  using Labels = std::initializer_list<std::wstring>;
+
+  std::srand(2026);
+  const size_t nocc = 3, nvirt = 4;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  const TensorSymmetries nonsymm{.perm = Symmetry::Nonsymm};
+
+  // the scalar roots of a system, alone, with one cache and as one schedule,
+  // against \p expected
+  auto check = [&](container::svector<ResultExpr> const& sys,
+                   std::array<double, 2> const& expected) {
+    auto const res = binarize<EvalExprBTAS>(sys);
+    std::vector<EvalNode<EvalExprBTAS>> nodes;
+    for (auto const& r : res.roots())
+      if (r.get()->is_scalar()) nodes.push_back(r.get());
+    REQUIRE(nodes.size() == 2);
+    // the two consumers are one canonical value, of opposite phases
+    REQUIRE(nodes[0].left()->hash_value() == nodes[1].left()->hash_value());
+    REQUIRE(nodes[0].left()->canon_phase() == -nodes[1].left()->canon_phase());
+    auto cache = cache_manager(nodes);
+    BatchPolicy ordered;
+    ordered.scheduler = BatchScheduler::ordered;
+    auto ordered_cache = cache_manager(nodes);
+    auto const scheduled = evaluate_each(nodes, ordered, yield_, ordered_cache);
+    for (std::size_t k : {0, 1}) {
+      CAPTURE(k);
+      CHECK(evaluate(nodes[k], yield_)->get<double>() ==
+            Catch::Approx(expected[k]).margin(1e-10));
+      CHECK(evaluate(nodes[k], yield_, cache)->get<double>() ==
+            Catch::Approx(expected[k]).margin(1e-10));
+      CHECK(scheduled[k]->get<double>() ==
+            Catch::Approx(expected[k]).margin(1e-10));
+    }
+  };
+  auto scalar_of = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), yield_)->get<double>();
+  };
+
+  SECTION("a tensor equation read with its head's labels permuted") {
+    // I is antisymmetric, so I{a_2,a_1;...} is its negative: the inlined
+    // subtrees have one hash and opposite phases, and the head, as written,
+    // carries that sign into the network of the consumer
+    auto antisymmetric = [&](ExprPtr const& t, std::size_t n01,
+                             std::size_t n23) {
+      btas::Range const range{n01, n01, n23, n23};
+      BTensorD r{range}, a{range};
+      for (auto& x : r) x = double(std::rand()) / RAND_MAX - 0.5;
+      for (auto const& x : range)
+        a(x[0], x[1], x[2], x[3]) =
+            r(x[0], x[1], x[2], x[3]) - r(x[1], x[0], x[2], x[3]) -
+            r(x[0], x[1], x[3], x[2]) + r(x[1], x[0], x[3], x[2]);
+      yield_.set_leaf(t->as<Tensor>(),
+                      eval_result<ResultTensorBTAS<BTensorD>>(a));
+    };
+    auto I = [&](Labels b) {
+      return ex<Tensor>(L"I", bra(b), ket{L"i_1", L"i_2"}, antisymm);
+    };
+    auto u =
+        ex<Tensor>(L"u", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"}, antisymm);
+    auto v =
+        ex<Tensor>(L"v", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"}, antisymm);
+    antisymmetric(u, nvirt, nvirt);
+    antisymmetric(v, nvirt, nocc);
+    auto W =
+        ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_5"}, nonsymm);
+    auto Z = ex<Tensor>(L"Z", bra{L"a_5"}, ket{L"a_2"}, nonsymm);
+
+    auto const e = scalar_of(u * v * W * Z);
+    REQUIRE(std::abs(e) > 1e-3);
+    for (bool as_defined_first : {true, false}) {
+      CAPTURE(as_defined_first);
+      Labels const first =
+          as_defined_first ? Labels{L"a_1", L"a_2"} : Labels{L"a_2", L"a_1"};
+      Labels const second =
+          as_defined_first ? Labels{L"a_2", L"a_1"} : Labels{L"a_1", L"a_2"};
+      check({ResultExpr(I({L"a_1", L"a_2"})->as<Tensor>(), u * v),
+             ResultExpr(Variable(L"R1"), I(first) * W * Z),
+             ResultExpr(Variable(L"R2"), I(second) * W * Z)},
+            {as_defined_first ? e : -e, as_defined_first ? -e : e});
+    }
+  }
+
+  SECTION("scalar equations that differ by a sign") {
+    // the two t W have one hash and opposite phases (see
+    // eval_cached_intermediate_of_reordered_leaf_btas), and a scalar is no
+    // factor of the network of its consumer
+    auto t = [&](Labels b) {
+      return ex<Tensor>(L"t", bra(b), ket{L"i_1", L"i_2"}, antisymm);
+    };
+    auto W =
+        ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"}, nonsymm);
+    auto X = ex<Tensor>(L"X", bra{L"a_2"}, ket{L"i_4"}, nonsymm);
+    auto Y = ex<Tensor>(L"Y", bra{L"i_4"}, ket{L"a_3"}, nonsymm);
+    auto Z = ex<Tensor>(L"Z", bra{L"a_3"}, ket{L"a_2"}, nonsymm);
+    auto E = [](std::wstring label) { return ex<Variable>(label); };
+
+    auto const e = scalar_of(t({L"a_1", L"i_3"}) * W) * scalar_of(X * Y * Z);
+    REQUIRE(std::abs(e) > 1e-3);
+    for (bool written_first : {true, false}) {
+      CAPTURE(written_first);
+      check({ResultExpr(Variable(L"E1"), t({L"a_1", L"i_3"}) * W),
+             ResultExpr(Variable(L"E2"), t({L"i_3", L"a_1"}) * W),
+             ResultExpr(Variable(L"R1"),
+                        E(written_first ? L"E1" : L"E2") * X * Y * Z),
+             ResultExpr(Variable(L"R2"),
+                        E(written_first ? L"E2" : L"E1") * X * Y * Z)},
+            {written_first ? e : -e, written_first ? -e : e});
+    }
+  }
+}

@@ -407,15 +407,24 @@ void collect_tensor_factors(EvalExprNode const& node,  //
                             node->is_equation_boundary())) {
     collect.emplace_back(
         ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
-    // a leaf enters the network as its expr(), which the network
-    // canonicalizes; any other node as an opaque tensor of its canonical form
-    phase *= op ? node->canon_phase() : node->leaf_phase();
+    // The sign of the factor as written relative to what its expr() is in
+    // the network:
+    // - a leaf: its canonical spelling, hence leaf_phase;
+    // - an inlined equation: the head as written, with the symmetry of the
+    //   head, by which the network accounts for the order of its slots, hence
+    //   1 (so is the expr() of an Adjoint, whose phase is 1);
+    // - any other node: a tensor without symmetry that stands for the
+    //   canonical form of the node, hence canon_phase.
+    phase *= node->is_equation_boundary() ? std::int8_t{1}
+             : op                         ? node->canon_phase()
+                                          : node->leaf_phase();
   } else if (node->op_type() == EvalOp::Product && !node.leaf() &&
              !node->is_equation_boundary()) {
     collect_tensor_factors(node.left(), collect, phase);
     collect_tensor_factors(node.right(), collect, phase);
   } else if (node->is_equation_boundary()) {
-    // a scalar equation is no factor of the network, but its phase counts
+    // a scalar equation is no factor of the network: only its hash stands
+    // for it in the hash of the product, hence canon_phase
     phase *= node->canon_phase();
   }
 }
