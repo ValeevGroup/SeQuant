@@ -1675,3 +1675,48 @@ TEST_CASE("eval_inlined_equation_phase_btas", "[eval_btas][inline]") {
     }
   }
 }
+
+TEST_CASE("eval_slot_alignment_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+  using Labels = std::initializer_list<std::wstring>;
+
+  std::srand(2026);
+  const size_t nocc = 3, nvirt = 4;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  // no tensor has a symmetry: the two orders of a_1, a_2 are different values
+  auto tensor = [](std::wstring const& label, Labels b, Labels k) {
+    return ex<Tensor>(label, bra(b), ket(k),
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  };
+  Labels const a12{L"a_1", L"a_2"}, a21{L"a_2", L"a_1"}, i12{L"i_1", L"i_2"};
+  auto g = [&](Labels b) { return tensor(L"g", b, i12); };
+  auto h = [&](Labels b) { return tensor(L"h", b, i12); };
+  auto const W = tensor(L"W", i12, a12);
+  auto const X = tensor(L"X", {L"a_3"}, {L"i_3"});
+  auto const Y = tensor(L"Y", {L"i_3"}, {L"a_3"});
+  // (f W) (X Y): f W is an intermediate of the tree
+  auto consumer = [&](ExprPtr const& f) {
+    return eval_node(ex<Product>(
+        ExprPtrList{ex<Product>(ExprPtrList{f, W}, Product::Flatten::No),
+                    X * Y},
+        Product::Flatten::No));
+  };
+  // the consumers of two factors that differ in value evaluate with one cache
+  // as each does alone
+  auto check = [&](ExprPtr const& f1, ExprPtr const& f2) {
+    std::vector nodes{consumer(f1), consumer(f2)};
+    std::array const alone{evaluate(nodes[0], yield_)->get<double>(),
+                           evaluate(nodes[1], yield_)->get<double>()};
+    REQUIRE(std::abs(alone[0] - alone[1]) > 1e-3);
+    auto cache = cache_manager(nodes);
+    for (std::size_t k : {0, 1})
+      CHECK(evaluate(nodes[k], yield_, cache)->get<double>() ==
+            Catch::Approx(alone[k]).margin(1e-10));
+  };
+
+  SECTION("summands aligned differently") {
+    check(g(a12) + h(a12), g(a12) + h(a21));
+    check(g(a12) + h(a12) + g(a21), g(a12) + h(a21) + g(a21));
+  }
+}

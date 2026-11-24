@@ -546,11 +546,24 @@ EvalExprNode sum_chain(std::vector<EvalExprNode>&& summands,
   // A Sum has phase 1: its value is that of its summands as written, each the
   // canonical form its hash stands for times its phase, so the phase is part
   // of what identifies the summand
-  auto hvals = summands | transform([](auto&& n) {
+  // A Sum is laid out as its first summand is; where the slots of another
+  // summand go in that layout is part of what identifies the summand as well
+  auto const& layout = summands.front()->canon_indices();
+  auto hvals = summands | transform([&layout](auto&& n) {
                  auto h = n->hash_value();
                  if (n->canon_phase() != 1) hash::combine(h, n->canon_phase());
+                 // an index that the layout lacks is given the position
+                 // past its end: such a Sum has no value, but is exported
+                 auto const& indices = n->canon_indices();
+                 if (!std::ranges::equal(indices, layout))
+                   for (Index const& ix : indices) {
+                     auto const pos = std::ranges::find(layout, ix);
+                     hash::combine(h, hash::value(static_cast<std::size_t>(
+                                          std::distance(layout.begin(), pos))));
+                   }
                  return h;
-               });
+               }) |
+               ranges::to_vector;
 
   // Every binary Sum produced by fold_left_to_node below folds the running
   // accumulator (the chain seed, or a prior chain Sum) in as the left
