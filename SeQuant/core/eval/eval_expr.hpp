@@ -988,9 +988,11 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
 
     SEQUANT_ASSERT(!prod.empty());
 
-    if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
-      return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
-                                 prod.factor(0)->end(), Product::Flatten::No});
+    if (prod.size() == 1 && prod.factor(0)->is<Product>()) {
+      // a product times a scalar: one product, of both scalars
+      auto const& inner = prod.factor(0)->as<Product>();
+      return ex<Product>(Product{prod.scalar() * inner.scalar(), inner.begin(),
+                                 inner.end(), Product::Flatten::No});
     } else {
       return ex<Product>(std::move(prod));
     }

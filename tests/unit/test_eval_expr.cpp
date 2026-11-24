@@ -1519,6 +1519,19 @@ TEST_CASE("to_expr of a leaf written out of canonical order", "[EvalExpr]") {
   REQUIRE(*to_expr(tree_of(pow(written, rational{2}))) ==
           *pow(sorted, rational{2}));
 
+  // a scalar factor multiplies the sign, whatever it scales
+  REQUIRE(*to_expr(tree_of(ex<Constant>(2) * written)) ==
+          *(ex<Constant>(-2) * sorted));
+  REQUIRE(*to_expr(tree_of(ex<Constant>(2) * pow(written, rational{-1}))) ==
+          *(ex<Constant>(-2) * pow(sorted, rational{-1})));
+  auto const Y = ex<Tensor>(L"Y", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"},
+                            TensorSymmetries{.perm = Symmetry::Nonsymm});
+  auto const scaled_sum = to_expr(tree_of(ex<Constant>(2) * (W + Y)));
+  REQUIRE(scaled_sum->is<Product>());
+  REQUIRE(scaled_sum->as<Product>().scalar() == 2);
+  REQUIRE(scaled_sum->as<Product>().size() == 1);
+  REQUIRE(*scaled_sum->as<Product>().factor(0) == *(W + Y));
+
   // a leaf under a head is wrapped in a Product node made from the head, which
   // has no leaf phase however the head is spelled
   auto const head = written->as<Tensor>();
