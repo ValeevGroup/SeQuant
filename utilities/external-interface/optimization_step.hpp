@@ -54,6 +54,7 @@ class OptimizationStep
 
   void set_replay_options(const nlohmann::json &options);
   void set_batch_options(const nlohmann::json &options);
+  void set_roofline_options(const nlohmann::json &options);
   void check_batch_spaces() const;
 
   std::set<std::string> batch_labels_;

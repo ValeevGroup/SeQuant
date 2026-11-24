@@ -743,6 +743,21 @@ tensor contractions, chosen so as to minimize the configured :code:`objective`.
        tensors (the *volatile* ones, e.g. amplitudes) change between evaluations. See below.
      - -
      - No
+   * - :code:`volatile`
+     - Identifies volatile tensors (same format as :code:`replay.volatile`, see below) whose contractions are weighted by :code:`volatile_weight`,
+       without the splitting into persistent and volatile parts that :code:`replay` does. Not valid together with :code:`replay`.
+     - -
+     - Together with :code:`volatile_weight`
+   * - :code:`volatile_weight`
+     - Weight of the cost of contractions involving volatile tensors (see :code:`replay.weight`); at least 1.
+     - -
+     - Together with :code:`volatile`
+   * - :code:`roofline`
+     - Object with the properties :code:`machine_balance` (FLOPs per element of memory traffic, required and positive) and :code:`fast_mem_elems`
+       (capacity of the fast memory, in elements; default 0). Replaces the operation count in the performance cost of the
+       :code:`DenseTimeSpace` objectives by a roofline estimate of the run time (see :class:`sequant::RooflineParams`). Not valid with :code:`DenseFLOPs`.
+     - -
+     - No
 
 :code:`batch` is an object with the following properties. Indices are identified by the label of their index space, which has to be one of the
 labels given in :code:`index_spaces`:
@@ -776,7 +791,7 @@ labels given in :code:`index_spaces`:
      - false
      - No
    * - :code:`persistent_only`
-     - Whether to restrict batching to subexpressions that do not contain volatile tensors. Requires :code:`replay`.
+     - Whether to restrict batching to subexpressions that do not contain volatile tensors. Requires :code:`replay` or :code:`volatile`.
      - false
      - No
    * - :code:`accumulation_factor`
@@ -807,6 +822,7 @@ labels given in :code:`index_spaces`:
      - Yes
    * - :code:`weight`
      - Weight of the cost of contractions involving volatile tensors, relative to the ones that don't (conceptually the number of evaluations).
+       At least 1; 1 means no weighting.
      - 1.0
      - No
    * - :code:`intermediate_label`

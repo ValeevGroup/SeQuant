@@ -498,6 +498,11 @@ TEST_CASE("optimize step", "[extint]") {
       options["replay"] = {{"volatile", "T2"}};
       OptimizationStep other;
       REQUIRE_NOTHROW(other.set_options(options));
+      json flat = with_batch(persistent);
+      flat["volatile"] = "T2";
+      flat["volatile_weight"] = 10;
+      OptimizationStep third;
+      REQUIRE_NOTHROW(third.set_options(flat));
     }
     {
       json unknown_space = batch;
@@ -521,6 +526,70 @@ TEST_CASE("optimize step", "[extint]") {
       OptimizationStep step;
       REQUIRE_THROWS_AS(step.set_options(with_batch(bad)), Exception);
     }
+  }
+
+  SECTION("volatile weighting options") {
+    auto rejects = [](const json &options, const char *message) {
+      OptimizationStep step;
+      REQUIRE_THROWS_WITH(step.set_options(options),
+                          Catch::Matchers::ContainsSubstring(message));
+    };
+    rejects(json{{"volatile", "T1"}, {"replay", {{"volatile", "T2"}}}},
+            "mutually exclusive");
+    rejects(json{{"volatile_weight", 2}, {"replay", {{"volatile", "T2"}}}},
+            "mutually exclusive");
+    rejects(json{{"volatile_weight", 2}}, "together");
+    rejects(json{{"volatile", "T1"}}, "together");
+    rejects(json{{"volatile", "T1"}, {"volatile_weight", 0.5}}, "at least 1");
+    rejects(json{{"replay", {{"volatile", "T2"}, {"weight", 0.5}}}},
+            "at least 1");
+    // 1 is the default: no weighting
+    REQUIRE_NOTHROW(OptimizationStep{}.set_options(
+        json{{"replay", {{"volatile", "T2"}, {"weight", 1}}}}));
+    rejects(json{{"volatile", json::array()}}, "must not be empty");
+    rejects(json{{"objective", "DenseFLOPs"},
+                 {"roofline", {{"machine_balance", 10}}}},
+            "DenseTimeSpace");
+    rejects(json{{"roofline", {{"bogus", 1}}}}, "Unknown option");
+    rejects(json{{"roofline", {{"fast_mem_elems", -1}}}}, "non-negative");
+    rejects(json{{"roofline", {{"fast_mem_elems", 1e6}}}}, "machine_balance");
+
+    OptimizationStep step;
+    REQUIRE_NOTHROW(step.set_options(json{
+        {"volatile", {"T1", {{"label", "T2"}}}},
+        {"volatile_weight", 10},
+        {"roofline", {{"machine_balance", 10}, {"fast_mem_elems", 1e6}}}}));
+  }
+
+  SECTION("volatile weighting defers contractions with volatile tensors") {
+    // Whether T1, the only volatile tensor, is contracted last: then it is a
+    // factor of the outermost product rather than of a nested one
+    auto t1_contracted_last = [](const json &options) {
+      ExecutionContext ctx;
+      seed_expr(ctx, {L"R2{a1,a2;i1,i2} = + g{i1,a3;i3,i4}:A-H-S "
+                      L"T1{a3;i2}:A-H-S INTpp{a1,a2;i3,i4}:A-H-S"});
+      OptimizationStep step;
+      step.set_options(options);
+      step.run("opt", ctx, {"in.0"});
+      const ResultExpr &result =
+          convert_data<ExpressionData>(ctx.get_data("opt.0").front().data.get())
+              .expressions.at(0);
+      const ExprPtr &rhs = result.expression();
+      REQUIRE(rhs->is<Product>());
+      for (const ExprPtr &factor : rhs->as<Product>().factors()) {
+        if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"T1") {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const json flops = {{"objective", "DenseFLOPs"}};
+    json weighted = flops;
+    weighted["volatile"] = "T1";
+    weighted["volatile_weight"] = 1000;
+    REQUIRE_FALSE(t1_contracted_last(flops));
+    REQUIRE(t1_contracted_last(weighted));
   }
 
   SECTION("factorizes with each objective") {

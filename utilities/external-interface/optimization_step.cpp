@@ -31,6 +31,20 @@ namespace sequant::util::extint {
 
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(OptimizationStep);
 
+namespace {
+
+/// Parses the weight of contractions involving volatile tensors: at least 1,
+/// which means no weighting
+double parse_volatile_weight(const nlohmann::json &value,
+                             const std::string &name) {
+  if (!value.is_number() || !(value.get<double>() >= 1.0)) {
+    throw Exception("Value for " + name + " must be a number of at least 1");
+  }
+  return value.get<double>();
+}
+
+}  // namespace
+
 std::string OptimizationStep::kind() const { return "optimize"; }
 
 bool OptimizationStep::accepts_options() const { return true; }
@@ -43,6 +57,9 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
   }
 
   bool batch_given = false;
+  bool volatile_given = false;
+  bool volatile_weight_given = false;
+  bool roofline_given = false;
 
   for (const auto &[key, value] : options.items()) {
     if (key == "objective") {
@@ -90,6 +107,21 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
       }
 
       options_.footprint_weight = value.get<double>();
+    } else if (key == "volatile") {
+      std::shared_ptr<const ExpressionFilter> is_volatile =
+          parse_tensor_filter(value, kind() + ".volatile");
+      options_.batch_policy.is_volatile_leaf =
+          [is_volatile](const Tensor &tensor) {
+            return is_volatile->matches(tensor);
+          };
+      volatile_given = true;
+    } else if (key == "volatile_weight") {
+      options_.volatile_weight =
+          parse_volatile_weight(value, kind() + " option '" + key + "'");
+      volatile_weight_given = true;
+    } else if (key == "roofline") {
+      set_roofline_options(value);
+      roofline_given = true;
     } else if (key == "replay") {
       set_replay_options(value);
     } else if (key == "batch") {
@@ -110,6 +142,26 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
   const ObjectiveFunction objective = options_.objective_function;
   const bool batched = objective == ObjectiveFunction::DenseTimeSpaceBatched;
 
+  if (volatile_given && replay_.has_value()) {
+    throw Exception(kind() +
+                    " options 'volatile' and 'replay' are mutually exclusive "
+                    "(use 'replay.volatile')");
+  }
+  if (volatile_weight_given && replay_.has_value()) {
+    throw Exception(kind() +
+                    " options 'volatile_weight' and 'replay' are mutually "
+                    "exclusive (use 'replay.weight')");
+  }
+  if (volatile_given != volatile_weight_given) {
+    throw Exception(kind() +
+                    " options 'volatile' and 'volatile_weight' must be given "
+                    "together");
+  }
+  if (roofline_given && objective == ObjectiveFunction::DenseFLOPs) {
+    throw Exception(kind() +
+                    " option 'roofline' requires a 'DenseTimeSpace' objective");
+  }
+
   if (options_.footprint_weight != 0.0 &&
       objective != ObjectiveFunction::DenseFLOPs) {
     throw Exception(kind() +
@@ -121,10 +173,11 @@ void OptimizationStep::set_options(const nlohmann::json &options) {
                     " option 'cse' = 'subnet' requires the 'DenseFLOPs' "
                     "objective");
   }
-  if (options_.batch_policy.persistent_only && !replay_.has_value()) {
+  if (options_.batch_policy.persistent_only && !replay_.has_value() &&
+      !volatile_given) {
     throw Exception(kind() +
                     " option 'batch.persistent_only' requires the 'replay' "
-                    "option");
+                    "or 'volatile' option");
   }
   if (batch_given && !batched) {
     throw Exception(kind() +
@@ -289,6 +342,36 @@ void OptimizationStep::set_batch_options(const nlohmann::json &options) {
   };
 }
 
+void OptimizationStep::set_roofline_options(const nlohmann::json &options) {
+  const std::string name = kind() + ".roofline";
+
+  if (!options.is_object()) {
+    throw Exception(name + " expects a JSON object");
+  }
+
+  RooflineParams &roofline = options_.roofline;
+  for (const auto &[key, value] : options.items()) {
+    double *target = nullptr;
+    if (key == "machine_balance") {
+      target = &roofline.machine_balance;
+    } else if (key == "fast_mem_elems") {
+      target = &roofline.fast_mem_elems;
+    } else {
+      throw Exception("Unknown option key for " + name + ": '" + key + "'");
+    }
+
+    if (!value.is_number() || value.get<double>() < 0.0) {
+      throw Exception("Value for " + name + " option '" + key +
+                      "' must be a non-negative number");
+    }
+    *target = value.get<double>();
+  }
+
+  if (!(roofline.machine_balance > 0.0)) {
+    throw Exception(name + " requires a positive 'machine_balance'");
+  }
+}
+
 void OptimizationStep::check_batch_spaces() const {
   if (batch_labels_.empty()) {
     return;
@@ -327,12 +410,8 @@ void OptimizationStep::set_replay_options(const nlohmann::json &options) {
     if (key == "volatile") {
       is_volatile = parse_tensor_filter(value, name + ".volatile");
     } else if (key == "weight") {
-      if (!value.is_number()) {
-        throw Exception("Value for " + name + " option '" + key +
-                        "' must be a number");
-      }
-
-      options_.volatile_weight = value.get<double>();
+      options_.volatile_weight =
+          parse_volatile_weight(value, name + " option '" + key + "'");
     } else if (key == "intermediate_label") {
       replay.intermediate_label = get_string(key, value);
     } else if (key == "persistent_id") {
