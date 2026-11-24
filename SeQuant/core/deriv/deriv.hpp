@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 
+#include <string>
 #include <string_view>
 
 namespace sequant::deriv {
@@ -142,6 +143,22 @@ struct BlockGradient {
 /// its protoindices do not follow its slots as the variable's do
 [[nodiscard]] ExprPtr at_zero(const ExprPtr& E,
                               const container::svector<ExprPtr>& variables);
+
+namespace detail {
+
+/// @return the definition in @p definitions of a leaf @p leaf : the one whose
+/// head has its label and ranks, or nullptr if there is none
+const ResultExpr* definition_of(
+    const Tensor& leaf, const container::svector<ResultExpr>& definitions);
+
+/// @return the expanded expression of the definition @p definition of the
+/// leaf @p leaf , with the slots of the head renamed to those of the leaf,
+/// slot by slot, and the summed indices to temporary ones whose labels are
+/// not in @p taken
+ExprPtr instantiate(const ResultExpr& definition, const Tensor& leaf,
+                    container::set<std::wstring> taken);
+
+}  // namespace detail
 
 }  // namespace sequant::deriv
 

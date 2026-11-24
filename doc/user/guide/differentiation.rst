@@ -263,11 +263,18 @@ of ``E`` is the sum over the blocks of the gradient times the change of the leaf
 block, not only the independent ones. Blocks that a symmetry of the leaf maps onto one another hold the same elements
 and are returned once.
 
-:func:`sequant::mbpt::rotation_gradient` (``SeQuant/domain/mbpt/rotation_gradient.hpp``) returns the response of a
-scalar ``E`` to a rotation of the orbitals, :math:`X_{qp} = \sum_T \sum_{\text{slots}} (\partial E / \partial T_{\dots
-p \dots})\, T_{\dots q \dots}`, for the leaves ``T`` of the labels given. It takes the two free indices: the space of
-``p`` selects the slots that rotate, and the space of ``q`` the blocks of the tensors the result is written in. Its
-antisymmetric part is the orbital gradient. Every bra and ket slot transforms alike, as for real orbitals.
+:func:`sequant::mbpt::spbasis_rotation_gradient` (``SeQuant/domain/mbpt/spbasis_rotation_gradient.hpp``) returns the
+derivative of ``E`` by a transformation :math:`1 + \kappa` of the single-particle basis, :math:`X_{qp} = \partial E /
+\partial \kappa_{qp} = \sum_T \sum_{\text{slots}} (\partial E / \partial T_{\dots p \dots})\, T_{\dots q \dots}`, for the
+leaves ``T`` of the labels given. It takes the two free indices: the space of ``p`` selects the slots that rotate, and
+the space of ``q`` the blocks of the tensors the result is written in. Its antisymmetric part is the gradient by a
+rotation of the basis, the orbital gradient. Every bra and ket slot transforms alike, as for real orbitals.
+
+A leaf held as a tensor is taken in a fixed basis otherwise. One that depends on the basis also through summed indices,
+as the Fock operator does through the occupied orbitals, is given with its definition, and is then differentiated
+through it: its own slots rotate, and so do those of the summed indices of its expression. The function also applies
+to its own result, with the slots that hold the earlier ``q`` held fixed, which gives the second and higher derivatives
+by :math:`\kappa`.
 
 .. literalinclude:: /examples/user/differentiation.cpp
    :language: cpp
