@@ -131,11 +131,8 @@ class CellRegistry {
       ResultPtr v = hooks_.persistent->get(hooks_.hash_of(cell.value_id));
       if (!v) continue;
       Slot& s = slots_[c];
-      discharge(s);
-      s.value = std::move(v);
+      assign(c, s, std::move(v));
       s.filled_since_clear = true;
-      live_.insert(c);
-      charge(s);
     }
   }
 
@@ -168,14 +165,8 @@ class CellRegistry {
     // Before the slot is touched: a throwing hook must leave it as it was.
     ResultPtr stored =
         hooks_.stored_form ? hooks_.stored_form(c, std::move(v)) : std::move(v);
-    discharge(s);
-    s.value = std::move(stored);
+    assign(c, s, std::move(stored));
     s.filled_since_clear = true;
-    if (s.value)
-      live_.insert(c);
-    else
-      live_.erase(c);
-    charge(s);
     if (cell.persistent && hooks_.persistent && hooks_.hash_of)
       hooks_.persistent->put(hooks_.hash_of(cell.value_id), s.value);
     if (hooks_.on_set) hooks_.on_set(c, s.value);
@@ -218,9 +209,9 @@ class CellRegistry {
     if (!s.value) throw no_result("take", c);
     if (table_->cells[c].persistent) return s.value;
     s.filled_since_clear = false;
-    discharge(s);
-    live_.erase(c);
-    return std::move(s.value);  // the slot is left null by the move
+    ResultPtr out = s.value;
+    assign(c, s, nullptr);
+    return out;
   }
 
   /// Lets the cell's result go: the schedule has no reader of it left in this
@@ -232,9 +223,7 @@ class CellRegistry {
     Slot& s = slots_[c];
     if (!s.value) return;
     s.filled_since_clear = false;
-    discharge(s);
-    s.value.reset();
-    live_.erase(c);
+    assign(c, s, nullptr);
   }
 
   /// Batch start: drops every cell bound to loop instance \p k -- the
@@ -278,10 +267,8 @@ class CellRegistry {
         bound = true;
       if (!bound) continue;
       Slot& s = slots_[c];
-      discharge(s);
-      s.value.reset();
+      assign(c, s, nullptr);
       s.filled_since_clear = false;
-      live_.erase(c);
     }
   }
 
@@ -296,7 +283,10 @@ class CellRegistry {
   /// storage moves fully onto the table.
   template <typename F>
   void for_each_live(F&& f) const {
-    for (CellId c : live_) f(c, slots_[c].value);
+    for (CellId c : live_) {
+      SEQUANT_ASSERT(slots_[c].value);
+      f(c, slots_[c].value);
+    }
   }
 
   /// \return whether some slot currently holds \p value (pointer identity).
@@ -392,23 +382,28 @@ class CellRegistry {
     if (hooks_.on_bytes_changed) hooks_.on_bytes_changed(live_bytes_);
   }
 
-  /// Charges \p s's (just stored) value to \c live_bytes_ and \c
-  /// slot_count_of_.
-  void charge(Slot& s) {
-    if (s.value) ++slot_count_of_[s.value.get()];
-    s.charged_bytes = s.value ? s.value->size_in_bytes() : 0;
-    account(static_cast<std::ptrdiff_t>(s.charged_bytes));
-  }
-
-  /// Gives back what \p s's value was charged; call before releasing it.
-  void discharge(Slot& s) {
+  /// Replaces the value of slot \p s (of cell \p c) with \p v (null
+  /// empties it). The only writer of \c Slot::value: it keeps \c
+  /// live_bytes_, \c live_ and \c slot_count_of_ in step with the slots.
+  void assign(CellId c, Slot& s, ResultPtr v) {
+    // give back what the old value was charged
     account(-static_cast<std::ptrdiff_t>(s.charged_bytes));
     s.charged_bytes = 0;
-    if (!s.value) return;
-    auto it = slot_count_of_.find(s.value.get());
-    SEQUANT_ASSERT(it != slot_count_of_.end());
-    if (it != slot_count_of_.end() && --it->second == 0)
-      slot_count_of_.erase(it);
+    if (s.value) {
+      auto it = slot_count_of_.find(s.value.get());
+      SEQUANT_ASSERT(it != slot_count_of_.end());
+      if (it != slot_count_of_.end() && --it->second == 0)
+        slot_count_of_.erase(it);
+    }
+    s.value = std::move(v);
+    if (!s.value) {
+      live_.erase(c);
+      return;
+    }
+    live_.insert(c);
+    ++slot_count_of_[s.value.get()];
+    s.charged_bytes = s.value->size_in_bytes();
+    account(static_cast<std::ptrdiff_t>(s.charged_bytes));
   }
 
   CellTable const* table_;
