@@ -3,46 +3,18 @@
 
 #include "json_include.hpp"
 
+#include "temp_dir.hpp"
+
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <nlohmann/json.hpp>
-
-#include <filesystem>
-#include <fstream>
-#include <string>
 
 using namespace sequant;
 using namespace sequant::util::extint;
 using json = nlohmann::json;
 using Catch::Matchers::ContainsSubstring;
 
-namespace {
-
-namespace fs = std::filesystem;
-
-struct TempDir {
-  fs::path path;
-
-  TempDir()
-      : path(fs::temp_directory_path() /
-             ("extint_include_" + std::to_string(counter()++))) {
-    fs::remove_all(path);
-    fs::create_directories(path);
-  }
-  ~TempDir() { fs::remove_all(path); }
-
-  void write(const std::string &name, const std::string &content) const {
-    fs::create_directories((path / name).parent_path());
-    std::ofstream(path / name) << content;
-  }
-
-  static int &counter() {
-    static int c = 0;
-    return c;
-  }
-};
-
-}  // namespace
+using test_support::TempDir;
 
 TEST_CASE("JSON includes", "[extint]") {
   TempDir dir;
