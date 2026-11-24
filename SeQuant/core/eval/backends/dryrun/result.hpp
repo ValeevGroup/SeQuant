@@ -71,8 +71,10 @@ class ResultDryRunNested;
 
 namespace detail {
 
-/// A byte size computed on first request and kept until \c reset(). Safe to
-/// fill from concurrent const readers; copies carry the stored value.
+/// A byte size computed on first request and kept until \c reset(); copies
+/// carry the stored value. Atomic so that \c size_in_bytes() const stays safe
+/// to call concurrently on a token shared between evaluations running on
+/// different threads; nothing in SeQuant does that itself.
 class SizeMemo {
  public:
   SizeMemo() = default;
