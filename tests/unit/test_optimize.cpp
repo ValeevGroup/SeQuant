@@ -1069,6 +1069,36 @@ TEST_CASE("optimize", "[optimize]") {
       return expected;
     };
 
+    SECTION("phase") {
+      // A CSE holds the canonical form of the subexpression it stands for.
+      // Each of these (t W) is the negative of that form: in the first pair
+      // through the order of the dummy indices of W, in the second through a
+      // leaf written out of the canonical order of its bra (a1, i3).
+      using strings = std::vector<std::string>;
+      const std::string cse1 = "CSE1{;;a_1,a_2}:N-N-N";
+      const std::string t = "t{a_1,i_3;i_1,i_2}:A-N-S";
+      for (const auto& [inputs, outputs] :
+           std::vector<std::pair<std::vector<std::wstring>, strings>>{
+               {{L"R1 = (t{a1,i3;i1,i2}:A-N-S W{i2,i1;i3,a2}) V{a2;a1}",
+                 L"R2 = (t{a1,i3;i1,i2}:A-N-S W{i1,i2;i3,a2}) U{a2;a1}"},
+                {cse1 + " = -1 " + t + " * W{i_2,i_1;i_3,a_2}:N-N-N",
+                 "R1 = (-1 " + cse1 + ") * V{a_2;a_1}:N-N-N",
+                 "R2 = " + cse1 + " * U{a_2;a_1}:N-N-N"}},
+               {{L"R1 = (t{i3,a1;i1,i2}:A-N-S W{i1,i2;i3,a2}) V{a2;a1}",
+                 L"R2 = (t{a1,i3;i1,i2}:A-N-S W{i1,i2;i3,a2}) U{a2;a1}"},
+                {cse1 + " = -1 (-1 " + t + ") * W{i_1,i_2;i_3,a_2}:N-N-N",
+                 "R1 = (-1 " + cse1 + ") * V{a_2;a_1}:N-N-N",
+                 "R2 = " + cse1 + " * U{a_2;a_1}:N-N-N"}},
+           }) {
+        std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+        opt::eliminate_common_subexpressions(expressions, binarizer);
+        strings actual;
+        for (const auto& result : collect_as_expr(expressions))
+          actual.push_back(toUtf8(io::serialization::to_string(result)));
+        REQUIRE(actual == outputs);
+      }
+    }
+
     SECTION("standard") {
       for (bool force_hash_collisions : {false, true}) {
         CAPTURE(force_hash_collisions);

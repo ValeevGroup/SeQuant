@@ -164,12 +164,19 @@ class SubexpressionReplacer {
       // Since tree node objects are immutable, we have to disassemble
       // and reassemble the tree in order to get the desired outcome.
 
+      // The CSE holds the canonical form of the tree, which every tree it
+      // stands for is its own phase times (see below); the tree as written,
+      // which to_expr() gives, is its phase times that form.
+      ExprPtr canonical = to_expr(tree);
+      if (tree->canon_phase() != 1) {
+        canonical = ex<Constant>(tree->canon_phase()) * canonical;
+      }
       ResultExpr intermediate = [&]() {
         if (expr->is<Tensor>()) {
-          return ResultExpr(expr->as<Tensor>(), to_expr(tree));
+          return ResultExpr(expr->as<Tensor>(), std::move(canonical));
         }
 
-        return ResultExpr(expr->as<Variable>(), to_expr(tree));
+        return ResultExpr(expr->as<Variable>(), std::move(canonical));
       }();
 
       intermediate_definition = expr_to_tree(intermediate);
