@@ -10,6 +10,7 @@
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/tensor_power.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
@@ -137,8 +138,8 @@ struct Rotation {
                 "a slot of a leaf that rotates holds an index that stands in "
                 "more than two slots");
           if (!includes(u.basis(), p.basis())) {
-            if (u.space().attr().intersection(p.space().attr()) !=
-                IndexSpace::Type::null)
+            if (get_default_index_basis_registry()->valid_intersection(
+                    u.space(), p.space()))
               reject(
                   "a slot of a leaf that rotates overlaps the space of p "
                   "without including it");
