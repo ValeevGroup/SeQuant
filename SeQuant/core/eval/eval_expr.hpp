@@ -924,6 +924,10 @@ rational power_exponent(meta::eval_node auto const& node) {
 /// Converts an `EvalExpr` to `ExprPtr`, passing the expression of every
 /// terminal through @p leaf_map.
 ///
+/// The result is the value of @p node as written: a leaf whose expression,
+/// its canonical spelling, differs from the leaf as written by a sign (see
+/// EvalExpr::leaf_phase) contributes that sign.
+///
 /// An inlined equation below @p node (see EvalExpr::is_equation_boundary) is a
 /// terminal: it contributes its head, not its rhs; @p node itself, boundary or
 /// not, is always expanded.
@@ -938,7 +942,13 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
-  if (node.leaf()) return leaf_map(evxpr.expr());
+  // the expression of a leaf, with the sign of its canonical spelling
+  auto const leaf = [&leaf_map](auto const& n) -> ExprPtr {
+    ExprPtr e = leaf_map(n->expr());
+    return n->leaf_phase() == 1 ? e : ex<Constant>(n->leaf_phase()) * e;
+  };
+
+  if (node.leaf()) return leaf(node);
 
   // Adjoint is unary and stores the marker-bearing tensor directly in its
   // own ExprPtr; the bare-leaf left child and Constant(1) right child are
@@ -950,7 +960,15 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
                                      : to_expr(c, leaf_map);
   };
 
-  if (op == EvalOp::Power) return pow(child(node.left()), power_exponent(node));
+  if (op == EvalOp::Power) {
+    auto const& base = node.left();
+    if (!base.leaf() || base->leaf_phase() == 1)
+      return pow(child(base), power_exponent(node));
+    // the node carries the sign of its base to the exponent
+    ExprPtr power = pow(leaf_map(base->expr()), power_exponent(node));
+    return evxpr.canon_phase() == 1 ? power
+                                    : ex<Constant>(evxpr.canon_phase()) * power;
+  }
 
   // the broadcast is implied by the Sum under a head that holds the node
   if (op == EvalOp::Broadcast) return child(node.left());
