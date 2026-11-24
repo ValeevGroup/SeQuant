@@ -385,6 +385,41 @@ IndexSet all_indices(ExprPtr const& expr) {
 }
 
 ///
+/// \return the tensor that stands for the result of the operation \p node as a
+///         factor of a network: \c node->expr() with the slots of its bra, of
+///         its ket and of its aux each in the order of
+///         \c node->canon_indices()
+///
+/// The value of the node is laid out by its canonical indices, and nodes of
+/// one hash are one value in that layout whatever their indices are labeled.
+/// The slots of \c expr() are ordered by label instead, so two such nodes
+/// whose labels are ordered differently would be the same factor in
+/// different layouts.
+///
+ExprPtr factor_in_canonical_layout(EvalExprNode const& node) {
+  auto const& t = node->as_tensor();
+  auto const& layout = node->canon_indices();
+  auto const position = [&layout](Index const& ix) {
+    auto const it = std::ranges::find(layout, ix);
+    SEQUANT_ASSERT(it != layout.end());
+    return std::distance(layout.begin(), it);
+  };
+  auto const in_layout = [&position](auto const& slots) {
+    return std::ranges::is_sorted(slots, std::less{}, position);
+  };
+  if (in_layout(t.bra()) && in_layout(t.ket()) && in_layout(t.aux()))
+    return node->expr();
+  auto const sorted = [&position](auto const& slots) {
+    auto indices = slots | ranges::to<container::svector<Index>>;
+    std::ranges::sort(indices, std::less{}, position);
+    return indices;
+  };
+  return ex<Tensor>(t.label(), bra(sorted(t.bra())), ket(sorted(t.ket())),
+                    aux(sorted(t.aux())), t.symmetry(), t.braket_symmetry(),
+                    t.column_symmetry());
+}
+
+///
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
 ///        sub-tree, or, at the root node of a sum sub-tree or of an inlined
 ///        equation (see EvalExpr::is_equation_boundary).
@@ -405,8 +440,12 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   if (auto op = node->op_type();
       node->is_tensor() && (!op || *op == EvalOp::Sum || is_unary(*op) ||
                             node->is_equation_boundary())) {
+    // the head of an inlined equation is as written, as a leaf is
     collect.emplace_back(
-        ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
+        ExprWithHash{.expr = op && !node->is_equation_boundary()
+                                 ? factor_in_canonical_layout(node)
+                                 : node->expr(),
+                     .hash = node->hash_value()});
     // The sign of the factor as written relative to what its expr() is in
     // the network:
     // - a leaf: its canonical spelling, hence leaf_phase;

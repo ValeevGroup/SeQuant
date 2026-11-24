@@ -1719,4 +1719,9 @@ TEST_CASE("eval_slot_alignment_btas", "[eval_btas]") {
     check(g(a12) + h(a12), g(a12) + h(a21));
     check(g(a12) + h(a12) + g(a21), g(a12) + h(a21) + g(a21));
   }
+
+  SECTION("factors that differ in the labels of their slots") {
+    check(g(a12) + h(a12), g(a21) + h(a21));
+    check(pow(g(a12), rational{3}), pow(g(a21), rational{3}));
+  }
 }
