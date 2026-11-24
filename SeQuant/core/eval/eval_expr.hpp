@@ -626,7 +626,11 @@ class EvalExpr {
 };
 
 struct EvalOpSetter {
-  void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
+  /// \note the result of an operation has no leaf phase
+  void set(EvalExpr& expr, EvalOp op) {
+    expr.op_type_ = op;
+    expr.respelled_ = false;
+  }
   void reset(EvalExpr& expr) { expr.op_type_ = std::nullopt; }
 };
 

@@ -1518,4 +1518,12 @@ TEST_CASE("to_expr of a leaf written out of canonical order", "[EvalExpr]") {
           *minus(pow(sorted, rational{-1})));
   REQUIRE(*to_expr(tree_of(pow(written, rational{2}))) ==
           *pow(sorted, rational{2}));
+
+  // a leaf under a head is wrapped in a Product node made from the head, which
+  // has no leaf phase however the head is spelled
+  auto const head = written->as<Tensor>();
+  auto const root = binarize(ResultExpr(head, written));
+  REQUIRE(root->op_type() == EvalOp::Product);
+  REQUIRE(root->leaf_phase() == 1);
+  REQUIRE(root.left()->leaf_phase() == -1);
 }
