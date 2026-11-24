@@ -429,7 +429,6 @@ set(SeQuant_symb_src
         SeQuant/core/space.cpp
         SeQuant/core/space.hpp
         SeQuant/core/slotted_index.hpp
-        SeQuant/core/tag.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
         SeQuant/core/tensor_canonicalizer_fwd.hpp
@@ -545,6 +544,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/ordered_dump.hpp
         SeQuant/core/eval/ordered_executor.hpp
         SeQuant/core/eval/ordered_schedule.hpp
+        SeQuant/core/eval/disk_spill.hpp
         SeQuant/core/eval/peak_monitor.hpp
         SeQuant/core/eval/peak_profile.hpp
         SeQuant/core/eval/release_plan.hpp

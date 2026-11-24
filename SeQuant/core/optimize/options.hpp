@@ -7,6 +7,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -72,7 +73,7 @@ bool is_tensor_factor(Expr const& e);
 /// Naming: `Dense{Primary}{Secondary}`, `Space` = peak/size, `Time` = perf.
 ///
 /// Leaves room for `Sparse*` models later.
-enum class ObjectiveFunction {
+enum class ObjectiveFunction : std::uint8_t {
   /// Floating-point operation count (the default).
   DenseFLOPs,
   /// \deprecated Use \c DenseTimeSpace. Result-tensor storage elements summed
@@ -98,7 +99,7 @@ enum class ObjectiveFunction {
 
 /// Whether to reorder summands so terms with shared intermediates appear
 /// closer to each other.
-enum class ReorderSum { Reorder, NoReorder };
+enum class ReorderSum : std::uint8_t { Reorder, NoReorder };
 
 /// Common-subexpression-elimination (CSE) options for single-term
 /// optimization. `subnet` recognizes equivalent subnetworks while searching for
@@ -211,6 +212,13 @@ struct CostParams {
   /// When true, only persistent (volatile-leaf-free) subnetworks are batched;
   /// threaded from BatchPolicy::persistent_only. Batched objectives only.
   bool batch_persistent_only = false;
+  /// Holding operands outside their consumer's loop, and the memory space of
+  /// the large ones; threaded from BatchPolicy::hold. Batched objectives only.
+  HoldPolicy hold = {};
+  /// Threaded from BatchPolicy::infeasible_peak_slack.
+  double infeasible_peak_slack = std::numeric_limits<double>::infinity();
+  /// Threaded from BatchPolicy::infeasible_is_error.
+  bool infeasible_is_error = true;
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public

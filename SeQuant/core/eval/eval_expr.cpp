@@ -182,9 +182,9 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
+      canon_phase_{p},
       expr_{ex.clone()},
       canon_indices_{std::move(ixs)},
-      canon_phase_{p},
       hash_value_{h},
       connectivity_{std::move(connectivity)} {
   if (connectivity_ != nullptr) {
@@ -286,6 +286,11 @@ std::string EvalExpr::label() const noexcept {
 }
 
 std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
+
+const EvalBatchInfo& EvalExpr::batch_info() const noexcept {
+  static const EvalBatchInfo defaults;
+  return batch_.get() ? *batch_.get() : defaults;
+}
 
 bool EvalExpr::has_connectivity_graph() const noexcept {
   return connectivity_ != nullptr;
@@ -695,6 +700,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         auto const& ann = opts.node_batch_axes[node_counter];
         result.set_node_slice_mask(ann.axes);
         result.set_batch_loops_opened_here(ann.opened_here);
+        result.set_root_scope(ann.root_scope);
         result.set_batch_order_aware(ann.order_aware);
         result.set_batch_effective_count(ann.effective_count);
       }
@@ -965,7 +971,6 @@ struct InlineContext {
       }
       map_slots(head.aux(), leaf->aux());
       transform_indices(head, renaming);
-      reset_tags(head);
     }
     // every other index of the rhs (a dummy, or every index under a scalar
     // head) gets a fresh one, so the subtree cannot collide with the

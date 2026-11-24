@@ -9,6 +9,7 @@
 #define SEQUANT_EVAL_SCHEDULE_DOCUMENT_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <iosfwd>
 #include <map>
 #include <memory>
@@ -34,7 +35,7 @@ std::string index_label(Index const& index);
 inline constexpr char const* kFormat = "sequant.schedule/1";
 
 /// mirrors \c BatchModeType
-enum class ModeKind { Contracted, External };
+enum class ModeKind : std::uint8_t { Contracted, External };
 
 /// a batched axis; label = index_label(axis index)
 struct AxisRecord {
@@ -189,6 +190,10 @@ struct BlockRecord {
   std::vector<StepRecord> steps;
   /// (value id, "AccumulateSum"|"AccumulateScatter")
   std::vector<std::pair<std::string, std::string>> outputs;
+  /// Parallel to \c outputs, or empty: the number of \c steps done before
+  /// each output is assembled; empty means after all of them
+  /// (ScopeBlock::output_after).
+  std::vector<std::size_t> output_after;
 };
 
 struct LoopRecord {

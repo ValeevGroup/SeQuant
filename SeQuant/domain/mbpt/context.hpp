@@ -8,10 +8,12 @@
 #include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
+#include <cstdint>
+
 namespace sequant::mbpt {
 
 /// Whether to use cluster-specific virtuals.
-enum class CSV { Yes, No };
+enum class CSV : std::uint8_t { Yes, No };
 
 // clang-format off
 /// @brief Prefactors of coefficient-summed MBPT operators
@@ -32,7 +34,7 @@ enum class CSV { Yes, No };
 ///
 /// The convention is read when an operator is lowered to tensor form.
 // clang-format on
-enum class NormalizationConvention {
+enum class NormalizationConvention : std::uint8_t {
   Default,   ///< factorial prefactors; projectors carry none
   Symmetric  ///< square-root prefactors for amplitudes and projectors
 };

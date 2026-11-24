@@ -8,10 +8,13 @@
 
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 
 #include <iostream>
+#include <limits>
 
 TEST_CASE("index", "[elements][index]") {
   using namespace sequant;
@@ -47,6 +50,15 @@ TEST_CASE("index", "[elements][index]") {
                           std::to_wstring(Index::min_tmp_index() - 1)));
     REQUIRE_THROWS(
         Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
+
+    // the ordinal reserved internally to encode "no ordinal" is rejected
+    if constexpr (sequant::assert_behavior() !=
+                  sequant::AssertBehavior::Abort) {
+      constexpr auto max_ordinal =
+          std::numeric_limits<Index::ordinal_type>::max();
+      REQUIRE_THROWS_AS(Index(L"i_" + std::to_wstring(max_ordinal)),
+                        sequant::Exception);
+    }
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
@@ -128,12 +140,10 @@ TEST_CASE("index", "[elements][index]") {
       // move-ctor should leave null in its wake
       REQUIRE(i7.nonnull());
       auto i7_copy = i7;
-      i7_copy.tag();  // make tag nonnull also
       REQUIRE(i7_copy.nonnull() == true);
       REQUIRE_NOTHROW(Index(std::move(i7_copy)));
       REQUIRE(i7_copy.nonnull() == false);
       i7_copy = i7;
-      i7_copy.tag();  // make tag nonnull also
       REQUIRE(i7_copy.nonnull() == true);
       REQUIRE_NOTHROW(Index{} = std::move(i7_copy));
       REQUIRE(i7_copy.nonnull() == false);
@@ -260,23 +270,6 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(i1 < a1);
     REQUIRE(!(a1 < i1));
 
-    // tags override rest, but ignored if defined for one and not the other
-    i2.tag().assign(1);
-    REQUIRE(i1 < i2);
-    REQUIRE(i1 <=> i2 == SO::less);
-    i1.tag().assign(2);
-    REQUIRE(!(i1 < i2));
-    REQUIRE(i2 < i1);
-    REQUIRE(i2 <=> i1 == SO::less);
-    a1.tag().assign(1);
-    REQUIRE(!(i1 < a1));
-    REQUIRE(a1 < i1);
-    REQUIRE(i2 < a1);
-    REQUIRE(i2 <=> a1 == SO::less);
-    a1.tag().reset().assign(0);
-    REQUIRE(a1 < i2);
-    REQUIRE(a1 <=> i2 == SO::less);
-
     // qns override rest
     IndexSpace p_upspace(L"p", 0b11, 0b01);
     IndexSpace p_downspace(L"p", 0b11, 0b10);
@@ -298,11 +291,6 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(!(p2B < p1B));
     REQUIRE(!(p1A < p1A));
     REQUIRE(!(p1B < p1B));
-    p2A.tag().assign(1);
-    REQUIRE(p1A < p2A);
-    p1A.tag().assign(2);
-    REQUIRE(p2A < p1A);
-    REQUIRE(p2A <=> p1A == SO::less);
     Index i1_p1Ap2A(L"i_1", {p1A, p2A});
     Index i1_p1Bp2A(L"i_1", {p1B, p2A});
     REQUIRE(i1_p1Ap2A < i1_p1Bp2A);

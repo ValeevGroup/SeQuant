@@ -74,6 +74,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <format>
 #include <fstream>
 #include <functional>
 #include <initializer_list>
@@ -549,6 +550,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.peak_threshold = 100e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -640,6 +642,7 @@ TEST_CASE("node-axes-match-binarize", "[optimize][batch][r1-offbyone]") {
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.peak_threshold = 100e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -940,6 +943,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[dryrun-df]") {
     };
     opts.batch_policy.accumulation_factor = 1.0;
     opts.batch_policy.peak_threshold = peak_threshold;
+    opts.batch_policy.infeasible_is_error = false;  // may be over budget
     opts.volatile_weight = vol_weight;
     if (use_roofline) {
       opts.roofline.machine_balance = 200.0;
@@ -1782,12 +1786,12 @@ TEST_CASE("external-scatter-replay", "[dryrun-extmode][eval]") {
   // batching at all (doc/developer/cost_model.rst,
   // "Ordered batch contexts and costing").
   // This test drives the SAME scatter branch the TA
-  // regression `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp)
-  // exercises, on the dry-run backend: a small forest carrying the occupied
-  // index ONLY as a protoindex of a composite PNO leg (canonicalization
-  // promotes it to a plain outer canon index, so index_position locates it
-  // directly -- no proto-aware locator needed, exactly as that TA test
-  // documents).
+  // regression `batched_eval_external_proto_occ_scatter`
+  // (test_eval_ta_batched_external.cpp) exercises, on the dry-run backend: a
+  // small forest carrying the occupied index ONLY as a protoindex of a
+  // composite PNO leg (canonicalization promotes it to a plain outer canon
+  // index, so index_position locates it directly -- no proto-aware locator
+  // needed, exactly as that TA test documents).
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
@@ -1987,7 +1991,8 @@ TEST_CASE("giant-term-replay", "[dryrun-eval]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;  // DP-side knob only; the runtime evaluator
-                                 // never consults peak_threshold.
+  policy.infeasible_is_error = false;  // may be over budget
+                                       // never consults peak_threshold.
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2292,6 +2297,7 @@ TEST_CASE("perf-first-no-4pao", "[dryrun-objective]") {
              ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
              : 40.0) *
         1e9;
+    policy.infeasible_is_error = false;  // may be over budget
 
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2703,6 +2709,7 @@ TEST_CASE("external-occ-sizing", "[dryrun-occ-sizing]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40.0 * 1e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -2927,6 +2934,7 @@ TEST_CASE("c60-perf-first-audit", "[dryrun-c60-batchability-audit]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = kThrGB * 1e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   struct TermVerdict {
     std::size_t t = 0;
@@ -3257,6 +3265,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -3596,6 +3605,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;
+  policy.infeasible_is_error = false;  // may be over budget
 
   // Optimize (perf-first) + binarize the giant, carrying the per-node batch
   // modes so the binarized tree matches the real schedule.
@@ -4090,6 +4100,33 @@ TEST_CASE("meter-policy-executor", "[meter]") {
   CHECK(ord_report.peak_bytes > 0.0);
   CHECK(ord_report.builds_total > 0);
   CHECK(ord_report.scheduler == sequant::BatchScheduler::ordered);
+  CHECK_FALSE(ord_report.peak_bytes_steady.has_value());
+  CHECK(ord_report.disk_peak_bytes == 0.0);
+
+  // ---- a second, steady evaluation: the first one's report is unchanged,
+  // and with nothing volatile here the steady one builds nothing new. ----
+  {
+    sequant::eval::dryrun::MeterOptions opts;
+    opts.steady_iteration = true;
+    auto const two = meter(forest, policy, regime, cfg, nullptr, opts);
+    CHECK(two.peak_bytes == ord_report.peak_bytes);
+    CHECK(two.builds_total == ord_report.builds_total);
+    REQUIRE(two.peak_bytes_steady.has_value());
+    CHECK(*two.peak_bytes_steady <= two.peak_bytes);
+  }
+
+  // ---- disk accounting: with every value eligible by size, whatever the
+  // schedule can keep on disk leaves the peak. ----
+  {
+    sequant::eval::DiskSpill disk;
+    disk.min_bytes = 0;
+    sequant::eval::dryrun::MeterOptions opts;
+    opts.disk = &disk;
+    auto const spilled = meter(forest, policy, regime, cfg, nullptr, opts);
+    CHECK(spilled.peak_bytes <= ord_report.peak_bytes);
+    CHECK(spilled.disk_peak_bytes ==
+          static_cast<double>(disk.peak_bytes_on_disk));
+  }
 
   // ---- forest descent: the SAME forest/policy, scheduler reset. ----
   policy.scheduler = sequant::BatchScheduler::forest_descent;
@@ -4787,6 +4824,7 @@ sequant::BatchPolicy nested_contracted_policy() {
     return ix.space().base_key() == L"i" ? 3 : 7;
   };
   policy.peak_threshold = 1;
+  policy.infeasible_is_error = false;  // may be over budget
   return policy;
 }
 
@@ -4906,6 +4944,7 @@ TEST_CASE("meter-ordered-batched-adjoint-leaf", "[meter][batch]") {
     policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"R"; };
     // below this term's unbatched peak (133120 B), so a node is sliced
     policy.peak_threshold = 100000;
+    policy.infeasible_is_error = false;  // may be over budget
     policy.scheduler = scheduler;
 
     OptimizeOptions opts;
@@ -4936,5 +4975,192 @@ TEST_CASE("meter-ordered-batched-adjoint-leaf", "[meter][batch]") {
     CHECK(adj.builds_total == ctl.builds_total);
     CHECK(adj.flops_persistent + adj.flops_volatile ==
           Catch::Approx(ctl.flops_persistent + ctl.flops_volatile));
+  }
+}
+
+// The roots of a metered forest are the results of different equations
+// (a singles and a doubles residual, a de-excitation, an energy): they have
+// nothing to be summed into, and are metered each as its own result, all of
+// them held at once. Every root here is evaluated in batches of a virtual
+// index.
+TEST_CASE("meter-roots-of-different-shapes", "[meter][batch]") {
+  using namespace sequant;
+  namespace dr = sequant::eval::dryrun;
+  using Catch::Matchers::ContainsSubstring;
+
+  auto ctx = get_default_context_snapshot();
+  auto ibr = mbpt::make_sr_spaces();
+  ibr->extent(L"i", 8).extent(L"a", 16).extent(L"g", 24);
+  ctx.set(Vacuum::SingleProduct).set(SPBasis::Spinor).set(ibr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  // the virtuals, of two spaces of different extents, are batched
+  auto const is_a = [](Index const& ix) {
+    return ix.basis().base_key() == L"a" || ix.basis().base_key() == L"g";
+  };
+  dr::SizeRegime regime;
+  regime.space_extent = {{L"i", 8}, {L"a", 16}, {L"g", 24}};
+  regime.space_slice_extents[L"a"] =
+      dr::batch_slice_extents_from_tiles({4, 4, 4, 4}, 4);
+  regime.space_slice_extents[L"g"] =
+      dr::batch_slice_extents_from_tiles({4, 4, 4, 4, 4, 4}, 4);
+
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = is_a;
+  policy.is_batchable_external_index = is_a;
+  policy.batch_target_size = [is_a](Index const& ix) {
+    return is_a(ix) ? std::size_t{4} : std::size_t{0};
+  };
+  policy.peak_threshold = 1;           // every term is batched
+  policy.infeasible_is_error = false;  // and is still over budget
+
+  auto root_of = [&](std::wstring_view equation) {
+    auto const res = deserialize<ResultExpr>(equation);
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) { return ix.basis().extent(); };
+    opts.batch_policy = policy;
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    auto rhs = optimize_result(res.expression(), opts).expr;
+    BinarizationOptions bopts;
+    if (auto it = opts.term_batch_axes->find(rhs.get());
+        it != opts.term_batch_axes->end())
+      bopts.node_batch_axes = it->second;
+    // what this test is about: the root is evaluated in batches
+    REQUIRE_FALSE(bopts.node_batch_axes.empty());
+    if (res.produces_tensor())
+      return binarize<dr::EvalExprDryRun>(
+          ResultExpr{res.result_as_tensor(), std::move(rhs)}, bopts);
+    return binarize<dr::EvalExprDryRun>(
+        ResultExpr{res.result_as_variable(), std::move(rhs)}, bopts);
+  };
+  auto const singles =
+      root_of(L"S{a_1;i_1}:N-N-N = f{a_1;a_2}:N-N-N * t{a_2;i_1}:N-N-N");
+  auto const doubles = root_of(
+      L"D{a_1,a_2;i_1,i_2}:N-N-N = g{a_1,a_2;a_3,a_4}:N-N-N * "
+      L"t{a_3,a_4;i_1,i_2}:N-N-N");
+  // of the rank of the singles, with the batched index at the other mode
+  auto const deexcitation =
+      root_of(L"L{i_1;a_1}:N-N-N = λ{i_1;a_2}:N-N-N * f{a_2;a_1}:N-N-N");
+  auto const energy = root_of(L"E = f{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N");
+
+  using Forest = std::vector<dr::EvalNodeDryRun>;
+  auto const cm = std::make_shared<dr::CostModel const>(regime);
+  dr::DryRunLeafEvaluator const yield{cm};
+  auto const aops = dr::make_dryrun_array_ops(cm);
+  // the two driver entries, on a cache set up as the meter sets up its own
+  auto with_cache = [&](auto&& run) {
+    auto cache = CacheManager<dr::EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    if (policy.scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
+          policy, yield, sequant::make_no_scope_guard{}));
+    return run(cache);
+  };
+  auto summed = [&](Forest const& forest) {
+    return with_cache([&](auto& cache) {
+      return evaluate<Trace::On>(forest, policy, std::wstring{}, yield, cache);
+    });
+  };
+  auto each = [&](Forest const& forest) {
+    return with_cache([&](auto& cache) {
+      return evaluate_each<Trace::On>(forest, policy, yield, cache);
+    });
+  };
+  auto const flops_of = [](dr::MeterReport const& r) {
+    return r.flops_persistent + r.flops_volatile;
+  };
+  dr::MeterOptions steady;
+  steady.steady_iteration = true;
+
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+
+    SECTION(std::format("the summed entry refuses unlike roots ({})",
+                        static_cast<int>(scheduler))) {
+      // roots of different ranks, a scalar next to a tensor
+      REQUIRE_THROWS_WITH(summed(Forest{singles, doubles}),
+                          ContainsSubstring("evaluate_each"));
+      REQUIRE_THROWS_WITH(summed(Forest{energy, doubles}),
+                          ContainsSubstring("evaluate_each"));
+      REQUIRE_THROWS_WITH(summed(Forest{doubles, energy}),
+                          ContainsSubstring("evaluate_each"));
+    }
+
+    SECTION(std::format("one result per root, as built ({})",
+                        static_cast<int>(scheduler))) {
+      Forest const forest{singles, doubles, deexcitation, energy};
+      auto const results = each(forest);
+      REQUIRE(results.size() == forest.size());
+      for (std::size_t i = 0; i != forest.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE(results[i]);
+        auto const alone = each(Forest{forest[i]});
+        REQUIRE(alone.size() == 1);
+        CHECK(results[i]->size_in_bytes() == alone[0]->size_in_bytes());
+        if (forest[i]->is_scalar()) continue;
+        // a tensor root comes back whole, in its own shape
+        container::svector<Index> const idx(forest[i]->canon_indices().begin(),
+                                            forest[i]->canon_indices().end());
+        CHECK(results[i]->size_in_bytes() == cm->memsize(idx));
+      }
+    }
+
+    SECTION(std::format("metered together ({})", static_cast<int>(scheduler))) {
+      double flops_apart = 0;
+      double peak_apart = 0;
+      double held = 0;  // the results, all held at the end
+      for (auto const& root : {singles, doubles, deexcitation, energy}) {
+        auto const alone = dr::meter(Forest{root}, policy, regime, {});
+        flops_apart += flops_of(alone);
+        peak_apart = std::max(peak_apart, alone.peak_bytes);
+        held += static_cast<double>(each(Forest{root})[0]->size_in_bytes());
+      }
+      // the roots share no value, so together they cost what they cost
+      // apart, in any order
+      for (auto const& forest :
+           {Forest{singles, doubles, deexcitation, energy},
+            Forest{energy, deexcitation, doubles, singles},
+            Forest{doubles, energy, singles, deexcitation}}) {
+        dr::MeterReport together;
+        REQUIRE_NOTHROW(
+            together = dr::meter(forest, policy, regime, {}, nullptr, steady));
+        CHECK(flops_of(together) == Catch::Approx(flops_apart));
+        CHECK(together.peak_bytes >= peak_apart);
+        CHECK(together.peak_bytes >= held);
+        // nothing here is volatile: a second evaluation rebuilds nothing,
+        // and still holds every result
+        REQUIRE(together.peak_bytes_steady.has_value());
+        CHECK(*together.peak_bytes_steady >= held);
+        CHECK(*together.peak_bytes_steady <= together.peak_bytes);
+      }
+    }
+  }
+
+  // Two roots of one shape over virtual spaces of different extents (as the
+  // alpha and beta singles of an open shell). Nothing in their shapes tells
+  // the summed entry they are not summands; the meter keeps them apart.
+  SECTION("roots of one shape over spaces of different extents") {
+    auto const singles_g =
+        root_of(L"S{g_1;i_1}:N-N-N = f{g_1;g_2}:N-N-N * t{g_2;i_1}:N-N-N");
+    Forest const forest{singles, singles_g};
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto const results = each(forest);
+      REQUIRE(results.size() == 2);
+      CHECK(results[0]->size_in_bytes() == 16 * 8 * 8);
+      CHECK(results[1]->size_in_bytes() == 24 * 8 * 8);
+      dr::MeterReport report;
+      REQUIRE_NOTHROW(
+          report = dr::meter(forest, policy, regime, {}, nullptr, steady));
+      CHECK(report.peak_bytes >= (16 + 24) * 8 * 8);
+      REQUIRE(report.peak_bytes_steady.has_value());
+      CHECK(*report.peak_bytes_steady >= (16 + 24) * 8 * 8);
+    }
   }
 }

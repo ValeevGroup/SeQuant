@@ -57,8 +57,8 @@ static void hash_tensor_cold(benchmark::State &state) {
 
   for (auto _ : state) {
     for (Tensor &tensor : tensors) {
-      tensor.set_bra(
-          container::svector<Index>(tensor.bra().begin(), tensor.bra().end()));
+      auto bra = tensor.bra();
+      tensor.set_bra(std::move(bra));
       auto hash = tensor.hash_value();
       benchmark::DoNotOptimize(hash);
     }

@@ -157,10 +157,6 @@ std::string toplevel_diff(const Index &lhs, const Index &rhs) {
            diff_indices(lhs.proto_indices(), rhs.proto_indices());
   }
 
-  if (lhs.tag() != rhs.tag()) {
-    return "Different tags";
-  }
-
   // We have run out of ideas of what to check
   SEQUANT_ABORT("Unexpected difference between indices");
 }
@@ -619,7 +615,6 @@ ExprPtr transform_expr(const Expr &expr,
     ExprPtr result = tensor.clone();
     auto &result_tensor = result->as<AbstractTensor>();
     transform_indices(result_tensor, index_replacements);
-    reset_tags(result_tensor);
     return result;
   };
 

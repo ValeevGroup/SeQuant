@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/disk_spill.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/peak_monitor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
@@ -19,6 +20,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <ranges>
 #include <string>
@@ -140,11 +142,32 @@ struct MeterReport {
 
   std::size_t builds_total = 0;
 
+  /// High-water of a second evaluation over the same cache, after
+  /// \c CacheManager::reset(): what an iteration costs once the persistent
+  /// values exist. Set only if \c MeterOptions::steady_iteration asked for it;
+  /// every other field describes the first evaluation alone.
+  std::optional<double> peak_bytes_steady;
+  /// High-water of the values charged as kept on disk (\c DiskSpill), over
+  /// the evaluations metered; zero without \c MeterOptions::disk.
+  double disk_peak_bytes = 0;
+
   std::vector<HomeFidelity> home_fidelity;  ///< sorted: builds desc
 
   BatchScheduler scheduler =
       BatchScheduler::forest_descent;  ///< which executor this report
                                        ///< describes
+};
+
+/// What \c meter measures beyond one evaluation of the forest.
+struct MeterOptions {
+  /// Also meter a second evaluation over the same cache, reset in between
+  /// (\c MeterReport::peak_bytes_steady).
+  bool steady_iteration = false;
+  /// If set, large idle values of an ordered schedule are charged as kept on
+  /// disk (see \c DiskSpill): they leave the peaks reported and are counted
+  /// in \c MeterReport::disk_peak_bytes. The accounting is left in the
+  /// object.
+  DiskSpill* disk = nullptr;
 };
 
 ///
@@ -333,13 +356,17 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 /// DryRun sizing backend, metering the replay with a fresh, \c PeakMonitor
 /// -wired, build-tallying cache, and returns the assembled \c MeterReport.
 ///
-/// Mirrors MPQC's wet dispatch: this drives the same driver entry
-/// point (\c sequant::evaluate(Nodes const&, BatchPolicy const&, layout, F,
-/// CacheManager&, mode_order, ScopeGuardFactory), \c ordered_executor.hpp) a
-/// real solve would use under \p policy -- both executors are selected
-/// by the same \c policy.scheduler, not independently maintained code paths --
-/// so the metered replay is exactly the run \p policy describes, not a
-/// hand-rolled proxy of it. Non-throwing wrapper (if desired) is the
+/// Mirrors MPQC's wet dispatch: this drives the per-root driver entry
+/// (\c sequant::evaluate_each(Nodes const&, BatchPolicy const&, F,
+/// CacheManager&, mode_order, ScopeGuardFactory), \c ordered_executor.hpp)
+/// -- both executors are selected by the same \c policy.scheduler, not
+/// independently maintained code paths -- so the metered replay is the run
+/// \p policy describes, not a hand-rolled proxy of it. The roots of
+/// \p forest are not summed: they may be the results of different equations
+/// (residuals of different shapes, a scalar), which a real solve keeps
+/// apart -- and holds all at once, which is how they are metered: a finished
+/// root counts toward the peak of every later one, and all of them at the
+/// end of each evaluation. Non-throwing wrapper (if desired) is the
 /// caller's responsibility; an exception from the replay propagates out of
 /// this call, but the RAII logger-state guard still restores
 /// \c Logger::instance().eval on the way out.
@@ -367,14 +394,15 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 ///        \c Logger::instance().eval.stream is redirected there for the
 ///        duration of the call (restored on exit, along with the elevated
 ///        \c eval.level and the installed \c eval.node_meta).
+/// \param opts what to meter beyond the one evaluation (\c MeterOptions).
 /// \return the assembled \c MeterReport (peak, persistent/volatile
 ///         FLOPs+time, build-vs-home fidelity), stamped with
 ///         \p policy.scheduler.
 ///
 inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
                          BatchPolicy const& policy, SizeRegime const& regime,
-                         CacheConfig const& cfg,
-                         std::ostream* trace = nullptr) {
+                         CacheConfig const& cfg, std::ostream* trace = nullptr,
+                         MeterOptions const& opts = {}) {
   auto cm = std::make_shared<CostModel const>(regime);
   DryRunLeafEvaluator yield{cm};
 
@@ -406,6 +434,7 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
 
   PeakMonitor mon;
   cache.set_peak_monitor(&mon);
+  if (opts.disk) cache.set_disk_spill(opts.disk);
 
   // Backend array-ops for the dry-run backend: the batched executors build a
   // scatter destination / enumerate axis batches through this seam (the same
@@ -462,7 +491,7 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
   // every non-leaf node, so installing it unconditionally would fire on the
   // ordered path's own evaluate_impl calls too. Ordered
   // (evaluate_ordered_schedule) drives its own executor via the driver entry
-  // (sequant::evaluate(forest, policy, ...) below, which dispatches on
+  // (sequant::evaluate_each(forest, policy, ...) below, which dispatches on
   // policy.scheduler) -- installing the forest custom evaluator for ordered
   // would silently reroute its builds through the forest evaluator instead
   // of run_ordered_contracted_block, diverging from what the wet ordered run
@@ -481,11 +510,24 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
     cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
         policy, yield, sequant::make_no_scope_guard{}));
 
-  (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
-                                     cache, {}, sequant::make_no_scope_guard{});
+  // The roots are evaluated but not summed: they are the results of
+  // different equations, of different shapes.
+  (void)sequant::evaluate_each<Trace::On>(forest, policy, yield, cache, {},
+                                          sequant::make_no_scope_guard{});
 
-  return assemble_report(cache, mon, rich, forest, is_volatile,
-                         policy.scheduler);
+  MeterReport report =
+      assemble_report(cache, mon, rich, forest, is_volatile, policy.scheduler);
+  if (opts.steady_iteration) {
+    // persistent values stay; the volatile ones are built again
+    cache.reset();
+    mon.hwmark_bytes = 0;
+    (void)sequant::evaluate_each<Trace::On>(forest, policy, yield, cache, {},
+                                            sequant::make_no_scope_guard{});
+    report.peak_bytes_steady = static_cast<double>(mon.hwmark_bytes);
+  }
+  if (opts.disk)
+    report.disk_peak_bytes = static_cast<double>(opts.disk->peak_bytes_on_disk);
+  return report;
 }
 
 }  // namespace sequant::eval::dryrun

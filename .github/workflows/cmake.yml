@@ -82,6 +82,7 @@ jobs:
         -DSEQUANT_COMPILE_DOC_EXAMPLES=${{ !matrix.valgrind }}
         -DSEQUANT_PYTHON=${{ matrix.build_type == 'Release' }}
         -DSEQUANT_ASSERT_BEHAVIOR=${{ matrix.valgrind && 'IGNORE' || matrix.build_type == 'Debug' && 'ABORT' || 'THROW' }}
+        ${{ startswith(matrix.os, 'ubuntu') && matrix.build_type == 'Debug' && !matrix.sanitize && '-DSEQUANT_TESTS_HEAVY_COMPILE_JOBS=1' || '' }}
     steps:
     - uses: actions/checkout@v7
 
@@ -145,6 +146,11 @@ jobs:
     - name: Install ccache on Windows
       if: ${{ startswith(matrix.os, 'windows') }}
       run: choco install ccache -y --no-progress
+
+    # CMake 4.5 rejects boost-locale 1.92's source_group(TREE ...) call (locale.hpp lies outside the tree)
+    - name: Pin CMake on Windows
+      if: ${{ startswith(matrix.os, 'windows') }}
+      uses: lukka/get-cmake@v4.4.5
 
     - name: Install prerequisites Windows packages
       if: ${{ startswith(matrix.os, 'windows') }}

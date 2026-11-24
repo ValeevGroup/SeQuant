@@ -29,6 +29,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <deque>
 #include <iostream>
@@ -201,7 +202,7 @@ template <typename N, bool F>
 [[nodiscard]] inline Bytes rss() noexcept { return Bytes{process_rss_bytes()}; }
 
 /// type of data or operation
-enum struct EvalMode {
+enum struct EvalMode : std::uint8_t {
   Constant,
   Variable,
   Power,
@@ -252,7 +253,7 @@ enum struct EvalMode {
                                                 : "??";
 }
 
-enum struct CacheMode { Store, Access, Release };
+enum struct CacheMode : std::uint8_t { Store, Access, Release };
 
 [[nodiscard]] constexpr auto to_string(CacheMode mode) noexcept {
   return (mode == CacheMode::Store)    ? "Store"
@@ -260,7 +261,7 @@ enum struct CacheMode { Store, Access, Release };
                                        : "Release";
 }
 
-enum struct TermMode { Begin, End };
+enum struct TermMode : std::uint8_t { Begin, End };
 
 [[nodiscard]] constexpr auto to_string(TermMode mode) noexcept {
   return (mode == TermMode::Begin) ? "Begin" : "End";
@@ -558,11 +559,11 @@ auto&& node0(std::ranges::range auto&& rng) {
   return ranges::front(std::forward<decltype(rng)>(rng));
 }
 
-enum struct CacheCheck { Checked, Unchecked };
+enum struct CacheCheck : std::uint8_t { Checked, Unchecked };
 
 }  // namespace detail
 
-enum struct Trace {
+enum struct Trace : std::uint8_t {
   On,
   Off,
   Default =
@@ -1165,7 +1166,7 @@ ResultPtr evaluate_impl(Node const& node,         //
   // marks a Checked node that exists in the cache map but has not been stored
   // yet, so its computed result must be cached (this replaces the recursive
   // wrapper's `evaluate<..., Unchecked>` re-entry).
-  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftUnary };
+  enum class Stage : std::uint8_t { Enter, NeedLeft, NeedRight, NeedLeftUnary };
   struct Frame {
     // Non-owning pointer into the tree being evaluated (which outlives this
     // call): a Node member would deep-copy the whole subtree into every frame
@@ -1448,6 +1449,29 @@ ResultPtr evaluate(Node const& node,           //
   return result.post;
 }
 
+namespace detail {
+
+/// Throws unless root \p n (the \p i -th of its forest) can be summed with
+/// the forest's \p first root: only results of one shape have a sum. Roots
+/// that are results in their own right (residuals of different ranks, a
+/// scalar next to a tensor) are not the summands of anything, and the
+/// backends would add them without complaint, or crash.
+template <meta::can_evaluate Node>
+void require_summable_roots(Node const& first, Node const& n, std::size_t i) {
+  bool const alike = n->is_scalar() == first->is_scalar() &&
+                     (n->is_scalar() || n->canon_indices().size() ==
+                                            first->canon_indices().size());
+  if (!alike)
+    throw Exception(
+        "evaluate: root " + std::to_string(i) + " (" + n->label() +
+        ") cannot be summed with root 0 (" + first->label() +
+        "): the roots of a summed forest must be results of one shape -- to "
+        "evaluate roots that are results in their own right use "
+        "sequant::evaluate_each");
+}
+
+}  // namespace detail
+
 ///
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
@@ -1455,7 +1479,10 @@ ResultPtr evaluate(Node const& node,           //
 /// \param nodes A range of node that can be evaluated using \p leaf_evaluator
 /// as the
 ///              leaf evaluator. The evaluation result of the elements of
-///              \p nodes will be summed up.
+///              \p nodes will be summed up: they must be results of one
+///              shape (all scalars, or tensors of one rank), else this
+///              throws; for roots that are results in their own right see
+///              \c sequant::evaluate_each (ordered_executor.hpp).
 ///
 /// \param layout The layout of the final result. Only meaningful if the result
 ///               has a layout (or supports permutation) eg. a tensor.
@@ -1475,12 +1502,15 @@ ResultPtr evaluate(Nodes const& nodes,  //
                    F const& leaf_evaluator, CacheManager<N, FHC>& cache) {
   ResultPtr result;
 
+  std::size_t i = 0;
   for (auto&& n : nodes) {
     if (!result) {
       result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
+      ++i;
       continue;
     }
 
+    detail::require_summable_roots(*std::ranges::begin(nodes), n, i++);
     ResultPtr pre = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
     auto time =
         detail::timed_eval_inplace([&]() { result->add_inplace(*pre); });

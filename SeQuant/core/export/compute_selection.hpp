@@ -1,6 +1,8 @@
 #ifndef SEQUANT_CORE_EXPORT_COMPUTE_SELECTION_HPP
 #define SEQUANT_CORE_EXPORT_COMPUTE_SELECTION_HPP
 
+#include <cstdint>
+
 namespace sequant {
 
 /// In a full binary tree, the ComputeSelection determines the left and/or right
@@ -8,7 +10,7 @@ namespace sequant {
 /// the current node's result. If neither the left nor right subtree contribute,
 /// that is ComputeSelection::None is used, the given node exists for tree
 /// connectivity purposes only and shall be skipped during code generation.
-enum class ComputeSelection {
+enum class ComputeSelection : std::uint8_t {
   None = 0,
   Left = 0b01,
   Right = 0b10,

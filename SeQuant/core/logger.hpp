@@ -53,14 +53,17 @@ struct Logger : public Singleton<Logger> {
     std::function<std::size_t(std::size_t)> rss_reduce = {};
 
     /// Optional supplier of an extra, backend-defined suffix appended to each
-    /// eval-trace line (after the rss field). Injected by the tensor-algebra
-    /// backend to report allocator-level memory that RSS alone cannot
-    /// distinguish -- e.g. glibc all-arena in-use vs system bytes, so one can
-    /// tell live heap from retained-free heap right at an RSS jump. Runs on
-    /// every rank on the eval log path (printing() is level>0, identical across
-    /// ranks), so an injected collective reduction here is matched across
-    /// ranks. Returns a preformatted, already-reduced string (e.g.
-    /// "heap_inuse=...B | heap_sys=...B"); empty function = omit the suffix.
+    /// eval-trace line: after the rss field of an `Eval` record, after the
+    /// bytes field of a `Batch` record (a batch step's Slice, Scatter,
+    /// Accumulate or Materialize, so the hook is called once per such
+    /// movement too). Injected by the tensor-algebra backend to report
+    /// allocator-level memory that RSS alone cannot distinguish -- e.g. glibc
+    /// all-arena in-use vs system bytes, so one can tell live heap from
+    /// retained-free heap right at an RSS jump. Runs on every rank on the eval
+    /// log path (printing() is level>0, identical across ranks), so an
+    /// injected collective reduction here is matched across ranks. Returns a
+    /// preformatted, already-reduced string (e.g. "heap_inuse=...B |
+    /// heap_sys=...B"); empty function = omit the suffix.
     std::function<std::string()> heap_stats = {};
 
     /// Optional post-op memory-release hook, invoked after each freshly
@@ -82,7 +85,24 @@ struct Logger : public Singleton<Logger> {
     /// function = nothing appended (default), so the annotation carries
     /// nothing beyond the running one.
     std::function<std::string(std::size_t hash)> node_meta = {};
-  } eval = {0, nullptr, {}, {}, {}, {}};
+
+    /// How much the eval trace reports on where the data of each operand and
+    /// result of an op lives across processes (appended to the layout a
+    /// \c Result::trange_annot reports; a backend whose data is not
+    /// distributed appends nothing):
+    ///   0: nothing (default).
+    ///   1: the kind of the process map that places the data.
+    ///   2: also the spread of the data's bytes over the processes: the
+    ///      busiest process's bytes relative to the mean, those bytes, and the
+    ///      total.
+    ///   3 (or more): also the bytes on each process, one entry per process.
+    /// Levels 2 and 3 cost collective reductions per reported value, so they
+    /// slow the evaluation down, and their messages count towards any
+    /// inter-process traffic a \c heap_stats hook reports for the op; like
+    /// \c level the value must be identical across ranks. Reported only while
+    /// the trace is printed (\c level > 0).
+    std::size_t placement = 0;
+  } eval = {0, nullptr, {}, {}, {}, {}, 0};
 
  private:
   friend class Singleton<Logger>;

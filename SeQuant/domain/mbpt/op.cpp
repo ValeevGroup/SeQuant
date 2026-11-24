@@ -1486,7 +1486,6 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             auto& tensor = factor->as<AbstractTensor>();
             if (tensor._label() != rdm_label) continue;
             transform_indices(tensor, rdm_replacement_rules);
-            reset_tags(tensor);
           }
         }
         for (auto& restriction : restrictions)
