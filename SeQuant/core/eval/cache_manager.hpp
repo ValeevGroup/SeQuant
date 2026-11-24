@@ -998,6 +998,15 @@ class CacheManager {
   /// residency queries skip a cache holding nothing without walking its keys.
   std::size_t n_alive_ = 0;
 
+  /// \return whether no entry of \c cache_map_ is alive
+  [[nodiscard]] bool none_alive() const noexcept {
+    SEQUANT_ASSERT(n_alive_ == static_cast<std::size_t>(std::ranges::count_if(
+                                   cache_map_, [](auto const& kv) {
+                                     return kv.second.alive();
+                                   })));
+    return n_alive_ == 0;
+  }
+
   /// What the keys of cache_map_ point into, where this cache owns it: a
   /// forest handed to cache_manager() as a temporary, and the copies hoist
   /// slots key (ensure_hoist_slot). Shared, so a copy of this cache keeps
@@ -1513,7 +1522,7 @@ class CacheManager {
   /// working_set_hwmark() (a high-water max over time), this is the current
   /// live residency at the instant of the call.
   [[nodiscard]] size_t current_residency() const noexcept {
-    if (n_alive_ == 0) return 0;
+    if (none_alive()) return 0;
     size_t s = 0;
     for (auto const& [k, e] : cache_map_)
       if (e.alive()) s += e.size_in_bytes();
@@ -1558,7 +1567,7 @@ class CacheManager {
   ///         buffer with a different pointer, so it is correctly not skipped.
   [[nodiscard]] bool chain_holds(ResultPtr const& value) const noexcept {
     if (!value) return false;
-    if (n_alive_ != 0)
+    if (!none_alive())
       for (auto const& [k, e] : cache_map_)
         if (e.holds(value)) return true;
     return parent_ ? parent_->chain_holds(value) : false;
@@ -1569,7 +1578,7 @@ class CacheManager {
   [[nodiscard]] std::unordered_set<Result const*> chain_held_buffers() const {
     std::unordered_set<Result const*> out;
     for (CacheManager const* c = this; c; c = c->parent_) {
-      if (c->n_alive_ == 0) continue;
+      if (c->none_alive()) continue;
       for (auto const& [k, e] : c->cache_map_)
         if (e.alive()) out.insert(e.buffer());
     }
@@ -1628,7 +1637,7 @@ class CacheManager {
   /// keeping in-place enabled for the private common case.
   [[nodiscard]] bool chain_holds_shared(ResultPtr const& value) const noexcept {
     if (!value) return false;
-    if (n_alive_ != 0)
+    if (!none_alive())
       for (auto const& [k, e] : cache_map_)
         if (e.holds(value) && (e.persistent() || e.max_life_count() > 1))
           return true;
@@ -1809,7 +1818,7 @@ class CacheManager {
   /// \return Returns the sum of `Result::size_in_bytes` of alive entries.
   ///
   [[nodiscard]] size_t size_in_bytes() const noexcept {
-    if (n_alive_ == 0) return 0;
+    if (none_alive()) return 0;
     using ranges::views::transform;
     using ranges::views::values;
     return ranges::accumulate(
