@@ -297,10 +297,7 @@ class GenerationVisitor {
         // the Constant sentinel carrying the exponent. The power is taken
         // element-wise, so the operand's indices are the result's and no
         // transpose is implied.
-        // the node carries the phase of its operand to the exponent
-        add(pow(node.left()->expr(), power_exponent(node)),
-            leaf_phase(node.left()) == 1 ? std::int8_t{1}
-                                         : node->canon_phase());
+        add(pow(node.left()->expr(), power_exponent(node)), power_phase(node));
         break;
       case EvalOp::Broadcast:
         // Unary IR op: the left child is the operand, whose modes are a subset

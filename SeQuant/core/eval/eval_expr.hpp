@@ -925,6 +925,20 @@ rational power_exponent(meta::eval_node auto const& node) {
 }
 
 ///
+/// \return The sign (+1 or -1) by which the value of the EvalOp::Power node
+///         @p node differs from the power of the expression its base is read
+///         as: expr() of a leaf, which lacks the leaf's sign (see
+///         EvalExpr::leaf_phase), and the value as written of any other base.
+///
+std::int8_t power_phase(meta::eval_node auto const& node) {
+  SEQUANT_ASSERT(node->op_type() == EvalOp::Power);
+  auto const& base = node.left();
+  // the node carries the sign of its base to the exponent
+  return base.leaf() && base->leaf_phase() != 1 ? node->canon_phase()
+                                                : std::int8_t{1};
+}
+
+///
 /// Converts an `EvalExpr` to `ExprPtr`, passing the expression of every
 /// terminal through @p leaf_map.
 ///
@@ -946,13 +960,13 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
-  // the expression of a leaf, with the sign of its canonical spelling
-  auto const leaf = [&leaf_map](auto const& n) -> ExprPtr {
-    ExprPtr e = leaf_map(n->expr());
-    return n->leaf_phase() == 1 ? e : ex<Constant>(n->leaf_phase()) * e;
+  // the expression of @c phase times @c e
+  auto const signed_expr = [](std::int8_t phase, ExprPtr e) -> ExprPtr {
+    return phase == 1 ? e : ex<Constant>(phase) * e;
   };
 
-  if (node.leaf()) return leaf(node);
+  if (node.leaf())
+    return signed_expr(evxpr.leaf_phase(), leaf_map(evxpr.expr()));
 
   // Adjoint is unary and stores the marker-bearing tensor directly in its
   // own ExprPtr; the bare-leaf left child and Constant(1) right child are
@@ -966,12 +980,9 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
 
   if (op == EvalOp::Power) {
     auto const& base = node.left();
-    if (!base.leaf() || base->leaf_phase() == 1)
-      return pow(child(base), power_exponent(node));
-    // the node carries the sign of its base to the exponent
-    ExprPtr power = pow(leaf_map(base->expr()), power_exponent(node));
-    return evxpr.canon_phase() == 1 ? power
-                                    : ex<Constant>(evxpr.canon_phase()) * power;
+    return signed_expr(power_phase(node),
+                       pow(base.leaf() ? leaf_map(base->expr()) : child(base),
+                           power_exponent(node)));
   }
 
   // the broadcast is implied by the Sum under a head that holds the node
