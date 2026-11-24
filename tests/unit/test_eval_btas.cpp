@@ -1702,10 +1702,10 @@ TEST_CASE("eval_slot_alignment_btas", "[eval_btas]") {
                     X * Y},
         Product::Flatten::No));
   };
-  // the consumers of two factors that differ in value evaluate with one cache
-  // as each does alone
-  auto check = [&](ExprPtr const& f1, ExprPtr const& f2) {
-    std::vector nodes{consumer(f1), consumer(f2)};
+  // two trees that differ in value evaluate with one cache as each does alone
+  auto check_nodes = [&](EvalNode<EvalExprBTAS> const& n1,
+                         EvalNode<EvalExprBTAS> const& n2) {
+    std::vector nodes{n1, n2};
     std::array const alone{evaluate(nodes[0], yield_)->get<double>(),
                            evaluate(nodes[1], yield_)->get<double>()};
     REQUIRE(std::abs(alone[0] - alone[1]) > 1e-3);
@@ -1713,6 +1713,9 @@ TEST_CASE("eval_slot_alignment_btas", "[eval_btas]") {
     for (std::size_t k : {0, 1})
       CHECK(evaluate(nodes[k], yield_, cache)->get<double>() ==
             Catch::Approx(alone[k]).margin(1e-10));
+  };
+  auto check = [&](ExprPtr const& f1, ExprPtr const& f2) {
+    check_nodes(consumer(f1), consumer(f2));
   };
 
   SECTION("summands aligned differently") {
@@ -1723,5 +1726,58 @@ TEST_CASE("eval_slot_alignment_btas", "[eval_btas]") {
   SECTION("factors that differ in the labels of their slots") {
     check(g(a12) + h(a12), g(a21) + h(a21));
     check(pow(g(a12), rational{3}), pow(g(a21), rational{3}));
+  }
+
+  SECTION("two factors that are results of operations") {
+    // (p + q) (r + s) and (r + s) (p + q), contracted alike
+    auto m = [&](std::wstring const& label, Labels b, Labels k) {
+      return tensor(label, b, k);
+    };
+    auto pq = [&](Labels b, Labels k) { return m(L"p", b, k) + m(L"q", b, k); };
+    auto rs = [&](Labels b, Labels k) { return m(L"r", b, k) + m(L"s", b, k); };
+    auto pw = [&](std::wstring const& label, Labels b, Labels k, int e) {
+      return pow(m(label, b, k), rational{e});
+    };
+    auto const Z = tensor(L"Z", {L"a_5"}, {L"a_1"});
+    Labels const a1{L"a_1"}, a4{L"a_4"}, a5{L"a_5"};
+    auto two = [&](ExprPtr const& f1, ExprPtr const& f2) {
+      return eval_node(ex<Product>(
+          ExprPtrList{ex<Product>(ExprPtrList{f1, f2}, Product::Flatten::No),
+                      Z},
+          Product::Flatten::No));
+    };
+    check_nodes(two(pq(a1, a4), rs(a4, a5)), two(rs(a1, a4), pq(a4, a5)));
+    check_nodes(two(pw(L"p", a1, a4, 2), pw(L"q", a4, a5, 3)),
+                two(pw(L"q", a1, a4, 3), pw(L"p", a4, a5, 2)));
+  }
+
+  SECTION("bra and ket of a factor exchanged by a bra-ket symmetry") {
+    // f and e are symmetric matrices: the sums f e + q of the two trees are
+    // one value, laid out a_1, a_2 in one and a_2, a_1 in the other, so a_1 is
+    // the bra of one and the ket of the other
+    auto symmetric = [&](std::wstring const& label, Labels b, Labels k) {
+      auto t = ex<Tensor>(label, bra(b), ket(k),
+                          TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                           .braket = BraKetSymmetry::Symm});
+      BTensorD r{btas::Range{nvirt, nvirt}}, m{btas::Range{nvirt, nvirt}};
+      for (auto& x : r) x = double(std::rand()) / RAND_MAX - 0.5;
+      for (std::size_t c = 0; c < nvirt; ++c)
+        for (std::size_t d = 0; d < nvirt; ++d) m(c, d) = r(c, d) + r(d, c);
+      yield_.set_leaf(t->as<Tensor>(),
+                      eval_result<ResultTensorBTAS<BTensorD>>(m));
+      return t;
+    };
+    Labels const a1{L"a_1"}, a2{L"a_2"}, a6{L"a_6"};
+    auto const Z = tensor(L"Z", a2, a1);
+    auto with_Z = [&](ExprPtr const& f) {
+      return eval_node(ex<Product>(
+          ExprPtrList{ex<Product>(ExprPtrList{f, Z}, Product::Flatten::No),
+                      X * Y},
+          Product::Flatten::No));
+    };
+    check_nodes(with_Z(symmetric(L"f", a1, a6) * symmetric(L"e", a6, a2) +
+                       tensor(L"q", a1, a2)),
+                with_Z(symmetric(L"f", a6, a2) * symmetric(L"e", a1, a6) +
+                       tensor(L"q", a2, a1)));
   }
 }
