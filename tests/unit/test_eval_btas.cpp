@@ -1436,4 +1436,25 @@ TEST_CASE("eval_cached_intermediate_of_reordered_leaf_btas", "[eval_btas]") {
       CHECK(e2 == Catch::Approx(sorted_first ? -e : e).margin(1e-12));
     }
   }
+
+  SECTION("a sum") {
+    auto Y =
+        ex<Tensor>(L"Y", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, nonsymm);
+    auto Z =
+        ex<Tensor>(L"Z", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"}, nonsymm);
+    // the two sums differ in the sign of a summand, hence in value
+    REQUIRE(eval_node((sorted + Y) * Z).left()->hash_value() !=
+            eval_node((written + Y) * Z).left()->hash_value());
+
+    auto const t = scalar_of(sorted * Z);
+    auto const y = scalar_of(Y * Z);
+    REQUIRE(std::abs(t) > 1e-3);
+    for (bool sorted_first : {true, false}) {
+      auto const [e1, e2] =
+          sorted_first ? with_shared_cache((sorted + Y) * Z, (written + Y) * Z)
+                       : with_shared_cache((written + Y) * Z, (sorted + Y) * Z);
+      CHECK(e1 == Catch::Approx(sorted_first ? y + t : y - t).margin(1e-12));
+      CHECK(e2 == Catch::Approx(sorted_first ? y - t : y + t).margin(1e-12));
+    }
+  }
 }

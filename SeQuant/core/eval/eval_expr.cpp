@@ -535,7 +535,14 @@ EvalExprNode sum_chain(std::vector<EvalExprNode>&& summands,
 
   SEQUANT_ASSERT(all_tensors | all_scalars);
 
-  auto hvals = summands | transform([](auto&& n) { return n->hash_value(); });
+  // A Sum has phase 1: its value is that of its summands as written, each the
+  // canonical form its hash stands for times its phase, so the phase is part
+  // of what identifies the summand
+  auto hvals = summands | transform([](auto&& n) {
+                 auto h = n->hash_value();
+                 if (n->canon_phase() != 1) hash::combine(h, n->canon_phase());
+                 return h;
+               });
 
   // Every binary Sum produced by fold_left_to_node below folds the running
   // accumulator (the chain seed, or a prior chain Sum) in as the left
