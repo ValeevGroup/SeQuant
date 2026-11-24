@@ -165,9 +165,11 @@ class CellRegistry {
       SEQUANT_ASSERT(!s.filled_since_clear &&
                      "CellRegistry::set: fill-once violated");
     }
-    discharge(s);
-    s.value =
+    // Before the slot is touched: a throwing hook must leave it as it was.
+    ResultPtr stored =
         hooks_.stored_form ? hooks_.stored_form(c, std::move(v)) : std::move(v);
+    discharge(s);
+    s.value = std::move(stored);
     s.filled_since_clear = true;
     if (s.value)
       live_.insert(c);
@@ -402,8 +404,8 @@ class CellRegistry {
     account(-static_cast<std::ptrdiff_t>(s.charged_bytes));
     s.charged_bytes = 0;
     if (!s.value) return;
-    // Missing only if a set() threw between discharging and charging.
     auto it = held_.find(s.value.get());
+    SEQUANT_ASSERT(it != held_.end());
     if (it != held_.end() && --it->second == 0) held_.erase(it);
   }
 

@@ -458,3 +458,55 @@ TEST_CASE("registry-live-cells", "[cell_registry]") {
   CHECK(live().empty());
   CHECK_FALSE(reg.holds(r3));
 }
+
+TEST_CASE("registry-holds-shared-buffer", "[cell_registry]") {
+  // holds() answers for a buffer for as long as any cell holds it, and a
+  // production whose stored_form hook throws leaves the cell as it was.
+  CellTable t;
+  for (std::size_t i = 0; i < 2; ++i) {
+    TableCell c;
+    c.value_id = i;
+    c.production.kind = ProductionKind::Build;
+    c.persistent = (i == 1);
+    t.cells.push_back(c);
+  }
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  auto make = [&cm](std::wstring_view label) {
+    return std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+        sequant::container::svector<sequant::Index>{
+            sequant::Index{std::wstring(label)}},
+        cm);
+  };
+  sequant::ResultPtr r = make(L"i_1"), other = make(L"i_2");
+
+  SECTION("one buffer in two cells") {
+    CellRegistry reg(t);
+    reg.set(0, r);
+    reg.set(1, r);
+    CHECK(reg.holds(r));
+    (void)reg.take(0);
+    CHECK(reg.holds(r));  // cell 1 still holds it
+    reg.set(1, other);
+    CHECK_FALSE(reg.holds(r));
+    CHECK(reg.holds(other));
+  }
+
+  SECTION("stored_form throws") {
+    bool fail = false;
+    sequant::eval::CellRegistryHooks hooks;
+    hooks.stored_form = [&fail](CellId, sequant::ResultPtr v) {
+      if (fail) throw sequant::Exception("stored_form failed");
+      return v;
+    };
+    CellRegistry reg(t, hooks);
+    reg.set(1, r);
+    auto const bytes = reg.live_bytes();
+    fail = true;
+    CHECK_THROWS_AS(reg.set(1, other), sequant::Exception);
+    CHECK(reg.peek(1) == r);
+    CHECK(reg.holds(r));
+    CHECK_FALSE(reg.holds(other));
+    CHECK(reg.live_bytes() == bytes);
+  }
+}
