@@ -280,7 +280,9 @@ class CellRegistry {
 
   /// Invokes \p f(CellId, ResultPtr const&) for every slot currently holding
   /// a value -- the registry-side source \c on_peak_liveset walks once
-  /// storage moves fully onto the table.
+  /// storage moves fully onto the table. \p f must not change this registry
+  /// (no \c set, \c take, \c release, ...): the walk iterates the set of
+  /// live cells, which such a change would invalidate.
   template <typename F>
   void for_each_live(F&& f) const {
     for (CellId c : live_) {
