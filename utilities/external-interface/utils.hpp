@@ -4,8 +4,11 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
 
+#include <filesystem>
 #include <map>
+#include <set>
 #include <string>
+#include <string_view>
 
 class IndexSpaceMeta {
  public:
@@ -29,5 +32,14 @@ class IndexSpaceMeta {
  private:
   std::map<sequant::IndexSpace, Entry> m_entries;
 };
+
+/// @return the base_key() of every index space in the default context's
+/// registry
+std::set<std::wstring> registered_space_labels();
+
+/// Creates the parent directories of @p path, if it names any
+/// @throw sequant::Exception mentioning @p step_kind if that fails
+void create_parent_directories(const std::filesystem::path &path,
+                               std::string_view step_kind);
 
 #endif

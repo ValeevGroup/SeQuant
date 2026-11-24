@@ -294,11 +294,7 @@ void OptimizationStep::check_batch_spaces() const {
     return;
   }
 
-  std::set<std::wstring> known;
-  for (const IndexSpace &space :
-       get_default_context().index_basis_registry()->spaces()) {
-    known.insert(std::wstring(space.base_key()));
-  }
+  const auto known = registered_space_labels();
   for (const std::string &label : batch_labels_) {
     if (!known.contains(toUtf16(label))) {
       throw Exception("Unknown index space '" + label + "' in " + kind() +

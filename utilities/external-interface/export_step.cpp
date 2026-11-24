@@ -552,15 +552,7 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   SEQUANT_ASSERT(!generated.empty());
 
   const std::filesystem::path path(filepath_);
-  if (path.has_parent_path()) {
-    std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
-    if (ec) {
-      throw Exception("Failed to create output directory '" +
-                      path.parent_path().string() + "' for " + kind() + ": " +
-                      ec.message());
-    }
-  }
+  create_parent_directories(path, kind());
 
   std::ofstream stream(path);
   stream << generated;

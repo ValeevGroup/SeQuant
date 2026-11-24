@@ -10,6 +10,7 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <memory>
@@ -38,6 +39,9 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
 /// errors.
 std::shared_ptr<ExpressionFilter> parse_tensor_filter(
     const nlohmann::json &value, const std::string &name);
+
+/// Reads a non-negative integer from @p value, using @p what in errors
+std::size_t parse_count(const nlohmann::json &value, const std::string &what);
 
 class FilterStep : public ProcessingStep {
  public:

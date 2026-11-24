@@ -177,7 +177,6 @@ void reject_keys(const nlohmann::json &spec, std::string_view type,
   }
 }
 
-/// Reads a non-negative integer from @p value, using @p what in errors
 std::size_t parse_count(const nlohmann::json &value, const std::string &what) {
   if (!value.is_number_integer() || value.get<long long>() < 0) {
     throw Exception(what + " must be a non-negative integer");
