@@ -14,8 +14,8 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/models/hf.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
-#include <SeQuant/domain/mbpt/rotation_gradient.hpp>
 #include <SeQuant/domain/mbpt/series.hpp>
+#include <SeQuant/domain/mbpt/spbasis_rotation_gradient.hpp>
 
 #include <string>
 #include <vector>
@@ -346,7 +346,7 @@ int main() {
     // turn, p in place of the slot's index elsewhere
     const Index p(L"i_5"), q(L"a_5");
     require_equivalent(
-        mbpt::rotation_gradient(E, {L"g"}, p, q),
+        mbpt::spbasis_rotation_gradient(E, {L"g"}, p, q),
         deserialize(L"1/2 g{a_5,i_2;a_1,a_2}:A-N-S t{a_1,a_2;i_5,i_2}:A-N-S + "
                     L"1/2 λ{i_5,i_2;a_1,a_2}:A-N-S g{a_1,a_2;a_5,i_2}:A-N-S"));
     // end-snippet-13

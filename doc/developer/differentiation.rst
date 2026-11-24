@@ -182,7 +182,7 @@ operations of the variable, so that summing its result against a change of the l
 block of the orbit once per operation that keeps the block. The leaves with a label are therefore grouped into classes
 of blocks that the operations map onto one another, one variable is spelled per class, and its derivative is divided by
 the number of operations that keep its block. Two blocks that share elements without being one block (``f{p;a}`` and
-``f{i;a}``) would be counted twice and are rejected. ``mbpt::rotation_gradient`` needs no derivative: it substitutes
+``f{i;a}``) would be counted twice and are rejected. ``mbpt::spbasis_rotation_gradient`` needs no derivative: it substitutes
 the rotated index in one slot at a time, and the tests check the two against each other on the CCSD Lagrangian.
 
 The judge

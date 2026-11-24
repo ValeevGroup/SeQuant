@@ -1,5 +1,5 @@
-#ifndef SEQUANT_DOMAIN_MBPT_ROTATION_GRADIENT_HPP
-#define SEQUANT_DOMAIN_MBPT_ROTATION_GRADIENT_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_SPBASIS_ROTATION_GRADIENT_HPP
+#define SEQUANT_DOMAIN_MBPT_SPBASIS_ROTATION_GRADIENT_HPP
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
@@ -36,10 +36,10 @@ namespace sequant::mbpt {
 /// @p p or @p q ; and for a leaf to rotate that stands under a TensorPower,
 /// has a slot whose index has protoindices or is a protoindex in its term,
 /// or runs over a space that overlaps that of @p p without including it
-[[nodiscard]] ExprPtr rotation_gradient(
+[[nodiscard]] ExprPtr spbasis_rotation_gradient(
     const ExprPtr& L, const container::svector<std::wstring>& labels,
     const Index& p, const Index& q);
 
 }  // namespace sequant::mbpt
 
-#endif  // SEQUANT_DOMAIN_MBPT_ROTATION_GRADIENT_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_SPBASIS_ROTATION_GRADIENT_HPP

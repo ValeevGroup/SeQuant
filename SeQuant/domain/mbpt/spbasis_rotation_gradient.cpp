@@ -1,4 +1,4 @@
-#include <SeQuant/domain/mbpt/rotation_gradient.hpp>
+#include <SeQuant/domain/mbpt/spbasis_rotation_gradient.hpp>
 
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
@@ -40,11 +40,11 @@ void split(const ExprPtr& e, Constant::scalar_type& scalar,
 
 }  // namespace
 
-ExprPtr rotation_gradient(const ExprPtr& L,
-                          const container::svector<std::wstring>& labels,
-                          const Index& p, const Index& q) {
+ExprPtr spbasis_rotation_gradient(
+    const ExprPtr& L, const container::svector<std::wstring>& labels,
+    const Index& p, const Index& q) {
   const auto reject = [](const char* text) {
-    throw Exception(std::string("mbpt::rotation_gradient: ") + text);
+    throw Exception(std::string("mbpt::spbasis_rotation_gradient: ") + text);
   };
   if (!L) reject("null argument");
   if (p.has_proto_indices() || q.has_proto_indices())

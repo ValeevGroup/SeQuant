@@ -7,7 +7,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
-#include <SeQuant/domain/mbpt/rotation_gradient.hpp>
+#include <SeQuant/domain/mbpt/spbasis_rotation_gradient.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -238,38 +238,39 @@ TEST_CASE("deriv/gradients/blocks", "[deriv][gradients]") {
 
 TEST_CASE("deriv/gradients/rotation", "[deriv][gradients]") {
   using deriv::test::require_same;
-  using mbpt::rotation_gradient;
+  using mbpt::spbasis_rotation_gradient;
   auto T = [](std::wstring_view s) { return deserialize(s); };
   const container::svector<std::wstring> fg{L"f", L"g"};
 
   SECTION("the Hartree-Fock energy: the Fock operator") {
     const auto E = T(L"h{i_1;i_1}:N-N-N + 1/2 g{i_1,i_2;i_1,i_2}:A-N-S");
     const Index i(L"i_5"), a(L"a_5");
-    require_same(rotation_gradient(E, {L"h", L"g"}, i, a),
+    require_same(spbasis_rotation_gradient(E, {L"h", L"g"}, i, a),
                  T(L"h{a_5;i_5}:N-N-N + g{a_5,i_1;i_5,i_1}:A-N-S + "
                    L"h{i_5;a_5}:N-N-N + g{i_5,i_1;a_5,i_1}:A-N-S"),
                  {i, a}, {});
     // a virtual p: no slot of the energy runs over it
-    REQUIRE(rotation_gradient(E, {L"h", L"g"}, a, i)->is_zero());
+    REQUIRE(spbasis_rotation_gradient(E, {L"h", L"g"}, a, i)->is_zero());
     // only the leaves named rotate
-    require_same(rotation_gradient(E, {L"h"}, i, a),
+    require_same(spbasis_rotation_gradient(E, {L"h"}, i, a),
                  T(L"h{a_5;i_5}:N-N-N + h{i_5;a_5}:N-N-N"), {i, a}, {});
   }
 
   SECTION("a leaf spelled as the adjoint rotates too") {
     const Index i(L"i_5"), a(L"a_5");
-    require_same(rotation_gradient(T(L"f⁺{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
-                                     L"f{i_1;a_1}:N-N-N u{a_1;i_1}:N-N-N"),
-                                   {L"f"}, i, a),
-                 T(L"f⁺{a_5;a_1}:N-N-N t{a_1;i_5}:N-N-N + "
-                   L"f{a_5;a_1}:N-N-N u{a_1;i_5}:N-N-N"),
-                 {i, a}, {});
+    require_same(
+        spbasis_rotation_gradient(T(L"f⁺{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N + "
+                                    L"f{i_1;a_1}:N-N-N u{a_1;i_1}:N-N-N"),
+                                  {L"f"}, i, a),
+        T(L"f⁺{a_5;a_1}:N-N-N t{a_1;i_5}:N-N-N + "
+          L"f{a_5;a_1}:N-N-N u{a_1;i_5}:N-N-N"),
+        {i, a}, {});
   }
 
   SECTION("a Hadamard index and an auxiliary slot") {
     const Index i(L"i_5"), a(L"a_5");
     require_same(
-        rotation_gradient(
+        spbasis_rotation_gradient(
             T(L"B{i_1;a_1;x_1}:N-N-N C{a_1;i_1;x_1}:N-N-N D{;;x_1}:N-N-N"),
             {L"B"}, i, a),
         T(L"B{a_5;a_1;x_1}:N-N-N C{a_1;i_5;x_1}:N-N-N D{;;x_1}:N-N-N"), {i, a},
@@ -287,7 +288,7 @@ TEST_CASE("deriv/gradients/rotation", "[deriv][gradients]") {
       const Index i(L"i_55"), j(L"i_56"), a(L"a_55"), b(L"a_56");
       for (const auto& [p, q] : {std::pair{i, a}, std::pair{a, i},
                                  std::pair{i, j}, std::pair{a, b}}) {
-        const auto X = rotation_gradient(L, fg, p, q);
+        const auto X = spbasis_rotation_gradient(L, fg, p, q);
         REQUIRE_FALSE(X->is_zero());
         require_same(X, via_block_gradients(L, fg, p, q), {p, q}, {});
       }
@@ -299,8 +300,8 @@ TEST_CASE("deriv/gradients/rotation", "[deriv][gradients]") {
     const Index i(L"i_5"), a(L"a_5");
     const auto X = [&](const ExprPtr& e, const Index& p, const Index& q,
                        std::string text) {
-      REQUIRE_THROWS_WITH(rotation_gradient(e, {L"f"}, p, q),
-                          "mbpt::rotation_gradient: " + text);
+      REQUIRE_THROWS_WITH(spbasis_rotation_gradient(e, {L"f"}, p, q),
+                          "mbpt::spbasis_rotation_gradient: " + text);
     };
     X(nullptr, i, a, "null argument");
     X(E, i, i, "p and q are one index");
