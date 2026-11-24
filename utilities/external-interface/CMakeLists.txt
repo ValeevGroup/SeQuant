@@ -172,9 +172,8 @@ add_test(
 set_tests_properties("sequant/external_interface/ccsd_irreps/verify" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_CCSD_IRREPS")
 
 
-# Cost reports, compared against the fixtures of the cost_analysis utility. The
-# drivers are configured into the build tree, where the reports are written.
-set(COST_ANALYSIS_EXAMPLES "${PROJECT_SOURCE_DIR}/utilities/cost_analysis/examples")
+# Cost reports. The drivers are configured into the build tree, where the
+# reports are written.
 set(_cost_report_dir "${CMAKE_CURRENT_BINARY_DIR}/examples/cost_report")
 foreach(NAME IN ITEMS "ccsd_r2" "df_r1")
     configure_file("examples/cost_report/${NAME}.json.in" "${_cost_report_dir}/${NAME}.json" @ONLY)
@@ -187,7 +186,7 @@ foreach(NAME IN ITEMS "ccsd_r2" "df_r1")
 
     add_test(
         NAME "sequant/external_interface/cost_report/${NAME}/verify"
-        COMMAND "${CMAKE_COMMAND}" -E compare_files "${NAME}.md" "${COST_ANALYSIS_EXAMPLES}/${NAME}.md.expected"
+        COMMAND "${CMAKE_COMMAND}" -E compare_files "${NAME}.md" "${CMAKE_CURRENT_SOURCE_DIR}/examples/cost_report/${NAME}.md.expected"
         WORKING_DIRECTORY "${_cost_report_dir}"
     )
     set_tests_properties("sequant/external_interface/cost_report/${NAME}/verify" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_COST_${NAME}")
@@ -195,7 +194,7 @@ endforeach()
 
 add_test(
     NAME "sequant/external_interface/cost_report/ccsd_r2/dump_tree"
-    COMMAND "${CMAKE_COMMAND}" -E compare_files "ccsd_r2.R2.tree.txt" "${COST_ANALYSIS_EXAMPLES}/R2.tree.txt.expected"
+    COMMAND "${CMAKE_COMMAND}" -E compare_files "ccsd_r2.R2.tree.txt" "${CMAKE_CURRENT_SOURCE_DIR}/examples/cost_report/R2.tree.txt.expected"
     WORKING_DIRECTORY "${_cost_report_dir}"
 )
 set_tests_properties("sequant/external_interface/cost_report/ccsd_r2/dump_tree" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_COST_ccsd_r2")

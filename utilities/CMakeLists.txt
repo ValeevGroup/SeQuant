@@ -27,7 +27,6 @@ add_custom_command(
 target_sources(sequant-schedule PRIVATE "${schedule_view_cpp}")
 
 add_subdirectory(external-interface)
-add_subdirectory(cost_analysis)
 
 add_test(
     NAME "sequant/schedule-view/validate-example"

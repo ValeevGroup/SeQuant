@@ -100,8 +100,9 @@ When a change you are making causes one of these tests to fail:
    fixture:
    - `external_interface` writes into the source tree,
      `utilities/external-interface/examples/<case>.itfaa` (gitignored);
-   - `cost_analysis` writes into the build-tree copy,
-     `<build>/utilities/cost_analysis/examples/` (`<case>.md`, `R2.tree.txt`).
+   - the `cost_report` tests write into the build tree,
+     `<build>/utilities/external-interface/examples/cost_report/` (`<case>.md`,
+     `ccsd_r2.R2.tree.txt`).
 3. Diagnose *why* the output changed, concretely — which change, and by what
    mechanism. "The symmetry defaults changed" is not a diagnosis; "Ŝ's braket
    symmetry goes from `Conjugate` to `Nonsymm`, which changes its hash and
@@ -336,9 +337,9 @@ targets `SeQuant-eval-{ta,btas,tapp}` sit on top of `eval` and are consumed as
 `SeQuant::eval::ta` etc. A row may include headers only from rows above it;
 an include from a row further down is a back-edge.
 
-`utilities/` holds standalone tools (`external_interface`, `cost_analysis`, …)
-whose fixtures are covered above; `SEQUANT_UTILITIES` is `ON` by default for
-top-level builds.
+`utilities/` holds standalone tools (`external_interface`, `sequant-schedule`,
+…); the fixtures of `external_interface` are covered above. `SEQUANT_UTILITIES`
+is `ON` by default for top-level builds.
 
 ## Documentation
 
