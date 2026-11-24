@@ -495,6 +495,17 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
   REQUIRE(man.alive(p));
   // The residency queries still see the surviving entry.
   REQUIRE(man.chain_holds(rp));
+  REQUIRE(man.current_residency() == rp->size_in_bytes());
+
+  // Storing null empties the entry, and the residency queries see that too.
+  (void)man.store_and_access(p, nullptr);
+  REQUIRE_FALSE(man.alive(p));
+  REQUIRE_FALSE(man.chain_holds(rp));
+  REQUIRE(man.current_residency() == 0);
+  REQUIRE(man.chain_held_buffers().empty());
+  auto const rp2 = man.store_and_access(p, eval_result(30));
+  REQUIRE(man.chain_holds(rp2));
+  REQUIRE(man.size_in_bytes() == rp2->size_in_bytes());
 }
 
 // Regression tripwire: after the combined single-DAG evaluation
