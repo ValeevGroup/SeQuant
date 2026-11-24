@@ -15,6 +15,7 @@ add_library(external_interface-obj OBJECT
     utils.cpp
 
     canonicalize_step.cpp
+    cost_report_step.cpp
     cse_step.cpp
     density_fitting_step.cpp
     dependency_step.cpp
@@ -169,3 +170,32 @@ add_test(
     WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/examples/"
 )
 set_tests_properties("sequant/external_interface/ccsd_irreps/verify" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_CCSD_IRREPS")
+
+
+# Cost reports, compared against the fixtures of the cost_analysis utility. The
+# drivers are configured into the build tree, where the reports are written.
+set(COST_ANALYSIS_EXAMPLES "${PROJECT_SOURCE_DIR}/utilities/cost_analysis/examples")
+set(_cost_report_dir "${CMAKE_CURRENT_BINARY_DIR}/examples/cost_report")
+foreach(NAME IN ITEMS "ccsd_r2" "df_r1")
+    configure_file("examples/cost_report/${NAME}.json.in" "${_cost_report_dir}/${NAME}.json" @ONLY)
+
+    add_test(
+        NAME "sequant/external_interface/cost_report/${NAME}/generate"
+        COMMAND external_interface --driver "${_cost_report_dir}/${NAME}.json"
+    )
+    set_tests_properties("sequant/external_interface/cost_report/${NAME}/generate" PROPERTIES FIXTURES_SETUP "SEQUANT_TEST_EXTERNAL_INTERFACE_COST_${NAME}")
+
+    add_test(
+        NAME "sequant/external_interface/cost_report/${NAME}/verify"
+        COMMAND "${CMAKE_COMMAND}" -E compare_files "${NAME}.md" "${COST_ANALYSIS_EXAMPLES}/${NAME}.md.expected"
+        WORKING_DIRECTORY "${_cost_report_dir}"
+    )
+    set_tests_properties("sequant/external_interface/cost_report/${NAME}/verify" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_COST_${NAME}")
+endforeach()
+
+add_test(
+    NAME "sequant/external_interface/cost_report/ccsd_r2/dump_tree"
+    COMMAND "${CMAKE_COMMAND}" -E compare_files "ccsd_r2.R2.tree.txt" "${COST_ANALYSIS_EXAMPLES}/R2.tree.txt.expected"
+    WORKING_DIRECTORY "${_cost_report_dir}"
+)
+set_tests_properties("sequant/external_interface/cost_report/ccsd_r2/dump_tree" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_COST_ccsd_r2")

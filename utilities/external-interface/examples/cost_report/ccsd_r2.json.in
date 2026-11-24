@@ -1,0 +1,37 @@
+{
+  "driver_format_version": 2,
+  "index_spaces": [
+    { "label": "i", "size": 10, "real_valued": true },
+    { "label": "a", "size": 38, "real_valued": true }
+  ],
+  "steps": [
+    {
+      "id": "input",
+      "kind": "read_input",
+      "options": { "file_path": "@CMAKE_CURRENT_SOURCE_DIR@/examples/cost_report/ccsd_r2.inp" },
+      "outputs": { "R2": "0" }
+    },
+    {
+      "id": "opt",
+      "kind": "optimize",
+      "inputs": "input",
+      "options": {
+        "objective": "DenseFLOPs",
+        "reorder_sums": false,
+        "volatile": "R",
+        "volatile_weight": 10
+      }
+    },
+    {
+      "kind": "cost_report",
+      "inputs": "opt",
+      "options": {
+        "output": "ccsd_r2.md",
+        "dump_tree": true,
+        "omit_revision": true,
+        "space_symbols": { "i": "O", "a": "V" },
+        "cache": { "volatile": "R", "min_repeats": 2 }
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "driver_format_version": 2,
+  "index_spaces": [
+    { "label": "i", "size": 10 },
+    { "label": "a", "size": 38 },
+    { "label": "Κ", "size": 400 }
+  ],
+  "steps": [
+    {
+      "id": "input",
+      "kind": "read_input",
+      "options": { "file_path": "@CMAKE_CURRENT_SOURCE_DIR@/examples/cost_report/df_r1.inp" },
+      "outputs": { "R1": "0" }
+    },
+    {
+      "id": "opt",
+      "kind": "optimize",
+      "inputs": "input",
+      "options": {
+        "objective": "DenseFLOPs",
+        "reorder_sums": false,
+        "volatile": "R",
+        "volatile_weight": 10
+      }
+    },
+    {
+      "kind": "cost_report",
+      "inputs": "opt",
+      "options": {
+        "output": "df_r1.md",
+        "omit_revision": true,
+        "space_symbols": { "i": "O", "a": "V" },
+        "cache": { "volatile": "R", "min_repeats": 2 }
+      }
+    }
+  ]
+}

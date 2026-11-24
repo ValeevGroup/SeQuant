@@ -298,6 +298,84 @@ Canonicalizes the input expressions.
 This step does not accept any options.
 
 
+cost_report
+^^^^^^^^^^^^
+
+Writes a Markdown report on the cost of evaluating the input expressions in the factorization they already have (i.e. typically the outputs of an
+:code:`optimize` step): the largest intermediates, the most expensive contractions, the peak storage of a single operation, the total operation
+count and the number of intermediates per shape. Memory is given in MB at the sizes of :code:`index_spaces`, with 16 bytes per element if any index
+lies in a space that is not :code:`real_valued` and 8 bytes otherwise; operation counts are symbolic. Each input expression gets its own section,
+named after the expression's result (e.g. :code:`R2`; :code:`Unnamed` if it has no label). Two expressions with the same result are an
+error, which the step reports before analyzing anything.
+
+This step does not factorize anything itself: it binarizes every summand in the order of its factors, so run :code:`optimize` first to report
+the cost of an optimized factorization. A leading (anti)symmetrizer is not counted, since the result stands for it.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Input
+     - Output
+   * - Expression
+     - (none)
+
+
+.. list-table:: Options
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`output`
+     - Path of the report (relative to the driver file's location, unless given as an absolute path). Missing parent directories are created.
+     - :code:`<step id>.md` (a step without an :code:`id` gets :code:`step<N>.cost_report`, :code:`N` being its position)
+     - No
+   * - :code:`top_n`
+     - Number of rows in the tables of the largest intermediates and the most expensive contractions.
+     - 20
+     - No
+   * - :code:`space_symbols`
+     - Object mapping index space labels to the single character that stands for them in the shape of an intermediate; spin-annotated spaces
+       (e.g. :code:`i↑`) use the entry of their base space. Other spaces are shown as :code:`X`. Every key must be the label of a space declared
+       in :code:`index_spaces`, without a spin annotation; any other key is an error.
+     - :code:`{}`
+     - No
+   * - :code:`dump_tree`
+     - Whether to also write the binary evaluation tree of every summand, one line per summand, to :code:`<stem>.<result>.tree.txt` next to
+       :code:`output`, where :code:`<stem>` is the file name of :code:`output` without its extension. The results then must not contain a path
+       separator, and must differ in more than case.
+     - false
+     - No
+   * - :code:`omit_revision`
+     - Whether to leave the SeQuant revision out of the report, so that reports of different builds can be compared.
+     - false
+     - No
+   * - :code:`cache`
+     - If given, an object configuring a simulation of the intermediates that a cache would keep across all inputs. Its properties are
+       :code:`volatile` (required; same format as :code:`replay.volatile` of the :code:`optimize` step), :code:`min_repeats` (number of uses for
+       an intermediate to be cached; default 2) and :code:`max_footprint` (intermediates with more elements than this are not cached; 0, the
+       default, is unlimited).
+     - -
+     - No
+
+Each result's section starts with a one-line summary and the total operation count, followed by the tables of the largest intermediates, the
+most expensive contractions and the shape census. If :code:`cache` is given, a single cache section follows all result sections. The figures that
+are not self-explanatory are:
+
+* *Distinct intermediates*: the tensor-valued internal nodes of the result's evaluation trees, without the root of each summand. Structurally equal
+  nodes count once, also across summands, and the number of times each one is built is given as its uses. *Reused* counts the ones with two or more
+  uses.
+* *Peak storage*: the memory of the heaviest single operation, i.e. a product or sum with its two operands plus its result, or a term that is a
+  single tensor, maximized over all summands at the sizes of :code:`index_spaces`. It is not the memory held by a cache; the cache section reports that.
+* *Shape census*: groups the distinct intermediates by shape, i.e. the sequence of :code:`space_symbols` characters of their indices. As spaces
+  without an entry all show as :code:`X`, one shape can cover tensors of different sizes; its size is that of its largest member.
+* *Cache*: a simulation of the cache over the evaluation trees of all input expressions together. *Cached* counts every intermediate that the
+  cache keeps: those used at least :code:`min_repeats` times, plus every *persistent* intermediate, whatever its number of uses. An intermediate is
+  persistent if it does not depend on a :code:`volatile` tensor but is an operand of one that does, so it is kept across evaluations. *Persistent* is
+  therefore a subset of *Cached*. The footprints add up the memory of these intermediates.
+
+
 cse
 ^^^
 

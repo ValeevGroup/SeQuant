@@ -7,6 +7,7 @@ add_executable(unit_tests-external-interface
     test_execution_context.cpp
     test_executor.cpp
     test_steps.cpp
+    test_cost_report.cpp
     test_expr_steps.cpp
     test_tree_steps.cpp
     test_json_include.cpp
