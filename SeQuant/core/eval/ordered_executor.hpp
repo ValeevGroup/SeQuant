@@ -1550,11 +1550,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       .holds =
           [&registry, on_disk, disk_spill](ResultPtr const& value) {
             if (!disk_spill) return registry.holds(value);
-            bool held = false;
-            registry.for_each_live([&](CellId c, ResultPtr const& v) {
-              held = held || (v == value && !on_disk(c, v));
-            });
-            return held;
+            return registry.holds_if(
+                value, [&](CellId c) { return !on_disk(c, value); });
           }};
   struct ExternalStoreGuard {
     CacheManager<N, FHC>& c;

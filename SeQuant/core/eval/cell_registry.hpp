@@ -294,7 +294,17 @@ class CellRegistry {
   /// \return whether some slot currently holds \p value (pointer identity).
   /// Read-only: spends no life.
   [[nodiscard]] bool holds(ResultPtr const& value) const {
-    return value && slot_count_of_.contains(value.get());
+    return value && cells_of_.contains(value.get());
+  }
+
+  /// \return whether some slot currently holds \p value (pointer identity)
+  /// and \p pred(CellId) is true for its cell. Visits only the cells holding
+  /// \p value. Read-only: spends no life.
+  template <typename Pred>
+  [[nodiscard]] bool holds_if(ResultPtr const& value, Pred&& pred) const {
+    if (!value) return false;
+    auto const it = cells_of_.find(value.get());
+    return it != cells_of_.end() && std::ranges::any_of(it->second, pred);
   }
 
   /// \return whether cell \p c is a non-persistent cell holding no value:
@@ -386,16 +396,24 @@ class CellRegistry {
 
   /// Replaces the value of slot \p s (of cell \p c) with \p v (null
   /// empties it). The only writer of \c Slot::value: it keeps \c
-  /// live_bytes_, \c live_ and \c slot_count_of_ in step with the slots.
+  /// live_bytes_, \c live_ and \c cells_of_ in step with the slots.
   void assign(CellId c, Slot& s, ResultPtr v) {
     // give back what the old value was charged
     account(-static_cast<std::ptrdiff_t>(s.charged_bytes));
     s.charged_bytes = 0;
     if (s.value) {
-      auto it = slot_count_of_.find(s.value.get());
-      SEQUANT_ASSERT(it != slot_count_of_.end());
-      if (it != slot_count_of_.end() && --it->second == 0)
-        slot_count_of_.erase(it);
+      auto it = cells_of_.find(s.value.get());
+      SEQUANT_ASSERT(it != cells_of_.end());
+      if (it != cells_of_.end()) {
+        auto& cells = it->second;
+        auto const pos = std::ranges::find(cells, c);
+        SEQUANT_ASSERT(pos != cells.end());
+        if (pos != cells.end()) {
+          *pos = cells.back();
+          cells.pop_back();
+        }
+        if (cells.empty()) cells_of_.erase(it);
+      }
     }
     s.value = std::move(v);
     if (!s.value) {
@@ -403,7 +421,7 @@ class CellRegistry {
       return;
     }
     live_.insert(c);
-    ++slot_count_of_[s.value.get()];
+    cells_of_[s.value.get()].push_back(c);
     s.charged_bytes = s.value->size_in_bytes();
     account(static_cast<std::ptrdiff_t>(s.charged_bytes));
   }
@@ -417,8 +435,8 @@ class CellRegistry {
   std::size_t live_bytes_ = 0;
   /// The cells whose slot holds a value, in cell order.
   std::set<CellId> live_;
-  /// For every buffer some slot holds, the number of slots holding it.
-  std::unordered_map<Result const*, std::size_t> slot_count_of_;
+  /// For every buffer some slot holds, the cells whose slots hold it.
+  std::unordered_map<Result const*, container::svector<CellId>> cells_of_;
 };
 
 /// Resolves one consumer cell's operand fetches to table reads. Installed on
