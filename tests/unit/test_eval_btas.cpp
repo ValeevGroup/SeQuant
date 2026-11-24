@@ -4,12 +4,14 @@
 #include "catch2_sequant.hpp"
 #include "tensor_power_fixtures.hpp"
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/btas/array_ops.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -1457,4 +1459,104 @@ TEST_CASE("eval_cached_intermediate_of_reordered_leaf_btas", "[eval_btas]") {
       CHECK(e2 == Catch::Approx(sorted_first ? y - t : y + t).margin(1e-12));
     }
   }
+}
+
+TEST_CASE("eval_ordered_reordered_leaf_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // the two spellings of eval_leaf_reordered_with_a_sign_btas as roots of one
+  // schedule: the leaf and t W are one value each, read with opposite signs
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  const TensorSymmetries nonsymm{.perm = Symmetry::Nonsymm};
+  auto written =
+      ex<Tensor>(L"t", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto sorted =
+      ex<Tensor>(L"t", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto W = ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"i_3", L"a_2"}, nonsymm);
+  auto V = ex<Tensor>(L"V", bra{L"a_2"}, ket{L"a_1"}, nonsymm);
+
+  auto const e = evaluate(eval_node(sorted * W * V), yield_)->get<double>();
+  REQUIRE(std::abs(e) > 1e-3);
+
+  BatchPolicy policy;
+  policy.scheduler = BatchScheduler::ordered;
+  for (bool sorted_first : {true, false}) {
+    std::vector nodes{eval_node((sorted_first ? sorted : written) * W * V),
+                      eval_node((sorted_first ? written : sorted) * W * V)};
+    REQUIRE(nodes[0].left()->hash_value() == nodes[1].left()->hash_value());
+    auto cache = cache_manager(nodes);
+    auto const results = evaluate_each(nodes, policy, yield_, cache);
+    REQUIRE(results.size() == 2);
+    CHECK(results[0]->get<double>() ==
+          Catch::Approx(sorted_first ? e : -e).margin(1e-12));
+    CHECK(results[1]->get<double>() ==
+          Catch::Approx(sorted_first ? -e : e).margin(1e-12));
+  }
+}
+
+TEST_CASE("eval_adjoint_of_reordered_leaf_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // the adjoints of the two spellings of eval_leaf_reordered_with_a_sign_btas
+  // differ by the sign their operands do; their nodes hash alike but are not
+  // one value (their layouts, as written, differ)
+  auto adjoint_of = [](std::initializer_list<std::wstring> bra_labels) {
+    Tensor t(L"t", bra(bra_labels), ket{L"i_1", L"i_2"}, Symmetry::Antisymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    t.adjoint();
+    return ex<Tensor>(std::move(t));
+  };
+  auto written = adjoint_of({L"a_1", L"i_3"});
+  auto sorted = adjoint_of({L"i_3", L"a_1"});
+  auto W = ex<Tensor>(L"W", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"},
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  REQUIRE(eval_node(written)->op_type() == EvalOp::Adjoint);
+
+  auto scalar_of = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), yield_)->get<double>();
+  };
+  auto const e = scalar_of(sorted * W);
+  REQUIRE(std::abs(e) > 1e-3);
+  CHECK(scalar_of(written * W) == Catch::Approx(-e).margin(1e-12));
+
+  // each spelling twice, so that every node is a value of the cache or of the
+  // schedule
+  for (bool ordered : {false, true})
+    for (bool sorted_first : {true, false}) {
+      CAPTURE(ordered, sorted_first);
+      std::vector nodes{eval_node(sorted_first ? sorted : written),
+                        eval_node(sorted_first ? written : sorted),
+                        eval_node(sorted_first ? sorted : written),
+                        eval_node(sorted_first ? written : sorted)};
+      REQUIRE(nodes[0]->hash_value() == nodes[1]->hash_value());
+      auto cache = cache_manager(nodes);
+      BatchPolicy policy;
+      if (ordered) policy.scheduler = BatchScheduler::ordered;
+      auto const results = evaluate_each(nodes, policy, yield_, cache);
+      for (int k : {0, 1}) {
+        // i_1, i_2, i_3, a_1 in one and i_1, i_2, a_1, i_3 in the other
+        auto const& s =
+            results[sorted_first ? k * 2 : k * 2 + 1]->get<BTensorD>();
+        auto const& w =
+            results[sorted_first ? k * 2 + 1 : k * 2]->get<BTensorD>();
+        REQUIRE(s.extent(2) == nocc);
+        REQUIRE(w.extent(2) == nvirt);
+        for (size_t i = 0; i < nocc; ++i)
+          for (size_t j = 0; j < nocc; ++j)
+            for (size_t l = 0; l < nocc; ++l)
+              for (size_t c = 0; c < nvirt; ++c)
+                CHECK(w(i, j, c, l) ==
+                      Catch::Approx(-s(i, j, l, c)).margin(1e-12));
+      }
+    }
 }
