@@ -1386,3 +1386,54 @@ TEST_CASE("eval_leaf_reordered_with_a_sign_btas", "[eval_btas]") {
   REQUIRE(std::abs(e_sorted) > 1e-3);
   CHECK(e_written == Catch::Approx(-e_sorted).margin(1e-12));
 }
+
+TEST_CASE("eval_cached_intermediate_of_reordered_leaf_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // the two spellings of eval_leaf_reordered_with_a_sign_btas: the leaf as
+  // written is the negative of the sorted one, and their nodes hash alike
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  const TensorSymmetries nonsymm{.perm = Symmetry::Nonsymm};
+  auto written =
+      ex<Tensor>(L"t", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto sorted =
+      ex<Tensor>(L"t", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto scalar_of = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), yield_)->get<double>();
+  };
+  // evaluates both expressions with one cache, so that an intermediate of the
+  // first is the second's if their nodes hash alike
+  auto with_shared_cache = [&](ExprPtr const& first, ExprPtr const& second) {
+    std::vector nodes{eval_node(first), eval_node(second)};
+    auto cache = cache_manager(nodes);
+    auto const v1 = evaluate(nodes[0], yield_, cache)->get<double>();
+    auto const v2 = evaluate(nodes[1], yield_, cache)->get<double>();
+    return std::pair{v1, v2};
+  };
+
+  SECTION("a product") {
+    auto W =
+        ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"i_3", L"a_2"}, nonsymm);
+    auto V = ex<Tensor>(L"V", bra{L"a_2"}, ket{L"a_1"}, nonsymm);
+    // the nodes of the two t W have one hash and opposite phases
+    auto const n_sorted = eval_node(sorted * W * V);
+    auto const n_written = eval_node(written * W * V);
+    REQUIRE(n_sorted.left()->hash_value() == n_written.left()->hash_value());
+    REQUIRE(n_sorted.left()->canon_phase() == -n_written.left()->canon_phase());
+
+    auto const e = scalar_of(sorted * W * V);
+    REQUIRE(std::abs(e) > 1e-3);
+    for (bool sorted_first : {true, false}) {
+      auto const [e1, e2] =
+          sorted_first ? with_shared_cache(sorted * W * V, written * W * V)
+                       : with_shared_cache(written * W * V, sorted * W * V);
+      CHECK(e1 == Catch::Approx(sorted_first ? e : -e).margin(1e-12));
+      CHECK(e2 == Catch::Approx(sorted_first ? -e : e).margin(1e-12));
+    }
+  }
+}
