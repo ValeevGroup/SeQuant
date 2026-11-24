@@ -1086,7 +1086,7 @@ TEST_CASE("optimize", "[optimize]") {
                  "R2 = " + cse1 + " * U{a_2;a_1}:N-N-N"}},
                {{L"R1 = (t{i3,a1;i1,i2}:A-N-S W{i1,i2;i3,a2}) V{a2;a1}",
                  L"R2 = (t{a1,i3;i1,i2}:A-N-S W{i1,i2;i3,a2}) U{a2;a1}"},
-                {cse1 + " = -1 (-1 " + t + ") * W{i_1,i_2;i_3,a_2}:N-N-N",
+                {cse1 + " = " + t + " * W{i_1,i_2;i_3,a_2}:N-N-N",
                  "R1 = (-1 " + cse1 + ") * V{a_2;a_1}:N-N-N",
                  "R2 = " + cse1 + " * U{a_2;a_1}:N-N-N"}},
            }) {

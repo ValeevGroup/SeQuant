@@ -980,11 +980,14 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   if (op == EvalOp::Product) {
     auto prod = Product{};
 
-    ExprPtr lexpr = child(node.left());
-    ExprPtr rexpr = child(node.right());
-
-    prod.append(1, lexpr, Product::Flatten::No);
-    prod.append(1, rexpr, Product::Flatten::No);
+    // the sign of a leaf goes into the scalar of the product
+    for (auto const* c : {&node.left(), &node.right()}) {
+      if (c->leaf())
+        prod.append((*c)->leaf_phase(), leaf_map((*c)->expr()),
+                    Product::Flatten::No);
+      else
+        prod.append(1, child(*c), Product::Flatten::No);
+    }
 
     SEQUANT_ASSERT(!prod.empty());
 

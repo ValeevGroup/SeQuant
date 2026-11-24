@@ -1509,8 +1509,10 @@ TEST_CASE("to_expr of a leaf written out of canonical order", "[EvalExpr]") {
 
   auto const product = to_expr(tree_of(written * W));
   REQUIRE(product->is<Product>());
+  // the sign is in the scalar of the product
+  REQUIRE(product->as<Product>().scalar() == -1);
   REQUIRE(product->as<Product>().size() == 2);
-  REQUIRE(*product->as<Product>().factor(0) == *minus(sorted));
+  REQUIRE(*product->as<Product>().factor(0) == *sorted);
   REQUIRE(*product->as<Product>().factor(1) == *W);
 
   // an odd power keeps the sign, an even one does not
@@ -1524,6 +1526,8 @@ TEST_CASE("to_expr of a leaf written out of canonical order", "[EvalExpr]") {
           *(ex<Constant>(-2) * sorted));
   REQUIRE(*to_expr(tree_of(ex<Constant>(2) * pow(written, rational{-1}))) ==
           *(ex<Constant>(-2) * pow(sorted, rational{-1})));
+  REQUIRE(*to_expr(tree_of(ex<Constant>(2) * written * W)) ==
+          *(ex<Constant>(-2) * sorted * W));
   auto const Y = ex<Tensor>(L"Y", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"},
                             TensorSymmetries{.perm = Symmetry::Nonsymm});
   auto const scaled_sum = to_expr(tree_of(ex<Constant>(2) * (W + Y)));
