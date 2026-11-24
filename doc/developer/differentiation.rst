@@ -174,10 +174,10 @@ summed (SeQuant reads an index in exactly two slots as summed), and a summed one
 rejects every such label, also an external one that stands in no slot, rather than tell these cases apart. A term whose
 Kronecker delta joins disjoint index spaces is zero and is dropped before this check.
 
-Gradients by blocks
----------------------
+Derivatives by tensors
+-------------------------
 
-``block_gradients`` turns ``diff``'s convention into a density. ``diff`` sums the positional gradient over all
+``tensor_derivatives`` turns ``diff``'s convention into a density. ``diff`` sums the positional gradient over all
 operations of the variable, so that summing its result against a change of the leaves over one block counts every
 block of the orbit once per operation that keeps the block. The leaves with a label are therefore grouped into classes
 of blocks that the operations map onto one another, one variable is spelled per class, and its derivative is divided by

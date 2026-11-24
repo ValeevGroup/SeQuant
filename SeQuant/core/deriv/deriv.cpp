@@ -995,10 +995,10 @@ bool overlap(const Block& l, const Block& r) {
 
 }  // namespace
 
-container::svector<BlockGradient> block_gradients(
+container::svector<TensorDerivative> tensor_derivatives(
     const ExprPtr& E, std::wstring_view label,
     const container::svector<ResultExpr>& definitions) {
-  const std::string where = "deriv::block_gradients: ";
+  const std::string where = "deriv::tensor_derivatives: ";
   if (!E) throw Exception(where + "null argument");
   // the leaves with the label, one per class of blocks, and the labels in
   // use; a leaf spelled as the adjoint, where that holds the elements of the
@@ -1046,7 +1046,7 @@ container::svector<BlockGradient> block_gradients(
   for (const auto& d : definitions)
     if (d.expression()) visit(d.expression());
 
-  container::svector<BlockGradient> result;
+  container::svector<TensorDerivative> result;
   const auto unused = unused_label_validator(std::move(taken));
   for (std::size_t k = 0; k != leaves.size(); ++k) {
     // the leaf under index names of its own
@@ -1074,9 +1074,9 @@ container::svector<BlockGradient> block_gradients(
   return result;
 }
 
-container::svector<BlockGradient> block_gradients(const ExprPtr& E,
-                                                  std::wstring_view label) {
-  return block_gradients(E, label, {});
+container::svector<TensorDerivative> tensor_derivatives(
+    const ExprPtr& E, std::wstring_view label) {
+  return tensor_derivatives(E, label, {});
 }
 
 ExprPtr at_zero(const ExprPtr& E,

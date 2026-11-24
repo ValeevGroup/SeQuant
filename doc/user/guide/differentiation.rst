@@ -251,15 +251,15 @@ leaf of the variable itself.
    :end-before: end-snippet-12
    :dedent: 4
 
-Gradients by blocks and orbital rotations
--------------------------------------------
+Derivatives by tensors and by rotations of the basis
+-------------------------------------------------------
 
 Two functions prepare what the derivative of a function by a parameter of its leaves needs, such as a nuclear gradient,
 where the integrals and the orbitals depend on the geometry.
 
-:func:`sequant::deriv::block_gradients` returns the gradient of ``E`` by each block of the leaves of a label, a block
+:func:`sequant::deriv::tensor_derivatives` returns the derivative of ``E`` by each block of the leaves of a label, a block
 being the list of the spaces of a leaf's slots. Unlike ``diff``, it is normalized as a density: the first-order change
-of ``E`` is the sum over the blocks of the gradient times the change of the leaf, summed over every element of the
+of ``E`` is the sum over the blocks of the derivative times the change of the leaf, summed over every element of the
 block, not only the independent ones. Blocks that a symmetry of the leaf maps onto one another hold the same elements
 and are returned once.
 
