@@ -313,8 +313,10 @@ container::svector<Elementary> elementary(
 /// the definitions of tensor leaves that diff() differentiates through
 using Definitions = container::svector<ResultExpr>;
 
-/// @return the definition in @p defs of a leaf @p t : the one whose head has
-/// t's label and ranks, or nullptr if there is none
+}  // namespace
+
+namespace detail {
+
 const ResultExpr* definition_of(const Tensor& t, const Definitions& defs) {
   for (const auto& d : defs)
     if (d.label() == t.label() && d.bra().size() == t.bra_rank() &&
@@ -323,9 +325,6 @@ const ResultExpr* definition_of(const Tensor& t, const Definitions& defs) {
   return nullptr;
 }
 
-/// @return the expression of the definition @p def of the leaf @p leaf ,
-/// with the slots of the head renamed to those of the leaf, slot by slot, and
-/// the summed indices to temporary ones whose labels are not in @p taken
 ExprPtr instantiate(const ResultExpr& def, const Tensor& leaf,
                     container::set<std::wstring> taken) {
   container::map<Index, Index> renames;
@@ -347,6 +346,13 @@ ExprPtr instantiate(const ResultExpr& def, const Tensor& leaf,
   expand(result);
   return result;
 }
+
+}  // namespace detail
+
+namespace {
+
+using detail::definition_of;
+using detail::instantiate;
 
 /// the labels of the indices of the @p factors of a term and of @p y
 container::set<std::wstring> labels_of(

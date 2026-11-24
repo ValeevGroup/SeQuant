@@ -307,19 +307,132 @@ TEST_CASE("deriv/gradients/rotation", "[deriv][gradients]") {
     X(E, i, i, "p and q are one index");
     X(E, Index(L"i_1"), a, "the function uses the label of p or q");
     X(E, Index(L"p_5"), a,
-      "a slot of a leaf to rotate overlaps the space of p without including "
-      "it");
-    X(T(L"f{i_1;a_1}:N-N-N"), i, a, "the function is not a scalar");
-    X(T(L"f{i_1;a_1}:N-N-N t{a_1;i_1}:N-N-N w{;a_2}:N-N-N"), i, a,
-      "the function is not a scalar");
+      "a slot of a leaf that rotates overlaps the space of p without "
+      "including it");
     X(T(L"Â{i_1;a_1}:A-N-S f{i_1;a_1}:N-N-N"), i, a,
-      "the function is not a scalar");
+      "the function holds an Â or Ŝ");
     X(T(L"f{i_1;i_2}:N-N-N Y{a_1<i_1>;a_2<i_2>}:N-N-N "
         L"Z{a_2<i_2>;a_1<i_1>}:N-N-N"),
       i, Index(L"i_6"),
-      "a slot of a leaf to rotate has protoindices or is a protoindex");
+      "a slot of a leaf that rotates has protoindices or is a protoindex");
     X(pow(T(L"f{i_1;a_1}:N-N-N"), 2) * T(L"t{a_1;i_1}:N-N-N"), i, a,
-      "a leaf to rotate stands under a TensorPower");
+      "a leaf that rotates stands under a TensorPower");
     X(mbpt::op::H(1), i, a, "the function holds operators");
+    X(T(L"f{i_1;i_1}:N-N-N n{;;i_1}:N-N-N"), i, a,
+      "a slot of a leaf that rotates holds an index that stands in more than "
+      "two slots");
+
+    const auto with = [&](std::wstring_view definition, std::string text) {
+      const container::svector<ResultExpr> defs{
+          ResultExpr(Tensor(L"f", bra{L"p_7"}, ket{L"p_8"}, Symmetry::Nonsymm),
+                     T(definition))};
+      REQUIRE_THROWS_WITH(spbasis_rotation_gradient(E, {L"g"}, i, a, defs),
+                          "mbpt::spbasis_rotation_gradient: " + text);
+    };
+    with(L"h{p_7;p_8}:N-N-N + g{p_7,i_7;p_8,i_7}:A-N-S",
+         "a tensor of the expression of a definition holds an index of the "
+         "head and does not rotate");
+    with(
+        L"g{p_7,i_7;p_8,i_7}:A-N-S + f{p_7;i_7}:N-N-N g{i_7,i_8;p_8,i_8}:A-N-S",
+        "a definition depends on itself");
+    with(L"g{p_7,i_7;p_8,i_7}:A-N-S + w{p_7;p_8}:N-N-N^(2)",
+         "a tensor of the expression of a definition holds an index of the "
+         "head and does not rotate");
+  }
+
+  // the Fock operator as a function of the basis through the occupied
+  // orbitals
+  const container::svector<ResultExpr> fock{
+      ResultExpr(Tensor(L"f", bra{L"p_7"}, ket{L"p_8"}, Symmetry::Nonsymm),
+                 T(L"h{p_7;p_8}:N-N-N + g{p_7,i_7;p_8,i_7}:A-N-S"))};
+  // @p e with every f written out as its definition
+  const auto written_out = [&](const ExprPtr& e) {
+    auto expanded = e->clone();
+    expand(expanded);
+    ExprPtr result = ex<Constant>(0);
+    for (const auto& term : expanded->is<Sum>()
+                                ? container::svector<ExprPtr>(
+                                      expanded->as<Sum>().summands().begin(),
+                                      expanded->as<Sum>().summands().end())
+                                : container::svector<ExprPtr>{expanded}) {
+      container::set<std::wstring> taken;
+      for (const auto& i : get_used_indices(term)) taken.emplace(i.label());
+      ExprPtr product =
+          ex<Constant>(term->is<Product>() ? term->as<Product>().scalar() : 1);
+      for (const auto& f : term->is<Product>()
+                               ? container::svector<ExprPtr>(
+                                     term->as<Product>().factors().begin(),
+                                     term->as<Product>().factors().end())
+                               : container::svector<ExprPtr>{term}) {
+        const bool is_f = f->is<Tensor>() && f->as<Tensor>().label() == L"f";
+        auto g =
+            is_f ? deriv::detail::instantiate(fock[0], f->as<Tensor>(), taken)
+                 : f;
+        for (const auto& i : get_used_indices(g)) taken.emplace(i.label());
+        product = product * g;
+      }
+      result = result + product;
+    }
+    expand(result);
+    return result;
+  };
+
+  SECTION("a leaf with a definition: the condition for the Fock operator") {
+    // Σ z f: the Fock operator rotates in its own slots, and through the
+    // occupied orbitals of its definition
+    const auto L = T(L"z{a_1;i_1}:N-N-N f{i_1;a_1}:N-N-N");
+    const Index i(L"i_5"), a(L"a_5");
+    const container::svector<std::wstring> hg{L"h", L"g"};
+    require_same(spbasis_rotation_gradient(L, hg, i, a, fock),
+                 T(L"z{a_1;i_5}:N-N-N f{a_5;a_1}:N-N-N + "
+                   L"z{a_1;i_1}:N-N-N g{i_1,a_5;a_1,i_5}:A-N-S + "
+                   L"z{a_1;i_1}:N-N-N g{i_1,i_5;a_1,a_5}:A-N-S"),
+                 {i, a}, {});
+    REQUIRE_THROWS_WITH(
+        spbasis_rotation_gradient(T(L"f⁺{a_1;i_1}:N-N-N t{i_1;a_1}:N-N-N"), hg,
+                                  i, a, fock),
+        "mbpt::spbasis_rotation_gradient: a leaf is spelled as the adjoint of "
+        "one with a definition");
+    // the same array as that of the function with f written out
+    for (const auto& [p, q] :
+         {std::pair{i, a}, std::pair{a, i}, std::pair{i, Index(L"i_6")},
+          std::pair{a, Index(L"a_6")}})
+      require_same(written_out(spbasis_rotation_gradient(L, hg, p, q, fock)),
+                   spbasis_rotation_gradient(written_out(L), hg, p, q), {p, q},
+                   {});
+  }
+
+  SECTION("the CCSD Lagrangian with the Fock operator defined") {
+    mbpt::CC cc{2};
+    const auto L = simplify(mbpt::op::ref_av(
+        (1 + mbpt::op::Λ(2)) * cc.hbar(), {.connect = cc.hbar_connections()}));
+    const container::svector<std::wstring> hg{L"h", L"g"};
+    const Index i(L"i_55"), a(L"a_55");
+    for (const auto& [p, q] : {std::pair{i, a}, std::pair{a, i}}) {
+      const auto X = spbasis_rotation_gradient(L, hg, p, q, fock);
+      require_same(written_out(X),
+                   spbasis_rotation_gradient(written_out(L), hg, p, q), {p, q},
+                   {});
+      // the occupied orbitals of the definition rotate with an occupied p
+      // only: then there is more than at a fixed Fock operator
+      REQUIRE(simplify(X - spbasis_rotation_gradient(L, fg, p, q))->is_zero() ==
+              (p == a));
+    }
+  }
+
+  SECTION("free indices, and the second derivative") {
+    // a slot that holds a free index: its Kronecker delta with p
+    const Index i(L"i_5"), a(L"a_5"), j(L"i_6"), b(L"a_6");
+    REQUIRE_THAT(
+        spbasis_rotation_gradient(T(L"f{i_1;a_1}:N-N-N"), {L"f"}, i, a),
+        EquivalentTo(T(L"f{a_5;a_1}:N-N-N δ{i_1;i_5}:N-S-S")));
+    // L = Σ h{i;i}: X{q;p} = h{q;p} + h{p;q}, and with the slots of q held
+    // the slots of p rotate: ∂²L/∂κ{q;p}∂κ{s;r} = δ{p;r} (h{q;s} + h{s;q})
+    const auto L = T(L"h{i_1;i_1}:N-N-N");
+    const auto X = spbasis_rotation_gradient(L, {L"h"}, i, a);
+    REQUIRE_THAT(X, EquivalentTo(T(L"h{a_5;i_5}:N-N-N + h{i_5;a_5}:N-N-N")));
+    REQUIRE_THAT(spbasis_rotation_gradient(X, {L"h"}, j, b, {}, {a}),
+                 EquivalentTo(T(L"h{a_5;a_6}:N-N-N δ{i_6;i_5}:N-S-S + "
+                                L"h{a_6;a_5}:N-N-N δ{i_5;i_6}:N-S-S")));
   }
 }
