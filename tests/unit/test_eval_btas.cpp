@@ -839,9 +839,8 @@ TEST_CASE("eval_tensor_power_btas", "[eval_btas]") {
   // an antisymmetric base spelled out of canonical order: its leaf
   // canonicalizes with phase -1 and the power node carries that phase raised
   // to the exponent; in the base's own layout pow(A, e) is the element-wise
-  // power of A as A evaluates there. A single uncached evaluation converts no
-  // node phase (a phase only reorients a cached value for another
-  // occurrence), so this pins the layout, not the phase arithmetic.
+  // power of A as A evaluates there, the negative of its canonical spelling
+  // (eval_leaf_reordered_with_a_sign_btas pins that sign).
   {
     auto A = ex<Tensor>(L"A", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"},
                         TensorSymmetries{.perm = Symmetry::Antisymm});
@@ -1342,4 +1341,48 @@ TEST_CASE("eval_btas_annotation_tells_basis_instances_apart",
   CHECK(annot[0] != annot[1]);
   CHECK(annot[0] != annot[2]);
   CHECK(annot[1] != annot[2]);
+}
+
+TEST_CASE("eval_leaf_reordered_with_a_sign_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // an antisymmetric leaf whose bra holds two spaces: the canonical order of
+  // the bundle is i_3, a_1, so the leaf as written is its negative
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  auto written =
+      ex<Tensor>(L"t", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto sorted =
+      ex<Tensor>(L"t", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"}, antisymm);
+  // one layout for both: a_1, i_3, i_1, i_2
+  auto const target = tidxs(written->as<Tensor>());
+  auto eval_at = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), target, yield_)->get<BTensorD>();
+  };
+
+  auto const t_written = eval_at(written);
+  auto const t_sorted = eval_at(sorted);
+  REQUIRE(t_written.range() == t_sorted.range());
+  double norm = 0;
+  auto s = t_sorted.begin();
+  for (auto w = t_written.begin(); w != t_written.end(); ++w, ++s) {
+    norm += *s * *s;
+    CHECK(*w == Catch::Approx(-*s).margin(1e-12));
+  }
+  REQUIRE(norm > 0.1);
+
+  // and under a contraction
+  auto W = ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"},
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  auto scalar_of = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), yield_)->get<double>();
+  };
+  auto const e_written = scalar_of(written * W);
+  auto const e_sorted = scalar_of(sorted * W);
+  REQUIRE(std::abs(e_sorted) > 1e-3);
+  CHECK(e_written == Catch::Approx(-e_sorted).margin(1e-12));
 }

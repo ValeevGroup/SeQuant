@@ -316,6 +316,15 @@ class EvalExpr {
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
   ///
+  /// \return The sign (+1 or -1) by which expr() differs from the tensor
+  ///         this object was constructed from: canon_phase() for a tensor
+  ///         whose expr() is its canonical spelling, with the slots of its
+  ///         bundles reordered; 1 for every other object, whose expr() is as
+  ///         written (a tensor of tensors, the result of an operation).
+  ///
+  [[nodiscard]] std::int8_t leaf_phase() const noexcept;
+
+  ///
   /// \return Whether this expression has a connectivity graph
   /// \see connectivity_graph
   ///
@@ -544,6 +553,10 @@ class EvalExpr {
 
   /// See \c root_scope.
   bool root_scope_ = false;
+
+  /// Whether expr_ is the canonical spelling of the tensor this was
+  /// constructed from; see \c leaf_phase.
+  bool respelled_ = false;
 
   ExprPtr expr_;
 

@@ -154,6 +154,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     auto& t = expr_->as<Tensor>();
     auto phase = TensorBlockCanonicalizer{}.apply(t);
     canon_phase_ = phase ? -1 : 1;
+    respelled_ = true;
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
@@ -286,6 +287,10 @@ std::string EvalExpr::label() const noexcept {
 }
 
 std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
+
+std::int8_t EvalExpr::leaf_phase() const noexcept {
+  return respelled_ ? canon_phase_ : std::int8_t{1};
+}
 
 const EvalBatchInfo& EvalExpr::batch_info() const noexcept {
   static const EvalBatchInfo defaults;
