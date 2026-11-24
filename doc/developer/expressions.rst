@@ -110,11 +110,16 @@ to what represents it in that network, which depends on the kind of the factor:
 - an inlined tensor equation is its head as written, with the symmetry of the head, through which the network itself accounts
   for the order of the head's slots; it contributes no sign (nor does an ``Adjoint`` node, likewise a tensor as written);
 - any other node (``Sum``, ``Power``, ``Broadcast``) is a tensor without symmetry that stands for the node's canonical value, and
-  contributes its phase;
+  contributes its phase. That tensor is not the node's ``expr()``, which is shared by every intermediate of its shape and has
+  its slots ordered by label: its label carries the hash of the node, and its slots follow the node's canonical indices, so
+  that two such factors of a network, or two layouts of one, are not mistaken for each other;
 - an inlined scalar equation is not part of the network, only its hash enters the hash of the product, and contributes its
   phase.
 
-A ``Sum`` has phase 1 and its hash includes the phases of its summands.
+A ``Sum`` has phase 1 and is laid out as its first summand is. Its hash includes, for each summand, the phase and, unless the
+summand is laid out as the ``Sum`` is, the position of each of its canonical indices in that layout. The positions are those of
+the canonical indices the summand happens to have: where a summand has a symmetry of its own that exchanges them (``p{a_1;i_1}
+p{a_2;i_2}``), two sums that are relabelings of each other can hash differently, and are then not shared.
 
 Export binarizes one ``ResultExpr`` at a time and never inlines; a tree from the system overload is not meant for export, since
 its consumed heads would appear as intermediates without definitions.
