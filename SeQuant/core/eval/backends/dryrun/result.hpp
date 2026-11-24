@@ -99,6 +99,8 @@ class SizeMemo {
   void reset() noexcept { v_.store(k_unknown_, std::memory_order_relaxed); }
 
  private:
+  // A size equal to this (only an overflowed one can be) is never memoized,
+  // only recomputed on every request.
   static constexpr std::size_t k_unknown_ =
       std::numeric_limits<std::size_t>::max();
   mutable std::atomic<std::size_t> v_{k_unknown_};
