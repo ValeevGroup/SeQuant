@@ -166,6 +166,9 @@ ExpressionCost analyze(std::string name, const ResultExpr &expr,
     res.trees.push_back(std::move(tree));
   };
 
+  // FullBinaryNode's move constructor is not noexcept, so growing the vector
+  // would deep-copy every tree
+  if (rhs->is<Sum>()) res.trees.reserve(rhs->as<Sum>().size());
   for_each_term(rhs, handle);
   res.n_terms = res.trees.size();
 
