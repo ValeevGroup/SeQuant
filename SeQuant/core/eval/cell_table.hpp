@@ -12,6 +12,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 namespace sequant::eval {
@@ -339,6 +340,10 @@ template <typename Candidates>
       out.push_back({"visibility", "read with out-of-range cell id"});
       return out;
     }
+  // Indices into table.reads of each consumer's reads, in table order.
+  container::vector<container::svector<std::size_t>> reads_of(n);
+  for (std::size_t i = 0; i < table.reads.size(); ++i)
+    reads_of[table.reads[i].consumer].push_back(i);
 
   // (1) visibility: a source is resident at the consumer's production iff
   // the source was produced earlier (or is a Leaf) and the source's
@@ -353,8 +358,8 @@ template <typename Candidates>
     for (CellId id = 0; id < n; ++id) {
       TableCell const& c = table.cells[id];
       if (c.production.kind == ProductionKind::Leaf) continue;
-      for (Read const& r : table.reads) {
-        if (r.consumer != id) continue;
+      for (std::size_t const ri : reads_of[id]) {
+        Read const& r = table.reads[ri];
         TableCell const& s = table.cells[r.source];
         bool const ok =
             produced[r.source] && detail::residency_scope(s).encloses(c.scope);
@@ -409,8 +414,8 @@ template <typename Candidates>
       if (repeated) continue;
       seen.push_back(L);
       bool any_bound = false, any_whole = false;
-      for (Read const& r : table.reads) {
-        if (r.consumer != id) continue;
+      for (std::size_t const ri : reads_of[id]) {
+        Read const& r = table.reads[ri];
         TableCell const& s = table.cells[r.source];
         bool bound_here = false, bound_other = false;
         for (LoopKey const& k : detail::bound_instances(s))
@@ -540,18 +545,27 @@ template <typename Candidates>
     }
   }
 
-  // (5) uniqueness: one Build per (value, scope).
-  for (CellId a = 0; a < n; ++a)
-    for (CellId b = a + 1; b < n; ++b) {
-      TableCell const& x = table.cells[a];
-      TableCell const& y = table.cells[b];
-      if (x.production.kind == ProductionKind::Build &&
-          y.production.kind == ProductionKind::Build &&
-          x.value_id == y.value_id && x.scope == y.scope)
-        out.push_back({"uniqueness", detail::cell_str(table, a) + " and " +
-                                         detail::cell_str(table, b) +
-                                         " build one value in one scope"});
+  // (5) uniqueness: one Build per (value, scope). Offending pairs are
+  // reported in (a, b) order.
+  {
+    std::unordered_map<std::size_t, container::svector<CellId>> builds_of;
+    for (CellId id = 0; id < n; ++id)
+      if (table.cells[id].production.kind == ProductionKind::Build)
+        builds_of[table.cells[id].value_id].push_back(id);
+    container::vector<std::pair<CellId, CellId>> dups;
+    for (auto const& [vid, ids] : builds_of) {
+      (void)vid;
+      for (std::size_t i = 0; i < ids.size(); ++i)
+        for (std::size_t j = i + 1; j < ids.size(); ++j)
+          if (table.cells[ids[i]].scope == table.cells[ids[j]].scope)
+            dups.emplace_back(ids[i], ids[j]);
     }
+    std::sort(dups.begin(), dups.end());
+    for (auto const& [a, b] : dups)
+      out.push_back({"uniqueness", detail::cell_str(table, a) + " and " +
+                                       detail::cell_str(table, b) +
+                                       " build one value in one scope"});
+  }
   return out;
 }
 

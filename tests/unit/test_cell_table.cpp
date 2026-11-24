@@ -4,6 +4,9 @@
 // for ScopeBlock, which validate_cell_table names but never dereferences
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 
+#include <string>
+#include <vector>
+
 using sequant::eval::AssembleKind;
 using sequant::eval::CellScope;
 using sequant::eval::CellTable;
@@ -173,6 +176,54 @@ TEST_CASE("validator-build-uniqueness", "[cell_table]") {
   auto const v = validate_cell_table(t, empty_root());
   REQUIRE(v.size() >= 1);
   CHECK(v.back().rule == "uniqueness");
+}
+
+TEST_CASE("validator-uniqueness-order", "[cell_table]") {
+  // Two values with interleaved duplicate root Builds: value 0 in cells
+  // 0, 2, 4 and value 1 in cells 1, 3. Pairs are reported in (a, b) order.
+  CellTable t;
+  for (std::size_t vid : {0, 1, 0, 1, 0}) {
+    TableCell c;
+    c.value_id = vid;
+    c.production.kind = ProductionKind::Build;
+    t.cells.push_back(c);
+  }
+  std::vector<std::string> got;
+  for (CellViolation const& x : validate_cell_table(t, empty_root()))
+    if (x.rule == "uniqueness") got.push_back(x.what);
+  auto pair = [&t](std::size_t a, std::size_t b) {
+    return sequant::eval::detail::cell_str(t, a) + " and " +
+           sequant::eval::detail::cell_str(t, b) +
+           " build one value in one scope";
+  };
+  CHECK(got == std::vector<std::string>{pair(0, 2), pair(0, 4), pair(1, 3),
+                                        pair(2, 4)});
+}
+
+TEST_CASE("validator-visibility-order", "[cell_table]") {
+  // Violations follow consumer order, then each consumer's reads in table
+  // order, even when the table lists reads out of consumer order. Each read
+  // names a source produced only later (cells 2 and 3), so none is visible.
+  CellTable t;
+  for (std::size_t vid = 0; vid < 4; ++vid) {
+    TableCell c;
+    c.value_id = vid;
+    c.production.kind = ProductionKind::Build;
+    t.cells.push_back(c);
+  }
+  t.reads.push_back(Read{1, 3, 3, {}});
+  t.reads.push_back(Read{0, 3, 3, {}});
+  t.reads.push_back(Read{1, 2, 2, {}});
+  t.reads.push_back(Read{0, 2, 2, {}});
+  std::vector<std::string> got;
+  for (CellViolation const& x : validate_cell_table(t, empty_root()))
+    if (x.rule == "visibility") got.push_back(x.what);
+  auto miss = [&t](std::size_t src, std::size_t consumer) {
+    return sequant::eval::detail::cell_str(t, src) + " not resident when " +
+           sequant::eval::detail::cell_str(t, consumer) + " is produced";
+  };
+  CHECK(got == std::vector<std::string>{miss(3, 0), miss(2, 0), miss(3, 1),
+                                        miss(2, 1)});
 }
 
 TEST_CASE("validator-form-mismatch", "[cell_table]") {

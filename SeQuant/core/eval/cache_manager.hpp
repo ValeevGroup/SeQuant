@@ -949,6 +949,9 @@ class CacheManager {
 
     [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
 
+    /// \return the held buffer (null if none), for pointer-identity tests.
+    [[nodiscard]] Result const* buffer() const noexcept { return data_p.get(); }
+
     /// \return true iff this entry currently holds the same buffer (pointer
     ///         identity) as @p other. A sliced/permuted/phase-shifted read of
     ///         this entry is a distinct buffer, so it compares unequal. Used by
@@ -969,12 +972,40 @@ class CacheManager {
   // Not noexcept: forwards to entry::store(), which is not noexcept (see
   // there).
   ResultPtr store_and_access(entry& ent, ResultPtr&& data) {
+    bool const was_alive = ent.alive();
     ent.store(std::move(data), strict_fill_once_);
-    return ent.access();
+    auto out = ent.access();
+    note_alive_change(was_alive, ent);
+    return out;
+  }
+
+  /// Keeps \c n_alive_ in step after \p ent, alive before iff \p was_alive,
+  /// was stored into or read.
+  void note_alive_change(bool was_alive, entry const& ent) noexcept {
+    if (was_alive == ent.alive()) return;
+    if (was_alive) {
+      SEQUANT_ASSERT(n_alive_ > 0);
+      --n_alive_;
+    } else {
+      ++n_alive_;
+    }
   }
 
   std::unordered_map<cache_key_type, entry, hasher_type, comparator_type>
       cache_map_;
+
+  /// The number of alive entries in \c cache_map_, so that the per-op
+  /// residency queries skip a cache holding nothing without walking its keys.
+  std::size_t n_alive_ = 0;
+
+  /// \return whether no entry of \c cache_map_ is alive
+  [[nodiscard]] bool none_alive() const noexcept {
+    SEQUANT_ASSERT(n_alive_ == static_cast<std::size_t>(std::ranges::count_if(
+                                   cache_map_, [](auto const& kv) {
+                                     return kv.second.alive();
+                                   })));
+    return n_alive_ == 0;
+  }
 
   /// What the keys of cache_map_ point into, where this cache owns it: a
   /// forest handed to cache_manager() as a temporary, and the copies hoist
@@ -1365,7 +1396,11 @@ class CacheManager {
   /// it deliberately.
   ///
   void reset() noexcept {
-    for (auto&& [k, v] : cache_map_) v.reset();
+    n_alive_ = 0;
+    for (auto&& [k, v] : cache_map_) {
+      v.reset();
+      if (v.alive()) ++n_alive_;
+    }
     working_set_hwmark_ = 0;
   }
 
@@ -1487,6 +1522,7 @@ class CacheManager {
   /// working_set_hwmark() (a high-water max over time), this is the current
   /// live residency at the instant of the call.
   [[nodiscard]] size_t current_residency() const noexcept {
+    if (none_alive()) return 0;
     size_t s = 0;
     for (auto const& [k, e] : cache_map_)
       if (e.alive()) s += e.size_in_bytes();
@@ -1531,9 +1567,22 @@ class CacheManager {
   ///         buffer with a different pointer, so it is correctly not skipped.
   [[nodiscard]] bool chain_holds(ResultPtr const& value) const noexcept {
     if (!value) return false;
-    for (auto const& [k, e] : cache_map_)
-      if (e.holds(value)) return true;
+    if (!none_alive())
+      for (auto const& [k, e] : cache_map_)
+        if (e.holds(value)) return true;
     return parent_ ? parent_->chain_holds(value) : false;
+  }
+
+  /// \return the buffers (by pointer identity) that \c chain_holds() would
+  ///         report as held: one pass over the chain instead of one per query.
+  [[nodiscard]] std::unordered_set<Result const*> chain_held_buffers() const {
+    std::unordered_set<Result const*> out;
+    for (CacheManager const* c = this; c; c = c->parent_) {
+      if (c->none_alive()) continue;
+      for (auto const& [k, e] : c->cache_map_)
+        if (e.alive()) out.insert(e.buffer());
+    }
+    return out;
   }
 
   /// \return true iff @p value's bytes are already part of the residency a
@@ -1588,9 +1637,10 @@ class CacheManager {
   /// keeping in-place enabled for the private common case.
   [[nodiscard]] bool chain_holds_shared(ResultPtr const& value) const noexcept {
     if (!value) return false;
-    for (auto const& [k, e] : cache_map_)
-      if (e.holds(value) && (e.persistent() || e.max_life_count() > 1))
-        return true;
+    if (!none_alive())
+      for (auto const& [k, e] : cache_map_)
+        if (e.holds(value) && (e.persistent() || e.max_life_count() > 1))
+          return true;
     return parent_ ? parent_->chain_holds_shared(value) : false;
   }
 
@@ -1615,7 +1665,10 @@ class CacheManager {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
-      if (auto data = found->second.access(); data) {
+      bool const was_alive = found->second.alive();
+      auto data = found->second.access();
+      note_alive_change(was_alive, found->second);
+      if (data) {
         // Diagnostic (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
         // read into the global access clock. No-op when the gate is off.
         eval::AccessClock::stamp(found->first->hash_value());
@@ -1765,6 +1818,7 @@ class CacheManager {
   /// \return Returns the sum of `Result::size_in_bytes` of alive entries.
   ///
   [[nodiscard]] size_t size_in_bytes() const noexcept {
+    if (none_alive()) return 0;
     using ranges::views::transform;
     using ranges::views::values;
     return ranges::accumulate(
