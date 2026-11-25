@@ -1353,8 +1353,8 @@ ResultPtr evaluate_impl(Node const& node,         //
         // evaluation-local buffer.
         bool const inplace_eligible =
             f.nd()->op_type() == EvalOp::Sum && f.nd()->accumulate_in_place() &&
-            !f.nd().left().leaf() && !cache.chain_holds_shared(f.left) &&
-            f.left.use_count() == 1;
+            !f.nd().left().leaf() && f.left.use_count() == 1 &&
+            !cache.chain_holds_shared(f.left);
         if (inplace_eligible) {
           // The accumulate-in-place Sum (sum_in_place_traced, above),
           // shared with the ordered executor's own compute_cell.
