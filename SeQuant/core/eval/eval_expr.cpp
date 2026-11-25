@@ -385,6 +385,58 @@ IndexSet all_indices(ExprPtr const& expr) {
 }
 
 ///
+/// \return the tensor that stands for the result of the Sum, Power or
+///         Broadcast \p node as a factor of a network
+///
+/// The value of such a node is laid out by its canonical indices, and nodes
+/// of one hash are one value in that layout whatever their indices are
+/// labeled. Its \c expr() does not tell them apart from other nodes, nor one
+/// layout from another: every intermediate has the same label, and the slots
+/// of its bra, of its ket and of its aux are each ordered by the labels of the
+/// indices. The tensor returned has the slots of each of the three in the
+/// order of the canonical indices, and a label made of the hash of the node
+/// and of the positions of its slots in the canonical layout, since which of
+/// those are in the bra and which in the ket is not fixed by the hash (nodes
+/// of bra-ket symmetric factors can differ in it). The canonical indices that
+/// are only proto-indices of the slots follow the aux, in their order: the
+/// proto-indices of a slot are not ordered, so without these the network
+/// would not tell which of them is which in the layout.
+///
+ExprPtr factor_in_canonical_layout(EvalExprNode const& node) {
+  auto const& t = node->as_tensor();
+  auto const& layout = node->canon_indices();
+  auto const position = [&layout](Index const& ix) {
+    auto const it = std::ranges::find(layout, ix);
+    SEQUANT_ASSERT(it != layout.end());
+    return std::distance(layout.begin(), it);
+  };
+  std::wstring label{t.label()};
+  label += L'#' + std::to_wstring(node->hash_value());
+  auto const sorted = [&position, &label](auto const& slots) {
+    auto indices = slots | ranges::to<container::svector<Index>>;
+    std::ranges::sort(indices, std::less{}, position);
+    for (Index const& ix : indices)
+      label += L'.' + std::to_wstring(position(ix));
+    return indices;
+  };
+  auto b = sorted(t.bra());
+  auto k = sorted(t.ket());
+  auto a = sorted(t.aux());
+  // the canonical indices that are in no slot are there only as proto-indices
+  // of those that are
+  for (std::size_t pos = 0; pos != layout.size(); ++pos) {
+    Index const& ix = layout[pos];
+    if (ranges::any_of(t.slots(), [&ix](auto const& s) { return s == ix; }))
+      continue;
+    label += L'.' + std::to_wstring(pos);
+    a.push_back(ix);
+  }
+  return ex<Tensor>(std::move(label), bra(std::move(b)), ket(std::move(k)),
+                    aux(std::move(a)), t.symmetry(), t.braket_symmetry(),
+                    t.column_symmetry());
+}
+
+///
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
 ///        sub-tree, or, at the root node of a sum sub-tree or of an inlined
 ///        equation (see EvalExpr::is_equation_boundary).
@@ -401,12 +453,17 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   // Treat a unary node (Adjoint, Power) and an inlined equation the same as
   // Sum here: each produces a tensor result that enters a parent Product as
   // a single factor — the parent shouldn't recurse past its boundary, just
-  // collect the tensor held in node->expr() and move on.
+  // collect the tensor that stands for the node and move on.
   if (auto op = node->op_type();
       node->is_tensor() && (!op || *op == EvalOp::Sum || is_unary(*op) ||
                             node->is_equation_boundary())) {
-    collect.emplace_back(
-        ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
+    // a leaf, an Adjoint and the head of an inlined equation are tensors as
+    // written, known to the network by their labels
+    bool const as_written =
+        !op || *op == EvalOp::Adjoint || node->is_equation_boundary();
+    collect.emplace_back(ExprWithHash{
+        .expr = as_written ? node->expr() : factor_in_canonical_layout(node),
+        .hash = node->hash_value()});
     // The sign of the factor as written relative to what its expr() is in
     // the network:
     // - a leaf: its canonical spelling, hence leaf_phase;
@@ -546,11 +603,24 @@ EvalExprNode sum_chain(std::vector<EvalExprNode>&& summands,
   // A Sum has phase 1: its value is that of its summands as written, each the
   // canonical form its hash stands for times its phase, so the phase is part
   // of what identifies the summand
-  auto hvals = summands | transform([](auto&& n) {
+  // A Sum is laid out as its first summand is; where the slots of another
+  // summand go in that layout is part of what identifies the summand as well
+  auto const& layout = summands.front()->canon_indices();
+  auto hvals = summands | transform([&layout](auto&& n) {
                  auto h = n->hash_value();
                  if (n->canon_phase() != 1) hash::combine(h, n->canon_phase());
+                 // an index that the layout lacks is given the position
+                 // past its end: such a Sum has no value, but is exported
+                 auto const& indices = n->canon_indices();
+                 if (!std::ranges::equal(indices, layout))
+                   for (Index const& ix : indices) {
+                     auto const pos = std::ranges::find(layout, ix);
+                     hash::combine(h, hash::value(static_cast<std::size_t>(
+                                          std::distance(layout.begin(), pos))));
+                   }
                  return h;
-               });
+               }) |
+               ranges::to_vector;
 
   // Every binary Sum produced by fold_left_to_node below folds the running
   // accumulator (the chain seed, or a prior chain Sum) in as the left
