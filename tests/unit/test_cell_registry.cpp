@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 using sequant::eval::CellId;
 using sequant::eval::CellReadResolver;
@@ -312,6 +313,13 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   reg2.seed_persistent();
   CHECK(reg2.peek(2) == r2);  // seeded from the store
   CHECK_FALSE(reg2.peek(1));
+  std::vector<sequant::eval::CellId> live2;
+  reg2.for_each_live(
+      [&live2](sequant::eval::CellId c, sequant::ResultPtr const&) {
+        live2.push_back(c);
+      });
+  CHECK(live2 == std::vector<sequant::eval::CellId>{2});
+  CHECK(reg2.holds(r2));
 }
 
 TEST_CASE("registry-clear-bound-to", "[cell_registry]") {
@@ -390,4 +398,126 @@ TEST_CASE("resolver-unfetched-not-drained", "[cell_registry]") {
   });
   CHECK_FALSE(rr.operand_drained(100));  // table value, never fetched here
   CHECK(rr.operand_drained(999));        // not a table value: private
+}
+
+TEST_CASE("registry-live-cells", "[cell_registry]") {
+  // for_each_live and holds follow every way a slot gains or loses a value,
+  // and visit cells in ascending order.
+  CellTable t;
+  for (std::size_t i = 0; i < 4; ++i) {
+    TableCell c;
+    c.value_id = i;
+    c.production.kind = ProductionKind::Build;
+    c.scope.path = {{LoopKey{1, 0}, 0}};
+    c.persistent = (i == 3);
+    t.cells.push_back(c);
+  }
+  CellRegistry reg(t);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  auto make = [&cm](std::wstring_view label) {
+    return std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+        sequant::container::svector<sequant::Index>{
+            sequant::Index{std::wstring(label)}},
+        cm);
+  };
+  sequant::ResultPtr r0 = make(L"i_1"), r1 = make(L"i_2"), r3 = make(L"i_3");
+  auto live = [&reg] {
+    std::vector<CellId> out;
+    reg.for_each_live(
+        [&out](CellId c, sequant::ResultPtr const&) { out.push_back(c); });
+    return out;
+  };
+
+  CHECK(live().empty());
+  reg.set(1, r1);
+  reg.set(3, r3);
+  reg.set(0, r0);
+  CHECK(live() == std::vector<CellId>{0, 1, 3});
+  CHECK(reg.holds(r1));
+
+  (void)reg.take(1);
+  CHECK(live() == std::vector<CellId>{0, 3});
+  CHECK_FALSE(reg.holds(r1));
+
+  (void)reg.take(3);  // a persistent cell is never given away
+  CHECK(live() == std::vector<CellId>{0, 3});
+
+  reg.release(0);
+  CHECK(live() == std::vector<CellId>{3});
+
+  reg.set(0, r0);
+  reg.clear_bound_to(LoopKey{1, 0});
+  CHECK(live() == std::vector<CellId>{3});
+  CHECK(reg.holds(r3));
+
+  reg.set(2, nullptr);  // a null value does not make the cell live
+  CHECK(live() == std::vector<CellId>{3});
+
+  reg.set(3, nullptr);  // nor keeps a live (persistent) cell live
+  CHECK(live().empty());
+  CHECK_FALSE(reg.holds(r3));
+}
+
+TEST_CASE("registry-holds-shared-buffer", "[cell_registry]") {
+  // holds() answers for a buffer for as long as any cell holds it, holds_if()
+  // asks only the cells that do, and a production whose stored_form hook
+  // throws leaves the cell as it was.
+  CellTable t;
+  for (std::size_t i = 0; i < 2; ++i) {
+    TableCell c;
+    c.value_id = i;
+    c.production.kind = ProductionKind::Build;
+    c.persistent = (i == 1);
+    t.cells.push_back(c);
+  }
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  auto make = [&cm](std::wstring_view label) {
+    return std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+        sequant::container::svector<sequant::Index>{
+            sequant::Index{std::wstring(label)}},
+        cm);
+  };
+  sequant::ResultPtr r = make(L"i_1"), other = make(L"i_2");
+
+  SECTION("one buffer in two cells") {
+    CellRegistry reg(t);
+    auto const in = [](CellId want) {
+      return [want](CellId c) { return c == want; };
+    };
+    reg.set(0, r);
+    reg.set(1, r);
+    reg.set(1, r);  // persistent: re-storing the same buffer adds no entry
+    CHECK(reg.holds(r));
+    CHECK(reg.holds_if(r, in(0)));
+    CHECK(reg.holds_if(r, in(1)));
+    (void)reg.take(0);
+    CHECK(reg.holds(r));  // cell 1 still holds it
+    CHECK_FALSE(reg.holds_if(r, in(0)));
+    CHECK(reg.holds_if(r, in(1)));
+    reg.set(1, other);
+    CHECK_FALSE(reg.holds(r));
+    CHECK_FALSE(reg.holds_if(r, in(1)));
+    CHECK(reg.holds(other));
+    CHECK(reg.holds_if(other, in(1)));
+  }
+
+  SECTION("stored_form throws") {
+    bool fail = false;
+    sequant::eval::CellRegistryHooks hooks;
+    hooks.stored_form = [&fail](CellId, sequant::ResultPtr v) {
+      if (fail) throw sequant::Exception("stored_form failed");
+      return v;
+    };
+    CellRegistry reg(t, hooks);
+    reg.set(1, r);
+    auto const bytes = reg.live_bytes();
+    fail = true;
+    CHECK_THROWS_AS(reg.set(1, other), sequant::Exception);
+    CHECK(reg.peek(1) == r);
+    CHECK(reg.holds(r));
+    CHECK_FALSE(reg.holds(other));
+    CHECK(reg.live_bytes() == bytes);
+  }
 }

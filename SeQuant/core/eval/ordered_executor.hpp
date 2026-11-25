@@ -1499,8 +1499,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // those values already contribute via current_residency()'s walk of
   // cache_map_, so a live cell's bytes are only added here when no alive
   // scope-cache entry anywhere on the chain holds that same buffer by pointer
-  // identity (cache.chain_holds, read-only -- unlike chain_holds_shared it
-  // decays no lifetime and does not care whether that entry is shared).
+  // identity (cache.chain_held_buffers, read-only -- unlike
+  // chain_holds_shared it decays no lifetime and does not care whether that
+  // entry is shared).
   // Under the cell-read resolver the executor never stores into a scope
   // cache itself, so on a run this executor drives alone that test never
   // fires and every live cell is counted.
@@ -1514,10 +1515,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       .bytes = [&registry, &cache, on_disk, disk_spill,
                 cell_hash]() -> std::size_t {
         std::size_t bytes = 0, disk_bytes = 0;
+        auto const chain_held = cache.chain_held_buffers();
         registry.for_each_live([&](CellId c, ResultPtr const& v) {
           if (on_disk(c, v))
             disk_bytes += v->size_in_bytes();
-          else if (!cache.chain_holds(v))
+          else if (!chain_held.contains(v.get()))
             bytes += v->size_in_bytes();
         });
         if (disk_spill) {
@@ -1539,19 +1541,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       .for_each =
           [&registry, &cache, cell_hash,
            on_disk](std::function<void(std::size_t, std::size_t)> const& emit) {
+            auto const chain_held = cache.chain_held_buffers();
             registry.for_each_live([&](CellId c, ResultPtr const& v) {
-              if (!on_disk(c, v) && !cache.chain_holds(v))
+              if (!on_disk(c, v) && !chain_held.contains(v.get()))
                 emit(cell_hash(c), v->size_in_bytes());
             });
           },
       .holds =
           [&registry, on_disk, disk_spill](ResultPtr const& value) {
             if (!disk_spill) return registry.holds(value);
-            bool held = false;
-            registry.for_each_live([&](CellId c, ResultPtr const& v) {
-              held = held || (v == value && !on_disk(c, v));
-            });
-            return held;
+            return registry.holds_if(
+                value, [&](CellId c) { return !on_disk(c, value); });
           }};
   struct ExternalStoreGuard {
     CacheManager<N, FHC>& c;

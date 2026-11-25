@@ -316,6 +316,15 @@ class EvalExpr {
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
   ///
+  /// \return The sign (+1 or -1) by which expr() differs from the tensor
+  ///         this object was constructed from: canon_phase() for a tensor
+  ///         whose expr() is its canonical spelling, with the slots of its
+  ///         bundles reordered; 1 for every other object, whose expr() is as
+  ///         written (a tensor of tensors, the result of an operation).
+  ///
+  [[nodiscard]] std::int8_t leaf_phase() const noexcept;
+
+  ///
   /// \return Whether this expression has a connectivity graph
   /// \see connectivity_graph
   ///
@@ -545,6 +554,10 @@ class EvalExpr {
   /// See \c root_scope.
   bool root_scope_ = false;
 
+  /// Whether expr_ is the canonical spelling of the tensor this was
+  /// constructed from; see \c leaf_phase.
+  bool respelled_ = false;
+
   ExprPtr expr_;
 
   index_vector canon_indices_;
@@ -613,7 +626,11 @@ class EvalExpr {
 };
 
 struct EvalOpSetter {
-  void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
+  /// \note the result of an operation has no leaf phase
+  void set(EvalExpr& expr, EvalOp op) {
+    expr.op_type_ = op;
+    expr.respelled_ = false;
+  }
   void reset(EvalExpr& expr) { expr.op_type_ = std::nullopt; }
 };
 
@@ -908,8 +925,26 @@ rational power_exponent(meta::eval_node auto const& node) {
 }
 
 ///
+/// \return The sign (+1 or -1) by which the value of the EvalOp::Power node
+///         @p node differs from the power of the expression its base is read
+///         as: expr() of a leaf, which lacks the leaf's sign (see
+///         EvalExpr::leaf_phase), and the value as written of any other base.
+///
+std::int8_t power_phase(meta::eval_node auto const& node) {
+  SEQUANT_ASSERT(node->op_type() == EvalOp::Power);
+  auto const& base = node.left();
+  // the node carries the sign of its base to the exponent
+  return base.leaf() && base->leaf_phase() != 1 ? node->canon_phase()
+                                                : std::int8_t{1};
+}
+
+///
 /// Converts an `EvalExpr` to `ExprPtr`, passing the expression of every
 /// terminal through @p leaf_map.
+///
+/// The result is the value of @p node as written: a leaf whose expression,
+/// its canonical spelling, differs from the leaf as written by a sign (see
+/// EvalExpr::leaf_phase) contributes that sign.
 ///
 /// An inlined equation below @p node (see EvalExpr::is_equation_boundary) is a
 /// terminal: it contributes its head, not its rhs; @p node itself, boundary or
@@ -925,7 +960,13 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
-  if (node.leaf()) return leaf_map(evxpr.expr());
+  // the expression of @c phase times @c e
+  auto const signed_expr = [](std::int8_t phase, ExprPtr e) -> ExprPtr {
+    return phase == 1 ? e : ex<Constant>(phase) * e;
+  };
+
+  if (node.leaf())
+    return signed_expr(evxpr.leaf_phase(), leaf_map(evxpr.expr()));
 
   // Adjoint is unary and stores the marker-bearing tensor directly in its
   // own ExprPtr; the bare-leaf left child and Constant(1) right child are
@@ -937,7 +978,12 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
                                      : to_expr(c, leaf_map);
   };
 
-  if (op == EvalOp::Power) return pow(child(node.left()), power_exponent(node));
+  if (op == EvalOp::Power) {
+    auto const& base = node.left();
+    return signed_expr(power_phase(node),
+                       pow(base.leaf() ? leaf_map(base->expr()) : child(base),
+                           power_exponent(node)));
+  }
 
   // the broadcast is implied by the Sum under a head that holds the node
   if (op == EvalOp::Broadcast) return child(node.left());
@@ -945,17 +991,22 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   if (op == EvalOp::Product) {
     auto prod = Product{};
 
-    ExprPtr lexpr = child(node.left());
-    ExprPtr rexpr = child(node.right());
-
-    prod.append(1, lexpr, Product::Flatten::No);
-    prod.append(1, rexpr, Product::Flatten::No);
+    // the sign of a leaf goes into the scalar of the product
+    for (auto const* c : {&node.left(), &node.right()}) {
+      if (c->leaf())
+        prod.append((*c)->leaf_phase(), leaf_map((*c)->expr()),
+                    Product::Flatten::No);
+      else
+        prod.append(1, child(*c), Product::Flatten::No);
+    }
 
     SEQUANT_ASSERT(!prod.empty());
 
-    if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
-      return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
-                                 prod.factor(0)->end(), Product::Flatten::No});
+    if (prod.size() == 1 && prod.factor(0)->is<Product>()) {
+      // a product times a scalar: one product, of both scalars
+      auto const& inner = prod.factor(0)->as<Product>();
+      return ex<Product>(Product{prod.scalar() * inner.scalar(), inner.begin(),
+                                 inner.end(), Product::Flatten::No});
     } else {
       return ex<Product>(std::move(prod));
     }

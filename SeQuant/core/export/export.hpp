@@ -257,11 +257,21 @@ class GenerationVisitor {
 
     // Assemble the expression that should be evaluated
     container::svector<ExprPtr> expressions;
+    // An operand's expr() is what the generated code reads. That of a leaf is
+    // its canonical spelling, which differs from the leaf as written by the
+    // node's leaf_phase; the expression is multiplied by it.
+    const auto leaf_phase = [](const ExportNode<NodeData> &operand) {
+      return operand.leaf() ? operand->leaf_phase() : std::int8_t{1};
+    };
+    const auto add = [&expressions](ExprPtr expr, std::int8_t phase) {
+      expressions.push_back(phase == 1 ? std::move(expr)
+                                       : ex<Constant>(phase) * expr);
+    };
     switch (node->op_type().value()) {
       case EvalOp::Product:
-        expressions.push_back(
-            ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
-                        Product::Flatten::No));
+        add(ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
+                        Product::Flatten::No),
+            leaf_phase(node.left()) * leaf_phase(node.right()));
         break;
       case EvalOp::Adjoint:
         // Unary IR op. The adjoint result (node->expr(), the marker-bearing
@@ -280,19 +290,19 @@ class GenerationVisitor {
         // operation yet (the eval-path backends apply conj directly in
         // Result::adjoint()). Adding complex-correct export requires
         // representing conj in the generated IR — tracked separately.
-        expressions.push_back(node.left()->expr());
+        add(node.left()->expr(), leaf_phase(node.left()));
         break;
       case EvalOp::Power:
         // Unary IR op: the left child is the operand tensor, the right child
         // the Constant sentinel carrying the exponent. The power is taken
         // element-wise, so the operand's indices are the result's and no
         // transpose is implied.
-        expressions.push_back(pow(node.left()->expr(), power_exponent(node)));
+        add(pow(node.left()->expr(), power_exponent(node)), power_phase(node));
         break;
       case EvalOp::Broadcast:
         // Unary IR op: the left child is the operand, whose modes are a subset
         // of the result's; the generator broadcasts it over the others
-        expressions.push_back(node.left()->expr());
+        add(node.left()->expr(), leaf_phase(node.left()));
         break;
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
@@ -301,14 +311,14 @@ class GenerationVisitor {
             // computation that should be exported.
             return;
           case ComputeSelection::Left:
-            expressions.push_back(node.left()->expr());
+            add(node.left()->expr(), leaf_phase(node.left()));
             break;
           case ComputeSelection::Right:
-            expressions.push_back(node.right()->expr());
+            add(node.right()->expr(), leaf_phase(node.right()));
             break;
           case ComputeSelection::Both:
-            expressions.push_back(node.left()->expr());
-            expressions.push_back(node.right()->expr());
+            add(node.left()->expr(), leaf_phase(node.left()));
+            add(node.right()->expr(), leaf_phase(node.right()));
             break;
         }
         break;

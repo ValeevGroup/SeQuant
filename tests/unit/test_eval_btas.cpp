@@ -4,12 +4,14 @@
 #include "catch2_sequant.hpp"
 #include "tensor_power_fixtures.hpp"
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/btas/array_ops.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -29,8 +31,10 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <array>
 #include <cmath>
 #include <complex>
+#include <initializer_list>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -697,6 +701,107 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
                             100 * std::numeric_limits<double>::epsilon()));
 }
 
+TEST_CASE("eval_sum_in_place_shared_operand_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 3, nvirt = 4;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  auto tensor = [](std::wstring const& label,
+                   std::initializer_list<std::wstring> b,
+                   std::initializer_list<std::wstring> k) {
+    return ex<Tensor>(label, bra(b), ket(k),
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  };
+  // the ordered executor answers the question of who holds an operand from
+  // its cell table, and passes these cases as it is: they pin that
+  BatchPolicy ordered;
+  ordered.scheduler = BatchScheduler::ordered;
+
+  SECTION("a pending operand of a product") {
+    // p + q is one value, read as a factor and then, for the last time, as
+    // what the chain p + q + g accumulates into
+    auto pq = [&](std::wstring const& a, std::wstring const& i) {
+      return tensor(L"p", {a}, {i}) + tensor(L"q", {a}, {i});
+    };
+    auto const node = eval_node(ex<Product>(
+        ExprPtrList{pq(L"a_2", L"i_5"),
+                    pq(L"a_1", L"i_3") + tensor(L"g", {L"a_1"}, {L"i_3"}),
+                    tensor(L"W", {L"i_3", L"i_5"}, {L"a_1", L"a_2"})},
+        Product::Flatten::No));
+    std::vector const nodes{node};
+    auto const alone = evaluate(node, yield_)->get<double>();
+    auto cache = cache_manager(nodes);
+    CHECK(evaluate(node, yield_, cache)->get<double>() ==
+          Catch::Approx(alone).margin(1e-10));
+    auto ordered_cache = cache_manager(nodes);
+    CHECK(evaluate_each(nodes, ordered, yield_, ordered_cache)[0]
+              ->get<double>() == Catch::Approx(alone).margin(1e-10));
+  }
+
+  SECTION("a result the caller holds") {
+    // f t is the first root and what the second accumulates g into
+    auto const ft =
+        tensor(L"f", {L"a_1"}, {L"a_2"}) * tensor(L"t", {L"a_2"}, {L"i_1"});
+    std::vector const nodes{eval_node(ft),
+                            eval_node(ft + tensor(L"g", {L"a_1"}, {L"i_1"}))};
+    REQUIRE(nodes[1].left()->hash_value() == nodes[0]->hash_value());
+    std::array const alone{evaluate(nodes[0], yield_)->get<BTensorD>(),
+                           evaluate(nodes[1], yield_)->get<BTensorD>()};
+    auto differs = [](BTensorD const& a, BTensorD const& b) {
+      BTensorD const d = a - b;
+      return std::sqrt(btas::dotc(d, d)) > 1e-10;
+    };
+    REQUIRE(differs(alone[0], alone[1]));
+
+    auto cache = cache_manager(nodes);
+    std::array const cached{evaluate(nodes[0], yield_, cache),
+                            evaluate(nodes[1], yield_, cache)};
+    auto ordered_cache = cache_manager(nodes);
+    auto const scheduled = evaluate_each(nodes, ordered, yield_, ordered_cache);
+    for (std::size_t k : {0, 1}) {
+      CAPTURE(k);
+      CHECK_FALSE(differs(cached[k]->get<BTensorD>(), alone[k]));
+      CHECK_FALSE(differs(scheduled[k]->get<BTensorD>(), alone[k]));
+    }
+  }
+
+  SECTION("the first root of a summed forest") {
+    using annot_t = EvalExprBTAS::annot_t;
+    auto const Z = tensor(L"Z", {L"i_1"}, {L"a_1"});
+    auto const g = tensor(L"g", {L"a_1"}, {L"i_1"});
+    auto const ft =
+        tensor(L"f", {L"a_1"}, {L"a_2"}) * tensor(L"t", {L"a_2"}, {L"i_1"});
+    auto forests = [&](auto const& nodes) {
+      auto cache = cache_manager(nodes);
+      auto ordered_cache = cache_manager(nodes);
+      return std::array{
+          evaluate(nodes, annot_t{}, yield_, cache),
+          evaluate(nodes, ordered, annot_t{}, yield_, ordered_cache)};
+    };
+
+    // E0 + E1 + E0: the value of E0 is cached for its second use
+    std::vector const scalars{eval_node(ft * Z), eval_node(g * Z),
+                              eval_node(ft * Z)};
+    auto const sum = 2 * evaluate(scalars[0], yield_)->get<double>() +
+                     evaluate(scalars[1], yield_)->get<double>();
+    for (auto const& r : forests(scalars))
+      CHECK(r->get<double>() == Catch::Approx(sum).margin(1e-10));
+
+    // a first root that is a leaf belongs to the leaf evaluator
+    auto const leaf = yield_(g->as<Tensor>());
+    BTensorD const pristine = leaf->get<BTensorD>();
+    std::vector const tensors{eval_node(g), eval_node(g), eval_node(g)};
+    auto cache = cache_manager(tensors);
+    auto const r = evaluate(tensors, annot_t{}, yield_, cache);
+    BTensorD const d = leaf->get<BTensorD>() - pristine;
+    CHECK(std::sqrt(btas::dotc(d, d)) < 1e-10);
+    BTensorD const e = r->get<BTensorD>() - pristine - pristine - pristine;
+    CHECK(std::sqrt(btas::dotc(e, e)) < 1e-10);
+  }
+}
+
 TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   using namespace sequant;
   using BTensorC = btas::Tensor<std::complex<double>>;
@@ -839,9 +944,8 @@ TEST_CASE("eval_tensor_power_btas", "[eval_btas]") {
   // an antisymmetric base spelled out of canonical order: its leaf
   // canonicalizes with phase -1 and the power node carries that phase raised
   // to the exponent; in the base's own layout pow(A, e) is the element-wise
-  // power of A as A evaluates there. A single uncached evaluation converts no
-  // node phase (a phase only reorients a cached value for another
-  // occurrence), so this pins the layout, not the phase arithmetic.
+  // power of A as A evaluates there, the negative of its canonical spelling
+  // (eval_leaf_reordered_with_a_sign_btas pins that sign).
   {
     auto A = ex<Tensor>(L"A", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"},
                         TensorSymmetries{.perm = Symmetry::Antisymm});
@@ -1342,4 +1446,440 @@ TEST_CASE("eval_btas_annotation_tells_basis_instances_apart",
   CHECK(annot[0] != annot[1]);
   CHECK(annot[0] != annot[2]);
   CHECK(annot[1] != annot[2]);
+}
+
+TEST_CASE("eval_leaf_reordered_with_a_sign_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // an antisymmetric leaf whose bra holds two spaces: the canonical order of
+  // the bundle is i_3, a_1, so the leaf as written is its negative
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  auto written =
+      ex<Tensor>(L"t", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto sorted =
+      ex<Tensor>(L"t", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"}, antisymm);
+  // one layout for both: a_1, i_3, i_1, i_2
+  auto const target = tidxs(written->as<Tensor>());
+  auto eval_at = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), target, yield_)->get<BTensorD>();
+  };
+
+  auto const t_written = eval_at(written);
+  auto const t_sorted = eval_at(sorted);
+  REQUIRE(t_written.range() == t_sorted.range());
+  double norm = 0;
+  auto s = t_sorted.begin();
+  for (auto w = t_written.begin(); w != t_written.end(); ++w, ++s) {
+    norm += *s * *s;
+    CHECK(*w == Catch::Approx(-*s).margin(1e-12));
+  }
+  REQUIRE(norm > 0.1);
+
+  // and under a contraction
+  auto W = ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"},
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  auto scalar_of = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), yield_)->get<double>();
+  };
+  auto const e_written = scalar_of(written * W);
+  auto const e_sorted = scalar_of(sorted * W);
+  REQUIRE(std::abs(e_sorted) > 1e-3);
+  CHECK(e_written == Catch::Approx(-e_sorted).margin(1e-12));
+}
+
+TEST_CASE("eval_cached_intermediate_of_reordered_leaf_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // the two spellings of eval_leaf_reordered_with_a_sign_btas: the leaf as
+  // written is the negative of the sorted one, and their nodes hash alike
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  const TensorSymmetries nonsymm{.perm = Symmetry::Nonsymm};
+  auto written =
+      ex<Tensor>(L"t", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto sorted =
+      ex<Tensor>(L"t", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto scalar_of = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), yield_)->get<double>();
+  };
+  // evaluates both expressions with one cache, so that an intermediate of the
+  // first is the second's if their nodes hash alike
+  auto with_shared_cache = [&](ExprPtr const& first, ExprPtr const& second) {
+    std::vector nodes{eval_node(first), eval_node(second)};
+    auto cache = cache_manager(nodes);
+    auto const v1 = evaluate(nodes[0], yield_, cache)->get<double>();
+    auto const v2 = evaluate(nodes[1], yield_, cache)->get<double>();
+    return std::pair{v1, v2};
+  };
+
+  SECTION("a product") {
+    auto W =
+        ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"i_3", L"a_2"}, nonsymm);
+    auto V = ex<Tensor>(L"V", bra{L"a_2"}, ket{L"a_1"}, nonsymm);
+    // the nodes of the two t W have one hash and opposite phases
+    auto const n_sorted = eval_node(sorted * W * V);
+    auto const n_written = eval_node(written * W * V);
+    REQUIRE(n_sorted.left()->hash_value() == n_written.left()->hash_value());
+    REQUIRE(n_sorted.left()->canon_phase() == -n_written.left()->canon_phase());
+
+    auto const e = scalar_of(sorted * W * V);
+    REQUIRE(std::abs(e) > 1e-3);
+    for (bool sorted_first : {true, false}) {
+      auto const [e1, e2] =
+          sorted_first ? with_shared_cache(sorted * W * V, written * W * V)
+                       : with_shared_cache(written * W * V, sorted * W * V);
+      CHECK(e1 == Catch::Approx(sorted_first ? e : -e).margin(1e-12));
+      CHECK(e2 == Catch::Approx(sorted_first ? -e : e).margin(1e-12));
+    }
+  }
+
+  SECTION("a sum") {
+    auto Y =
+        ex<Tensor>(L"Y", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, nonsymm);
+    auto Z =
+        ex<Tensor>(L"Z", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"}, nonsymm);
+    // the two sums differ in the sign of a summand, hence in value
+    REQUIRE(eval_node((sorted + Y) * Z).left()->hash_value() !=
+            eval_node((written + Y) * Z).left()->hash_value());
+
+    auto const t = scalar_of(sorted * Z);
+    auto const y = scalar_of(Y * Z);
+    REQUIRE(std::abs(t) > 1e-3);
+    for (bool sorted_first : {true, false}) {
+      auto const [e1, e2] =
+          sorted_first ? with_shared_cache((sorted + Y) * Z, (written + Y) * Z)
+                       : with_shared_cache((written + Y) * Z, (sorted + Y) * Z);
+      CHECK(e1 == Catch::Approx(sorted_first ? y + t : y - t).margin(1e-12));
+      CHECK(e2 == Catch::Approx(sorted_first ? y - t : y + t).margin(1e-12));
+    }
+  }
+}
+
+TEST_CASE("eval_ordered_reordered_leaf_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // the two spellings of eval_leaf_reordered_with_a_sign_btas as roots of one
+  // schedule: the leaf and t W are one value each, read with opposite signs
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  const TensorSymmetries nonsymm{.perm = Symmetry::Nonsymm};
+  auto written =
+      ex<Tensor>(L"t", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto sorted =
+      ex<Tensor>(L"t", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto W = ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"i_3", L"a_2"}, nonsymm);
+  auto V = ex<Tensor>(L"V", bra{L"a_2"}, ket{L"a_1"}, nonsymm);
+
+  auto const e = evaluate(eval_node(sorted * W * V), yield_)->get<double>();
+  REQUIRE(std::abs(e) > 1e-3);
+
+  BatchPolicy policy;
+  policy.scheduler = BatchScheduler::ordered;
+  for (bool sorted_first : {true, false}) {
+    std::vector nodes{eval_node((sorted_first ? sorted : written) * W * V),
+                      eval_node((sorted_first ? written : sorted) * W * V)};
+    REQUIRE(nodes[0].left()->hash_value() == nodes[1].left()->hash_value());
+    auto cache = cache_manager(nodes);
+    auto const results = evaluate_each(nodes, policy, yield_, cache);
+    REQUIRE(results.size() == 2);
+    CHECK(results[0]->get<double>() ==
+          Catch::Approx(sorted_first ? e : -e).margin(1e-12));
+    CHECK(results[1]->get<double>() ==
+          Catch::Approx(sorted_first ? -e : e).margin(1e-12));
+  }
+}
+
+TEST_CASE("eval_adjoint_of_reordered_leaf_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // the adjoints of the two spellings of eval_leaf_reordered_with_a_sign_btas
+  // differ by the sign their operands do; their nodes hash alike but are not
+  // one value (their layouts, as written, differ)
+  auto adjoint_of = [](std::initializer_list<std::wstring> bra_labels) {
+    Tensor t(L"t", bra(bra_labels), ket{L"i_1", L"i_2"}, Symmetry::Antisymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    t.adjoint();
+    return ex<Tensor>(std::move(t));
+  };
+  auto written = adjoint_of({L"a_1", L"i_3"});
+  auto sorted = adjoint_of({L"i_3", L"a_1"});
+  auto W = ex<Tensor>(L"W", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"},
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  REQUIRE(eval_node(written)->op_type() == EvalOp::Adjoint);
+
+  auto scalar_of = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), yield_)->get<double>();
+  };
+  auto const e = scalar_of(sorted * W);
+  REQUIRE(std::abs(e) > 1e-3);
+  CHECK(scalar_of(written * W) == Catch::Approx(-e).margin(1e-12));
+
+  // each spelling twice, so that every node is a value of the cache or of the
+  // schedule
+  for (bool ordered : {false, true})
+    for (bool sorted_first : {true, false}) {
+      CAPTURE(ordered, sorted_first);
+      std::vector nodes{eval_node(sorted_first ? sorted : written),
+                        eval_node(sorted_first ? written : sorted),
+                        eval_node(sorted_first ? sorted : written),
+                        eval_node(sorted_first ? written : sorted)};
+      REQUIRE(nodes[0]->hash_value() == nodes[1]->hash_value());
+      auto cache = cache_manager(nodes);
+      BatchPolicy policy;
+      if (ordered) policy.scheduler = BatchScheduler::ordered;
+      auto const results = evaluate_each(nodes, policy, yield_, cache);
+      for (int k : {0, 1}) {
+        // i_1, i_2, i_3, a_1 in one and i_1, i_2, a_1, i_3 in the other
+        auto const& s =
+            results[sorted_first ? k * 2 : k * 2 + 1]->get<BTensorD>();
+        auto const& w =
+            results[sorted_first ? k * 2 + 1 : k * 2]->get<BTensorD>();
+        REQUIRE(s.extent(2) == nocc);
+        REQUIRE(w.extent(2) == nvirt);
+        for (size_t i = 0; i < nocc; ++i)
+          for (size_t j = 0; j < nocc; ++j)
+            for (size_t l = 0; l < nocc; ++l)
+              for (size_t c = 0; c < nvirt; ++c)
+                CHECK(w(i, j, c, l) ==
+                      Catch::Approx(-s(i, j, l, c)).margin(1e-12));
+      }
+    }
+}
+
+TEST_CASE("eval_inlined_equation_phase_btas", "[eval_btas][inline]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+  using Labels = std::initializer_list<std::wstring>;
+
+  std::srand(2026);
+  const size_t nocc = 3, nvirt = 4;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  const TensorSymmetries nonsymm{.perm = Symmetry::Nonsymm};
+
+  // the scalar roots of a system, alone, with one cache and as one schedule,
+  // against \p expected
+  auto check = [&](container::svector<ResultExpr> const& sys,
+                   std::array<double, 2> const& expected) {
+    auto const res = binarize<EvalExprBTAS>(sys);
+    std::vector<EvalNode<EvalExprBTAS>> nodes;
+    for (auto const& r : res.roots())
+      if (r.get()->is_scalar()) nodes.push_back(r.get());
+    REQUIRE(nodes.size() == 2);
+    // the two consumers are one canonical value, of opposite phases
+    REQUIRE(nodes[0].left()->hash_value() == nodes[1].left()->hash_value());
+    REQUIRE(nodes[0].left()->canon_phase() == -nodes[1].left()->canon_phase());
+    auto cache = cache_manager(nodes);
+    BatchPolicy ordered;
+    ordered.scheduler = BatchScheduler::ordered;
+    auto ordered_cache = cache_manager(nodes);
+    auto const scheduled = evaluate_each(nodes, ordered, yield_, ordered_cache);
+    for (std::size_t k : {0, 1}) {
+      CAPTURE(k);
+      CHECK(evaluate(nodes[k], yield_)->get<double>() ==
+            Catch::Approx(expected[k]).margin(1e-10));
+      CHECK(evaluate(nodes[k], yield_, cache)->get<double>() ==
+            Catch::Approx(expected[k]).margin(1e-10));
+      CHECK(scheduled[k]->get<double>() ==
+            Catch::Approx(expected[k]).margin(1e-10));
+    }
+  };
+  auto scalar_of = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), yield_)->get<double>();
+  };
+
+  SECTION("a tensor equation read with its head's labels permuted") {
+    // I is antisymmetric, so I{a_2,a_1;...} is its negative: the inlined
+    // subtrees have one hash and opposite phases, and the head, as written,
+    // carries that sign into the network of the consumer
+    auto antisymmetric = [&](ExprPtr const& t, std::size_t n01,
+                             std::size_t n23) {
+      btas::Range const range{n01, n01, n23, n23};
+      BTensorD r{range}, a{range};
+      for (auto& x : r) x = double(std::rand()) / RAND_MAX - 0.5;
+      for (auto const& x : range)
+        a(x[0], x[1], x[2], x[3]) =
+            r(x[0], x[1], x[2], x[3]) - r(x[1], x[0], x[2], x[3]) -
+            r(x[0], x[1], x[3], x[2]) + r(x[1], x[0], x[3], x[2]);
+      yield_.set_leaf(t->as<Tensor>(),
+                      eval_result<ResultTensorBTAS<BTensorD>>(a));
+    };
+    auto I = [&](Labels b) {
+      return ex<Tensor>(L"I", bra(b), ket{L"i_1", L"i_2"}, antisymm);
+    };
+    auto u =
+        ex<Tensor>(L"u", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"}, antisymm);
+    auto v =
+        ex<Tensor>(L"v", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"}, antisymm);
+    antisymmetric(u, nvirt, nvirt);
+    antisymmetric(v, nvirt, nocc);
+    auto W =
+        ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_5"}, nonsymm);
+    auto Z = ex<Tensor>(L"Z", bra{L"a_5"}, ket{L"a_2"}, nonsymm);
+
+    auto const e = scalar_of(u * v * W * Z);
+    REQUIRE(std::abs(e) > 1e-3);
+    Labels const a12{L"a_1", L"a_2"}, a21{L"a_2", L"a_1"};
+    for (bool as_defined_first : {true, false}) {
+      CAPTURE(as_defined_first);
+      Labels const first = as_defined_first ? a12 : a21;
+      Labels const second = as_defined_first ? a21 : a12;
+      check({ResultExpr(I({L"a_1", L"a_2"})->as<Tensor>(), u * v),
+             ResultExpr(Variable(L"R1"), I(first) * W * Z),
+             ResultExpr(Variable(L"R2"), I(second) * W * Z)},
+            {as_defined_first ? e : -e, as_defined_first ? -e : e});
+    }
+  }
+
+  SECTION("scalar equations that differ by a sign") {
+    // the two t W have one hash and opposite phases (see
+    // eval_cached_intermediate_of_reordered_leaf_btas), and a scalar is no
+    // factor of the network of its consumer
+    auto t = [&](Labels b) {
+      return ex<Tensor>(L"t", bra(b), ket{L"i_1", L"i_2"}, antisymm);
+    };
+    auto W =
+        ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"}, nonsymm);
+    auto X = ex<Tensor>(L"X", bra{L"a_2"}, ket{L"i_4"}, nonsymm);
+    auto Y = ex<Tensor>(L"Y", bra{L"i_4"}, ket{L"a_3"}, nonsymm);
+    auto Z = ex<Tensor>(L"Z", bra{L"a_3"}, ket{L"a_2"}, nonsymm);
+    auto E = [](std::wstring label) { return ex<Variable>(label); };
+
+    auto const e = scalar_of(t({L"a_1", L"i_3"}) * W) * scalar_of(X * Y * Z);
+    REQUIRE(std::abs(e) > 1e-3);
+    for (bool written_first : {true, false}) {
+      CAPTURE(written_first);
+      check({ResultExpr(Variable(L"E1"), t({L"a_1", L"i_3"}) * W),
+             ResultExpr(Variable(L"E2"), t({L"i_3", L"a_1"}) * W),
+             ResultExpr(Variable(L"R1"),
+                        E(written_first ? L"E1" : L"E2") * X * Y * Z),
+             ResultExpr(Variable(L"R2"),
+                        E(written_first ? L"E2" : L"E1") * X * Y * Z)},
+            {written_first ? e : -e, written_first ? -e : e});
+    }
+  }
+}
+
+TEST_CASE("eval_slot_alignment_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+  using Labels = std::initializer_list<std::wstring>;
+
+  std::srand(2026);
+  const size_t nocc = 3, nvirt = 4;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  // no tensor has a symmetry: the two orders of a_1, a_2 are different values
+  auto tensor = [](std::wstring const& label, Labels b, Labels k) {
+    return ex<Tensor>(label, bra(b), ket(k),
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  };
+  Labels const a12{L"a_1", L"a_2"}, a21{L"a_2", L"a_1"}, i12{L"i_1", L"i_2"};
+  auto g = [&](Labels b) { return tensor(L"g", b, i12); };
+  auto h = [&](Labels b) { return tensor(L"h", b, i12); };
+  auto const W = tensor(L"W", i12, a12);
+  auto const X = tensor(L"X", {L"a_3"}, {L"i_3"});
+  auto const Y = tensor(L"Y", {L"i_3"}, {L"a_3"});
+  // (f W) (X Y): f W is an intermediate of the tree
+  auto consumer = [&](ExprPtr const& f) {
+    return eval_node(ex<Product>(
+        ExprPtrList{ex<Product>(ExprPtrList{f, W}, Product::Flatten::No),
+                    X * Y},
+        Product::Flatten::No));
+  };
+  // two trees that differ in value evaluate with one cache as each does alone
+  auto check_nodes = [&](EvalNode<EvalExprBTAS> const& n1,
+                         EvalNode<EvalExprBTAS> const& n2) {
+    std::vector nodes{n1, n2};
+    std::array const alone{evaluate(nodes[0], yield_)->get<double>(),
+                           evaluate(nodes[1], yield_)->get<double>()};
+    REQUIRE(std::abs(alone[0] - alone[1]) > 1e-3);
+    auto cache = cache_manager(nodes);
+    for (std::size_t k : {0, 1})
+      CHECK(evaluate(nodes[k], yield_, cache)->get<double>() ==
+            Catch::Approx(alone[k]).margin(1e-10));
+  };
+  auto check = [&](ExprPtr const& f1, ExprPtr const& f2) {
+    check_nodes(consumer(f1), consumer(f2));
+  };
+
+  SECTION("summands aligned differently") {
+    check(g(a12) + h(a12), g(a12) + h(a21));
+    check(g(a12) + h(a12) + g(a21), g(a12) + h(a21) + g(a21));
+  }
+
+  SECTION("factors that differ in the labels of their slots") {
+    check(g(a12) + h(a12), g(a21) + h(a21));
+    check(pow(g(a12), rational{3}), pow(g(a21), rational{3}));
+  }
+
+  SECTION("two factors that are results of operations") {
+    // (p + q) (r + s) and (r + s) (p + q), contracted alike
+    auto m = [&](std::wstring const& label, Labels b, Labels k) {
+      return tensor(label, b, k);
+    };
+    auto pq = [&](Labels b, Labels k) { return m(L"p", b, k) + m(L"q", b, k); };
+    auto rs = [&](Labels b, Labels k) { return m(L"r", b, k) + m(L"s", b, k); };
+    auto pw = [&](std::wstring const& label, Labels b, Labels k, int e) {
+      return pow(m(label, b, k), rational{e});
+    };
+    auto const Z = tensor(L"Z", {L"a_5"}, {L"a_1"});
+    Labels const a1{L"a_1"}, a4{L"a_4"}, a5{L"a_5"};
+    auto two = [&](ExprPtr const& f1, ExprPtr const& f2) {
+      return eval_node(ex<Product>(
+          ExprPtrList{ex<Product>(ExprPtrList{f1, f2}, Product::Flatten::No),
+                      Z},
+          Product::Flatten::No));
+    };
+    check_nodes(two(pq(a1, a4), rs(a4, a5)), two(rs(a1, a4), pq(a4, a5)));
+    check_nodes(two(pw(L"p", a1, a4, 2), pw(L"q", a4, a5, 3)),
+                two(pw(L"q", a1, a4, 3), pw(L"p", a4, a5, 2)));
+  }
+
+  SECTION("bra and ket of a factor exchanged by a bra-ket symmetry") {
+    // f and e are symmetric matrices: the sums f e + q of the two trees are
+    // one value, laid out a_1, a_2 in one and a_2, a_1 in the other, so a_1 is
+    // the bra of one and the ket of the other
+    auto symmetric = [&](std::wstring const& label, Labels b, Labels k) {
+      auto t = ex<Tensor>(label, bra(b), ket(k),
+                          TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                           .braket = BraKetSymmetry::Symm});
+      BTensorD r{btas::Range{nvirt, nvirt}}, m{btas::Range{nvirt, nvirt}};
+      for (auto& x : r) x = double(std::rand()) / RAND_MAX - 0.5;
+      for (std::size_t c = 0; c < nvirt; ++c)
+        for (std::size_t d = 0; d < nvirt; ++d) m(c, d) = r(c, d) + r(d, c);
+      yield_.set_leaf(t->as<Tensor>(),
+                      eval_result<ResultTensorBTAS<BTensorD>>(m));
+      return t;
+    };
+    Labels const a1{L"a_1"}, a2{L"a_2"}, a6{L"a_6"};
+    auto const Z = tensor(L"Z", a2, a1);
+    auto with_Z = [&](ExprPtr const& f) {
+      return eval_node(ex<Product>(
+          ExprPtrList{ex<Product>(ExprPtrList{f, Z}, Product::Flatten::No),
+                      X * Y},
+          Product::Flatten::No));
+    };
+    check_nodes(with_Z(symmetric(L"f", a1, a6) * symmetric(L"e", a6, a2) +
+                       tensor(L"q", a1, a2)),
+                with_Z(symmetric(L"f", a6, a2) * symmetric(L"e", a1, a6) +
+                       tensor(L"q", a2, a1)));
+  }
 }

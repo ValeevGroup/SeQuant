@@ -94,5 +94,33 @@ reason :func:`sequant::to_expr` of a node above a boundary shows the head, not t
 its right-hand side. The flag is not part of the node's hash, so an inlined subtree hashes like the same subtree written out,
 and repeated uses of one head are recognized as one intermediate.
 
+Phases of evaluation nodes
+------------------------------
+
+Every node has a hash and a phase (``EvalExpr::canon_phase``): the value of the node as written is the phase times the canonical
+value the hash stands for. Caches, the ordered executor and common-subexpression elimination hold canonical values and multiply
+by the phase of each occurrence, so that occurrences differing by a sign are one value. A leaf evaluator is the exception to "as
+written": it is given the canonical spelling of a leaf (the node's ``expr()``) and returns the array of that spelling; the sign
+between the two (``EvalExpr::leaf_phase``) is applied to what it returns.
+
+The phase of a product is that of canonicalizing the network of its factors times the sign of each factor as written relative
+to what represents it in that network, which depends on the kind of the factor:
+
+- a leaf is its canonical spelling, and contributes its leaf phase;
+- an inlined tensor equation is its head as written, with the symmetry of the head, through which the network itself accounts
+  for the order of the head's slots; it contributes no sign (nor does an ``Adjoint`` node, likewise a tensor as written);
+- any other node (``Sum``, ``Power``, ``Broadcast``) is a tensor without symmetry that stands for the node's canonical value, and
+  contributes its phase. That tensor is not the node's ``expr()``, which is shared by every intermediate of its shape and has
+  its slots ordered by label: its label carries the hash of the node, and its slots follow the node's canonical indices, so
+  that two such factors of a network, or two layouts of one, are not mistaken for each other. The canonical indices that are
+  only proto-indices of the slots are appended as slots of their own, since the proto-indices of a slot are not ordered;
+- an inlined scalar equation is not part of the network, only its hash enters the hash of the product, and contributes its
+  phase.
+
+A ``Sum`` has phase 1 and is laid out as its first summand is. Its hash includes, for each summand, the phase and, unless the
+summand is laid out as the ``Sum`` is, the position of each of its canonical indices in that layout. The positions are those of
+the canonical indices the summand happens to have: where a summand has a symmetry of its own that exchanges them (``p{a_1;i_1}
+p{a_2;i_2}``), two sums that are relabelings of each other can hash differently, and are then not shared.
+
 Export binarizes one ``ResultExpr`` at a time and never inlines; a tree from the system overload is not meant for export, since
 its consumed heads would appear as intermediates without definitions.

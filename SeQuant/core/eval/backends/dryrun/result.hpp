@@ -19,7 +19,9 @@
 #include <algorithm>
 #include <any>
 #include <array>
+#include <atomic>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <utility>
@@ -68,6 +70,77 @@ class ResultDryRunNested;
     ExtentOverrides overrides = {}, ExtentOverrides lobounds = {});
 
 namespace detail {
+
+/// A byte size computed on first request and kept until \c reset(); copies
+/// carry the stored value. Atomic so that \c size_in_bytes() const stays safe
+/// to call concurrently on a token shared between evaluations running on
+/// different threads; nothing in SeQuant does that itself.
+class SizeMemo {
+ public:
+  SizeMemo() = default;
+  SizeMemo(SizeMemo const& other) noexcept
+      : v_{other.v_.load(std::memory_order_relaxed)} {}
+  SizeMemo& operator=(SizeMemo const& other) noexcept {
+    v_.store(other.v_.load(std::memory_order_relaxed),
+             std::memory_order_relaxed);
+    return *this;
+  }
+
+  template <typename F>
+  [[nodiscard]] std::size_t get(F&& compute) const {
+    std::size_t v = v_.load(std::memory_order_relaxed);
+    if (v == k_unknown_) {
+      v = std::forward<F>(compute)();
+      v_.store(v, std::memory_order_relaxed);
+    }
+    return v;
+  }
+
+  void reset() noexcept { v_.store(k_unknown_, std::memory_order_relaxed); }
+
+ private:
+  // A size equal to this (only an overflowed one can be) is never memoized,
+  // only recomputed on every request.
+  static constexpr std::size_t k_unknown_ =
+      std::numeric_limits<std::size_t>::max();
+  mutable std::atomic<std::size_t> v_{k_unknown_};
+};
+
+/// A dry-run result's extent overrides together with the byte size they
+/// imply, computed on first request (\c size). Reads see the overrides as a
+/// const \c ExtentOverrides; every change goes through assignment or \c
+/// modify, which forget the size. A moved-from object keeps the size; do not
+/// read it.
+class SizedOverrides {
+ public:
+  SizedOverrides() = default;
+  explicit SizedOverrides(ExtentOverrides ov) : ov_{std::move(ov)} {}
+
+  operator ExtentOverrides const&() const noexcept { return ov_; }
+
+  SizedOverrides& operator=(ExtentOverrides ov) {
+    ov_ = std::move(ov);
+    bytes_.reset();
+    return *this;
+  }
+
+  /// Applies \p f(ExtentOverrides&) to the overrides.
+  template <typename F>
+  void modify(F&& f) {
+    bytes_.reset();
+    std::forward<F>(f)(ov_);
+  }
+
+  /// \return the byte size, \p compute() on first request
+  template <typename F>
+  [[nodiscard]] std::size_t size(F&& compute) const {
+    return bytes_.get(std::forward<F>(compute));
+  }
+
+ private:
+  ExtentOverrides ov_;
+  SizeMemo bytes_;
+};
 
 /// Whether any index of \p idx carries proto-indices, i.e. whether a result
 /// over \p idx is nested.
@@ -714,9 +787,10 @@ class ResultDryRun final : public Result {
 
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
-    detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
-                                        block, mode, block_lo, block_hi,
-                                        lobounds_);
+    overrides_.modify([&](ExtentOverrides& ov) {
+      detail::DryRunOps::write_into_slice(indices_, ov, assembled_, cm_, block,
+                                          mode, block_lo, block_hi, lobounds_);
+    });
   }
 
   void add_inplace(Result const& other) override {
@@ -747,12 +821,15 @@ class ResultDryRun final : public Result {
   }
 
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    return cm_->memsize(indices_, overrides_);
+    return overrides_.size(
+        [this] { return cm_->memsize(indices_, overrides_); });
   }
 
   container::svector<Index> indices_;
   std::shared_ptr<CostModel const> cm_;
-  ExtentOverrides overrides_;
+  /// positional extent overrides, with the size_in_bytes() they imply
+  /// memoized: the meter asks every live token for it on every op
+  detail::SizedOverrides overrides_;
   ExtentOverrides lobounds_;  // positional lobounds of sliced modes
   AssembledCoverage assembled_;
 };
@@ -886,9 +963,10 @@ class ResultDryRunNested final : public Result {
 
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
-    detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
-                                        block, mode, block_lo, block_hi,
-                                        lobounds_);
+    overrides_.modify([&](ExtentOverrides& ov) {
+      detail::DryRunOps::write_into_slice(indices_, ov, assembled_, cm_, block,
+                                          mode, block_lo, block_hi, lobounds_);
+    });
   }
 
   void add_inplace(Result const& other) override {
@@ -921,14 +999,17 @@ class ResultDryRunNested final : public Result {
   }
 
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    return cm_->memsize(indices_, overrides_);
+    return overrides_.size(
+        [this] { return cm_->memsize(indices_, overrides_); });
   }
 
   container::svector<Index> outer_;
   container::svector<Index> inner_;
   container::svector<Index> indices_;  // canon order; outer_++inner_ content
   std::shared_ptr<CostModel const> cm_;
-  ExtentOverrides overrides_;
+  /// positional extent overrides, with the size_in_bytes() they imply
+  /// memoized: the meter asks every live token for it on every op
+  detail::SizedOverrides overrides_;
   ExtentOverrides lobounds_;  // positional lobounds of sliced modes
   AssembledCoverage assembled_;
 };

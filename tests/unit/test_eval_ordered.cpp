@@ -819,6 +819,19 @@ TEST_CASE("disk-spill-metering", "[eval][ordered][meter][disk]") {
     }
     CHECK(r.peak() < plain.peak());
 
+    // both operands of (a*b)*d are on disk, so neither is resident: the
+    // sample of that op charges them, and its result, on top of what is live
+    std::size_t const op = scalar_tree(L"(a * b) * d")->hash_value();
+    bool sampled = false;
+    for (auto const& s : r.samples) {
+      if (s.op_hash != op) continue;
+      sampled = true;
+      std::size_t live_bytes = 0;
+      for (auto const& e : s.live) live_bytes += e.bytes;
+      CHECK(s.total >= live_bytes + 3 * r.one);
+    }
+    CHECK(sampled);
+
     // accounting: the shared value alone is written once and read three
     // times; each write and each read is of one scalar
     CHECK(spill.n_writes >= 4);  // a*b, (a*b)+c, (a*b)*d, e*f at the least

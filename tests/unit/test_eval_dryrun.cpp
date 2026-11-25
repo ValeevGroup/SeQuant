@@ -1702,6 +1702,71 @@ TEST_CASE("write-into-slice-is-positional",
   }
 }
 
+// size_in_bytes() is memoized; a write or an accumulation that changes the
+// extents must invalidate it.
+TEST_CASE("size-in-bytes-follows-mutation",
+          "[dryrun-result][write-into-slice]") {
+  using sequant::eval::dryrun::detail::overrides_of;
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  ResultDryRun const stored{{Index{L"i_3"}, Index{L"a_3"}}, cm};
+  Result const& stored_r = stored;
+  container::svector<Index> const idx{Index{L"i_1"}, Index{L"a_1"}};
+
+  SECTION("flat, write_into_slice") {
+    ResultDryRun dest{idx, cm, {{1, 0}}};  // mode 1 unfilled
+    Result& dest_w = dest;
+    auto const before = dest_w.size_in_bytes();
+    dest_w.write_into_slice(*stored_r.slice_mode(1, 0, 5), 1, 0, 5);
+    CHECK(dest_w.size_in_bytes() != before);
+    CHECK(dest_w.size_in_bytes() == cm->memsize(idx, overrides_of(dest_w)));
+  }
+  SECTION("flat, add_inplace") {
+    ResultDryRun acc{idx, cm, {{1, 0}}};  // mode 1 unfilled
+    Result& acc_w = acc;
+    auto const before = acc_w.size_in_bytes();
+    acc_w.add_inplace(*stored_r.slice_mode(1, 0, 5));
+    CHECK(acc_w.size_in_bytes() != before);
+    CHECK(acc_w.size_in_bytes() == cm->memsize(idx, overrides_of(acc_w)));
+  }
+  SECTION("flat, clone then write") {
+    ResultDryRun orig{idx, cm, {{1, 0}}};  // mode 1 unfilled
+    Result const& orig_r = orig;
+    auto const before = orig_r.size_in_bytes();
+    auto const copy = orig_r.clone();
+    CHECK(copy->size_in_bytes() == before);
+    copy->write_into_slice(*stored_r.slice_mode(1, 0, 5), 1, 0, 5);
+    CHECK(copy->size_in_bytes() != before);
+    CHECK(copy->size_in_bytes() == cm->memsize(idx, overrides_of(*copy)));
+    CHECK(orig_r.size_in_bytes() == before);
+  }
+
+  Index i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"};
+  Index a_pno{L"a_1", {i1, i2}};
+  container::svector<Index> outer{i1, a3};
+  container::svector<Index> inner{a_pno};
+  container::svector<Index> canon{i1, a3, a_pno};
+  ResultDryRunNested tmpl{outer, inner, cm, {}, canon};
+  Result const& tmpl_r = tmpl;
+
+  SECTION("nested, write_into_slice") {
+    ResultDryRunNested dest{outer, inner, cm, {{0, 0}}, canon};
+    Result& dest_w = dest;
+    auto const before = dest_w.size_in_bytes();
+    dest_w.write_into_slice(*tmpl_r.slice_mode(0, 0, 5), 0, 0, 5);
+    CHECK(dest_w.size_in_bytes() != before);
+    CHECK(dest_w.size_in_bytes() == cm->memsize(canon, overrides_of(dest_w)));
+  }
+  SECTION("nested, add_inplace") {
+    ResultDryRunNested acc{outer, inner, cm, {{0, 0}}, canon};
+    Result& acc_w = acc;
+    auto const before = acc_w.size_in_bytes();
+    acc_w.add_inplace(*tmpl_r.slice_mode(0, 0, 5));
+    CHECK(acc_w.size_in_bytes() != before);
+    CHECK(acc_w.size_in_bytes() == cm->memsize(canon, overrides_of(acc_w)));
+  }
+}
+
 TEST_CASE("nested-moment-aware-extent", "[dryrun-nested]") {
   auto r = backend_test_regime();
   // Non-trivial second moment: <#PNO^2> != <#PNO>^2 (dispersion inflates it).

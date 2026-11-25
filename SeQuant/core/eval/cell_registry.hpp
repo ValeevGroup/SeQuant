@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <functional>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -130,10 +131,8 @@ class CellRegistry {
       ResultPtr v = hooks_.persistent->get(hooks_.hash_of(cell.value_id));
       if (!v) continue;
       Slot& s = slots_[c];
-      discharge(s);
-      s.value = std::move(v);
+      assign(c, s, std::move(v));
       s.filled_since_clear = true;
-      charge(s);
     }
   }
 
@@ -163,11 +162,11 @@ class CellRegistry {
       SEQUANT_ASSERT(!s.filled_since_clear &&
                      "CellRegistry::set: fill-once violated");
     }
-    discharge(s);
-    s.value =
+    // Before the slot is touched: a throwing hook must leave it as it was.
+    ResultPtr stored =
         hooks_.stored_form ? hooks_.stored_form(c, std::move(v)) : std::move(v);
+    assign(c, s, std::move(stored));
     s.filled_since_clear = true;
-    charge(s);
     if (cell.persistent && hooks_.persistent && hooks_.hash_of)
       hooks_.persistent->put(hooks_.hash_of(cell.value_id), s.value);
     if (hooks_.on_set) hooks_.on_set(c, s.value);
@@ -210,8 +209,9 @@ class CellRegistry {
     if (!s.value) throw no_result("take", c);
     if (table_->cells[c].persistent) return s.value;
     s.filled_since_clear = false;
-    discharge(s);
-    return std::move(s.value);  // the slot is left null by the move
+    ResultPtr out = s.value;
+    assign(c, s, nullptr);
+    return out;
   }
 
   /// Lets the cell's result go: the schedule has no reader of it left in this
@@ -223,8 +223,7 @@ class CellRegistry {
     Slot& s = slots_[c];
     if (!s.value) return;
     s.filled_since_clear = false;
-    discharge(s);
-    s.value.reset();
+    assign(c, s, nullptr);
   }
 
   /// Batch start: drops every cell bound to loop instance \p k -- the
@@ -268,8 +267,7 @@ class CellRegistry {
         bound = true;
       if (!bound) continue;
       Slot& s = slots_[c];
-      discharge(s);
-      s.value.reset();
+      assign(c, s, nullptr);
       s.filled_since_clear = false;
     }
   }
@@ -282,19 +280,31 @@ class CellRegistry {
 
   /// Invokes \p f(CellId, ResultPtr const&) for every slot currently holding
   /// a value -- the registry-side source \c on_peak_liveset walks once
-  /// storage moves fully onto the table.
+  /// storage moves fully onto the table. \p f must not change this registry
+  /// (no \c set, \c take, \c release, ...): the walk iterates the set of
+  /// live cells, which such a change would invalidate.
   template <typename F>
   void for_each_live(F&& f) const {
-    for (CellId c = 0; c < slots_.size(); ++c)
-      if (slots_[c].value) f(c, slots_[c].value);
+    for (CellId c : live_) {
+      SEQUANT_ASSERT(slots_[c].value);
+      f(c, slots_[c].value);
+    }
   }
 
   /// \return whether some slot currently holds \p value (pointer identity).
   /// Read-only: spends no life.
   [[nodiscard]] bool holds(ResultPtr const& value) const {
+    return value && cells_of_.contains(value.get());
+  }
+
+  /// \return whether some slot currently holds \p value (pointer identity)
+  /// and \p pred(CellId) is true for its cell. Visits only the cells holding
+  /// \p value. Read-only: spends no life.
+  template <typename Pred>
+  [[nodiscard]] bool holds_if(ResultPtr const& value, Pred&& pred) const {
     if (!value) return false;
-    return std::any_of(slots_.begin(), slots_.end(),
-                       [&](Slot const& s) { return s.value == value; });
+    auto const it = cells_of_.find(value.get());
+    return it != cells_of_.end() && std::ranges::any_of(it->second, pred);
   }
 
   /// \return whether cell \p c is a non-persistent cell holding no value:
@@ -384,16 +394,36 @@ class CellRegistry {
     if (hooks_.on_bytes_changed) hooks_.on_bytes_changed(live_bytes_);
   }
 
-  /// Charges \p s's (just stored) value to \c live_bytes_.
-  void charge(Slot& s) {
-    s.charged_bytes = s.value ? s.value->size_in_bytes() : 0;
-    account(static_cast<std::ptrdiff_t>(s.charged_bytes));
-  }
-
-  /// Gives back what \p s's value was charged; call before releasing it.
-  void discharge(Slot& s) {
+  /// Replaces the value of slot \p s (of cell \p c) with \p v (null
+  /// empties it). The only writer of \c Slot::value: it keeps \c
+  /// live_bytes_, \c live_ and \c cells_of_ in step with the slots.
+  void assign(CellId c, Slot& s, ResultPtr v) {
+    // give back what the old value was charged
     account(-static_cast<std::ptrdiff_t>(s.charged_bytes));
     s.charged_bytes = 0;
+    if (s.value) {
+      auto it = cells_of_.find(s.value.get());
+      SEQUANT_ASSERT(it != cells_of_.end());
+      if (it != cells_of_.end()) {
+        auto& cells = it->second;
+        auto const pos = std::ranges::find(cells, c);
+        SEQUANT_ASSERT(pos != cells.end());
+        if (pos != cells.end()) {
+          *pos = cells.back();
+          cells.pop_back();
+        }
+        if (cells.empty()) cells_of_.erase(it);
+      }
+    }
+    s.value = std::move(v);
+    if (!s.value) {
+      live_.erase(c);
+      return;
+    }
+    live_.insert(c);
+    cells_of_[s.value.get()].push_back(c);
+    s.charged_bytes = s.value->size_in_bytes();
+    account(static_cast<std::ptrdiff_t>(s.charged_bytes));
   }
 
   CellTable const* table_;
@@ -403,6 +433,10 @@ class CellRegistry {
       assemble_at_;
   std::unordered_map<std::size_t, CellId> leaf_of_;
   std::size_t live_bytes_ = 0;
+  /// The cells whose slot holds a value, in cell order.
+  std::set<CellId> live_;
+  /// For every buffer some slot holds, the cells whose slots hold it.
+  std::unordered_map<Result const*, container::svector<CellId>> cells_of_;
 };
 
 /// Resolves one consumer cell's operand fetches to table reads. Installed on

@@ -154,6 +154,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     auto& t = expr_->as<Tensor>();
     auto phase = TensorBlockCanonicalizer{}.apply(t);
     canon_phase_ = phase ? -1 : 1;
+    respelled_ = true;
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
@@ -287,6 +288,10 @@ std::string EvalExpr::label() const noexcept {
 
 std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
 
+std::int8_t EvalExpr::leaf_phase() const noexcept {
+  return respelled_ ? canon_phase_ : std::int8_t{1};
+}
+
 const EvalBatchInfo& EvalExpr::batch_info() const noexcept {
   static const EvalBatchInfo defaults;
   return batch_.get() ? *batch_.get() : defaults;
@@ -380,28 +385,104 @@ IndexSet all_indices(ExprPtr const& expr) {
 }
 
 ///
+/// \return the tensor that stands for the result of the Sum, Power or
+///         Broadcast \p node as a factor of a network
+///
+/// The value of such a node is laid out by its canonical indices, and nodes
+/// of one hash are one value in that layout whatever their indices are
+/// labeled. Its \c expr() does not tell them apart from other nodes, nor one
+/// layout from another: every intermediate has the same label, and the slots
+/// of its bra, of its ket and of its aux are each ordered by the labels of the
+/// indices. The tensor returned has the slots of each of the three in the
+/// order of the canonical indices, and a label made of the hash of the node
+/// and of the positions of its slots in the canonical layout, since which of
+/// those are in the bra and which in the ket is not fixed by the hash (nodes
+/// of bra-ket symmetric factors can differ in it). The canonical indices that
+/// are only proto-indices of the slots follow the aux, in their order: the
+/// proto-indices of a slot are not ordered, so without these the network
+/// would not tell which of them is which in the layout.
+///
+ExprPtr factor_in_canonical_layout(EvalExprNode const& node) {
+  auto const& t = node->as_tensor();
+  auto const& layout = node->canon_indices();
+  auto const position = [&layout](Index const& ix) {
+    auto const it = std::ranges::find(layout, ix);
+    SEQUANT_ASSERT(it != layout.end());
+    return std::distance(layout.begin(), it);
+  };
+  std::wstring label{t.label()};
+  label += L'#' + std::to_wstring(node->hash_value());
+  auto const sorted = [&position, &label](auto const& slots) {
+    auto indices = slots | ranges::to<container::svector<Index>>;
+    std::ranges::sort(indices, std::less{}, position);
+    for (Index const& ix : indices)
+      label += L'.' + std::to_wstring(position(ix));
+    return indices;
+  };
+  auto b = sorted(t.bra());
+  auto k = sorted(t.ket());
+  auto a = sorted(t.aux());
+  // the canonical indices that are in no slot are there only as proto-indices
+  // of those that are
+  for (std::size_t pos = 0; pos != layout.size(); ++pos) {
+    Index const& ix = layout[pos];
+    if (ranges::any_of(t.slots(), [&ix](auto const& s) { return s == ix; }))
+      continue;
+    label += L'.' + std::to_wstring(pos);
+    a.push_back(ix);
+  }
+  return ex<Tensor>(std::move(label), bra(std::move(b)), ket(std::move(k)),
+                    aux(std::move(a)), t.symmetry(), t.braket_symmetry(),
+                    t.column_symmetry());
+}
+
+///
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
 ///        sub-tree, or, at the root node of a sum sub-tree or of an inlined
 ///        equation (see EvalExpr::is_equation_boundary).
 ///
+/// \param[in,out] phase multiplied by the sign by which each factor of the
+///        sub-tree as written differs from what is collected for it (see
+///        EvalExpr::leaf_phase for a leaf, EvalExpr::canon_phase otherwise).
+///
 template <typename Rng>
 void collect_tensor_factors(EvalExprNode const& node,  //
-                            Rng& collect) {
+                            Rng& collect, std::int8_t& phase) {
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
+  // Treat a unary node (Adjoint, Power) and an inlined equation the same as
+  // Sum here: each produces a tensor result that enters a parent Product as
+  // a single factor — the parent shouldn't recurse past its boundary, just
+  // collect the tensor that stands for the node and move on.
   if (auto op = node->op_type();
       node->is_tensor() && (!op || *op == EvalOp::Sum || is_unary(*op) ||
-                            node->is_equation_boundary()))
-    // Treat a unary node (Adjoint, Power) and an inlined equation the same as
-    // Sum here: each produces a tensor result that enters a parent Product as
-    // a single factor — the parent shouldn't recurse past its boundary, just
-    // collect the tensor held in node->expr() and move on.
-    collect.emplace_back(
-        ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
-  else if (node->op_type() == EvalOp::Product && !node.leaf() &&
-           !node->is_equation_boundary()) {
-    collect_tensor_factors(node.left(), collect);
-    collect_tensor_factors(node.right(), collect);
+                            node->is_equation_boundary())) {
+    // a leaf, an Adjoint and the head of an inlined equation are tensors as
+    // written, known to the network by their labels
+    bool const as_written =
+        !op || *op == EvalOp::Adjoint || node->is_equation_boundary();
+    collect.emplace_back(ExprWithHash{
+        .expr = as_written ? node->expr() : factor_in_canonical_layout(node),
+        .hash = node->hash_value()});
+    // The sign of the factor as written relative to what its expr() is in
+    // the network:
+    // - a leaf: its canonical spelling, hence leaf_phase;
+    // - an inlined equation: the head as written, with the symmetry of the
+    //   head, by which the network accounts for the order of its slots, hence
+    //   1 (so is the expr() of an Adjoint, whose phase is 1);
+    // - any other node: a tensor without symmetry that stands for the
+    //   canonical form of the node, hence canon_phase.
+    phase *= node->is_equation_boundary() ? std::int8_t{1}
+             : op                         ? node->canon_phase()
+                                          : node->leaf_phase();
+  } else if (node->op_type() == EvalOp::Product && !node.leaf() &&
+             !node->is_equation_boundary()) {
+    collect_tensor_factors(node.left(), collect, phase);
+    collect_tensor_factors(node.right(), collect, phase);
+  } else if (node->is_equation_boundary()) {
+    // a scalar equation is no factor of the network: only its hash stands
+    // for it in the hash of the product, hence canon_phase
+    phase *= node->canon_phase();
   }
 }
 
@@ -519,7 +600,27 @@ EvalExprNode sum_chain(std::vector<EvalExprNode>&& summands,
 
   SEQUANT_ASSERT(all_tensors | all_scalars);
 
-  auto hvals = summands | transform([](auto&& n) { return n->hash_value(); });
+  // A Sum has phase 1: its value is that of its summands as written, each the
+  // canonical form its hash stands for times its phase, so the phase is part
+  // of what identifies the summand
+  // A Sum is laid out as its first summand is; where the slots of another
+  // summand go in that layout is part of what identifies the summand as well
+  auto const& layout = summands.front()->canon_indices();
+  auto hvals = summands | transform([&layout](auto&& n) {
+                 auto h = n->hash_value();
+                 if (n->canon_phase() != 1) hash::combine(h, n->canon_phase());
+                 // an index that the layout lacks is given the position
+                 // past its end: such a Sum has no value, but is exported
+                 auto const& indices = n->canon_indices();
+                 if (!std::ranges::equal(indices, layout))
+                   for (Index const& ix : indices) {
+                     auto const pos = std::ranges::find(layout, ix);
+                     hash::combine(h, hash::value(static_cast<std::size_t>(
+                                          std::distance(layout.begin(), pos))));
+                   }
+                 return h;
+               }) |
+               ranges::to_vector;
 
   // Every binary Sum produced by fold_left_to_node below folds the running
   // accumulator (the chain seed, or a prior chain Sum) in as the left
@@ -615,13 +716,14 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto const& uncontracted_idxs = ltr_uncontr_idxs.imed[i];
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
-      return {EvalOp::Product,
-              ResultType::Scalar,
-              detail::make_variable(),
-              {},
-              1,
-              h,
-              nullptr};
+      return {
+          EvalOp::Product,
+          ResultType::Scalar,
+          detail::make_variable(),
+          {},
+          static_cast<std::int8_t>(left->canon_phase() * right->canon_phase()),
+          h,
+          nullptr};
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
@@ -632,14 +734,18 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           tl->canon_indices(),                              //
-          tl->canon_phase(),                                //
+          static_cast<std::int8_t>(left->canon_phase() *
+                                   right->canon_phase()),  //
           h,
           nullptr};
     } else {
       // tensor * tensor
       container::svector<ExprWithHash> subfacs;
-      collect_tensor_factors(left, subfacs);
-      collect_tensor_factors(right, subfacs);
+      // the canonical form of the network is that of the factors' canonical
+      // forms; the factors as written differ from those by their own phases
+      std::int8_t factor_phase = 1;
+      collect_tensor_factors(left, subfacs, factor_phase);
+      collect_tensor_factors(right, subfacs, factor_phase);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
       IndexGroups<IndexVec> const target_indices = [prod = ex<Product>(ts),
                                                     &uncontracted_idxs]() {
@@ -669,13 +775,14 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           &named_indices);
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
+      auto const phase = static_cast<std::int8_t>(canon.phase * factor_phase);
       EvalExpr result =
           scalar_result
               ? EvalExpr{EvalOp::Product,          //
                          ResultType::Scalar,       //
                          detail::make_variable(),  //
                          {},                       //
-                         canon.phase,              //
+                         phase,                    //
                          h,
                          std::move(canon.graph)}
               : EvalExpr{EvalOp::Product,     //
@@ -684,7 +791,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                              opts, bra(target_indices.bra),
                              ket(target_indices.ket), aux(target_indices.aux)),
                          canon.get_indices<Index::index_vector>(),  //
-                         canon.phase,                               //
+                         phase,                                     //
                          h,
                          std::move(canon.graph)};
       // This is a genuine contraction (DP) node: the optimizer's
