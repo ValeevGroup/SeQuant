@@ -2293,18 +2293,11 @@ container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector_impl(
 
 ExprPtr closed_shell_CC_triplet_spintrace(
     ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options) {
-  container::svector<container::svector<Index>> ext_groups;
   const auto ext_idxs = external_indices(expr);
-  for (const auto& g : ext_idxs) {
-    container::svector<Index> grp;
-    grp.reserve(g.size());
-    for (const auto& s : g) grp.push_back(s.index());
-    ext_groups.push_back(std::move(grp));
-  }
 
   // spintrace_by_sector already removed spin (with collision relabeling) from
   // each sector.
-  auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true);
+  auto sectors = spintrace_by_sector(expr, ext_idxs, /*triplet_R=*/true);
   SEQUANT_ASSERT(sectors.size() == (std::size_t{1} << ext_idxs.size()));
 
   // V_mu: weight every sector by the sign of the spin of external group 0
@@ -2322,9 +2315,9 @@ ExprPtr closed_shell_CC_triplet_spintrace(
   SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
                              [](const auto& g) { return g.size() == 2; }));
 
-  triplet = triplet_combined_residual(triplet, ext_groups);
+  triplet = triplet_combined_residual(triplet, ext_idxs);
   simplify(triplet);
-  if (options.compact) triplet = triplet_maxcoeff_compact(triplet, ext_groups);
+  if (options.compact) triplet = triplet_maxcoeff_compact(triplet, ext_idxs);
   simplify(triplet);
   return triplet;
 }
