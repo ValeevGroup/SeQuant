@@ -2250,6 +2250,47 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
 
 }  // namespace
 
+template <detail::index_group_range IdxGroups>
+container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector_impl(
+    const ExprPtr& expr, IdxGroups&& ext_index_groups, bool triplet_R) {
+  ExprPtr work = expr->clone();
+  if (has_tensor(work, reserved::antisymm_label())) {
+    work = expand_A_op(work);
+  }
+  const std::size_t n_ext = ext_index_groups.size();
+
+  // spintrace_impl places external groups at the head of its per-product
+  // index_groups list, so external group g sits at bit g of spincase_bitstr
+  // (independent of the product's internal-index count).
+  container::svector<std::pair<std::wstring, ExprPtr>> sectors;
+  for (std::uint32_t ext_val = 0; ext_val < (1u << n_ext); ++ext_val) {
+    std::function<bool(uint64_t)> predicate = [ext_val, n_ext](uint64_t sc) {
+      for (std::size_t g = 0; g < n_ext; ++g) {
+        const uint64_t spin_bit = (sc >> g) & 1u;
+        const uint64_t want = (ext_val >> g) & 1u;
+        if (spin_bit != want) return false;
+      }
+      return true;
+    };
+
+    ExprPtr sector =
+        spintrace_impl<true>(work, ext_index_groups,
+                             /*spinfree_index_spaces=*/false, predicate);
+    canonicalize(sector);
+    simplify(sector);
+    if (triplet_R) sector = triplet_adapt_amplitudes(sector);
+    sector = remove_spin(sector, /*relabel_collisions=*/true);
+    canonicalize(sector);
+    simplify(sector);
+
+    std::wstring label;
+    for (std::size_t g = 0; g < n_ext; ++g)
+      label += ((ext_val >> g) & 1u) ? L'β' : L'α';
+    sectors.emplace_back(std::move(label), std::move(sector));
+  }
+  return sectors;
+}
+
 ExprPtr closed_shell_CC_triplet_spintrace(
     ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options) {
   container::svector<container::svector<Index>> ext_groups;
@@ -2304,46 +2345,18 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
 
 container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     const ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>&
+        ext_index_groups,
+    bool triplet_R) {
+  return spintrace_by_sector_impl(
+      expr, as_view_of_index_groups(ext_index_groups), triplet_R);
+}
+
+container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
+    const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
     bool triplet_R) {
-  ExprPtr work = expr->clone();
-  if (has_tensor(work, reserved::antisymm_label())) {
-    work = expand_A_op(work);
-  }
-
-  const std::size_t n_ext = ext_index_groups.size();
-  SEQUANT_ASSERT(n_ext <= 31);
-
-  // spintrace_impl places external groups at the head of its per-product
-  // index_groups list, so external group g sits at bit g of spincase_bitstr
-  // (independent of the product's internal-index count).
-  container::svector<std::pair<std::wstring, ExprPtr>> sectors;
-  for (std::uint32_t ext_val = 0; ext_val < (1u << n_ext); ++ext_val) {
-    std::function<bool(uint64_t)> predicate = [ext_val, n_ext](uint64_t sc) {
-      for (std::size_t g = 0; g < n_ext; ++g) {
-        const uint64_t spin_bit = (sc >> g) & 1u;
-        const uint64_t want = (ext_val >> g) & 1u;
-        if (spin_bit != want) return false;
-      }
-      return true;
-    };
-
-    ExprPtr sector =
-        spintrace_impl<true>(work, ext_index_groups,
-                             /*spinfree_index_spaces=*/false, predicate);
-    canonicalize(sector);
-    simplify(sector);
-    if (triplet_R) sector = triplet_adapt_amplitudes(sector);
-    sector = remove_spin(sector, /*relabel_collisions=*/true);
-    canonicalize(sector);
-    simplify(sector);
-
-    std::wstring label;
-    for (std::size_t g = 0; g < n_ext; ++g)
-      label += ((ext_val >> g) & 1u) ? L'β' : L'α';
-    sectors.emplace_back(std::move(label), std::move(sector));
-  }
-  return sectors;
+  return spintrace_by_sector_impl(expr, ext_index_groups, triplet_R);
 }
 
 }  // namespace sequant::mbpt

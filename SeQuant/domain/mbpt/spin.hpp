@@ -487,6 +487,11 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 ///         Summing all sectors reproduces generic `spintrace` (for
 ///         triplet_R == false).
 [[nodiscard]] container::svector<std::pair<std::wstring, ExprPtr>>
+spintrace_by_sector(const ExprPtr& expr,
+                    const container::svector<container::svector<SlottedIndex>>&
+                        ext_index_groups,
+                    bool triplet_R = false);
+[[nodiscard]] container::svector<std::pair<std::wstring, ExprPtr>>
 spintrace_by_sector(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
