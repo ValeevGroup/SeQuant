@@ -10,24 +10,35 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <string>
 #include <utility>
 
 namespace sequant {
 
+namespace {
+
+/// @return the precondition of TensorPower(@p base, @p exponent) that is
+///         violated, or nullptr if there is none
+const char* tensor_power_violation(const ExprPtr& base,
+                                   const rational& exponent) {
+  if (!base || !base->is<AbstractTensor>() ||
+      !base->as<AbstractTensor>()._is_cnumber())
+    return "base must be a c-number tensor; name a compound tensor-valued "
+           "expression as a ResultExpr and raise the resulting leaf";
+  if (base->is<TensorPower>()) return "use pow() to compose exponents";
+  if (denominator(exponent) != 1 &&
+      base->as<AbstractTensor>()._symmetry() == Symmetry::Antisymm)
+    return "a non-integer power of an antisymmetric tensor is not defined";
+  return nullptr;
+}
+
+}  // namespace
+
 TensorPower::TensorPower(ExprPtr base, exponent_type exponent)
     : base_{}, exponent_{std::move(exponent)} {
-  SEQUANT_ENFORCE(base && base->is<AbstractTensor>() &&
-                      base->as<AbstractTensor>()._is_cnumber(),
-                  "TensorPower: base must be a c-number tensor; name a "
-                  "compound tensor-valued expression as a ResultExpr and "
-                  "raise the resulting leaf");
-  SEQUANT_ENFORCE(!base->is<TensorPower>(),
-                  "TensorPower: use pow() to compose exponents");
-  SEQUANT_ENFORCE(
-      denominator(exponent_) == 1 ||
-          base->as<AbstractTensor>()._symmetry() != Symmetry::Antisymm,
-      "TensorPower: a non-integer power of an antisymmetric "
-      "tensor is not defined");
+  // as SEQUANT_ENFORCE does, with the violated precondition as the message
+  if (const char* violation = tensor_power_violation(base, exponent_))
+    enforce_failed(std::string("TensorPower: ") + violation);
   base_ = base->clone();
 }
 
@@ -254,14 +265,12 @@ ExprPtr make_scalar_power(const ExprPtr& base, rational exponent) {
   return ex<Power>(base, std::move(exponent));
 }
 
-/// rejects the inputs that the TensorPower constructor enforces against
+/// @return @p base raised to @p exponent, @p base itself if @p exponent is 1
+/// @throw Exception if TensorPower(@p base, @p exponent) is not defined
 ExprPtr make_tensor_power(const ExprPtr& base, rational exponent) {
-  const auto& tensor = base->as<AbstractTensor>();
-  if (!tensor._is_cnumber())
-    throw Exception("pow: base must be a c-number tensor");
-  if (denominator(exponent) != 1 && tensor._symmetry() == Symmetry::Antisymm)
-    throw Exception(
-        "pow: a non-integer power of an antisymmetric tensor is not defined");
+  if (exponent == 1) return base->clone();
+  if (const char* violation = tensor_power_violation(base, exponent))
+    throw Exception(std::string("pow: ") + violation);
   return ex<TensorPower>(base, std::move(exponent));
 }
 
@@ -300,9 +309,7 @@ ExprPtr pow(ExprPtr base, rational exponent) {
       throw Exception(
           "pow: (T^a)^b with even a and non-integer b is |T|^(ab), not "
           "T^(ab); name T^a as a ResultExpr and raise the resulting leaf");
-    const auto composed = inner.exponent() * exponent;
-    if (composed == 1) return inner.base()->clone();
-    return make_tensor_power(inner.base(), composed);
+    return make_tensor_power(inner.base(), inner.exponent() * exponent);
   }
 
   if (!base->is<AbstractTensor>())

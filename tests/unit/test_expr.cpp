@@ -4,6 +4,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_range_equals.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -1823,7 +1824,9 @@ TEST_CASE("tensor_power", "[elements]") {
     CHECK(*pow(pow(D, rational{3}), rational{1, 3}) ==
           *D);  // odd inner: composes
     REQUIRE_THROWS_AS(pow(pow(D, rational{2}), rational{1, 2}), Exception);
-    REQUIRE_THROWS_AS(pow(D * D, rational{-1}), Exception);
+    REQUIRE_THROWS_WITH(
+        pow(D * D, rational{-1}),
+        Catch::Matchers::ContainsSubstring("scalar or a c-number tensor"));
     REQUIRE_THROWS_AS(pow(D + D, rational{-1}), Exception);
     REQUIRE_THROWS_AS(pow(x * x, rational{2}), Exception);
     // unsupported input is rejected by pow itself, whatever the assert
