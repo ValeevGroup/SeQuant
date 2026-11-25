@@ -383,6 +383,22 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     btas::contract(-0.25, temp, {71, 74}, t2, {72, 74, 11, 12}, 0.0, man2,
                    {11, 12, 71, 72});
     REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
+
+    // the layout of a head: its indices as written, sorted or not
+    const Tensor head =
+        deserialize<sequant::ExprPtr>(L"X{i1,a4;a1,i4}")->as<Tensor>();
+    REQUIRE(EvalExprBTAS::layout(head) == tidxs(L"i1,a4,a1,i4"));
+    const auto node_of_head =
+        binarize<EvalExprBTAS>(sequant::ResultExpr(head, expr1));
+    const auto in_head =
+        evaluate(node_of_head, EvalExprBTAS::layout(head), yield_)
+            ->get<BTensorD>();
+    const auto expected = eval(expr1, tidxs(L"i1,a4,a1,i4"));
+    REQUIRE(in_head.range().extent(0) == nocc);
+    REQUIRE(in_head.range().extent(1) == nvirt);
+    REQUIRE(in_head.range().extent(2) == nvirt);
+    REQUIRE(in_head.range().extent(3) == nocc);
+    REQUIRE(std::equal(in_head.begin(), in_head.end(), expected.begin()));
   }
 
   SECTION("Summation and Product") {

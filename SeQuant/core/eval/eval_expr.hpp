@@ -305,6 +305,14 @@ class EvalExpr {
   [[nodiscard]] std::string indices_annot() const noexcept;
 
   ///
+  /// \param indices The indices of a tensor, in the order of its modes.
+  /// \return A string usable as TiledArray annotation of that tensor: the
+  ///         labels of the indices without protoindices, then, after a
+  ///         semicolon, of those with protoindices, if any.
+  ///
+  [[nodiscard]] static std::string indices_annot(index_vector const& indices);
+
+  ///
   /// \return Canonically ordered indices -- non-empty if this object represents
   /// a tensor result.
   ///

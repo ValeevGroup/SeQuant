@@ -5,6 +5,8 @@
 
 #include <SeQuant/core/eval/eval_expr.hpp>
 
+#include <range/v3/range/conversion.hpp>
+
 #include <string>
 
 namespace sequant {
@@ -22,6 +24,20 @@ class EvalExprTA final : public EvalExpr {
   }
 
   [[nodiscard]] inline auto const& annot() const noexcept { return annot_; }
+
+  ///
+  /// \param head The head of a result: the tensor that an expression defines.
+  /// \return The layout of a result with its modes in the order that the
+  ///         indices of \p head are written in: bra, then ket, then aux;
+  ///         those with protoindices follow the others, after a semicolon,
+  ///         as the modes of the inner tensors.
+  ///         Give it to sequant::evaluate to lay a result out as its
+  ///         head.
+  ///
+  [[nodiscard]] static std::string layout(Tensor const& head) {
+    return indices_annot(head.const_braketaux_indices() |
+                         ranges::to<index_vector>);
+  }
 
  private:
   std::string annot_;

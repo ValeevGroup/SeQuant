@@ -280,6 +280,22 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     auto const tidx1 = tidxs(L"i1,i4,a1,a4");
     auto eval1 = eval(expr1, tidx1);
 
+    // the layout of a head: its indices as written, sorted or not
+    {
+      const auto head =
+          deserialize<sequant::ExprPtr>(L"X{i1,a4;a1,i4}")->as<Tensor>();
+      REQUIRE(EvalExprTAPP::layout(head) == tidxs(L"i1,a4,a1,i4"));
+      const auto in_head =
+          evaluate(binarize<EvalExprTAPP>(sequant::ResultExpr(head, expr1)),
+                   EvalExprTAPP::layout(head), yield_)
+              ->get<TAPPTensorD>();
+      const auto expected = eval(expr1, tidxs(L"i1,a4,a1,i4"));
+      // a norm does not tell layouts apart: the extents do
+      REQUIRE(in_head.extents() == expected.extents());
+      REQUIRE(in_head.extents() != eval1.extents());
+      REQUIRE(norm(in_head) == Catch::Approx(norm(expected)));
+    }
+
     // mnemonics
     // ===
     // i looks like 1
