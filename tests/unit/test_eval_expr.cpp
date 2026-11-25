@@ -1483,3 +1483,64 @@ TEST_CASE("binarize-system-strict-braket", "[EvalExpr][inline]") {
   REQUIRE(e.right()->is_equation_boundary());
   REQUIRE(e.right()->hash_value() == e_lax.right()->hash_value());
 }
+
+TEST_CASE("to_expr of a leaf written out of canonical order", "[EvalExpr]") {
+  using namespace sequant;
+  // the canonical order of the bra is i_3, a_1: the leaf as written is the
+  // negative of its node's expression
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  auto const written =
+      ex<Tensor>(L"t", bra{L"a_1", L"i_3"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto const sorted =
+      ex<Tensor>(L"t", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"}, antisymm);
+  auto const W = ex<Tensor>(L"W", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"},
+                            TensorSymmetries{.perm = Symmetry::Nonsymm});
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const tree_of = [](ExprPtr const& expr) { return binarize(expr); };
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  auto const minus = [](ExprPtr const& expr) {
+    return ex<Constant>(-1) * expr;
+  };
+
+  REQUIRE(tree_of(written)->canon_phase() == -1);
+  REQUIRE(*tree_of(written)->expr() == *sorted);
+  REQUIRE(*to_expr(tree_of(sorted)) == *sorted);
+  REQUIRE(*to_expr(tree_of(written)) == *minus(sorted));
+
+  auto const product = to_expr(tree_of(written * W));
+  REQUIRE(product->is<Product>());
+  // the sign is in the scalar of the product
+  REQUIRE(product->as<Product>().scalar() == -1);
+  REQUIRE(product->as<Product>().size() == 2);
+  REQUIRE(*product->as<Product>().factor(0) == *sorted);
+  REQUIRE(*product->as<Product>().factor(1) == *W);
+
+  // an odd power keeps the sign, an even one does not
+  REQUIRE(*to_expr(tree_of(pow(written, rational{-1}))) ==
+          *minus(pow(sorted, rational{-1})));
+  REQUIRE(*to_expr(tree_of(pow(written, rational{2}))) ==
+          *pow(sorted, rational{2}));
+
+  // a scalar factor multiplies the sign, whatever it scales
+  REQUIRE(*to_expr(tree_of(ex<Constant>(2) * written)) ==
+          *(ex<Constant>(-2) * sorted));
+  REQUIRE(*to_expr(tree_of(ex<Constant>(2) * pow(written, rational{-1}))) ==
+          *(ex<Constant>(-2) * pow(sorted, rational{-1})));
+  REQUIRE(*to_expr(tree_of(ex<Constant>(2) * written * W)) ==
+          *(ex<Constant>(-2) * sorted * W));
+  auto const Y = ex<Tensor>(L"Y", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"},
+                            TensorSymmetries{.perm = Symmetry::Nonsymm});
+  auto const scaled_sum = to_expr(tree_of(ex<Constant>(2) * (W + Y)));
+  REQUIRE(scaled_sum->is<Product>());
+  REQUIRE(scaled_sum->as<Product>().scalar() == 2);
+  REQUIRE(scaled_sum->as<Product>().size() == 1);
+  REQUIRE(*scaled_sum->as<Product>().factor(0) == *(W + Y));
+
+  // a leaf under a head is wrapped in a Product node made from the head, which
+  // has no leaf phase however the head is spelled
+  auto const head = written->as<Tensor>();
+  auto const root = binarize(ResultExpr(head, written));
+  REQUIRE(root->op_type() == EvalOp::Product);
+  REQUIRE(root->leaf_phase() == 1);
+  REQUIRE(root.left()->leaf_phase() == -1);
+}

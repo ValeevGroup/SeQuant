@@ -1058,6 +1058,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// evaluator itself on a leaf operand's first touch, before recording it as
 /// that leaf's cell -- so both account for it the same way.
 ///
+/// The leaf evaluator is given the node, whose \c expr() is the canonical
+/// spelling of the leaf, and returns the array of that spelling. A leaf
+/// written in another order of an antisymmetric bundle (one whose bra or ket
+/// holds indices of several spaces) differs from it by the node's
+/// \c leaf_phase, which is applied here, so that the result is the node's
+/// own oriented value, as that of every other node is.
+///
 /// \return the leaf's own oriented result, whole (never sliced: the declared
 ///         slice of a read is applied by \c CellReadResolver::fetch).
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
@@ -1080,7 +1087,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
               log::label(node, cache.batch_context()));
   }
   log::release_after_op();
-  return result;
+  // The evaluator's array is that of the canonical spelling in the node's
+  // expr(); the node's own oriented value differs from it by the phase of
+  // reordering the leaf as written into that spelling.
+  if (node->leaf_phase() == 1) return result;
+  return apply_canon_phase<EvalTrace>(node, std::move(result), cache);
 }
 
 /// \brief The per-build event bookkeeping: the \c SEQUANT_UT_BUILD_METER

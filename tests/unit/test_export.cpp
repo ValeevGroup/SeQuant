@@ -1566,3 +1566,62 @@ TEST_CASE("export-irreps", "[export][irreps]") {
     REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
   }
 }
+
+TEST_CASE("export-leaf-reordered-with-a-sign", "[export]") {
+  using Catch::Matchers::ContainsSubstring;
+
+  // The generated code reads a leaf in its canonical spelling; a leaf written
+  // in another order of an antisymmetric bundle (D{a_1,i_3;i_1,i_2} for
+  // D{i_3,a_1;i_1,i_2}) must be read with the sign of the reordering.
+  auto resetter = to_export_context();
+
+  const auto code_of = [](std::wstring_view input) {
+    TextGenerator<TextGeneratorContext> generator;
+    TextGeneratorContext ctx;
+    export_expression(to_export_tree(deserialize<ResultExpr>(input)), generator,
+                      ctx);
+    return generator.get_generated_code();
+  };
+  const std::string D = "D[i_3, a_1, i_1, i_2]";
+  const std::string R4 = "Compute R[a_1, i_3, i_1, i_2] += ";
+  const std::string R2 = "Compute R[a_1, i_1] += ";
+
+  SECTION("alone") {
+    CHECK_THAT(code_of(L"R{a_1,i_3;i_1,i_2} = D{a_1,i_3;i_1,i_2}:A-S-S"),
+               ContainsSubstring(R4 + "-1 " + D + "\n"));
+    CHECK_THAT(code_of(L"R{a_1,i_3;i_1,i_2} = D{i_3,a_1;i_1,i_2}:A-S-S"),
+               ContainsSubstring(R4 + D + "\n"));
+  }
+  SECTION("scaled") {
+    CHECK_THAT(code_of(L"R{a_1,i_3;i_1,i_2} = 2 D{a_1,i_3;i_1,i_2}:A-S-S"),
+               ContainsSubstring(R4 + "-2 " + D + "\n"));
+  }
+  SECTION("power") {
+    CHECK_THAT(code_of(L"R{a_1,i_3;i_1,i_2} = D{a_1,i_3;i_1,i_2}:A-S-S^(-1)"),
+               ContainsSubstring(R4 + "-1 " + D + "^(-1)\n"));
+    CHECK_THAT(code_of(L"R{a_1,i_3;i_1,i_2} = D{a_1,i_3;i_1,i_2}:A-S-S^(-2)"),
+               ContainsSubstring(R4 + D + "^(-2)\n"));
+  }
+  SECTION("contracted") {
+    CHECK_THAT(code_of(L"R{a_1;i_1} = D{a_1,i_3;i_1,i_2}:A-S-S t{i_2;i_3}"),
+               ContainsSubstring(R2 + "-1 " + D + " t[i_2, i_3]\n"));
+    CHECK_THAT(code_of(L"R{a_1;i_1} = 3 D{a_1,i_3;i_1,i_2}:A-S-S t{i_2;i_3}"),
+               ContainsSubstring(R2 + "-3 " + D + " t[i_2, i_3]\n"));
+    // the signs of two such leaves cancel
+    CHECK_THAT(
+        code_of(L"R = D{a_1,i_3;i_1,i_2}:A-S-S "
+                L"E{i_1,i_2;a_1,i_3}:A-S-S"),
+        ContainsSubstring("Compute R += " + D + " E[i_3, a_1, i_1, i_2]\n"));
+  }
+  SECTION("summed") {
+    const auto both = code_of(
+        L"R{a_1,i_3;i_1,i_2} = D{a_1,i_3;i_1,i_2}:A-S-S "
+        L"+ 2 D{i_3,a_1;i_1,i_2}:A-S-S");
+    CHECK_THAT(both, ContainsSubstring(R4 + "-1 " + D + "\n") &&
+                         ContainsSubstring(R4 + "2 " + D + "\n"));
+    CHECK_THAT(code_of(L"R{a_1,i_3;i_1,i_2} = D{a_1,i_3;i_1,i_2}:A-S-S + "
+                       L"B{a_1;i_1} C{i_3;i_2}"),
+               ContainsSubstring(R4 + "-1 " + D + "\n") &&
+                   ContainsSubstring(R4 + "B[a_1, i_1] C[i_3, i_2]\n"));
+  }
+}
