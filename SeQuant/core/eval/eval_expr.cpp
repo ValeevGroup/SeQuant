@@ -397,7 +397,10 @@ IndexSet all_indices(ExprPtr const& expr) {
 /// order of the canonical indices, and a label made of the hash of the node
 /// and of the positions of its slots in the canonical layout, since which of
 /// those are in the bra and which in the ket is not fixed by the hash (nodes
-/// of bra-ket symmetric factors can differ in it).
+/// of bra-ket symmetric factors can differ in it). The canonical indices that
+/// are only proto-indices of the slots follow the aux, in their order: the
+/// proto-indices of a slot are not ordered, so without these the network
+/// would not tell which of them is which in the layout.
 ///
 ExprPtr factor_in_canonical_layout(EvalExprNode const& node) {
   auto const& t = node->as_tensor();
@@ -419,6 +422,15 @@ ExprPtr factor_in_canonical_layout(EvalExprNode const& node) {
   auto b = sorted(t.bra());
   auto k = sorted(t.ket());
   auto a = sorted(t.aux());
+  // the canonical indices that are in no slot are there only as proto-indices
+  // of those that are
+  for (std::size_t pos = 0; pos != layout.size(); ++pos) {
+    Index const& ix = layout[pos];
+    if (ranges::any_of(t.slots(), [&ix](auto const& s) { return s == ix; }))
+      continue;
+    label += L'.' + std::to_wstring(pos);
+    a.push_back(ix);
+  }
   return ex<Tensor>(std::move(label), bra(std::move(b)), ket(std::move(k)),
                     aux(std::move(a)), t.symmetry(), t.braket_symmetry(),
                     t.column_symmetry());

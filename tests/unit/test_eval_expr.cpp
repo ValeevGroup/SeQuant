@@ -624,6 +624,41 @@ TEST_CASE("Sum-node hash is sensitive to every summand",
   CHECK(last_a->hash_value() == first_a->hash_value());
 }
 
+TEST_CASE("a Sum factor places the proto-indices of its slots",
+          "[eval][binarize][hash]") {
+  using namespace sequant;
+
+  auto const root = [](std::wstring const& s) {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return binarize(
+        deserialize<ExprPtr>(s, {.def_perm_symm = Symmetry::Nonsymm,
+                                 .def_braket_symm = BraKetSymmetry::Nonsymm,
+                                 .def_col_symm = ColumnSymmetry::Nonsymm}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+  // the sum over the dummies a7, a8 that depend on i, contracted with T
+  auto const product = [&root](std::wstring const& i, std::wstring const& t) {
+    return root(L"(P{a1<i1,i2>;a7<" + i + L">} * Q{a7<" + i +
+                L">;a3<i1,i2>} + K{a1<i1,i2>;a8<" + i + L">} * L{a8<" + i +
+                L">;a3<i1,i2>}) * T{a3<i1,i2>;a5<" + t + L">}");
+  };
+
+  // the two sums are relabelings of each other, i1 <-> i2, and one value
+  REQUIRE(product(L"i1", L"i1").left()->hash_value() ==
+          product(L"i2", L"i1").left()->hash_value());
+  // which of the two T depends on tells the products of one sum apart
+  CHECK(product(L"i1", L"i1")->hash_value() !=
+        product(L"i1", L"i2")->hash_value());
+  // as it does the products of the two sums with one T
+  CHECK(product(L"i1", L"i1")->hash_value() !=
+        product(L"i2", L"i1")->hash_value());
+  // the products that are relabelings of each other are one value
+  CHECK(product(L"i1", L"i1")->hash_value() ==
+        product(L"i2", L"i2")->hash_value());
+  CHECK(product(L"i1", L"i2")->hash_value() ==
+        product(L"i2", L"i1")->hash_value());
+}
+
 TEST_CASE("proto-index-liveness", "[eval]") {
   using namespace sequant;
 

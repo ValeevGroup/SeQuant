@@ -112,7 +112,8 @@ to what represents it in that network, which depends on the kind of the factor:
 - any other node (``Sum``, ``Power``, ``Broadcast``) is a tensor without symmetry that stands for the node's canonical value, and
   contributes its phase. That tensor is not the node's ``expr()``, which is shared by every intermediate of its shape and has
   its slots ordered by label: its label carries the hash of the node, and its slots follow the node's canonical indices, so
-  that two such factors of a network, or two layouts of one, are not mistaken for each other;
+  that two such factors of a network, or two layouts of one, are not mistaken for each other. The canonical indices that are
+  only proto-indices of the slots are appended as slots of their own, since the proto-indices of a slot are not ordered;
 - an inlined scalar equation is not part of the network, only its hash enters the hash of the product, and contributes its
   phase.
 
