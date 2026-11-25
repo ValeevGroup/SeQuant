@@ -103,6 +103,9 @@ ExprPtr WK_biorthogonalization_filter(
 [[nodiscard]] ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
+[[nodiscard]] ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs);
 
 // clang-format off
 /// \brief Assembles the closed-shell triplet residual from the

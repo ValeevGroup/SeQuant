@@ -966,9 +966,8 @@ ExprPtr triplet_combined_residual(
   return triplet_combined_residual_impl(V, ext_idxs);
 }
 
-ExprPtr triplet_maxcoeff_compact(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
+template <detail::index_group_range IdxGroups>
+ExprPtr triplet_maxcoeff_compact_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   const std::size_t n_particles = ext_idxs.size();
   if (n_particles <= 1) return expr;
   if (n_particles > 3)
@@ -1022,6 +1021,17 @@ ExprPtr triplet_maxcoeff_compact(
     compact.append(std::move(kept));
   }
   return ex<Sum>(compact);
+}
+
+ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs) {
+  return triplet_maxcoeff_compact_impl(expr, as_view_of_index_groups(ext_idxs));
+}
+ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  return triplet_maxcoeff_compact_impl(expr, ext_idxs);
 }
 
 namespace detail {
