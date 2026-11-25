@@ -1518,6 +1518,9 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
     detail::require_summable_roots(*std::ranges::begin(nodes), n, i++);
     ResultPtr pre = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
+    // the value of the first root may be held by others: \p cache, the leaf
+    // evaluator, the caller
+    if (result.use_count() != 1) result = result->clone();
     auto time =
         detail::timed_eval_inplace([&]() { result->add_inplace(*pre); });
 

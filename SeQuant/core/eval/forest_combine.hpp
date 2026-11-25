@@ -109,6 +109,9 @@ template <Trace EvalTrace, meta::can_evaluate node_t, typename N, bool FHC>
     // Cross-root accumulation -- mirrors sequant::evaluate(Nodes const&,
     // layout, ...)'s identical timed add_inplace() + SumInplace EvalStat
     // (there, `post` above is that overload's per-node `pre`).
+    // the value of the first root may be held by others: \p cache, the leaf
+    // evaluator, the caller
+    if (result.use_count() != 1) result = result->clone();
     auto const sum_time = sequant::detail::timed_eval_inplace(
         [&]() { result->add_inplace(*post); });
 

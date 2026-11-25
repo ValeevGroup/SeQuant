@@ -764,6 +764,40 @@ TEST_CASE("eval_sum_in_place_shared_operand_btas", "[eval_btas]") {
       CHECK_FALSE(differs(scheduled[k]->get<BTensorD>(), alone[k]));
     }
   }
+
+  SECTION("the first root of a summed forest") {
+    using annot_t = EvalExprBTAS::annot_t;
+    auto const Z = tensor(L"Z", {L"i_1"}, {L"a_1"});
+    auto const g = tensor(L"g", {L"a_1"}, {L"i_1"});
+    auto const ft =
+        tensor(L"f", {L"a_1"}, {L"a_2"}) * tensor(L"t", {L"a_2"}, {L"i_1"});
+    auto forests = [&](auto const& nodes) {
+      auto cache = cache_manager(nodes);
+      auto ordered_cache = cache_manager(nodes);
+      return std::array{
+          evaluate(nodes, annot_t{}, yield_, cache),
+          evaluate(nodes, ordered, annot_t{}, yield_, ordered_cache)};
+    };
+
+    // E0 + E1 + E0: the value of E0 is cached for its second use
+    std::vector const scalars{eval_node(ft * Z), eval_node(g * Z),
+                              eval_node(ft * Z)};
+    auto const sum = 2 * evaluate(scalars[0], yield_)->get<double>() +
+                     evaluate(scalars[1], yield_)->get<double>();
+    for (auto const& r : forests(scalars))
+      CHECK(r->get<double>() == Catch::Approx(sum).margin(1e-10));
+
+    // a first root that is a leaf belongs to the leaf evaluator
+    auto const leaf = yield_(g->as<Tensor>());
+    BTensorD const pristine = leaf->get<BTensorD>();
+    std::vector const tensors{eval_node(g), eval_node(g), eval_node(g)};
+    auto cache = cache_manager(tensors);
+    auto const r = evaluate(tensors, annot_t{}, yield_, cache);
+    BTensorD const d = leaf->get<BTensorD>() - pristine;
+    CHECK(std::sqrt(btas::dotc(d, d)) < 1e-10);
+    BTensorD const e = r->get<BTensorD>() - pristine - pristine - pristine;
+    CHECK(std::sqrt(btas::dotc(e, e)) < 1e-10);
+  }
 }
 
 TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
