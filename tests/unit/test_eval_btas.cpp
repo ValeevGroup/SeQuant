@@ -4,12 +4,14 @@
 #include "catch2_sequant.hpp"
 #include "tensor_power_fixtures.hpp"
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/btas/array_ops.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -29,8 +31,10 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <array>
 #include <cmath>
 #include <complex>
+#include <initializer_list>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -695,6 +699,71 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
       result_marked->get<BTensorD>() - result_unmarked->get<BTensorD>();
   REQUIRE(norm(zero) == Catch::Approx(0).margin(
                             100 * std::numeric_limits<double>::epsilon()));
+}
+
+TEST_CASE("eval_sum_in_place_shared_operand_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 3, nvirt = 4;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  auto tensor = [](std::wstring const& label,
+                   std::initializer_list<std::wstring> b,
+                   std::initializer_list<std::wstring> k) {
+    return ex<Tensor>(label, bra(b), ket(k),
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  };
+  BatchPolicy ordered;
+  ordered.scheduler = BatchScheduler::ordered;
+
+  SECTION("a pending operand of a product") {
+    // p + q is one value, read as a factor and then, for the last time, as
+    // what the chain p + q + g accumulates into
+    auto pq = [&](std::wstring const& a, std::wstring const& i) {
+      return tensor(L"p", {a}, {i}) + tensor(L"q", {a}, {i});
+    };
+    auto const node = eval_node(ex<Product>(
+        ExprPtrList{pq(L"a_2", L"i_5"),
+                    pq(L"a_1", L"i_3") + tensor(L"g", {L"a_1"}, {L"i_3"}),
+                    tensor(L"W", {L"i_3", L"i_5"}, {L"a_1", L"a_2"})},
+        Product::Flatten::No));
+    std::vector const nodes{node};
+    auto const alone = evaluate(node, yield_)->get<double>();
+    auto cache = cache_manager(nodes);
+    CHECK(evaluate(node, yield_, cache)->get<double>() ==
+          Catch::Approx(alone).margin(1e-10));
+    auto ordered_cache = cache_manager(nodes);
+    CHECK(evaluate_each(nodes, ordered, yield_, ordered_cache)[0]
+              ->get<double>() == Catch::Approx(alone).margin(1e-10));
+  }
+
+  SECTION("a result the caller holds") {
+    // f t is the first root and what the second accumulates g into
+    auto const ft =
+        tensor(L"f", {L"a_1"}, {L"a_2"}) * tensor(L"t", {L"a_2"}, {L"i_1"});
+    std::vector const nodes{eval_node(ft),
+                            eval_node(ft + tensor(L"g", {L"a_1"}, {L"i_1"}))};
+    REQUIRE(nodes[1].left()->hash_value() == nodes[0]->hash_value());
+    std::array const alone{evaluate(nodes[0], yield_)->get<BTensorD>(),
+                           evaluate(nodes[1], yield_)->get<BTensorD>()};
+    auto differs = [](BTensorD const& a, BTensorD const& b) {
+      BTensorD const d = a - b;
+      return std::sqrt(btas::dotc(d, d)) > 1e-10;
+    };
+    REQUIRE(differs(alone[0], alone[1]));
+
+    auto cache = cache_manager(nodes);
+    std::array const cached{evaluate(nodes[0], yield_, cache),
+                            evaluate(nodes[1], yield_, cache)};
+    auto ordered_cache = cache_manager(nodes);
+    auto const scheduled = evaluate_each(nodes, ordered, yield_, ordered_cache);
+    for (std::size_t k : {0, 1}) {
+      CAPTURE(k);
+      CHECK_FALSE(differs(cached[k]->get<BTensorD>(), alone[k]));
+      CHECK_FALSE(differs(scheduled[k]->get<BTensorD>(), alone[k]));
+    }
+  }
 }
 
 TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {

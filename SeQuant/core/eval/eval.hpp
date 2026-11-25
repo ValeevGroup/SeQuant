@@ -1338,6 +1338,11 @@ ResultPtr evaluate_impl(Node const& node,         //
         //    could be sharing it, exactly as chain_holds_shared() reports "not
         //    held" for the same case) -- see that method's own doc comment. The
         //    forest path (no resolver wired) keeps chain_holds_shared.
+        //  - f.left.use_count() == 1: an entry that this read drained holds
+        //    f.left no longer, but whoever read it before may: an operand of
+        //    a node up the stack that waits for its sibling (the subtree this
+        //    Sum is in), or a result that the caller keeps from an earlier
+        //    evaluation with this cache.
         // A marked Sum whose left child is a leaf (the common case for the
         // innermost Sum of a chain, whose left is the chain seed), or whose
         // left operand is a shared cache-resident value, therefore falls back
@@ -1348,7 +1353,8 @@ ResultPtr evaluate_impl(Node const& node,         //
         // evaluation-local buffer.
         bool const inplace_eligible =
             f.nd()->op_type() == EvalOp::Sum && f.nd()->accumulate_in_place() &&
-            !f.nd().left().leaf() && !cache.chain_holds_shared(f.left);
+            !f.nd().left().leaf() && !cache.chain_holds_shared(f.left) &&
+            f.left.use_count() == 1;
         if (inplace_eligible) {
           // The accumulate-in-place Sum (sum_in_place_traced, above),
           // shared with the ordered executor's own compute_cell.
