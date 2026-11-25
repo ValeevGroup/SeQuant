@@ -1610,8 +1610,9 @@ class CacheManager {
   ///         by every consumer), so mutating it in place would corrupt those
   ///         other reads.
   ///
-  /// This is the runtime safety gate the in-place \c Sum accumulation
-  /// (eval.hpp) needs, and is strictly the "the accumulator is shared" test:
+  /// One of the conditions of the in-place \c Sum accumulation (eval.hpp),
+  /// which also requires that nobody outside the cache holds the value. It
+  /// is strictly the "the accumulator is shared" test:
   /// a private single-use buffer is not reported here, so in-place still fires
   /// for it. Two cases yield a private (unshared) accumulator, both correctly
   /// returning false:

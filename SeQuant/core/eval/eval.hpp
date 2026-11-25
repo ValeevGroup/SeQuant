@@ -922,9 +922,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// events it carries. \p left is consumed (moved from and mutated), so the
 /// caller must have established that it is an evaluation-local buffer nobody
 /// else will read -- that provenance gate stays at the call site, since the
-/// two callers answer it differently (\c evaluate_impl from the scope
-/// chain's \c chain_holds_shared, the ordered executor from the cell
-/// registry via \c CellReadResolver::operand_drained).
+/// two callers answer it differently (\c evaluate_impl from the reference
+/// count of \p left, the ordered executor from the cell registry via
+/// \c CellReadResolver::operand_drained).
 ///
 /// \return the (mutated) accumulator, in the node's own oriented layout.
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
@@ -1321,6 +1321,13 @@ ResultPtr evaluate_impl(Node const& node,         //
         //    this evaluation (prod()/sum() allocate, or hand back a pending
         //    view that copies before it is written to), so only internal
         //    nodes are safe candidates.
+        //  - f.left.use_count() == 1: nobody else holds f.left. An entry that
+        //    the read of f.left drained holds it no longer, but whoever read
+        //    it before may: an operand of a node up the stack that waits for
+        //    its sibling (the subtree this Sum is in), or a result that the
+        //    caller keeps from an earlier evaluation with this cache. A cache
+        //    entry that holds f.left is another reference to it, so this
+        //    condition implies the next one.
         //  - !cache.chain_holds_shared(f.left): even an internal node's result
         //    must not be a live, shared entry on the CacheManager's scope chain
         //    -- i.e. not referenced again elsewhere in this evaluation's
@@ -1359,7 +1366,8 @@ ResultPtr evaluate_impl(Node const& node,         //
         // evaluation-local buffer.
         bool const inplace_eligible =
             f.nd()->op_type() == EvalOp::Sum && f.nd()->accumulate_in_place() &&
-            !f.nd().left().leaf() && !cache.chain_holds_shared(f.left);
+            !f.nd().left().leaf() && f.left.use_count() == 1 &&
+            !cache.chain_holds_shared(f.left);
         if (inplace_eligible) {
           // The accumulate-in-place Sum (sum_in_place_traced, above),
           // shared with the ordered executor's own compute_cell.
@@ -1523,6 +1531,9 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
     detail::require_summable_roots(*std::ranges::begin(nodes), n, i++);
     ResultPtr pre = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
+    // the value of the first root may be held by others: \p cache, the leaf
+    // evaluator, the caller
+    if (result.use_count() != 1) result = result->clone();
     auto time =
         detail::timed_eval_inplace([&]() { result->add_inplace(*pre); });
 

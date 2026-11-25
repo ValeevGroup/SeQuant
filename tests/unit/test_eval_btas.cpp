@@ -31,8 +31,10 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <array>
 #include <cmath>
 #include <complex>
+#include <initializer_list>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -697,6 +699,107 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
       result_marked->get<BTensorD>() - result_unmarked->get<BTensorD>();
   REQUIRE(norm(zero) == Catch::Approx(0).margin(
                             100 * std::numeric_limits<double>::epsilon()));
+}
+
+TEST_CASE("eval_sum_in_place_shared_operand_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2026);
+  const size_t nocc = 3, nvirt = 4;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  auto tensor = [](std::wstring const& label,
+                   std::initializer_list<std::wstring> b,
+                   std::initializer_list<std::wstring> k) {
+    return ex<Tensor>(label, bra(b), ket(k),
+                      TensorSymmetries{.perm = Symmetry::Nonsymm});
+  };
+  // the ordered executor answers the question of who holds an operand from
+  // its cell table, and passes these cases as it is: they pin that
+  BatchPolicy ordered;
+  ordered.scheduler = BatchScheduler::ordered;
+
+  SECTION("a pending operand of a product") {
+    // p + q is one value, read as a factor and then, for the last time, as
+    // what the chain p + q + g accumulates into
+    auto pq = [&](std::wstring const& a, std::wstring const& i) {
+      return tensor(L"p", {a}, {i}) + tensor(L"q", {a}, {i});
+    };
+    auto const node = eval_node(ex<Product>(
+        ExprPtrList{pq(L"a_2", L"i_5"),
+                    pq(L"a_1", L"i_3") + tensor(L"g", {L"a_1"}, {L"i_3"}),
+                    tensor(L"W", {L"i_3", L"i_5"}, {L"a_1", L"a_2"})},
+        Product::Flatten::No));
+    std::vector const nodes{node};
+    auto const alone = evaluate(node, yield_)->get<double>();
+    auto cache = cache_manager(nodes);
+    CHECK(evaluate(node, yield_, cache)->get<double>() ==
+          Catch::Approx(alone).margin(1e-10));
+    auto ordered_cache = cache_manager(nodes);
+    CHECK(evaluate_each(nodes, ordered, yield_, ordered_cache)[0]
+              ->get<double>() == Catch::Approx(alone).margin(1e-10));
+  }
+
+  SECTION("a result the caller holds") {
+    // f t is the first root and what the second accumulates g into
+    auto const ft =
+        tensor(L"f", {L"a_1"}, {L"a_2"}) * tensor(L"t", {L"a_2"}, {L"i_1"});
+    std::vector const nodes{eval_node(ft),
+                            eval_node(ft + tensor(L"g", {L"a_1"}, {L"i_1"}))};
+    REQUIRE(nodes[1].left()->hash_value() == nodes[0]->hash_value());
+    std::array const alone{evaluate(nodes[0], yield_)->get<BTensorD>(),
+                           evaluate(nodes[1], yield_)->get<BTensorD>()};
+    auto differs = [](BTensorD const& a, BTensorD const& b) {
+      BTensorD const d = a - b;
+      return std::sqrt(btas::dotc(d, d)) > 1e-10;
+    };
+    REQUIRE(differs(alone[0], alone[1]));
+
+    auto cache = cache_manager(nodes);
+    std::array const cached{evaluate(nodes[0], yield_, cache),
+                            evaluate(nodes[1], yield_, cache)};
+    auto ordered_cache = cache_manager(nodes);
+    auto const scheduled = evaluate_each(nodes, ordered, yield_, ordered_cache);
+    for (std::size_t k : {0, 1}) {
+      CAPTURE(k);
+      CHECK_FALSE(differs(cached[k]->get<BTensorD>(), alone[k]));
+      CHECK_FALSE(differs(scheduled[k]->get<BTensorD>(), alone[k]));
+    }
+  }
+
+  SECTION("the first root of a summed forest") {
+    using annot_t = EvalExprBTAS::annot_t;
+    auto const Z = tensor(L"Z", {L"i_1"}, {L"a_1"});
+    auto const g = tensor(L"g", {L"a_1"}, {L"i_1"});
+    auto const ft =
+        tensor(L"f", {L"a_1"}, {L"a_2"}) * tensor(L"t", {L"a_2"}, {L"i_1"});
+    auto forests = [&](auto const& nodes) {
+      auto cache = cache_manager(nodes);
+      auto ordered_cache = cache_manager(nodes);
+      return std::array{
+          evaluate(nodes, annot_t{}, yield_, cache),
+          evaluate(nodes, ordered, annot_t{}, yield_, ordered_cache)};
+    };
+
+    // E0 + E1 + E0: the value of E0 is cached for its second use
+    std::vector const scalars{eval_node(ft * Z), eval_node(g * Z),
+                              eval_node(ft * Z)};
+    auto const sum = 2 * evaluate(scalars[0], yield_)->get<double>() +
+                     evaluate(scalars[1], yield_)->get<double>();
+    for (auto const& r : forests(scalars))
+      CHECK(r->get<double>() == Catch::Approx(sum).margin(1e-10));
+
+    // a first root that is a leaf belongs to the leaf evaluator
+    auto const leaf = yield_(g->as<Tensor>());
+    BTensorD const pristine = leaf->get<BTensorD>();
+    std::vector const tensors{eval_node(g), eval_node(g), eval_node(g)};
+    auto cache = cache_manager(tensors);
+    auto const r = evaluate(tensors, annot_t{}, yield_, cache);
+    BTensorD const d = leaf->get<BTensorD>() - pristine;
+    CHECK(std::sqrt(btas::dotc(d, d)) < 1e-10);
+    BTensorD const e = r->get<BTensorD>() - pristine - pristine - pristine;
+    CHECK(std::sqrt(btas::dotc(e, e)) < 1e-10);
+  }
 }
 
 TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
