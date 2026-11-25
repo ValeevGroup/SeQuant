@@ -460,8 +460,9 @@ TEST_CASE("registry-live-cells", "[cell_registry]") {
 }
 
 TEST_CASE("registry-holds-shared-buffer", "[cell_registry]") {
-  // holds() answers for a buffer for as long as any cell holds it, and a
-  // production whose stored_form hook throws leaves the cell as it was.
+  // holds() answers for a buffer for as long as any cell holds it, holds_if()
+  // asks only the cells that do, and a production whose stored_form hook
+  // throws leaves the cell as it was.
   CellTable t;
   for (std::size_t i = 0; i < 2; ++i) {
     TableCell c;
@@ -482,14 +483,24 @@ TEST_CASE("registry-holds-shared-buffer", "[cell_registry]") {
 
   SECTION("one buffer in two cells") {
     CellRegistry reg(t);
+    auto const in = [](CellId want) {
+      return [want](CellId c) { return c == want; };
+    };
     reg.set(0, r);
     reg.set(1, r);
+    reg.set(1, r);  // persistent: re-storing the same buffer adds no entry
     CHECK(reg.holds(r));
+    CHECK(reg.holds_if(r, in(0)));
+    CHECK(reg.holds_if(r, in(1)));
     (void)reg.take(0);
     CHECK(reg.holds(r));  // cell 1 still holds it
+    CHECK_FALSE(reg.holds_if(r, in(0)));
+    CHECK(reg.holds_if(r, in(1)));
     reg.set(1, other);
     CHECK_FALSE(reg.holds(r));
+    CHECK_FALSE(reg.holds_if(r, in(1)));
     CHECK(reg.holds(other));
+    CHECK(reg.holds_if(other, in(1)));
   }
 
   SECTION("stored_form throws") {
