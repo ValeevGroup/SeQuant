@@ -1634,12 +1634,11 @@ TEST_CASE("eval_inlined_equation_phase_btas", "[eval_btas][inline]") {
 
     auto const e = scalar_of(u * v * W * Z);
     REQUIRE(std::abs(e) > 1e-3);
+    Labels const a12{L"a_1", L"a_2"}, a21{L"a_2", L"a_1"};
     for (bool as_defined_first : {true, false}) {
       CAPTURE(as_defined_first);
-      Labels const first =
-          as_defined_first ? Labels{L"a_1", L"a_2"} : Labels{L"a_2", L"a_1"};
-      Labels const second =
-          as_defined_first ? Labels{L"a_2", L"a_1"} : Labels{L"a_1", L"a_2"};
+      Labels const first = as_defined_first ? a12 : a21;
+      Labels const second = as_defined_first ? a21 : a12;
       check({ResultExpr(I({L"a_1", L"a_2"})->as<Tensor>(), u * v),
              ResultExpr(Variable(L"R1"), I(first) * W * Z),
              ResultExpr(Variable(L"R2"), I(second) * W * Z)},
