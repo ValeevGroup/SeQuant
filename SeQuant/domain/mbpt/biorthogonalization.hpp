@@ -128,6 +128,9 @@ ExprPtr WK_biorthogonalization_filter(
 [[nodiscard]] ExprPtr triplet_combined_residual(
     const ExprPtr& V,
     const container::svector<container::svector<Index>>& ext_idxs);
+[[nodiscard]] ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs);
 
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector

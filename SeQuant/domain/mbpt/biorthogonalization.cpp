@@ -917,9 +917,8 @@ std::vector<double> compute_triplet_biorthogonalizer_coeffs(
   return detail::flatten_row_major(pinv.row(pinv.rows() - 1));
 }
 
-ExprPtr triplet_combined_residual(
-    const ExprPtr& V,
-    const container::svector<container::svector<Index>>& ext_idxs) {
+template <detail::index_group_range IdxGroups>
+ExprPtr triplet_combined_residual_impl(const ExprPtr& V, IdxGroups&& ext_idxs) {
   const std::size_t n_particles = ext_idxs.size();
   const auto weights = hardcoded_triplet_residual_row(n_particles);
 
@@ -954,6 +953,17 @@ ExprPtr triplet_combined_residual(
   auto result = ex<Sum>(out);
   simplify(result);
   return result;
+}
+
+ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs) {
+  return triplet_combined_residual_impl(V, as_view_of_index_groups(ext_idxs));
+}
+ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  return triplet_combined_residual_impl(V, ext_idxs);
 }
 
 ExprPtr triplet_maxcoeff_compact(
