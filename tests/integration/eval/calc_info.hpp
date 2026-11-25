@@ -98,14 +98,19 @@ struct CalcInfo {
                                                          size_t rank) const {
     using ranges::views::transform;
     auto trimmed = tail_factor(expr);
+    container::svector<Index> uocc, occ;
+    for (size_t k = 1; k <= rank; ++k) {
+      uocc.emplace_back(L"a_" + std::to_wstring(k));
+      occ.emplace_back(L"i_" + std::to_wstring(k));
+    }
+    const Tensor head(L"R", bra(std::move(uocc)), ket(std::move(occ)));
     auto tform_and_save =
-        transform([st = optm_opts.single_term](const auto& expr) {
-          // SCF reference path: per-term binarize for energy/residual building;
-          // the head's bra/ket layout is consumed by integration helpers that
-          // index by slot ordinal and don't depend on conventional layout.
-          SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-          return binarize<ExprT>(st ? optimize(expr) : expr);
-          SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+        transform([st = optm_opts.single_term, &head](const auto& expr) {
+          // every term of a residual has its head, in the layout of the
+          // amplitudes: the unoccupied orbitals and then the occupied ones.
+          // The external indices of a residual are those of the head, as the
+          // equations are derived; binarize throws for a term that lacks one
+          return binarize<ExprT>(ResultExpr(head, st ? optimize(expr) : expr));
         }) |
         ranges::to_vector;
     if (trimmed.size() > 0) {

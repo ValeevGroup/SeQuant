@@ -21,9 +21,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/algorithm/sort.hpp>
 #include <range/v3/range/operations.hpp>
-#include <range/v3/view/concat.hpp>
 #include <range/v3/view/repeat_n.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
@@ -94,7 +92,6 @@ class SequantEvalScfTAPP final : public SequantEvalScf {
   }
 
   double solve() override {
-    using ranges::views::concat;
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using ranges::views::zip;
@@ -109,24 +106,16 @@ class SequantEvalScfTAPP final : public SequantEvalScf {
                    std::array<Evaluator, 2>{evaluate_symm<Trace::Off>,
                                             evaluate_symm<Trace::On>}};
 
-    auto sorted_annot = [](Tensor const& tnsr) {
-      auto b = tnsr.bra() | ranges::to_vector;
-      auto k = tnsr.ket() | ranges::to_vector;
-      ranges::sort(b, Index::LabelCompare{});
-      ranges::sort(k, Index::LabelCompare{});
-      return EvalExprTAPP::index_hash(concat(b, k)) |
-             ranges::to<EvalExprTAPP::annot_t>;
-    };
-
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
     auto st = info_.eqn_opts.spintrace;
     auto log = Logger::instance().eval.level > 0;
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
       SEQUANT_ASSERT(!n.empty());
-      // update_amplitudes assumes that the residuals are in specific layout
-      auto const target_indices = sorted_annot(ranges::front(n)->as_tensor());
-      r = funcs[st][log](n, target_indices, data_world_, cman_)
+      // update_amplitudes takes the residuals in the layout of the amplitudes,
+      // which is that of their head
+      r = funcs[st][log](n, EvalExprTAPP::layout(ranges::front(n)->as_tensor()),
+                         data_world_, cman_)
               ->template get<Tensor_t>();
     }
 
