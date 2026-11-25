@@ -453,7 +453,7 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   // Treat a unary node (Adjoint, Power) and an inlined equation the same as
   // Sum here: each produces a tensor result that enters a parent Product as
   // a single factor — the parent shouldn't recurse past its boundary, just
-  // collect the tensor held in node->expr() and move on.
+  // collect the tensor that stands for the node and move on.
   if (auto op = node->op_type();
       node->is_tensor() && (!op || *op == EvalOp::Sum || is_unary(*op) ||
                             node->is_equation_boundary())) {
