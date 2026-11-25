@@ -714,6 +714,8 @@ TEST_CASE("eval_sum_in_place_shared_operand_btas", "[eval_btas]") {
     return ex<Tensor>(label, bra(b), ket(k),
                       TensorSymmetries{.perm = Symmetry::Nonsymm});
   };
+  // the ordered executor answers the question of who holds an operand from
+  // its cell table, and passes these cases as it is: they pin that
   BatchPolicy ordered;
   ordered.scheduler = BatchScheduler::ordered;
 

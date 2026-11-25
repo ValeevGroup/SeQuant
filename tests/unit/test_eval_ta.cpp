@@ -2204,3 +2204,97 @@ TEST_CASE("evaluate_each_ta", "[eval]") {
         ContainsSubstring("evaluate_each"));
   }
 }
+
+TEST_CASE("eval_sum_in_place_shared_operand_ta", "[eval]") {
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+  auto const aops = yield_.array_ops();
+  using Node = EvalNode<EvalExprTA>;
+  auto node_of = [](std::wstring_view expr, Symmetry symm = Symmetry::Nonsymm) {
+    return eval_node(
+        deserialize<ExprPtr>(expr, {.def_perm_symm = symm,
+                                    .def_braket_symm = BraKetSymmetry::Nonsymm,
+                                    .def_col_symm = ColumnSymmetry::Nonsymm}));
+  };
+  auto cache_of = [&aops](std::vector<Node> const& nodes) {
+    auto cache = cache_manager(nodes);
+    cache.set_array_ops(&aops);
+    return cache;
+  };
+  auto norm_of_difference = [](TA::TSpArrayD const& a, TA::TSpArrayD const& b,
+                               std::string const& annot) {
+    TA::TSpArrayD diff;
+    diff(annot) = a(annot) - b(annot);
+    return TA::norm2(diff);
+  };
+
+  SECTION("a pending operand of a product") {
+    std::vector const nodes{
+        node_of(L"(p{a_2;i_5} + q{a_2;i_5}) * (p{a_1;i_3} + q{a_1;i_3} + "
+                L"g{a_1;i_3}) * W{i_3,i_5;a_1,a_2}")};
+    auto const alone = evaluate(nodes[0], yield_)->get<double>();
+    auto cache = cache_of(nodes);
+    CHECK(evaluate(nodes[0], yield_, cache)->get<double>() ==
+          Catch::Approx(alone).margin(1e-10));
+  }
+
+  SECTION("a result the caller holds") {
+    std::vector const nodes{node_of(L"f{a_1;a_2} * t{a_2;i_1}"),
+                            node_of(L"f{a_1;a_2} * t{a_2;i_1} + g{a_1;i_1}")};
+    REQUIRE(nodes[1].left()->hash_value() == nodes[0]->hash_value());
+    auto cache = cache_of(nodes);
+    for (std::size_t k : {0, 1}) {
+      CAPTURE(k);
+      auto const alone = evaluate(nodes[k], yield_);
+      auto const cached = evaluate(nodes[k], yield_, cache);
+      CHECK(norm_of_difference(cached->get<TA::TSpArrayD>(),
+                               alone->get<TA::TSpArrayD>(),
+                               "0,1") == Catch::Approx(0).margin(1e-10));
+    }
+    // the first result, read again once the second root has been evaluated
+    auto const first = evaluate(nodes[0], yield_);
+    auto first_cache = cache_of(nodes);
+    auto const held = evaluate(nodes[0], yield_, first_cache);
+    (void)evaluate(nodes[1], yield_, first_cache);
+    CHECK(norm_of_difference(held->get<TA::TSpArrayD>(),
+                             first->get<TA::TSpArrayD>(),
+                             "0,1") == Catch::Approx(0).margin(1e-10));
+  }
+
+  SECTION("a result the caller holds, read with the opposite phase") {
+    // the two products are one value of opposite phases: what the Sum
+    // accumulates into is a view of the tiles of the result held
+    auto const plus = L"g{a_1,a_2;i_3,i_4} * t{i_3,i_4;i_1,i_2}";
+    auto const minus = L"g{a_2,a_1;i_3,i_4} * t{i_3,i_4;i_1,i_2}";
+    for (bool plus_first : {true, false}) {
+      CAPTURE(plus_first);
+      std::vector const nodes{
+          node_of(plus_first ? plus : minus, Symmetry::Antisymm),
+          node_of(std::wstring{plus_first ? minus : plus} +
+                      L" + h{a_1,a_2;i_1,i_2}",
+                  Symmetry::Antisymm)};
+      REQUIRE(nodes[1].left()->hash_value() == nodes[0]->hash_value());
+      REQUIRE(nodes[1].left()->canon_phase() == -nodes[0]->canon_phase());
+      auto cache = cache_of(nodes);
+      auto const held = evaluate(nodes[0], yield_, cache);
+      TA::TSpArrayD const before = TA::clone(held->get<TA::TSpArrayD>());
+      REQUIRE(TA::norm2(before) > 0);
+      (void)evaluate(nodes[1], yield_, cache);
+      CHECK(norm_of_difference(held->get<TA::TSpArrayD>(), before, "0,1,2,3") ==
+            Catch::Approx(0).margin(1e-10));
+    }
+  }
+
+  SECTION("the first root of a summed forest") {
+    std::vector const nodes{node_of(L"f{a_1;a_2} * t{a_2;i_1} * Z{i_1;a_1}"),
+                            node_of(L"g{a_1;i_1} * Z{i_1;a_1}"),
+                            node_of(L"f{a_1;a_2} * t{a_2;i_1} * Z{i_1;a_1}")};
+    auto const sum = 2 * evaluate(nodes[0], yield_)->get<double>() +
+                     evaluate(nodes[1], yield_)->get<double>();
+    auto cache = cache_of(nodes);
+    CHECK(evaluate(nodes, std::string{}, yield_, cache)->get<double>() ==
+          Catch::Approx(sum).margin(1e-10));
+  }
+}
