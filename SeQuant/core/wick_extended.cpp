@@ -35,18 +35,6 @@ namespace {
 
 using Blocks = container::svector<container::svector<std::size_t>>;
 
-/// @return a factory of indices whose labels differ from those of every index
-/// of @p expr; Index::make_tmp_index does not guarantee that, since the
-/// dummies named by reduction and canonicalization come from IndexFactory
-/// objects that count from the same ordinal
-IndexFactory fresh_index_factory(const Expr &expr) {
-  container::set<std::wstring> labels;
-  for (const auto &idx : get_used_indices(expr)) labels.emplace(idx.label());
-  return IndexFactory([labels = std::move(labels)](const Index &idx) {
-    return !labels.contains(std::wstring(idx.label()));
-  });
-}
-
 /// @return a fresh index in @p sp in the basis of @p idx, i.e. with its basis
 /// instance and protoindices
 Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
@@ -227,7 +215,7 @@ template <Statistics S>
 container::svector<ExprPtr> separate_shared_indices(Expr &term) {
   container::svector<ExprPtr> deltas;
   container::set<Index> seen;
-  auto idxfac = fresh_index_factory(term);
+  IndexFactory idxfac(unused_label_validator(term));
   auto separate = [&](NormalOperator<S> &nop) {
     container::svector<Op<S>> ops;
     bool renamed = false;
@@ -374,7 +362,7 @@ container::svector<std::shared_ptr<Product>> split_mixed_spaces(
       term->is<Product>()
           ? std::static_pointer_cast<Product>(term->clone().as_shared_ptr())
           : std::make_shared<Product>(ExprPtrList{term->clone()});
-  auto idxfac = fresh_index_factory(*product);
+  IndexFactory idxfac(unused_label_validator(*product));
   container::svector<std::shared_ptr<Product>> partials{
       std::make_shared<Product>(product->scalar(), ExprPtrList{})};
   for (const auto &f : product->factors()) {

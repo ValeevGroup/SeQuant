@@ -245,7 +245,9 @@ When configuring a build tree from scratch, mirror the `BUILD_CONFIG` flags in
 ## Tests
 
 `unit_tests-sequant` (`tests/unit`, Catch2; filter by tag or name, e.g.
-`unit_tests-sequant "[export]"`) is only part of the suite. The fixture
+`unit_tests-sequant "[export]"`) is only part of the suite. The tests of
+`SeQuant-deriv` are a separate executable, `unit_tests-sequant-deriv`
+(`tests/unit/deriv`), that `check-sequant` builds and runs too. The fixture
 comparisons above, the integration programs under `tests/integration` and,
 with `SEQUANT_PYTHON=ON`, the binding tests under `python/` are separate ctest
 entries that the unit-test binary neither builds nor runs. Run everything the
@@ -323,15 +325,17 @@ them all. Ordered from the bottom up, each row depends only on rows above it:
 | target | sources | depends on |
 |---|---|---|
 | `SeQuant-bliss` | `SeQuant/external/bliss` | — |
-| `SeQuant-symb` | `SeQuant/core/` except `eval`, `optimize`, `export` | bliss (privately) |
+| `SeQuant-symb` | `SeQuant/core/` except `eval`, `optimize`, `export`, `deriv` | bliss (privately) |
+| `SeQuant-deriv` | `SeQuant/core/deriv` | symb |
 | `SeQuant-eval` | `SeQuant/core/eval` | symb, bliss (privately) |
 | `SeQuant-optimize` | `SeQuant/core/optimize` | eval, symb, bliss |
 | `SeQuant-export` | `SeQuant/core/export` | optimize, eval, symb |
-| `SeQuant-core` | `SeQuant/version.cpp` only; umbrella for the four above | symb, eval, optimize, export |
+| `SeQuant-core` | `SeQuant/version.cpp` only; umbrella for symb, eval, optimize, export | symb, eval, optimize, export |
 | `SeQuant-mbpt` | `SeQuant/domain/mbpt` | core, optimize |
 
 Note that "core" is both the source directory (`SeQuant/core/`, which feeds
-`symb`, `eval`, `optimize` and `export`) and the small umbrella target. Backend
+`symb`, `deriv`, `eval`, `optimize` and `export`) and the small umbrella
+target, which links all of those but `deriv`. Backend
 targets `SeQuant-eval-{ta,btas,tapp}` sit on top of `eval` and are consumed as
 `SeQuant::eval::ta` etc. A row may include headers only from rows above it;
 an include from a row further down is a back-edge.

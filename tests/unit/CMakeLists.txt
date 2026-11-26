@@ -383,3 +383,6 @@ else()
     set(TEST_NAMES "sequant/unit")
     build_test_as_needed(unit_tests-sequant "sequant/unit" TEST_NAMES)
 endif()
+
+# symbolic differentiation (SeQuant-deriv) has its own executable
+add_subdirectory(deriv)

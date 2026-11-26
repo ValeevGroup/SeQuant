@@ -25,10 +25,12 @@
 
 #include <algorithm>
 #include <concepts>
+#include <functional>
 #include <iterator>
 #include <optional>
 #include <ranges>
 #include <set>
+#include <string>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -421,6 +423,19 @@ template <typename Set = container::set<Index>, SlotTypes types = AnySlotType>
 Set get_used_indices(const ExprPtr& expr) {
   return get_used_indices<Set, types>(*expr);
 }
+
+/// @return a validator, for IndexFactory or for drawing from
+/// Index::make_tmp_index, that accepts an index whose label is none of
+/// @p taken
+std::function<bool(const Index&)> unused_label_validator(
+    container::set<std::wstring> taken);
+
+/// @return unused_label_validator() of the labels of every index of @p expr ;
+/// neither Index::make_tmp_index nor IndexFactory alone names indices apart
+/// from those of @p expr , since the dummies named by reduction and
+/// canonicalization come from IndexFactory objects that count from the same
+/// ordinal
+std::function<bool(const Index&)> unused_label_validator(const Expr& expr);
 
 template <typename Container = std::vector<Index>, typename Rng>
 TensorOfTensorIndices<Container> tot_indices(Rng const& idxs) {

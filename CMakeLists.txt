@@ -456,6 +456,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/expr_filter.hpp
         SeQuant/core/utility/expr_matcher.cpp
         SeQuant/core/utility/expr_matcher.hpp
+        SeQuant/core/utility/indices.cpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.cpp
         SeQuant/core/utility/macros.hpp
@@ -496,6 +497,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/detail/concepts.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
+        SeQuant/domain/mbpt/models/hf.cpp
+        SeQuant/domain/mbpt/models/hf.hpp
         SeQuant/domain/mbpt/op_registry.hpp
         SeQuant/domain/mbpt/op_registry.cpp
         SeQuant/domain/mbpt/op.cpp
@@ -511,6 +514,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/rules/pno.hpp
         SeQuant/domain/mbpt/rules/thc.cpp
         SeQuant/domain/mbpt/rules/thc.hpp
+        SeQuant/domain/mbpt/series.cpp
+        SeQuant/domain/mbpt/series.hpp
         SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
@@ -606,6 +611,12 @@ set(SeQuant_export_src
         SeQuant/core/export/text_generator.hpp
         SeQuant/core/export/utils.hpp
         SeQuant/core/export/utils.cpp
+)
+
+# Symbolic differentiation sources (depends on symb only)
+set(SeQuant_deriv_src
+        SeQuant/core/deriv/deriv.cpp
+        SeQuant/core/deriv/deriv.hpp
 )
 
 # TiledArray backend sources; each explicit instantiation of a Result class
@@ -828,6 +839,12 @@ sequant_add_library(export ${SeQuant_export_src})
 target_link_libraries(SeQuant-export PUBLIC SeQuant-optimize SeQuant-eval SeQuant-symb)
 
 ##########################
+# SeQuant-deriv: symbolic differentiation (depends on symb only)
+##########################
+sequant_add_library(deriv ${SeQuant_deriv_src})
+target_link_libraries(SeQuant-deriv PUBLIC SeQuant-symb)
+
+##########################
 # SeQuant-core: version info, links symb + export
 ##########################
 sequant_add_library(core ${SeQuant_core_src})
@@ -852,7 +869,7 @@ endif()
 ##########################
 # All SeQuant modules (used for install, IWYU, etc.)
 ##########################
-set(SEQUANT_MODULES SeQuant-bliss SeQuant-symb SeQuant-eval SeQuant-optimize SeQuant-export SeQuant-core SeQuant-mbpt SeQuant)
+set(SEQUANT_MODULES SeQuant-bliss SeQuant-symb SeQuant-eval SeQuant-optimize SeQuant-export SeQuant-deriv SeQuant-core SeQuant-mbpt SeQuant)
 # a backend module is installed and exported only with its backend, else it is build-tree only
 set(SEQUANT_BUILD_LOCAL_MODULES)
 foreach (_backend IN LISTS _sequant_known_backends)
