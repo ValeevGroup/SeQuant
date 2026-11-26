@@ -506,6 +506,23 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(prod1_eval, prod1_man));
 
+      // the layout of a head: its indices as written, sorted or not
+      const auto head =
+          sequant::deserialize<sequant::ExprPtr>(L"X{i4,a1;a4,i1}")
+              ->as<sequant::Tensor>();
+      const auto in_head = evaluate(sequant::binarize<sequant::EvalExprTA>(
+                                        sequant::ResultExpr(head, expr1)),
+                                    sequant::EvalExprTA::layout(head), yield_)
+                               ->get<TA::TSpArrayD>();
+      REQUIRE(equal_tarrays(in_head, prod1_man));
+
+      // the indices with protoindices are the modes of the inner tensors
+      REQUIRE(
+          sequant::EvalExprTA::layout(sequant::deserialize<sequant::ExprPtr>(
+                                          L"X{a4<i2,i3>,i2;a1<i1,i2>,i1}")
+                                          ->as<sequant::Tensor>()) ==
+          "i_2,i_1;a_4i_2i_3,a_1i_1i_2");
+
       auto expr2 = parse_antisymm(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
           L"i4}");
@@ -1194,6 +1211,27 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         ref(target_layout) = 3 * ref(target_layout);
       }
       REQUIRE(approx_equal("i,j,k;a,b", result, ref));
+
+      // into the layout of a head: the indices with protoindices are the
+      // modes of the inner tensors, the others those of the outer ones
+      auto const head =
+          deserialize<sequant::ExprPtr>(L"X{a4<i2,i3>,i3;a3<i2,i3>,i1,i2}")
+              ->as<sequant::Tensor>();
+      auto const head_layout = EvalExprTA::layout(head);
+      REQUIRE(head_layout == "i_3,i_1,i_2;a_4i_2i_3,a_3i_2i_3");
+      auto const in_head =
+          evaluate(binarize<EvalExprTA>(ResultExpr(
+                       head, deserialize<sequant::ExprPtr>(expr_str))),
+                   head_layout, yield)
+              ->get<ArrayToT>();
+      ArrayToT ref_in_head;
+      ref_in_head(head_layout) = ref(target_layout);
+      // a dot product does not tell layouts apart: that of the difference,
+      // with positional annotations, does
+      ArrayToT diff;
+      diff("i,j,k;a,b") = in_head("i,j,k;a,b") - ref_in_head("i,j,k;a,b");
+      REQUIRE(diff("i,j,k;a,b").dot(diff("i,j,k;a,b")) ==
+              Catch::Approx(0).margin(1e-12));
     }
 
     SECTION("ToT_times_ToT_to_ToT") {

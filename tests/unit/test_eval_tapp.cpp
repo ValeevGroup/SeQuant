@@ -20,6 +20,7 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -172,8 +173,7 @@ container::svector<int64_t> tidxs(Iterable const& indices) noexcept {
 }
 
 container::svector<int64_t> tidxs(Tensor const& tnsr) noexcept {
-  return sequant::EvalExprTAPP::index_hash(tnsr.const_braket_indices()) |
-         ranges::to<container::svector<int64_t>>;
+  return sequant::EvalExprTAPP::layout(tnsr);
 }
 
 container::svector<int64_t> tidxs(
@@ -279,6 +279,24 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
         parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{ i1, i2}");
     auto const tidx1 = tidxs(L"i1,i4,a1,a4");
     auto eval1 = eval(expr1, tidx1);
+
+    // the layout of a head: its indices as written, sorted or not
+    {
+      const auto head =
+          deserialize<sequant::ExprPtr>(L"X{i1,a4;a1,i4}")->as<Tensor>();
+      REQUIRE(EvalExprTAPP::layout(head) == tidxs(L"i1,a4,a1,i4"));
+      const auto in_head =
+          evaluate(binarize<EvalExprTAPP>(sequant::ResultExpr(head, expr1)),
+                   EvalExprTAPP::layout(head), yield_)
+              ->get<TAPPTensorD>();
+      const auto expected = eval(expr1, tidxs(L"i1,a4,a1,i4"));
+      REQUIRE(in_head.extents() == expected.extents());
+      REQUIRE(in_head.extents() != eval1.extents());
+      // element by element: the extents do not tell apart a swap of modes of
+      // the same space, nor does a norm
+      REQUIRE(std::equal(in_head.data(), in_head.data() + in_head.volume(),
+                         expected.data()));
+    }
 
     // mnemonics
     // ===

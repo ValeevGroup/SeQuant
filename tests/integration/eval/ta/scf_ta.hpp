@@ -111,11 +111,10 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
       SEQUANT_ASSERT(!n.empty());
-      auto trank = ranges::front(n)->as_tensor().bra_rank();
-      SEQUANT_ASSERT(trank == 1 || trank == 2);
-      // update_amplitudes assumes that the residuals are in specific layout
-      std::string target_indices = trank == 1 ? "a_1,i_1" : "a_1,a_2,i_1,i_2";
-      r = funcs[st][log](n, target_indices, data_world_, cman_)
+      // update_amplitudes takes the residuals in the layout of the amplitudes,
+      // which is that of their head
+      r = funcs[st][log](n, EvalExprTA::layout(ranges::front(n)->as_tensor()),
+                         data_world_, cman_)
               ->template get<Tensor_t>();
     }
 

@@ -113,15 +113,17 @@ ExprPtr make_variable() { return ex<Variable>(label_scalar); }
 }  // namespace detail
 
 std::string EvalExpr::indices_annot() const noexcept {
-  using ranges::views::filter;
-  using ranges::views::join;
-  using ranges::views::transform;
-
   if (!is_tensor()) return {};
-  auto outer = csv_labels(canon_indices_  //
+  return indices_annot(canon_indices_);
+}
+
+std::string EvalExpr::indices_annot(index_vector const& indices) {
+  using ranges::views::filter;
+
+  auto outer = csv_labels(indices  //
                           | filter(ranges::not_fn(&Index::has_proto_indices)));
 
-  auto inner = csv_labels(canon_indices_  //
+  auto inner = csv_labels(indices  //
                           | filter(&Index::has_proto_indices));
 
   return outer + (inner.empty() ? "" : (";" + inner));
