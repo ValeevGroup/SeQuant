@@ -252,8 +252,7 @@ container::svector<long> tidxs(Iterable const& indices) noexcept {
 }
 
 container::svector<long> tidxs(Tensor const& tnsr) noexcept {
-  return sequant::EvalExprBTAS::index_hash(tnsr.const_braket_indices()) |
-         ranges::to<container::svector<long>>;
+  return sequant::EvalExprBTAS::layout(tnsr);
 }
 
 container::svector<long> tidxs(
