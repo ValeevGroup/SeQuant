@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a80f616e9c6d19edacfcd8bed4a5fc2c1:
+
+Template Function sequant::to_latex(const mbpt::Operator<mbpt::qns_t, S>&)
+==========================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_latex(const mbpt::Operator<mbpt::qns_t, S>&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a6557afc7846f1f6972a9609d311947c7:
+
+Enum CanonicalizationMethod
+===========================
+
+- Defined in :ref:`file_SeQuant_core_options.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::CanonicalizationMethod
+   :project: SeQuant

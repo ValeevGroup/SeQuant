@@ -1,0 +1,47 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_tiledarray_eval_expr.hpp:
+
+Program Listing for File eval_expr.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_tiledarray_eval_expr.hpp>` (``SeQuant/core/eval/backends/tiledarray/eval_expr.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_BACKENDS_TILEDARRAY_EVAL_EXPR_HPP
+   #define SEQUANT_EVAL_BACKENDS_TILEDARRAY_EVAL_EXPR_HPP
+   
+   #ifdef SEQUANT_HAS_TILEDARRAY
+   
+   #include <SeQuant/core/eval/eval_expr.hpp>
+   
+   #include <string>
+   
+   namespace sequant {
+   
+   class EvalExprTA final : public EvalExpr {
+    public:
+     template <typename... Args, typename = std::enable_if_t<
+                                     std::is_constructible_v<EvalExpr, Args...>>>
+     EvalExprTA(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+       annot_ = indices_annot();
+     }
+   
+     [[nodiscard]] inline auto const& annot() const noexcept { return annot_; }
+   
+    private:
+     std::string annot_;
+   };
+   
+   using EvalNodeTA = EvalNode<EvalExprTA>;
+   
+   static_assert(meta::eval_node<EvalNodeTA>);
+   static_assert(meta::can_evaluate<EvalNodeTA>);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_HAS_TILEDARRAY
+   
+   #endif  // SEQUANT_EVAL_BACKENDS_TILEDARRAY_EVAL_EXPR_HPP

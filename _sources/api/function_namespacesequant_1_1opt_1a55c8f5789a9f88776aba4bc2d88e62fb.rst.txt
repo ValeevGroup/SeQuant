@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a55c8f5789a9f88776aba4bc2d88e62fb:
+
+Template Function sequant::opt::extract_persistent_subexpressions
+=================================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::extract_persistent_subexpressions(VectorLike&, const std::function<bool(const std::ranges::range_value_t<VectorLike>&)>&, const Transformer&, const std::function<std::string(const std::ranges::range_value_t<VectorLike>&, std::size_t)>&, std::size_t)
+   :project: SeQuant

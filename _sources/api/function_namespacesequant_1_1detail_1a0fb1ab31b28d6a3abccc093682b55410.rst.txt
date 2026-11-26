@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a0fb1ab31b28d6a3abccc093682b55410:
+
+Template Function sequant::detail::term_weight
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::term_weight(const NormalOperator<S>&, const container::svector<container::svector<std::size_t>>&)
+   :project: SeQuant

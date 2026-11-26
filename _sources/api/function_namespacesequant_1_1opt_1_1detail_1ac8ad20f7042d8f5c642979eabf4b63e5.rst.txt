@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1ac8ad20f7042d8f5c642979eabf4b63e5:
+
+Function sequant::opt::detail::slot_map_onto
+============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::slot_map_onto(const Tensor&, const Tensor&, ShapeCompatibility)
+   :project: SeQuant

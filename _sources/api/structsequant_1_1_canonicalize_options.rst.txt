@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_canonicalize_options:
+
+Struct CanonicalizeOptions
+==========================
+
+- Defined in :ref:`file_SeQuant_core_options.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::CanonicalizeOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

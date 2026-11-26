@@ -1,0 +1,28 @@
+.. _exhale_class_classsequant_1_1_any_irrep_context:
+
+Class AnyIrrepContext
+=====================
+
+- Defined in :ref:`file_SeQuant_core_irreps_any.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_any_irrep_context_1_1_concept`
+- :ref:`exhale_struct_structsequant_1_1_any_irrep_context_1_1_model`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::AnyIrrepContext
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

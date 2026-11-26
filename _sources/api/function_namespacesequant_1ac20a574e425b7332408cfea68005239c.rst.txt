@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac20a574e425b7332408cfea68005239c:
+
+Function sequant::canonicalize_tensor_leaf
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::canonicalize_tensor_leaf(Expr&, CanonicalizeOptions, const std::function<void(const AbstractTensor&)>&)
+   :project: SeQuant

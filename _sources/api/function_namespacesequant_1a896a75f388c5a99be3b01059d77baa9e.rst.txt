@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a896a75f388c5a99be3b01059d77baa9e:
+
+Template Function sequant::type_name_of
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::type_name_of()
+   :project: SeQuant

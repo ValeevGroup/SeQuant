@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_extended_wick_options:
+
+Struct ExtendedWickOptions
+==========================
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::ExtendedWickOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

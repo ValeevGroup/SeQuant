@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_hold_policy:
+
+Struct HoldPolicy
+=================
+
+- Defined in :ref:`file_SeQuant_core_batch_policy.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::HoldPolicy
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

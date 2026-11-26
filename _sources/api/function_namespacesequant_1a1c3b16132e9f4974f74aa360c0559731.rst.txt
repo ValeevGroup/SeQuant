@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1c3b16132e9f4974f74aa360c0559731:
+
+Function sequant::set_locale
+============================
+
+- Defined in :ref:`file_SeQuant_core_runtime.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::set_locale()
+   :project: SeQuant

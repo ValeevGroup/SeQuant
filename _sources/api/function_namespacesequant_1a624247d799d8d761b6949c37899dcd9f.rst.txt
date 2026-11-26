@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a624247d799d8d761b6949c37899dcd9f:
+
+Template Function sequant::irreps_of(const FullBinaryNode<T>&, const Ctx&, OnNode&&)
+====================================================================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_eval_tree.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::irreps_of(const FullBinaryNode<T>&, const Ctx&, OnNode&&)
+   :project: SeQuant

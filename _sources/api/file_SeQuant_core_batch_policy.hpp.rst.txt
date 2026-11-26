@@ -1,0 +1,95 @@
+
+.. _file_SeQuant_core_batch_policy.hpp:
+
+File batch_policy.hpp
+=====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/batch_policy.hpp``)
+----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_batch_policy.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/aggregate.hpp`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``cstddef``
+
+- ``cstdint``
+
+- ``functional``
+
+- ``limits``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_meter.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_legality.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_dump.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+- :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_batch_policy`
+
+- :ref:`exhale_struct_structsequant_1_1_hold_policy`
+
+- :ref:`exhale_struct_structsequant_1_1_memory_space`
+
+- :ref:`exhale_class_classsequant_1_1_peak_budget_infeasible`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1a6ccdd44987d1a57e2c7d8809b91193a6`
+

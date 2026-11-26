@@ -1,0 +1,86 @@
+
+.. _program_listing_file_SeQuant_core_utility_aggregate.hpp:
+
+Program Listing for File aggregate.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_aggregate.hpp>` (``SeQuant/core/utility/aggregate.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     bool unitary = false;
+     bool use_connected_form = false;
+   };
+   //
+   // Created by Ajay Melekamburath on 8/4/26.
+   //
+   
+   #ifndef SEQUANT_CORE_UTILITY_AGGREGATE_HPP
+   #define SEQUANT_CORE_UTILITY_AGGREGATE_HPP
+   
+   #include <compare>
+   #include <type_traits>
+   
+   namespace sequant::detail {
+   
+   class designated_init_only {
+    public:
+     constexpr designated_init_only(const designated_init_only&) noexcept =
+         default;
+     constexpr designated_init_only& operator=(
+         const designated_init_only&) noexcept = default;
+     static constexpr designated_init_only make() noexcept { return {}; }
+   
+     friend constexpr bool operator==(designated_init_only,
+                                      designated_init_only) noexcept {
+       return true;
+     }
+     friend constexpr std::strong_ordering operator<=>(
+         designated_init_only, designated_init_only) noexcept {
+       return std::strong_ordering::equal;
+     }
+   
+    private:
+     constexpr designated_init_only() noexcept = default;
+   };
+   
+   }  // namespace sequant::detail
+   
+   // clang-format off
+   // clang-format on
+   #define SEQUANT_DESIGNATED_INIT_ONLY                            \
+     [[no_unique_address]] ::sequant::detail::designated_init_only \
+         sequant_designated_init_only_ =                           \
+             ::sequant::detail::designated_init_only::make()
+   
+   namespace sequant::detail {
+   
+   struct designated_init_only_probe {
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     bool a = false;
+     bool b = false;
+   };
+   static_assert(std::is_aggregate_v<designated_init_only_probe>);
+   static_assert(std::is_trivially_copyable_v<designated_init_only_probe>);
+   static_assert(std::is_default_constructible_v<designated_init_only_probe>);
+   // [[no_unique_address]] elision is permitted, not required, and MSVC ignores
+   // the standard spelling outright (it has [[msvc::no_unique_address]], since
+   // honoring this one would change its ABI). A toolchain that does not elide
+   // still gets a working guard -- the tag merely costs a byte -- so check the
+   // size only where elision is guaranteed rather than failing the build over it.
+   #if !defined(_MSC_VER) || defined(__clang__)
+   static_assert(sizeof(designated_init_only_probe) == 2 * sizeof(bool),
+                 "[[no_unique_address]] must elide the tag member");
+   #endif
+   static_assert([] {
+     designated_init_only_probe p{};
+     p = designated_init_only_probe{.a = true};
+     return p.a;
+   }());
+   
+   }  // namespace sequant::detail
+   
+   #endif  // SEQUANT_CORE_UTILITY_AGGREGATE_HPP

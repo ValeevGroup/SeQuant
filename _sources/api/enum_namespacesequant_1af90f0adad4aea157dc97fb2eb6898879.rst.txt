@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1af90f0adad4aea157dc97fb2eb6898879:
+
+Enum DeclarationScope
+=====================
+
+- Defined in :ref:`file_SeQuant_core_export_generator.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::DeclarationScope
+   :project: SeQuant

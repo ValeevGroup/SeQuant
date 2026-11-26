@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a030dfa9e817584f051fd409f38a9eb83:
+
+Template Function sequant::wprintf
+==================================
+
+- Defined in :ref:`file_SeQuant_core_utility_debug.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::wprintf(Args&&...)
+   :project: SeQuant

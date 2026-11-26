@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1ab495832c6f43528f518dcc69ea2ade8b:
+
+Function sequant::opt::detail::same_block
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::same_block(const Tensor&, const Tensor&)
+   :project: SeQuant

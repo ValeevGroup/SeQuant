@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1detail_1a1f0d23911f8146c345915da01c2256d2:
+
+Template Function sequant::mbpt::detail::validate_ref_av_connections
+====================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::detail::validate_ref_av_connections(const EVOptions<T>&, bool)
+   :project: SeQuant

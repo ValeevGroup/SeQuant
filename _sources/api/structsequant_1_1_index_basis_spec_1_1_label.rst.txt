@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_index_basis_spec_1_1_label:
+
+Struct IndexBasisSpec::Label
+============================
+
+- Defined in :ref:`file_SeQuant_core_index_basis_registry.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_struct_structsequant_1_1_index_basis_spec`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexBasisSpec::Label
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

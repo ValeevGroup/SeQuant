@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7e8a2816292917ea968442adce56c024:
+
+Function sequant::toUtf8(std::wstring_view)
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toUtf8(std::wstring_view)
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1_vector_expr_access:
+
+Template Class VectorExprAccess
+===============================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::VectorExprAccess
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

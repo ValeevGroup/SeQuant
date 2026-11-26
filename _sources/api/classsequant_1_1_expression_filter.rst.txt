@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_expression_filter:
+
+Class ExpressionFilter
+======================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_filter.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_expression_filter_1_1_rule`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::ExpressionFilter
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

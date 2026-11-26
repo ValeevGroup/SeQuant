@@ -1,0 +1,30 @@
+.. _exhale_class_classsequant_1_1_index_space:
+
+Class IndexSpace
+================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1_attr`
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1_attr_compare`
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1_key_compare`
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1bad__key`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::IndexSpace
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

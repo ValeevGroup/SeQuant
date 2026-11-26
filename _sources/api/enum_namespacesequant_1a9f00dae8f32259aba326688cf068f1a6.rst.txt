@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a9f00dae8f32259aba326688cf068f1a6:
+
+Enum Usage
+==========
+
+- Defined in :ref:`file_SeQuant_core_export_context.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::Usage
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a3ab41d1064651cc795cc1eecbc49b760:
+
+Enum BatchModeType
+==================
+
+- Defined in :ref:`file_SeQuant_core_eval_fwd.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::BatchModeType
+   :project: SeQuant

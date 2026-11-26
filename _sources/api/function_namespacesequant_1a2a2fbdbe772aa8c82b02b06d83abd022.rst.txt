@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a2a2fbdbe772aa8c82b02b06d83abd022:
+
+Function sequant::iroot
+=======================
+
+- Defined in :ref:`file_SeQuant_core_math.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::iroot(const intmax_t&, unsigned)
+   :project: SeQuant

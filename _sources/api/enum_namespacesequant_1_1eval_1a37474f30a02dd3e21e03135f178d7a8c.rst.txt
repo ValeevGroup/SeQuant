@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1eval_1a37474f30a02dd3e21e03135f178d7a8c:
+
+Enum LoopRole
+=============
+
+- Defined in :ref:`file_SeQuant_core_eval_legality.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::eval::LoopRole
+   :project: SeQuant

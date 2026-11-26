@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a8fc66d296cd9fc6b1c757325a73dbc73:
+
+Function sequant::opt::detail::relabeled(const Tensor&, std::wstring_view, const SlotMap&)
+==========================================================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::relabeled(const Tensor&, std::wstring_view, const SlotMap&)
+   :project: SeQuant

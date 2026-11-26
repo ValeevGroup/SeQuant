@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_tensor_1_1_resolved_symmetries:
+
+Struct Tensor::ResolvedSymmetries
+=================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_tensor`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Tensor::ResolvedSymmetries
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

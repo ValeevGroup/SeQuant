@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1ac3bf490f6e2f2deb518b2612afabe075:
+
+Enum SPBasis
+============
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::SPBasis
+   :project: SeQuant

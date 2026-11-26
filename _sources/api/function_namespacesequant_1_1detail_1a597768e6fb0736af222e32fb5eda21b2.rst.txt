@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a597768e6fb0736af222e32fb5eda21b2:
+
+Template Function sequant::detail::numeric_cast
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_constant.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::numeric_cast(const sequant::rational&)
+   :project: SeQuant

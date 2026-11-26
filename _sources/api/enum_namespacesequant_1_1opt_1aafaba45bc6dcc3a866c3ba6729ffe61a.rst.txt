@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1opt_1aafaba45bc6dcc3a866c3ba6729ffe61a:
+
+Enum ShapeCompatibility
+=======================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::opt::ShapeCompatibility
+   :project: SeQuant

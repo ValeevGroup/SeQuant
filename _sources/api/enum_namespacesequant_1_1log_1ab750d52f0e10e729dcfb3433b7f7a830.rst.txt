@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1log_1ab750d52f0e10e729dcfb3433b7f7a830:
+
+Enum TermMode
+=============
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::log::TermMode
+   :project: SeQuant

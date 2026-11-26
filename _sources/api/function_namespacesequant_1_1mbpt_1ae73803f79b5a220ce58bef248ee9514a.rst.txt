@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1ae73803f79b5a220ce58bef248ee9514a:
+
+Template Function sequant::mbpt::operator!=(const QuantumNumberChange<Tag, QNV>&, const QuantumNumberChange<Tag, QNV>&)
+=======================================================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::operator!=(const QuantumNumberChange<Tag, QNV>&, const QuantumNumberChange<Tag, QNV>&)
+   :project: SeQuant

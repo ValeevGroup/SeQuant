@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afb7b6bea6f152cb56c9fbd5fbaaf755b:
+
+Template Function sequant::carried_atoms
+========================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::carried_atoms(Set&, meta::range_of<Index> auto&&)
+   :project: SeQuant

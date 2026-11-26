@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1af594faa2aa93010d5e9e18a9ca2345b9:
+
+Template Function sequant::detail::lexicographic_compare_tensors
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::lexicographic_compare_tensors(const T&, const T&, const LexicographicCompareOptions&, const Bra&, const Ket&, const Aux&)
+   :project: SeQuant

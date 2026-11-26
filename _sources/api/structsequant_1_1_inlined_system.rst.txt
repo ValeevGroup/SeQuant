@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_inlined_system:
+
+Template Struct InlinedSystem
+=============================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::InlinedSystem
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

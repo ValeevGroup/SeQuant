@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1ac9c6e3d16528f39644d08dc6a2f3aabc:
+
+Enum Statistics
+===============
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::Statistics
+   :project: SeQuant

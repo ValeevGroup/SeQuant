@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4e4befd10ef4bbffc84e2fed1c75f8ef:
+
+Template Function sequant::topological_order
+============================================
+
+- Defined in :ref:`file_SeQuant_core_utility_topological.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::topological_order(Range&&, const DepFunc&, Comp)
+   :project: SeQuant

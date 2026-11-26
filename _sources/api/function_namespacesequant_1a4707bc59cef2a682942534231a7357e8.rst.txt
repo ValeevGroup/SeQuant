@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4707bc59cef2a682942534231a7357e8:
+
+Function sequant::expand(ResultExpr&&)
+======================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::expand(ResultExpr&&)
+   :project: SeQuant

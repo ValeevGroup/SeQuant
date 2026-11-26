@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1acd1657655c020159ab87d3748565f667:
+
+Template Function sequant::evaluate_multiroot
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::evaluate_multiroot(container::svector<node_t> const&, container::svector<std::string> const&, F const&, CacheManager<N, FHC>&)
+   :project: SeQuant

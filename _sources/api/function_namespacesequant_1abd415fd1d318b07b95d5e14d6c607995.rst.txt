@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1abd415fd1d318b07b95d5e14d6c607995:
+
+Template Function sequant::collect_tensor_factors
+=================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::collect_tensor_factors(EvalExprNode const&, Rng&, std::int8_t&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7301e4cb229ec3596f3288e6f52190b7:
+
+Template Function sequant::open_atoms
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::open_atoms(Set const&, Set const&, auto const&)
+   :project: SeQuant

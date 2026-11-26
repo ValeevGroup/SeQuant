@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1density_1a6ce183a2c2b506b2613248a36f23111c:
+
+Function sequant::density::spinfree_rdm_label
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::density::spinfree_rdm_label()
+   :project: SeQuant

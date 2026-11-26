@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a3d010e8e8aa98053f314b7d6bcfc85d5:
+
+Enum IrrepNodeKind
+==================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::IrrepNodeKind
+   :project: SeQuant

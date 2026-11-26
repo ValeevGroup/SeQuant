@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a4513b31ac1da11899ecac887bf266285:
+
+Function sequant::eval::enclosing_instances
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::enclosing_instances(OccurrenceRec const&, std::unordered_map<std::size_t, PointOccurrence> const&)
+   :project: SeQuant

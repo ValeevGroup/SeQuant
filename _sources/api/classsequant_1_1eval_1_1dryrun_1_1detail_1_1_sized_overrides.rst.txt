@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1eval_1_1dryrun_1_1detail_1_1_sized_overrides:
+
+Class SizedOverrides
+====================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::eval::dryrun::detail::SizedOverrides
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

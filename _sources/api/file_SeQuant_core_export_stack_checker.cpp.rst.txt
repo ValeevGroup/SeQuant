@@ -1,0 +1,53 @@
+
+.. _file_SeQuant_core_export_stack_checker.cpp:
+
+File stack_checker.cpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/stack_checker.cpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_stack_checker.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/stack_checker.hpp`` (:ref:`file_SeQuant_core_export_stack_checker.hpp`)
+
+- ``SeQuant/core/export/utils.hpp`` (:ref:`file_SeQuant_core_export_utils.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

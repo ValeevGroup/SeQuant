@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_irrep_node_traits_3_01_full_binary_node_3_01_t_01_4_01_4:
+
+Template Struct IrrepNodeTraits< FullBinaryNode< T > >
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_eval_tree.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IrrepNodeTraits< FullBinaryNode< T > >
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

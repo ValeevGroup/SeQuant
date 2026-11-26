@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a61841b282b8e0a92a11d31df37e4037e:
+
+Template Function sequant::eval::detail::stamp_residency_impl
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_lifetime_mask.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::stamp_residency_impl(R const&, ModesOf const&, Setter const&)
+   :project: SeQuant

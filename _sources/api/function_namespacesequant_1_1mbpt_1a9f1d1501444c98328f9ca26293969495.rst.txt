@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a9f1d1501444c98328f9ca26293969495:
+
+Function sequant::mbpt::reset_default_mbpt_context
+==================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::reset_default_mbpt_context()
+   :project: SeQuant

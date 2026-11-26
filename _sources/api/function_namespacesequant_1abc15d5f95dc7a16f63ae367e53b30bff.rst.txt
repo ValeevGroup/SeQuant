@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1abc15d5f95dc7a16f63ae367e53b30bff:
+
+Template Function sequant::relevant_basis
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_export_reordering_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::relevant_basis(Range&&, MemoryLayout)
+   :project: SeQuant

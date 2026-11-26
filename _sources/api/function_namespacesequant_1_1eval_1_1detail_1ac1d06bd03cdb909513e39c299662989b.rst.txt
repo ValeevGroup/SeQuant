@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1ac1d06bd03cdb909513e39c299662989b:
+
+Template Function sequant::eval::detail::with_ordered_schedule
+==============================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::with_ordered_schedule(Nodes const&, BatchPolicy const&, std::function<std::size_t(Index const&)> const&, std::initializer_list<std::wstring>, auto&&)
+   :project: SeQuant

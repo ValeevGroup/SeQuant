@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1aef069ac842018568d3b443bdfc985f11:
+
+Variable sequant::default_max_folded_bits
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_math.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::default_max_folded_bits
+   :project: SeQuant

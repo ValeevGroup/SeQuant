@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a07d7f77c48510daa5ace8e005cc11ac5:
+
+Template Function sequant::binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+============================================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+   :project: SeQuant

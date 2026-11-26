@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a16f5bd3f50b9a4af04bcb17ab1f2d1be:
+
+Function sequant::factor_in_canonical_layout
+============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::factor_in_canonical_layout(EvalExprNode const&)
+   :project: SeQuant

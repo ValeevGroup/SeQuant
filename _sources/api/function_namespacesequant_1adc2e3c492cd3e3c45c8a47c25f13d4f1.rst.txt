@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1adc2e3c492cd3e3c45c8a47c25f13d4f1:
+
+Function sequant::pow
+=====================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor_power.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::pow(ExprPtr, rational)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1expr__type__rank_1a4f92f537d9cef2004f20db996fe8687e:
+
+Variable sequant::expr_type_rank::constant
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::expr_type_rank::constant
+   :project: SeQuant

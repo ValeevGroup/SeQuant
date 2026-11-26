@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1_1rec_1a6c18e4fc28aca8856a81c4990f560fc7:
+
+Typedef sequant::eval::rec::PointList
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::rec::PointList
+   :project: SeQuant

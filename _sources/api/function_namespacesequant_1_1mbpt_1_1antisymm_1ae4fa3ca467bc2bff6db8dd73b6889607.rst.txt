@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1antisymm_1ae4fa3ca467bc2bff6db8dd73b6889607:
+
+Function sequant::mbpt::antisymm::num_closed_loops
+==================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::antisymm::num_closed_loops(std::vector<Index>, std::vector<Index>, std::vector<Index>, std::vector<Index>)
+   :project: SeQuant

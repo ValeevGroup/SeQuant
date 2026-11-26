@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a657acd22502869e20a3f2032229ac37b:
+
+Function sequant::pin_default_contexts
+======================================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::pin_default_contexts()
+   :project: SeQuant

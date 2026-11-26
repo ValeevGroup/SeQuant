@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_index_tie_break_less:
+
+Struct IndexTieBreakLess
+========================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexTieBreakLess
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

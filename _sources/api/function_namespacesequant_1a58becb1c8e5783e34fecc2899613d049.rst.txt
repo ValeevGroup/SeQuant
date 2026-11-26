@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a58becb1c8e5783e34fecc2899613d049:
+
+Template Function sequant::evaluate_each
+========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::evaluate_each(Nodes const&, BatchPolicy const&, F const&, CacheManager<N, FHC>&, std::initializer_list<std::wstring>, ScopeGuardFactory)
+   :project: SeQuant

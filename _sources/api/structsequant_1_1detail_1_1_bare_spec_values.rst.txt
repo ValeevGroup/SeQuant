@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_bare_spec_values:
+
+Struct BareSpecValues
+=====================
+
+- Defined in :ref:`file_SeQuant_core_index_basis_registry.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::BareSpecValues
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

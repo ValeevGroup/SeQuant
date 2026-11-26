@@ -1,0 +1,33 @@
+.. _exhale_class_classsequant_1_1_mutatable_labeled:
+
+Class MutatableLabeled
+======================
+
+- Defined in :ref:`file_SeQuant_core_expressions_labeled.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Labeled`` (:ref:`exhale_class_classsequant_1_1_labeled`)
+
+
+Derived Types
+*************
+
+- ``public sequant::Tensor`` (:ref:`exhale_class_classsequant_1_1_tensor`)
+- ``public sequant::Variable`` (:ref:`exhale_class_classsequant_1_1_variable`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::MutatableLabeled
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

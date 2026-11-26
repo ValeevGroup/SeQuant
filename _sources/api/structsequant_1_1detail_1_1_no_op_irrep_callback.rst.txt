@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_no_op_irrep_callback:
+
+Struct NoOpIrrepCallback
+========================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::NoOpIrrepCallback
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

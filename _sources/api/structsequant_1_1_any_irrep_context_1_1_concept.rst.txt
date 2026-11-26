@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_any_irrep_context_1_1_concept:
+
+Struct AnyIrrepContext::Concept
+===============================
+
+- Defined in :ref:`file_SeQuant_core_irreps_any.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_any_irrep_context`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::AnyIrrepContext::Concept
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a7511a1cfe50f3aab601e7bda12b7a495:
+
+Enum IndexSlotType
+==================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_slot.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::IndexSlotType
+   :project: SeQuant

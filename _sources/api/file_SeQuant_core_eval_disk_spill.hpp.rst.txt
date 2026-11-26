@@ -1,0 +1,68 @@
+
+.. _file_SeQuant_core_eval_disk_spill.hpp:
+
+File disk_spill.hpp
+===================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/disk_spill.hpp``)
+-------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_disk_spill.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``cstddef``
+
+- ``unordered_map``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_meter.hpp`
+
+- :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_disk_spill`
+

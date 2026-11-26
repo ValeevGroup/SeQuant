@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1d602fe15e5a8cb07c503fc58cd67d0f:
+
+Template Function sequant::diff_indices
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::diff_indices(const LRange&, const RRange&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afee497da8584b79899cacfb9925fba4f:
+
+Template Function sequant::make_irrep
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_z2_algebra.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_irrep(std::string_view)
+   :project: SeQuant

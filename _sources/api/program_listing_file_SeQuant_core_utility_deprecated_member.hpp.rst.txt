@@ -1,0 +1,114 @@
+
+.. _program_listing_file_SeQuant_core_utility_deprecated_member.hpp:
+
+Program Listing for File deprecated_member.hpp
+==============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_deprecated_member.hpp>` (``SeQuant/core/utility/deprecated_member.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     std::shared_ptr<const Registry> basis_registry = nullptr;
+     /// @deprecated use basis_registry
+     SEQUANT_DEPRECATED_MEMBER(space_registry, "use basis_registry",
+                               std::shared_ptr<const Registry>);
+   };
+   // reading the alias: options.space_registry.value
+   //
+   // Created by Eduard Valeyev on 10/21/26.
+   //
+   
+   #ifndef SEQUANT_CORE_UTILITY_DEPRECATED_MEMBER_HPP
+   #define SEQUANT_CORE_UTILITY_DEPRECATED_MEMBER_HPP
+   
+   #include <concepts>
+   #include <type_traits>
+   #include <utility>
+   
+   namespace sequant {
+   
+   namespace detail {
+   struct deprecated_member_init_t {
+     explicit deprecated_member_init_t() = default;
+   };
+   }  // namespace detail
+   
+   template <typename T>
+   struct DeprecatedMember {
+     static_assert(std::is_object_v<T> && !std::is_const_v<T> &&
+                       std::is_default_constructible_v<T>,
+                   "DeprecatedMember<T>: T is a non-const, default-constructible "
+                   "object type (the member holds a T, value-initialized when the "
+                   "alias is not spelled)");
+   
+     DeprecatedMember() = default;
+   
+     T value{};
+   
+    protected:
+     template <typename U>
+       requires std::constructible_from<T, U&&>
+     constexpr DeprecatedMember(detail::deprecated_member_init_t, U&& u)
+         : value(std::forward<U>(u)) {}
+   };
+   
+   // clang-format off
+   // clang-format on
+   #ifdef SEQUANT_DOXYGEN
+   // the documentation's view of the member: a plain member of the value's type,
+   // so that the @deprecated comment above an invocation attaches to it (the
+   // Doxyfile predefines SEQUANT_DOXYGEN and expands this macro by name)
+   #define SEQUANT_DEPRECATED_MEMBER(Name, Msg, ...) __VA_ARGS__ Name
+   #else
+   #define SEQUANT_DEPRECATED_MEMBER(Name, Msg, ...)                          \
+     struct Name##_deprecated_t final                                         \
+         : ::sequant::DeprecatedMember<__VA_ARGS__> {                         \
+       Name##_deprecated_t() = default;                                       \
+       template <typename U>                                                  \
+         requires(std::constructible_from<__VA_ARGS__, U &&> &&               \
+                  !std::same_as<std::remove_cvref_t<U>, Name##_deprecated_t>) \
+       [[deprecated(Msg)]] Name##_deprecated_t(U&& u)                         \
+           : ::sequant::DeprecatedMember<__VA_ARGS__>(                        \
+                 ::sequant::detail::deprecated_member_init_t{},               \
+                 std::forward<U>(u)) {}                                       \
+     };                                                                       \
+     Name##_deprecated_t Name = {}
+   #endif  // SEQUANT_DOXYGEN
+   
+   namespace detail {
+   struct deprecated_member_probe {
+     int current = 0;
+     SEQUANT_DEPRECATED_MEMBER(old, "use current", int);
+   };
+   static_assert(std::is_aggregate_v<deprecated_member_probe>);
+   static_assert(std::is_default_constructible_v<deprecated_member_probe>);
+   static_assert(deprecated_member_probe{.current = 1}.old.value == 0);
+   static_assert(
+       !std::is_constructible_v<deprecated_member_probe::old_deprecated_t,
+                                detail::deprecated_member_init_t, int>,
+       "the value constructor is for the declared type only");
+   
+   struct deprecated_member_greedy {
+     int from_alias = 0;
+     constexpr deprecated_member_greedy() = default;
+     template <typename U>
+     constexpr deprecated_member_greedy(U&&) : from_alias(1) {}
+   };
+   struct deprecated_member_greedy_probe {
+     SEQUANT_DEPRECATED_MEMBER(old, "use current", deprecated_member_greedy);
+   };
+   static_assert(
+       [] {
+         deprecated_member_greedy_probe p{};
+         auto copy = p.old;
+         return copy.value.from_alias == 0;
+       }(),
+       "copying the member is a copy, not a use of the deprecated constructor");
+   }  // namespace detail
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_UTILITY_DEPRECATED_MEMBER_HPP

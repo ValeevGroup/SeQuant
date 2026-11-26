@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a3d853d3582e6727e64b1e113cbf8bc75:
+
+Template Function sequant::block_cmp_first
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::block_cmp_first(const TensorBlockIndexComparer&, Fallback)
+   :project: SeQuant

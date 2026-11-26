@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a4f6226748a98a992f04f19244c102ea0:
+
+Define SEQUANT_ASSERT_THROW
+===========================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_ASSERT_THROW
+   :project: SeQuant

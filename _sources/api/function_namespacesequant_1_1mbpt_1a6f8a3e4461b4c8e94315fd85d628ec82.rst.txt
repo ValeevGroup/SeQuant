@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a6f8a3e4461b4c8e94315fd85d628ec82:
+
+Function sequant::mbpt::append_spin
+===================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::append_spin(const ExprPtr&, const container::map<Index, Index>&)
+   :project: SeQuant

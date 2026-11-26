@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1eval_1a61a535a196ebb6366e10129a266a13e2:
+
+Enum OccurrenceRole
+===================
+
+- Defined in :ref:`file_SeQuant_core_eval_legality.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::eval::OccurrenceRole
+   :project: SeQuant

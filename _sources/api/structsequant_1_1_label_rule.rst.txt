@@ -1,0 +1,26 @@
+.. _exhale_struct_structsequant_1_1_label_rule:
+
+Struct LabelRule
+================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_filter.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::ExpressionFilter::Rule`` (:ref:`exhale_struct_structsequant_1_1_expression_filter_1_1_rule`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::LabelRule
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

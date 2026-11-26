@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1mbpt_1_1_quantum_number_change:
+
+Template Class QuantumNumberChange
+==================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public container::svector< boost::numeric::interval< std::make_signed_t< std::int64_t > >, 8 >``
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::mbpt::QuantumNumberChange
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

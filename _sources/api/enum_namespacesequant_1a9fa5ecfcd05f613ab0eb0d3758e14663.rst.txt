@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a9fa5ecfcd05f613ab0eb0d3758e14663:
+
+Enum ObjectiveFunction
+======================
+
+- Defined in :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::ObjectiveFunction
+   :project: SeQuant

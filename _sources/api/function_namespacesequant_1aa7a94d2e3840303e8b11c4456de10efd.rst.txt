@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa7a94d2e3840303e8b11c4456de10efd:
+
+Function sequant::power_phase
+=============================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::power_phase(meta::eval_node auto const&)
+   :project: SeQuant

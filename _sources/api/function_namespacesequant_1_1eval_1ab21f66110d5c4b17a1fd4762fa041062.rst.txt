@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1ab21f66110d5c4b17a1fd4762fa041062:
+
+Function sequant::eval::disk_eligible_cells
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_table.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::disk_eligible_cells(CellTable const&, std::function<bool(std::size_t value_id)> const&)
+   :project: SeQuant

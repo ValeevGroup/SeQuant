@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1transform_1_1ast__to__expr_1aabd5d9746d9c1a225e92215968799638:
+
+Function sequant::io::serialization::v1::transform::ast_to_expr::utf8_input
+===========================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::transform::ast_to_expr::utf8_input(std::string_view)
+   :project: SeQuant

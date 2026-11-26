@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_error_handler:
+
+Template Struct ErrorHandler
+============================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::io::serialization::v1::parse::ErrorHandler
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

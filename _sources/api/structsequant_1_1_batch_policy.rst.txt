@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_batch_policy:
+
+Struct BatchPolicy
+==================
+
+- Defined in :ref:`file_SeQuant_core_batch_policy.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::BatchPolicy
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

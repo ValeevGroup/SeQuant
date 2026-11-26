@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a33d455bf98fb4bd57e2a86dace86c75e:
+
+Function sequant::detail::fold_deltas
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::fold_deltas(std::shared_ptr<Product>&, const container::set<Index>&)
+   :project: SeQuant

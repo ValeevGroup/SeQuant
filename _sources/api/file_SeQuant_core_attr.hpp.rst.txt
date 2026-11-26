@@ -1,0 +1,177 @@
+
+.. _file_SeQuant_core_attr.hpp:
+
+File attr.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/attr.hpp``)
+--------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_attr.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``cassert``
+
+- ``cstdint``
+
+- ``cstdlib``
+
+- ``ostream``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_basis.hpp`
+
+- :ref:`file_SeQuant_core_context.cpp`
+
+- :ref:`file_SeQuant_core_context.hpp`
+
+- :ref:`file_SeQuant_core_density.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_export_export.cpp`
+
+- :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_result_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.cpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor_power.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_serialization.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+- :ref:`file_SeQuant_core_op.cpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_core_slotted_index.hpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.cpp`
+
+- :ref:`file_SeQuant_core_utility_indices.hpp`
+
+- :ref:`file_SeQuant_core_wick_extended.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_slot_types`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1ae40b50a8d05740253f45c7117832e924`
+
+- :ref:`exhale_enum_namespacesequant_1adab01c80985d73d8397f382dd73f24e3`
+
+- :ref:`exhale_enum_namespacesequant_1a7c45821c9effd8dbe9f96766666daafe`
+
+- :ref:`exhale_enum_namespacesequant_1ae49066699e5ba0d0ee5147963e2b7d5d`
+
+- :ref:`exhale_enum_namespacesequant_1a0a9b166401d5079cb26813f8cc47da32`
+
+- :ref:`exhale_enum_namespacesequant_1a23f8450cce6c0235ab383b8f2f873bd4`
+
+- :ref:`exhale_enum_namespacesequant_1acd9c6540aee6e7d9ee4c4d22207cf0df`
+
+- :ref:`exhale_enum_namespacesequant_1a6864bcd9e8854de305fe54dd10104527`
+
+- :ref:`exhale_enum_namespacesequant_1afa68a364dda9a607857edac9787fe0f6`
+
+- :ref:`exhale_enum_namespacesequant_1adb3703b8d1bfd8ed6a242ec158b2f9d1`
+
+- :ref:`exhale_enum_namespacesequant_1a6ae7ab2cfc2f297d3835de0dcf4b372c`
+
+- :ref:`exhale_enum_namespacesequant_1ac3bf490f6e2f2deb518b2612afabe075`
+
+- :ref:`exhale_enum_namespacesequant_1ac9c6e3d16528f39644d08dc6a2f3aabc`
+
+- :ref:`exhale_enum_namespacesequant_1a981486172ce8b840ada3a055f842c805`
+
+- :ref:`exhale_enum_namespacesequant_1a6af27b3373529d3b73318dbdf1ff3c71`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a6131cba13aaf34ebd0d52c126e79361c`
+
+- :ref:`exhale_function_namespacesequant_1ae9db797babe208bf3f819ca89ae5ce9b`
+
+- :ref:`exhale_function_namespacesequant_1afabc11dab1948e1a4fda0a7bb4b96962`
+
+- :ref:`exhale_function_namespacesequant_1a2683bd9a87c9fedba1b73b48675d5123`
+
+- :ref:`exhale_function_namespacesequant_1a11e7d2782ce2dc6136611fc020d126d4`
+
+- :ref:`exhale_function_namespacesequant_1a107d9204a84750f799d7d7adb900ef6a`
+
+- :ref:`exhale_function_namespacesequant_1a39d724ab06625de380dda6122aba80c0`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1ae825a98ade35c6992202be5b3a162d8b`
+

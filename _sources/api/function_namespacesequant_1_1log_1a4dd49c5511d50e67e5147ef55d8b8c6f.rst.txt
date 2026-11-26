@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1a4dd49c5511d50e67e5147ef55d8b8c6f:
+
+Template Function sequant::log::working_set
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::working_set(CacheManager<N, F> const&, ResultPtr const&, ResultPtr const&, ResultPtr const&)
+   :project: SeQuant

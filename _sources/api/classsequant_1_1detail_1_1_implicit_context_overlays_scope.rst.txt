@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1_implicit_context_overlays_scope:
+
+Class ImplicitContextOverlaysScope
+==================================
+
+- Defined in :ref:`file_SeQuant_core_utility_context.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::ImplicitContextOverlaysScope
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:
