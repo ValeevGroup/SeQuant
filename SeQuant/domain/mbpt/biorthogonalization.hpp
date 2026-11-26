@@ -4,9 +4,12 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/slotted_index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/memoize.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #if defined(SEQUANT_HAS_TILEDARRAY)
 #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
@@ -77,8 +80,8 @@ void biorthogonal_transform(
 /// hash of their canonicalized tensor network forms. For each group, it
 /// retains only the terms with the largest absolute scalar coefficient, scaled
 /// by n!/rank(M) (rank(M) = Catalan(n) for n external index groups) so that the
-/// idempotent NNS projector (biorthogonal_nns_project) rebuilds the full
-/// residual.
+/// idempotent NNS projector (biorthogonal_singlet_nns_project) rebuilds the
+/// full residual.
 /// @param expr The input expression, expected to be a `Sum` of `Product` terms.
 /// @param ext_idxs A vector of external index groups. The function will not
 /// apply the filtering logic if `ext_idxs.size()` is 2 or less.
@@ -89,6 +92,48 @@ ExprPtr WK_biorthogonalization_filter(
 ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
+
+/// \brief Compaction of the closed-shell triplet residual: keeps one
+/// representative slot permutation per tensor-network hash group, scaled so
+/// that the nns projector rebuilds the full residual from it.
+/// \param expr The residual; returned unchanged unless it is a Sum
+/// \param ext_idxs A vector of external index groups
+/// \return The compacted expression
+/// \throw Exception for more than 3 groups (beyond triples)
+[[nodiscard]] ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+[[nodiscard]] ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs);
+
+// clang-format off
+/// \brief Assembles the closed-shell triplet residual from the
+/// sector-summed primitive V, for singles, doubles and triples (n = 1, 2, 3
+/// external index groups; doubles based on Kohn's paper)
+///
+///   n = 1: Omega = V/2, the biorthogonal factor for singles is 1/2.
+///   n = 2: Omega = (3 V - V_ps)/16 (Kohn's paper)
+///   n = 3: Omega = (6 V - V_ps01 - V_ps02 + 2 V_ks12)/160
+///          the 18x18 overlap matrix of the TEE ops (6 pairings x 3 T
+///          positions) has rank 9;
+///
+/// Supporting a new n means adding its row to
+/// hardcoded_triplet_residual_row
+///
+/// \pre \p V is a Product or a Sum of Products
+/// \param V The sector-summed triplet primitive
+/// \param ext_idxs A vector of external index groups (must have 1, 2 or 3
+///        groups)
+/// \return The combined residual, simplified
+/// \throw Exception for unsupported \p ext_idxs sizes
+// clang-format on
+[[nodiscard]] ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<Index>>& ext_idxs);
+[[nodiscard]] ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs);
 
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
@@ -161,6 +206,15 @@ container::svector<size_t> compute_permuted_indices(
     const container::svector<size_t>& indices, size_t perm_rank,
     size_t n_particles);
 
+/// \brief compute_permuted_indices applied to the bra and ket slots
+///
+/// \param perm_index The rank of the bra and ket permutation pair
+/// \param n_particles The rank of external index pairs
+///
+/// \return The permuted indices, bra slots first
+[[nodiscard]] container::svector<size_t> compute_permuted_indices_bra_ket(
+    size_t perm_index, size_t n_particles);
+
 /// \brief Provides one row of the NNS projector matrix,
 /// hardcoded from Mathematica to avoid numerical precision loss.
 ///
@@ -178,7 +232,8 @@ container::svector<size_t> compute_permuted_indices(
 ///         std::nullopt if n_particles is outside the range [1,5].
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
+std::optional<std::vector<T>> hardcoded_singlet_nns_projector(
+    std::size_t n_particles) {
   switch (n_particles) {
     case 1:
       return std::vector<T>{T(1) / T(1)};
@@ -247,7 +302,7 @@ std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
 /// \return (memoized) Vector of hrdcoded/computed NNS projection weights
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& nns_projection_weights(
+[[nodiscard]] const std::vector<T>& singlet_nns_projection_weights(
     std::size_t n_particles,
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold) {
@@ -267,9 +322,10 @@ template <typename T>
 
   return sequant::detail::memoize(
       cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
-        constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
-        if (n_particles <= max_rank_hardcoded_nns_projector) {
-          if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
+        constexpr std::size_t max_rank_hardcoded_singlet_nns_projector = 5;
+        if (n_particles <= max_rank_hardcoded_singlet_nns_projector) {
+          if (auto hardcoded_coeffs =
+                  hardcoded_singlet_nns_projector<T>(n_particles)) {
             return std::move(hardcoded_coeffs.value());
           }
         }
@@ -284,20 +340,107 @@ template <typename T>
       });
 }
 
+/// \brief Computes one row of the triplet NNS projector that
+/// hardcoded_triplet_nns_projector tabulates
+/// \param n_particles The rank of external index pairs
+/// \param pseudoinverse_threshold The threshold to compute the pseudoinverse
+/// \return Vector of the (n!)^2 computed NNS projection weights
+[[nodiscard]] std::vector<double> compute_triplet_nns_p_coeffs(
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+
+/// \brief Computes a sparse triplet biorthogonal row, the computed counterpart
+/// of hardcoded_triplet_residual_row
+///
+/// Shifts the last row of the pseudoinverse of the triplet overlap matrix by
+/// null-space vectors so that whole groups of equal coefficients vanish,
+/// keeping the solution with the fewest non-zeros.
+///
+/// \param n_particles The rank of external index pairs
+/// \param pseudoinverse_threshold The threshold to compute the pseudoinverse
+/// \return Vector of the (n!)^2 rational and sparse coefficients
+/// \throw Exception if \p n_particles > 4
+[[nodiscard]] std::vector<rational>
+compute_triplet_sparse_biorthogonalizer_coeffs(
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+
+// clang-format off
+/// \brief Provides the identity row of the closed-shell triplet NNS
+/// projector, hardcoded to avoid numerical precision loss.
+///
+/// The last row of G.pinv(G), and G being the overlap matrix of
+/// the triplet primitives
+/// \param n_particles The rank of external index pairs
+///
+/// \return Optional vector of the (n!)^2 weights, std::nullopt if
+///         n_particles is not 2 or 3
+// clang-format on
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+std::optional<std::vector<T>> hardcoded_triplet_nns_projector(
+    std::size_t n_particles) {
+  switch (n_particles) {
+    case 2:
+      return std::vector<T>{T(-1) / T(4), T(-1) / T(4), T(-1) / T(4),
+                            T(3) / T(4)};
+
+    case 3:
+      return std::vector<T>{
+          T(-1) / T(20), T(1) / T(20),  T(1) / T(20),  T(1) / T(20),
+          T(-1) / T(10), T(0) / T(1),   T(1) / T(20),  T(-1) / T(20),
+          T(1) / T(20),  T(1) / T(20),  T(-1) / T(10), T(0) / T(1),
+          T(1) / T(20),  T(1) / T(20),  T(-1) / T(20), T(1) / T(20),
+          T(0) / T(1),   T(-1) / T(10), T(1) / T(20),  T(1) / T(20),
+          T(1) / T(20),  T(-1) / T(20), T(0) / T(1),   T(-1) / T(10),
+          T(-1) / T(10), T(-1) / T(10), T(0) / T(1),   T(0) / T(1),
+          T(1) / T(4),   T(-1) / T(20), T(0) / T(1),   T(0) / T(1),
+          T(-1) / T(10), T(-1) / T(10), T(-1) / T(20), T(1) / T(4)};
+
+    default:
+      return std::nullopt;
+  }
+}
+
+/// \brief Provides the closed-shell triplet NNS projector weights
+///
+/// \tparam T The numeric type (must be floating point or complex)
+/// \param n_particles The rank of external index pairs
+///
+/// \return Vector of weights (see hardcoded_triplet_nns_projector)
+///
+/// \throw Exception unless \p n_particles is 2 or 3
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+[[nodiscard]] const std::vector<T>& triplet_nns_projection_weights(
+    std::size_t n_particles) {
+  static const std::vector<T> rows[2] = {
+      *hardcoded_triplet_nns_projector<T>(2),
+      *hardcoded_triplet_nns_projector<T>(3)};
+  if (n_particles != 2 && n_particles != 3)
+    throw Exception(
+        "triplet NNS projector weights are only available for "
+        "n_particles = 2, 3, requested rank is : " +
+        std::to_string(n_particles));
+  return rows[n_particles - 2];
+}
+
 }  // namespace detail
 
 #if defined(SEQUANT_HAS_TILEDARRAY)
 
 /// \brief This function is used to implement
-/// ResultPtr::biorthogonal_nns_project for TA::DistArray
+/// ResultPtr::biorthogonal_singlet_nns_project for TA::DistArray
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned TA::DistArray.
 template <typename... Args>
-auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                 size_t bra_rank) {
+auto biorthogonal_singlet_nns_project_ta(TA::DistArray<Args...> const& arr,
+                                         size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -310,7 +453,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
 
   const auto& nns_p_coeffs =
-      detail::nns_projection_weights<numeric_type>(ket_rank);
+      detail::singlet_nns_projection_weights<numeric_type>(ket_rank);
 
   TA::DistArray<Args...> result;
 
@@ -353,9 +496,9 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 }
 
 template <typename... Args>
-auto biorthogonal_nns_project(TA::DistArray<Args...> const& arr,
-                              size_t bra_rank) {
-  return biorthogonal_nns_project_ta(arr, bra_rank);
+auto biorthogonal_singlet_nns_project(TA::DistArray<Args...> const& arr,
+                                      size_t bra_rank) {
+  return biorthogonal_singlet_nns_project_ta(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_TILEDARRAY)
@@ -363,15 +506,15 @@ auto biorthogonal_nns_project(TA::DistArray<Args...> const& arr,
 #if defined(SEQUANT_HAS_BTAS)
 
 /// \brief This function is used to implement
-/// ResultPtr::biorthogonal_nns_project for btas::Tensor
+/// ResultPtr::biorthogonal_singlet_nns_project for btas::Tensor
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned btas::Tensor.
 template <typename... Args>
-auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
-                                   size_t bra_rank) {
+auto biorthogonal_singlet_nns_project_btas(btas::Tensor<Args...> const& arr,
+                                           size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -384,7 +527,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
 
   const auto& nns_p_coeffs =
-      detail::nns_projection_weights<numeric_type>(ket_rank);
+      detail::singlet_nns_projection_weights<numeric_type>(ket_rank);
 
   btas::Tensor<Args...> result;
 
@@ -428,9 +571,9 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 }
 
 template <typename... Args>
-auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
-                              size_t bra_rank) {
-  return biorthogonal_nns_project_btas(arr, bra_rank);
+auto biorthogonal_singlet_nns_project(btas::Tensor<Args...> const& arr,
+                                      size_t bra_rank) {
+  return biorthogonal_singlet_nns_project_btas(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_BTAS)
@@ -438,15 +581,15 @@ auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
 #if defined(SEQUANT_HAS_TAPP)
 
 /// \brief This function is used to implement
-/// ResultPtr::biorthogonal_nns_project for TAPPTensor
+/// ResultPtr::biorthogonal_singlet_nns_project for TAPPTensor
 ///
 /// \param arr The tensor to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned TAPPTensor.
 template <typename T, typename Alloc>
-auto biorthogonal_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
-                                   size_t bra_rank) {
+auto biorthogonal_singlet_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
+                                           size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -459,7 +602,7 @@ auto biorthogonal_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
   using numeric_type = T;
 
   const auto& nns_p_coeffs =
-      detail::nns_projection_weights<numeric_type>(ket_rank);
+      detail::singlet_nns_projection_weights<numeric_type>(ket_rank);
 
   using perm_type = container::svector<size_t>;
 
@@ -505,12 +648,193 @@ auto biorthogonal_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
 }
 
 template <typename T, typename Alloc>
-auto biorthogonal_nns_project(TAPPTensor<T, Alloc> const& arr,
-                              size_t bra_rank) {
-  return biorthogonal_nns_project_tapp(arr, bra_rank);
+auto biorthogonal_singlet_nns_project(TAPPTensor<T, Alloc> const& arr,
+                                      size_t bra_rank) {
+  return biorthogonal_singlet_nns_project_tapp(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_TAPP)
+
+#if defined(SEQUANT_HAS_TILEDARRAY)
+
+namespace detail {
+
+/// \brief Weighted sum over the S_n x S_n external-slot permutations of a
+/// rank-2n TA::DistArray:
+///   out = sum_p weights[p] * arr(annot_p),
+/// with the annotations generated from compute_permuted_indices_bra_ket and
+/// the weight row selected by the caller. Zero-weight
+/// permutations are skipped.
+template <typename... Args>
+auto triplet_perm_combine_ta(
+    TA::DistArray<Args...> const& arr, std::size_t n_particles,
+    std::vector<typename TA::DistArray<Args...>::numeric_type> const& weights) {
+  using ranges::views::iota;
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+  const std::size_t rank = 2 * n_particles;
+
+  sequant::detail::perm_t perm =
+      iota(size_t{0}, rank) | ranges::to<sequant::detail::perm_t>;
+  const auto lannot = sequant::detail::ords_to_annot(perm);
+
+  TA::DistArray<Args...> result;
+  for (std::size_t p = 0; p != weights.size(); ++p) {
+    if (weights[p] == numeric_type(0)) continue;
+    const auto annot = sequant::detail::ords_to_annot(
+        compute_permuted_indices_bra_ket(p, n_particles));
+    if (result.is_initialized()) {
+      result(lannot) += weights[p] * arr(annot);
+    } else {
+      result(lannot) = weights[p] * arr(annot);
+    }
+  }
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  return result;
+}
+
+/// \brief Applies the weight row \p weights_of(n_particles) over the triplet
+/// slot permutations of \p arr (n_particles = bra_rank); no-op for singles
+/// (array rank 2) or less
+/// \throw Exception unless the bra and ket ranks are equal, or if
+///        \p weights_of throws for bra_rank
+template <typename... Args>
+auto triplet_perm_project_ta(
+    TA::DistArray<Args...> const& arr, size_t bra_rank,
+    const std::vector<typename TA::DistArray<Args...>::numeric_type>& (
+        *weights_of)(std::size_t)) {
+  const std::size_t rank = arr.trange().rank();
+  if (2 * bra_rank != rank)
+    throw Exception(
+        "triplet_perm_project_ta: the bra and ket ranks must be equal");
+  if (rank <= 2) return arr;
+  return triplet_perm_combine_ta<Args...>(arr, bra_rank, weights_of(bra_rank));
+}
+
+}  // namespace detail
+
+/// \brief Idempotent NNS projector for the closed-shell triplet: removes the
+/// metric-null component of the array. Apply to the Davidson trial vector
+/// each iteration, and to the H*R residual when the compact equations were
+/// evaluated, where it also rebuilds the terms dropped by
+/// triplet_maxcoeff_compact; no-op for singles (array rank 2), throws beyond
+/// triples (array rank 6).
+template <typename... Args>
+auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
+                            size_t bra_rank) {
+  return detail::triplet_perm_project_ta(
+      arr, bra_rank,
+      &detail::triplet_nns_projection_weights<
+          typename TA::DistArray<Args...>::numeric_type>);
+}
+
+template <typename... Args>
+auto triplet_nns_project(TA::DistArray<Args...> const& arr, size_t bra_rank) {
+  return triplet_nns_project_ta(arr, bra_rank);
+}
+
+#endif  // defined(SEQUANT_HAS_TILEDARRAY)
+
+#if defined(SEQUANT_HAS_BTAS)
+
+namespace detail {
+
+/// \brief BTAS analogue of triplet_perm_combine_ta
+template <typename... Args>
+auto triplet_perm_combine_btas(
+    btas::Tensor<Args...> const& arr, std::size_t n_particles,
+    std::vector<typename btas::Tensor<Args...>::numeric_type> const& weights) {
+  using ranges::views::iota;
+  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+  const std::size_t rank = 2 * n_particles;
+
+  sequant::detail::perm_t perm =
+      iota(size_t{0}, rank) | ranges::to<sequant::detail::perm_t>;
+
+  btas::Tensor<Args...> result;
+  bool result_initialized = false;
+  for (std::size_t p = 0; p != weights.size(); ++p) {
+    if (weights[p] == numeric_type(0)) continue;
+    const sequant::detail::perm_t annot =
+        compute_permuted_indices_bra_ket(p, n_particles);
+
+    btas::Tensor<Args...> temp;
+    btas::permute(arr, annot, temp, perm);
+    btas::scal(weights[p], temp);
+
+    if (result_initialized) {
+      result += temp;
+    } else {
+      result = temp;
+      result_initialized = true;
+    }
+  }
+  return result;
+}
+
+/// \brief BTAS analogue of triplet_perm_project_ta
+template <typename... Args>
+auto triplet_perm_project_btas(
+    btas::Tensor<Args...> const& arr, size_t bra_rank,
+    const std::vector<typename btas::Tensor<Args...>::numeric_type>& (
+        *weights_of)(std::size_t)) {
+  const std::size_t rank = arr.rank();
+  if (2 * bra_rank != rank)
+    throw Exception(
+        "triplet_perm_project_btas: the bra and ket ranks must be equal");
+  if (rank <= 2) return arr;
+  return triplet_perm_combine_btas<Args...>(arr, bra_rank,
+                                            weights_of(bra_rank));
+}
+
+}  // namespace detail
+
+/// @brief BTAS analogue of the TA triplet_nns_project
+template <typename... Args>
+auto triplet_nns_project_btas(btas::Tensor<Args...> const& arr,
+                              size_t bra_rank) {
+  return detail::triplet_perm_project_btas(
+      arr, bra_rank,
+      &detail::triplet_nns_projection_weights<
+          typename btas::Tensor<Args...>::numeric_type>);
+}
+
+template <typename... Args>
+auto triplet_nns_project(btas::Tensor<Args...> const& arr, size_t bra_rank) {
+  return triplet_nns_project_btas(arr, bra_rank);
+}
+
+#endif  // defined(SEQUANT_HAS_BTAS)
+
+// clang-format off
+/// @brief Rebuilds the full closed-shell residual from one evaluated from
+///        closed_shell_CC_spintrace with the same @p options; dispatches to
+///        biorthogonal_singlet_nns_project or triplet_nns_project for compact
+///        residuals. Non-compact residuals need no NNS projection.
+/// @param arr the evaluated residual
+/// @param bra_rank the particle rank of the residual
+/// @param options the options passed to closed_shell_CC_spintrace
+/// @throw Exception for an invalid multiplicity, or if the backend of @p arr
+///        does not implement the triplet path
+// clang-format on
+template <typename Array>
+Array closed_shell_CC_nns_project(Array const& arr, std::size_t bra_rank,
+                                  ClosedShellCCSpintraceOptions options = {}) {
+  switch (options.multiplicity) {
+    case 1:
+      if (options.compact)
+        return biorthogonal_singlet_nns_project(arr, bra_rank);
+      return arr;
+    case 3:
+      if constexpr (requires { triplet_nns_project(arr, bra_rank); }) {
+        if (options.compact) return triplet_nns_project(arr, bra_rank);
+        return arr;
+      }
+      throw Exception(
+          "closed_shell_CC_nns_project: the triplet path is not implemented "
+          "for this backend");
+  }
+  throw Exception("closed_shell_CC_nns_project: invalid multiplicity");
+}
 
 }  // namespace sequant::mbpt
 

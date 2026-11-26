@@ -229,7 +229,7 @@ class ScopedCsvContext {
 inline std::vector<ExprPtr> spintraced(std::vector<ExprPtr> const& equations) {
   std::vector<ExprPtr> result;
   for (auto const& eq : equations)
-    result.push_back(mbpt::closed_shell_CC_spintrace_v2(eq));
+    result.push_back(mbpt::closed_shell_CC_singlet_spintrace_v2(eq));
   return result;
 }
 

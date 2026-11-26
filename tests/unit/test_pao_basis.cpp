@@ -57,7 +57,7 @@ std::vector<ExprPtr> derive(std::optional<Field> field = {}) {
   Index::reset_tmp_index();
   std::vector<ExprPtr> out;
   for (auto const& eq : mbpt::CC{2}.t(2, 0)) {
-    ExprPtr e = mbpt::closed_shell_CC_spintrace(
+    ExprPtr e = mbpt::closed_shell_CC_singlet_spintrace(
         eq, {.method = mbpt::BiorthogonalizationMethod::V1});
     e = mbpt::density_fit(e, ibr->retrieve_space(L"Κ"), L"g", L"g");
     e = mbpt::csv_transform(e, ibr->retrieve(L"μ̃"));

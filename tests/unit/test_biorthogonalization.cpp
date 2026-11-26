@@ -113,7 +113,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       }
 
       const auto hardcoded_nns =
-          mbpt::detail::hardcoded_nns_projector<double>(n);
+          mbpt::detail::hardcoded_singlet_nns_projector<double>(n);
       REQUIRE(hardcoded_nns.has_value());
       // asserts that the computed projector is idempotent
       const auto computed_nns = mbpt::detail::compute_nns_p_coeffs(n);
@@ -123,6 +123,24 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
         REQUIRE_THAT((*hardcoded_nns)[i],
                      WithinAbs(computed_nns[i], tolerance));
       }
+    }
+  }
+
+  SECTION("triplet sparse biorthogonalizer coefficients") {
+    // non-zero coefficients; the rest of the (n!)^2 row must be zero
+    const std::vector<std::vector<std::pair<std::size_t, rational>>> nonzeros =
+        {{{0, rational{1, 2}}},
+         {{0, rational{-1, 16}}, {3, rational{3, 16}}},
+         {{14, rational{-1, 160}},
+          {21, rational{-1, 160}},
+          {34, rational{1, 80}},
+          {35, rational{3, 80}}}};
+    const std::vector<std::size_t> row_sizes = {1, 4, 36};
+    for (std::size_t n = 1; n <= 3; ++n) {
+      std::vector<rational> expected(row_sizes[n - 1], rational{0});
+      for (const auto& [i, c] : nonzeros[n - 1]) expected[i] = c;
+      REQUIRE(mbpt::detail::compute_triplet_sparse_biorthogonalizer_coeffs(n) ==
+              expected);
     }
   }
 

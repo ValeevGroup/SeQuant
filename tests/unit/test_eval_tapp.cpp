@@ -239,7 +239,7 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
       [&yield_](sequant::ExprPtr const& expr,
                 container::svector<int64_t> const& target_labels) {
         auto result = evaluate(eval_node(expr), target_labels, yield_);
-        return mbpt::biorthogonal_nns_project(
+        return mbpt::biorthogonal_singlet_nns_project(
             result->get<TAPPTensorD>(),
             eval_node(expr)->as_tensor().bra_rank());
       };

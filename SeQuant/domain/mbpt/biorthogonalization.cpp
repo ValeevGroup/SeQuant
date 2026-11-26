@@ -2,6 +2,7 @@
 #include <SeQuant/domain/mbpt/detail/concepts.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -22,11 +23,17 @@
 #include <libperm/Rank.hpp>
 #include <libperm/Utils.hpp>
 
+#include <range/v3/algorithm/count_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/view/drop.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <numeric>
 
 namespace sequant::mbpt {
 
@@ -586,12 +593,12 @@ ExprPtr biorthogonal_transform(
   return biorthogonal_transform_impl(expr, ext_index_groups, threshold);
 }
 
-template <detail::index_group_range IdxGroups>
-ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
-  if (!expr->is<Sum>()) return expr;
-  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
+namespace {
 
-  // hash filtering logic for R > 2
+// groups the terms of \p expr by tensor-network hash, keeping in each group
+// the terms with the largest |coefficient|
+container::map<std::size_t, container::vector<ExprPtr>>
+largest_coeff_terms_by_hash(const ExprPtr& expr) {
   container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
 
   const auto ctx = get_default_context_snapshot();
@@ -624,6 +631,16 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
     }
   }
 
+  return largest_coeff_terms;
+}
+
+}  // namespace
+
+template <detail::index_group_range IdxGroups>
+ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
+
   // the diagonal of the idempotent NNS projector is rank(M)/n!, so each kept
   // term carries the reciprocal for the projector to rebuild its group at full
   // weight; all terms tied for the largest coefficient are kept and scaled
@@ -632,7 +649,7 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   const auto rank = catalan(n);
   const rational normalization(factorial(n), rank);
   Sum filtered;
-  for (const auto& [_, terms] : largest_coeff_terms) {
+  for (const auto& [_, terms] : largest_coeff_terms_by_hash(expr)) {
     for (const auto& t : terms) {
       auto kept = ex<Product>(t->as<Product>());
       kept->as<Product>().scale(normalization);
@@ -757,6 +774,382 @@ container::svector<size_t> compute_permuted_indices(
     permuted_indices[i] = indices[perm_obj[i]];
   }
   return permuted_indices;
+}
+
+}  // namespace detail
+
+// clang-format off
+/// \brief Provides the closed-shell triplet residual assembly row over the
+/// (n!)^2 external slot permutations
+///
+/// A combination of T and E operators with their permutations
+/// [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434).
+///
+/// \param n_particles The rank of external index pairs
+///
+/// \return Vector of rational weights in flat perm order
+///
+/// \throw Exception if the row is not available for \p n_particles
+// clang-format on
+std::vector<rational> hardcoded_triplet_residual_row(std::size_t n_particles) {
+  switch (n_particles) {
+    case 1:
+      return {ratio(1, 2)};
+
+    case 2:
+      return {ratio(-1, 16), ratio(0, 1), ratio(0, 1), ratio(3, 16)};
+
+    case 3:
+      return {ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(-1, 160), ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(-1, 160), ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(1, 80),   ratio(3, 80)};
+  }
+  throw Exception(
+      "hardcoded triplet residual weights are not available for "
+      "n_particles = " +
+      std::to_string(n_particles));
+}
+
+// Returns weight * term with its external bra and ket indices relabeled by slot
+// permutation p; bra and ket are permuted independently because triplet
+// terms are not particle-symmetric
+ExprPtr triplet_expr_for(const ExprPtr& term,
+                         const container::svector<Index>& b,
+                         const container::svector<Index>& k, std::size_t p,
+                         const rational& w = 1) {
+  const std::size_t n_particles = b.size();
+  const auto ords = detail::compute_permuted_indices_bra_ket(p, n_particles);
+  container::map<Index, Index> replacements;
+  for (std::size_t i = 0; i != n_particles; ++i) {
+    if (ords[i] != i) replacements.emplace(b[i], b[ords[i]]);
+    if (ords[n_particles + i] != n_particles + i)
+      replacements.emplace(k[i], k[ords[n_particles + i] - n_particles]);
+  }
+  if (replacements.empty())
+    return w == 1 ? term->clone() : ex<Constant>(w) * term;
+  return transform_expr(term, replacements, w);
+}
+
+/// Overlap matrix of the triplet state over the (n!)^2 slot permutations
+Eigen::MatrixXd triplet_overlap_matrix(std::size_t n_particles) {
+  const auto num_perms = static_cast<std::size_t>(factorial(n_particles));
+  const auto dim = boost::numeric_cast<Eigen::Index>(num_perms * num_perms);
+
+  // bra slot -> ket slot map of primitive idx
+  auto pairing = [&](std::size_t idx) {
+    perm::Permutation result = perm::unrank(idx / num_perms, n_particles);
+    result->invert();
+    result->postMultiply(perm::unrank(idx % num_perms, n_particles));
+    return result;
+  };
+  auto triplet_bra = [&](std::size_t idx) {
+    return perm::unrank(idx / num_perms, n_particles)->image(0);
+  };
+
+  Eigen::MatrixXd G(dim, dim);
+  G.setZero();
+
+  for (std::size_t row = 0; row < dim; ++row) {
+    perm::Permutation ref = pairing(row);
+    ref->invert();
+    const auto row_triplet = triplet_bra(row);
+
+    G(row, row) = std::pow(-2, n_particles);
+
+    for (std::size_t col = row + 1; col < dim; ++col) {
+      perm::Permutation current = pairing(col);
+      current->postMultiply(ref);
+
+      auto cycles = current->toDisjointCycles(n_particles);
+      const auto col_triplet = triplet_bra(col);
+      const bool same_cycle =
+          std::any_of(cycles.begin(), cycles.end(), [&](const auto& cycle) {
+            return std::find(cycle.begin(), cycle.end(), row_triplet) !=
+                       cycle.end() &&
+                   std::find(cycle.begin(), cycle.end(), col_triplet) !=
+                       cycle.end();
+          });
+      if (!same_cycle) continue;
+
+      std::size_t n_cycles = std::distance(cycles.begin(), cycles.end());
+      auto entry = std::pow(-2, n_cycles);
+
+      G(row, col) = entry;
+      G(col, row) = entry;
+    }
+  }
+
+  if (n_particles % 2 != 0) {
+    G *= -1;
+  }
+
+  SEQUANT_ASSERT(G.isApprox(G.transpose()));
+
+  return G;
+}
+
+/// rank of the triplet overlap matrix
+sequant::intmax_t triplet_rank(std::size_t n) {
+  return 3 * factorial(2 * n) / (factorial(n + 2) * factorial(n - 1));
+}
+
+/// last row of the pseudoinverse of the triplet overlap matrix; the hardcoded
+/// triplet residual row differs from it by a null-space vector (for now)
+std::vector<double> compute_triplet_biorthogonalizer_coeffs(
+    std::size_t n_particles, double threshold) {
+  auto overlap = triplet_overlap_matrix(n_particles);
+
+  // Find Pseudo Inverse
+  auto decomp = Eigen::CompleteOrthogonalDecomposition<decltype(overlap)>();
+  decomp.setThreshold(threshold);
+  decomp.compute(overlap);
+  SEQUANT_ASSERT(decomp.rank() == triplet_rank(n_particles));
+
+  Eigen::MatrixXd pinv = decomp.pseudoInverse();
+  SEQUANT_ASSERT(pinv.isApprox(pinv.transpose()));
+
+  return detail::flatten_row_major(pinv.row(pinv.rows() - 1));
+}
+
+template <detail::index_group_range IdxGroups>
+ExprPtr triplet_combined_residual_impl(const ExprPtr& V, IdxGroups&& ext_idxs) {
+  const std::size_t n_particles = ext_idxs.size();
+  const auto weights = hardcoded_triplet_residual_row(n_particles);
+
+  // the n bra slots and the n ket slots are permuted independently
+  SEQUANT_ASSERT(weights.size() ==
+                 factorial(n_particles) * factorial(n_particles));
+
+  const auto b = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_bra_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
+  const auto k = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_ket_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
+  const ExprPtr terms = V->is<Sum>() ? V : ex<Sum>(ExprPtrList{V});
+
+  Sum out;
+  for (const auto& term : *terms) {
+    for (std::size_t p = 0; p != weights.size(); ++p) {
+      const auto& w = weights[p];
+      if (w == 0) continue;
+      out.append(triplet_expr_for(term, b, k, p, w));
+    }
+  }
+
+  auto result = ex<Sum>(out);
+  simplify(result);
+  return result;
+}
+
+ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs) {
+  return triplet_combined_residual_impl(V, as_view_of_index_groups(ext_idxs));
+}
+ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  return triplet_combined_residual_impl(V, ext_idxs);
+}
+
+template <detail::index_group_range IdxGroups>
+ExprPtr triplet_maxcoeff_compact_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
+  const std::size_t n_particles = ext_idxs.size();
+  if (n_particles <= 1) return expr;
+  if (n_particles > 3)
+    throw Exception(
+        "triplet_maxcoeff_compact: only up to 3 external index groups are "
+        "supported, got " +
+        std::to_string(n_particles));
+  if (!expr->is<Sum>()) return expr;
+
+  auto work = expr->clone();
+  for (auto& term : *work) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+  canonicalize(work);
+  simplify(work);
+
+  // columns of the external groups other than group 0: V was signed by its
+  // spin, so permutations moving it do not fix the TEE operator
+  container::set<std::pair<Index, Index>> ext_columns;
+  for (const auto& g : ext_idxs | ranges::views::drop(1))
+    ext_columns.emplace(std::minmax(get_bra_idx(g), get_ket_idx(g)));
+
+  // count the number of slot-permuted terms equal to this term
+  auto stabilizer_order = [&](const Product& term) {
+    sequant::intmax_t order = 1;
+    for (const auto& f : term.factors()) {
+      if (!f->is<Tensor>()) continue;
+      const auto& t = f->as<Tensor>();
+      if (t.column_symmetry() != ColumnSymmetry::Symm) continue;
+      order *= factorial(static_cast<std::size_t>(ranges::count_if(
+          ranges::views::zip(t.bra(), t.ket()), [&](const auto& col) {
+            const auto& [x, y] = col;
+            return ext_columns.contains(std::minmax(x, y));
+          })));
+    }
+    return order;
+  };
+
+  // scale the compact term by rank/dim (doubles: rank 3 of 4, triples: 9 of 36)
+  const rational dim_over_rank = n_particles == 2 ? rational(4, 3) : 4;
+
+  Sum compact;
+  for (const auto& [_, terms] : largest_coeff_terms_by_hash(work)) {
+    // the max-|coeff| member is an identity-perm representative; its
+    // coefficient also collects the images that map back onto it
+    auto kept = terms.front()->clone();
+    kept->as<Product>().scale(
+        dim_over_rank * rational(1, stabilizer_order(kept->as<Product>())));
+    compact.append(std::move(kept));
+  }
+  return ex<Sum>(compact);
+}
+
+ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs) {
+  return triplet_maxcoeff_compact_impl(expr, as_view_of_index_groups(ext_idxs));
+}
+ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  return triplet_maxcoeff_compact_impl(expr, ext_idxs);
+}
+
+namespace detail {
+
+container::svector<size_t> compute_permuted_indices_bra_ket(
+    size_t perm_index, size_t n_particles) {
+  const auto num_perms = static_cast<size_t>(factorial(n_particles));
+  SEQUANT_ASSERT(perm_index < num_perms * num_perms);
+
+  container::svector<size_t> bra_slots(n_particles);
+  container::svector<size_t> ket_slots(n_particles);
+  for (size_t i = 0; i < n_particles; ++i) {
+    bra_slots[i] = i;
+    ket_slots[i] = n_particles + i;
+  }
+
+  container::svector<size_t> ords =
+      compute_permuted_indices(bra_slots, perm_index / num_perms, n_particles);
+  const auto permuted_ket =
+      compute_permuted_indices(ket_slots, perm_index % num_perms, n_particles);
+  ords.insert(ords.end(), permuted_ket.begin(), permuted_ket.end());
+  return ords;
+}
+
+std::vector<double> compute_triplet_nns_p_coeffs(std::size_t n_particles,
+                                                 double threshold) {
+  const auto overlap = triplet_overlap_matrix(n_particles);
+  const auto pinv_row =
+      compute_triplet_biorthogonalizer_coeffs(n_particles, threshold);
+  // G and pinv(G) are symmetric, so the last row of G pinv(G) is G times the
+  // last row of pinv(G)
+  return flatten_row_major(
+      overlap *
+      Eigen::Map<const Eigen::VectorXd>(
+          pinv_row.data(), boost::numeric_cast<Eigen::Index>(pinv_row.size())));
+}
+
+std::vector<rational> compute_triplet_sparse_biorthogonalizer_coeffs(
+    std::size_t n_particles, double threshold) {
+  if (n_particles > 4)
+    throw Exception(
+        "compute_triplet_sparse_biorthogonalizer_coeffs: only up to 4 external "
+        "index pairs are supported, got " +
+        std::to_string(n_particles));
+  const auto overlap = triplet_overlap_matrix(n_particles);
+  const auto dense_row =
+      compute_triplet_biorthogonalizer_coeffs(n_particles, threshold);
+  const auto dim = dense_row.size();
+  const Eigen::Map<const Eigen::VectorXd> dense(
+      dense_row.data(), boost::numeric_cast<Eigen::Index>(dim));
+  // every valid row x satisfies overlap.x == target
+  const Eigen::VectorXd target = overlap * dense;
+  const double tol = threshold * dense.cwiseAbs().maxCoeff();
+
+  // column is the map key, so swapping two Es in TEE will be the same key.
+  container::map<std::vector<double>, std::size_t> representative;
+  for (std::size_t idx = 0; idx < dim; ++idx) {
+    std::vector<double> column(dim);
+    for (std::size_t r = 0; r < dim; ++r)
+      column[r] =
+          overlap(static_cast<Eigen::Index>(r), static_cast<Eigen::Index>(idx));
+    representative[std::move(column)] =
+        idx;  // 18 col for rank 3 (from 36 to 18 for rank 3)
+  }
+
+  // group the unique ones by equal dense coefficient (group by values)
+  std::vector<std::size_t> by_value;
+  for (const auto& [_, idx] : representative) by_value.push_back(idx);
+  std::ranges::stable_sort(by_value, {},
+                           [&](std::size_t i) { return dense_row[i]; });
+  std::vector<std::vector<std::size_t>> groups;
+  for (std::size_t k = 0; k < by_value.size(); ++k) {
+    if (k == 0 || dense_row[by_value[k]] - dense_row[by_value[k - 1]] > tol)
+      groups.emplace_back();
+    groups.back().push_back(by_value[k]);
+  }
+  for (auto& g : groups) std::ranges::sort(g);
+  std::ranges::sort(groups, {}, [](const auto& g) { return g.front(); });
+
+  // 2^g = all, keep every subset of groups (zero the rest); keep the solvable
+  // one with the higher sparsity
+  std::vector<std::size_t> nonzero_idx;
+  std::vector<double> nonzero_coeffs;
+  const std::uint64_t all_groups = (std::uint64_t{1} << groups.size()) - 1;
+  for (const auto kept : bits::subsets(all_groups)) {
+    std::vector<std::size_t> cols;
+    for (const auto g : bits::on_bits_index(kept))
+      cols.insert(cols.end(), groups[g].begin(), groups[g].end());
+    if (cols.empty()) continue;
+    std::ranges::sort(cols);
+
+    Eigen::MatrixXd A(overlap.rows(), static_cast<Eigen::Index>(cols.size()));
+    for (std::size_t j = 0; j < cols.size(); ++j)
+      A.col(static_cast<Eigen::Index>(j)) =
+          overlap.col(static_cast<Eigen::Index>(cols[j]));
+    Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> decomp;
+    decomp.setThreshold(threshold);
+    decomp.compute(A);
+    const Eigen::VectorXd x = decomp.solve(target);
+    if ((A * x - target).norm() > threshold * target.norm())
+      continue;  // if Gd=Gs
+
+    std::vector<std::size_t> candidate_idx;
+    std::vector<double> candidate_coeffs;
+    for (std::size_t j = 0; j < cols.size(); ++j)
+      if (const double v = x(static_cast<Eigen::Index>(j)); std::abs(v) > tol) {
+        candidate_idx.push_back(cols[j]);
+        candidate_coeffs.push_back(v);
+      }
+    if (nonzero_idx.empty() || candidate_idx.size() < nonzero_idx.size() ||
+        (candidate_idx.size() == nonzero_idx.size() &&
+         std::ranges::lexicographical_compare(nonzero_idx, candidate_idx))) {
+      nonzero_idx = std::move(candidate_idx);
+      nonzero_coeffs = std::move(candidate_coeffs);
+    }
+  }
+  SEQUANT_ASSERT(!nonzero_idx.empty());
+
+  std::vector<rational> result(dim, rational{0});
+  for (std::size_t j = 0; j < nonzero_idx.size(); ++j)
+    result[nonzero_idx[j]] = to_rational(nonzero_coeffs[j], threshold);
+
+  return result;
 }
 
 }  // namespace detail
