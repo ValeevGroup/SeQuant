@@ -938,11 +938,6 @@ ExprPtr triplet_combined_residual_impl(const ExprPtr& V, IdxGroups&& ext_idxs) {
 
   Sum out;
   for (const auto& term : *terms) {
-    SEQUANT_ASSERT(term->is<Product>());
-    if (!term->is<Product>()) {
-      out.append(term);
-      continue;
-    }
     for (std::size_t p = 0; p != weights.size(); ++p) {
       const auto& w = weights[p];
       if (w == 0) continue;

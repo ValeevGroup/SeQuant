@@ -2590,6 +2590,15 @@ TEST_CASE("triplet_combined_residual_product", "[spin][triplet]") {
         triplet_combined_residual(V, ext_idxs),
         ex<Constant>(ratio(3, 16)) * V - ex<Constant>(ratio(1, 16)) * V_ps);
   }
+
+  SECTION("bare tensor term is weighted like a Product") {
+    const ExprPtr R = P(L"R{i_1,i_2;a_1,a_2}");
+    const ExprPtr R_prod = ex<Product>(1, ExprPtrList{R->clone()});
+    REQUIRE(R->is<Tensor>());
+    REQUIRE(R_prod->is<Product>());
+    require_equal(triplet_combined_residual(R, ext_idxs),
+                  triplet_combined_residual(R_prod, ext_idxs));
+  }
 }
 
 TEST_CASE("triplet_combined_residual_singles", "[spin][triplet]") {
