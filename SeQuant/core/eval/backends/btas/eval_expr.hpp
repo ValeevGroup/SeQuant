@@ -57,6 +57,9 @@ class EvalExprBTAS final : public EvalExpr {
 
   ///
   /// \param head The head of a result: the tensor that an expression defines.
+  /// \pre The indices of \p head are those of the result, as for the head
+  ///      of the ResultExpr that the evaluated node was binarized from;
+  ///      neither this function nor sequant::evaluate checks it.
   /// \return The layout of a result with its modes in the order that the
   ///         indices of \p head are written in: bra, then ket, then aux.
   ///         Give it to sequant::evaluate to lay a result out as its
