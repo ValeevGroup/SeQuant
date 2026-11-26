@@ -820,11 +820,11 @@ template <typename Array>
 Array closed_shell_CC_nns_project(Array const& arr, std::size_t bra_rank,
                                   ClosedShellCCSpintraceOptions options = {}) {
   switch (options.multiplicity) {
-    case SpinMultiplicity::Singlet:
+    case 1:
       if (options.compact)
         return biorthogonal_singlet_nns_project(arr, bra_rank);
       return arr;
-    case SpinMultiplicity::Triplet:
+    case 3:
       if constexpr (requires { triplet_nns_project(arr, bra_rank); }) {
         if (options.compact) return triplet_nns_project(arr, bra_rank);
         return arr;

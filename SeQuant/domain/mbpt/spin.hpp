@@ -346,15 +346,13 @@ struct ClosedShellCCTripletSpintraceOptions {
 ExprPtr closed_shell_CC_triplet_spintrace(
     ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options = {});
 
-/// spin multiplicity of the closed-shell spin-tracing state
-enum class SpinMultiplicity { Singlet, Triplet };
-
 /// controls the behavior of closed_shell_CC_spintrace
 struct ClosedShellCCSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  // set the default to singlet state
-  SpinMultiplicity multiplicity = SpinMultiplicity::Singlet;
-  /// singlet: true selects BiorthogonalizationMethod::V2, false V1;
+  /// spin multiplicity 2S+1 of the target state; 1 (singlet) and 3 (triplet)
+  /// are supported for now
+  std::size_t multiplicity = 1;
+  /// singlet: "compact = true" selects BiorthogonalizationMethod::V2, false V1;
   /// triplet: see ClosedShellCCTripletSpintraceOptions::compact
   bool compact = true;
 };

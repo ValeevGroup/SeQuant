@@ -2325,11 +2325,11 @@ ExprPtr closed_shell_CC_triplet_spintrace(
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
                                   ClosedShellCCSpintraceOptions options) {
   switch (options.multiplicity) {
-    case SpinMultiplicity::Singlet:
+    case 1:
       return closed_shell_CC_singlet_spintrace(
           expr, {.method = options.compact ? BiorthogonalizationMethod::V2
                                            : BiorthogonalizationMethod::V1});
-    case SpinMultiplicity::Triplet:
+    case 3:
       return closed_shell_CC_triplet_spintrace(expr,
                                                {.compact = options.compact});
   }
