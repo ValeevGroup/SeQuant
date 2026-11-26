@@ -20,6 +20,7 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -289,10 +290,12 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
                    EvalExprTAPP::layout(head), yield_)
               ->get<TAPPTensorD>();
       const auto expected = eval(expr1, tidxs(L"i1,a4,a1,i4"));
-      // a norm does not tell layouts apart: the extents do
       REQUIRE(in_head.extents() == expected.extents());
       REQUIRE(in_head.extents() != eval1.extents());
-      REQUIRE(norm(in_head) == Catch::Approx(norm(expected)));
+      // element by element: the extents do not tell apart a swap of modes of
+      // the same space, nor does a norm
+      REQUIRE(std::equal(in_head.data(), in_head.data() + in_head.volume(),
+                         expected.data()));
     }
 
     // mnemonics

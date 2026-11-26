@@ -31,6 +31,7 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <complex>
