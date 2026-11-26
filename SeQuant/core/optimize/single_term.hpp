@@ -12,6 +12,7 @@
 #include <SeQuant/core/optimize/single_term_detail.hpp>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 
 #include <range/v3/view/filter.hpp>
@@ -68,9 +69,13 @@ EvalSequence single_term_opt(
     CostParams const& cost = {},
     container::vector<NodeBatchAnnotation>* out_axes = nullptr) {
   if (out_axes) out_axes->clear();
-  // the slot counts recover an external slot index on their own, but not an
-  // index carried only as a protoindex of the externals, so declare them all
-  auto const& tidxs = network.ext_indices();
+  // the slot counts recover an external slot index on their own, but neither
+  // an index carried only as a protoindex of the externals nor a named index
+  // that occurs on several factors (a result index shared by the factors of a
+  // THC-like product), so declare them all
+  auto tidxs = network.ext_indices();
+  if (auto const& named = CanonicalizeOptions::default_options().named_indices)
+    tidxs.insert(named->begin(), named->end());
   // Unpack the cost knobs into the names the recurrence arms below use, so the
   // arms are unchanged. (void)-cast all, since each if-constexpr arm uses only
   // a subset.
