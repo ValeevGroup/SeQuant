@@ -2376,17 +2376,13 @@ SECTION("closed_shell_CC_spintrace") {
   require_equal(closed_shell_CC_spintrace(expr, {.compact = false}),
                 closed_shell_CC_singlet_spintrace_v1(expr));
   require_equal(
-      closed_shell_CC_spintrace(
-          expr, {.multiplicity = SpinMultiplicity::Triplet, .compact = false}),
+      closed_shell_CC_spintrace(expr, {.multiplicity = 3, .compact = false}),
       closed_shell_CC_triplet_spintrace(expr, {.compact = false}));
-  require_equal(closed_shell_CC_spintrace(
-                    expr, {.multiplicity = SpinMultiplicity::Triplet}),
+  require_equal(closed_shell_CC_spintrace(expr, {.multiplicity = 3}),
                 closed_shell_CC_triplet_spintrace(expr));
 
-  REQUIRE_THROWS_AS(
-      closed_shell_CC_spintrace(
-          expr, {.multiplicity = static_cast<SpinMultiplicity>(2)}),
-      Exception);
+  REQUIRE_THROWS_AS(closed_shell_CC_spintrace(expr, {.multiplicity = 2}),
+                    Exception);
 }
 }
 
