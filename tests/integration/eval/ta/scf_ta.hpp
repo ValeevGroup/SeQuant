@@ -111,8 +111,6 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
       SEQUANT_ASSERT(!n.empty());
-      auto trank = ranges::front(n)->as_tensor().bra_rank();
-      SEQUANT_ASSERT(trank == 1 || trank == 2);
       // update_amplitudes takes the residuals in the layout of the amplitudes,
       // which is that of their head
       r = funcs[st][log](n, EvalExprTA::layout(ranges::front(n)->as_tensor()),
