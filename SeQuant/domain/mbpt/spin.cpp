@@ -2188,10 +2188,8 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
     out->scale(p.scalar());
 
     for (const auto& f : p) {
-      if (!f->is<Tensor>() || f->as<Tensor>().label() != L"R") {
-        SEQUANT_ASSERT(
-            (!f->is<Tensor>() || f->as<Tensor>().label() != L"L") &&
-            "triplet spin adaptation supports right eigenvectors (R) only");
+      if (!f->is<Tensor>() || (f->as<Tensor>().label() != L"R" &&
+                               f->as<Tensor>().label() != L"L")) {
         out->append(1, f, Product::Flatten::No);
         continue;
       }
@@ -2209,8 +2207,9 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
       SEQUANT_ASSERT(rank == 1 || t.symmetry() == Symmetry::Nonsymm);
 
       // In a fixed external spin sector the spin-orbital amplitude collects
-      // all column permutations of R, each weighted by the spin sign of R's
-      // first column. ColumnSymmetry::Nonsymm keeps the permuted R's distinct.
+      // all column permutations of R amplitude (or L), each weighted by
+      // the spin sign of its first column. ColumnSymmetry::Nonsymm keeps the
+      // permuted amplitudes distinct.
       container::svector<std::size_t> columns(rank);
       std::iota(columns.begin(), columns.end(), std::size_t{0});
       auto channel = std::make_shared<Sum>();
