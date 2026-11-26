@@ -192,13 +192,16 @@ std::function<IrrepSet<Irrep>(const Tensor &)> resolve_by_pattern(
 
 /// The different kinds of nodes relevant for the propagation of IRREPs
 /// (Broadcast: a child expanded over modes it lacks, constant along them and
-/// hence nonzero in every IRREP block of them)
+/// hence nonzero in every IRREP block of them; Any: a node nonzero in every
+/// IRREP block whatever its children, such as a non-positive element-wise
+/// power, which maps a zero block to inf or 1)
 enum class IrrepNodeKind : std::uint8_t {
   Leaf,
   Product,
   Sum,
   Adjoint,
-  Broadcast
+  Broadcast,
+  Any
 };
 
 /// Adapter that makes a given type of (expression) node accessible to the
@@ -254,6 +257,11 @@ typename Ctx::set_type fold_irreps(const Node &node, const Ctx &ctx,
       });
       if (!result.empty()) result = ctx.any_set();
       break;
+    case IrrepNodeKind::Any:
+      Traits::for_each_child(
+          node, [&](const Node &child) { fold_irreps(child, ctx, on_node); });
+      result = ctx.any_set();
+      break;
   }
 
   on_node(node, result);
@@ -304,8 +312,11 @@ struct IrrepNodeTraits<Expr> {
       return ctx.irreps_of(tensor);
     }
     if (expr.is<TensorPower>()) {
-      // element-wise power of a tensor: irreps of the base
-      return leaf_irreps(*expr.as<TensorPower>().base(), ctx);
+      // element-wise power of a tensor: irreps of the base, unless a
+      // non-positive exponent maps its zero blocks to inf or 1
+      const TensorPower &power = expr.as<TensorPower>();
+      if (power.exponent() <= 0) return ctx.any_set();
+      return leaf_irreps(*power.base(), ctx);
     }
     if (expr.is<Constant>() || expr.is<Product>()) {
       // Only zero-valued products end up here (see kind())

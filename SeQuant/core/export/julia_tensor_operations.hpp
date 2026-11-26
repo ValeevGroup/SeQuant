@@ -14,6 +14,7 @@
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <ranges>
 #include <string>
@@ -406,9 +407,23 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   /// @return @p operand_str (rendering @p operand) permuted by `permutedims`
   /// so that its modes are @p target in that order, or as is if they already
   /// are
+  /// @throw Exception if @p operand has a repeated index, i.e. would need its
+  ///        diagonal taken
   template <std::ranges::input_range Indices>
   static std::string permuted(std::string operand_str, const Tensor &operand,
                               Indices &&target) {
+    auto operand_indices = operand.const_indices();
+    for (auto it = std::ranges::begin(operand_indices);
+         it != std::ranges::end(operand_indices); ++it) {
+      if (std::ranges::find(std::ranges::next(it),
+                            std::ranges::end(operand_indices),
+                            *it) != std::ranges::end(operand_indices)) {
+        throw Exception("Julia TensorOperations: cannot take the diagonal of " +
+                        toUtf8(operand.label()) + " over index " +
+                        toUtf8(it->full_label()));
+      }
+    }
+
     // permutedims(A, p) has A's dimension p[k] as its k-th dimension
     std::string perm;
     bool is_identity = true;

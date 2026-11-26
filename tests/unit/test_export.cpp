@@ -975,6 +975,19 @@ TEST_CASE("export-broadcast-sum", "[export]") {
     CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
   }
 
+  SECTION("TensorOperations: diagonal of a summand") {
+    JuliaTensorOperationsGenerator<> generator;
+    JuliaTensorOperationsGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(
+                              L"D{i_1;a_1} = f{i_1;i_1} + g{i_1;a_1}")),
+                          generator, ctx),
+        "Julia TensorOperations: cannot take the diagonal of f over index "
+        "i_1");
+  }
+
   SECTION("GenerationOptimizer forwards the broadcast") {
     GenerationOptimizer<StackCheckingGenerator<TextGenerator<>>> generator{
         StackCheckingGenerator<TextGenerator<>>{TextGenerator<>{}}};

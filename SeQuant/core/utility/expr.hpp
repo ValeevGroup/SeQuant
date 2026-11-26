@@ -55,7 +55,10 @@ bool is_valid(const Expr &expr, std::string *msg = nullptr);
 ///
 /// Unlike a bare Sum, a Sum on the rhs may broadcast: its summands may have
 /// different external indices if each is a subset of the result's indices
-/// and together they are all of them.
+/// and together they are all of them. A result index is never contracted, so
+/// a term that uses it in several slots (a Hadamard product) supplies it. A
+/// summand that is broadcast must not trace over an index if it has a single
+/// non-scalar factor, a tensor.
 /// @param expr The expression to validate
 /// @param msg If given, the function will set the string to a message
 ///            describing why the provided expression is considered to

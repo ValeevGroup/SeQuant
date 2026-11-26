@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <iterator>
@@ -14,10 +15,14 @@ static_assert(sizeof(wchar_t) == sizeof(char16_t) ||
 
 std::string toUtf8(const std::wstring_view str) {
   std::string result;
-  if constexpr (sizeof(wchar_t) == sizeof(char16_t)) {
-    utf8::utf16to8(str.begin(), str.end(), std::back_inserter(result));
-  } else {
-    utf8::utf32to8(str.begin(), str.end(), std::back_inserter(result));
+  try {
+    if constexpr (sizeof(wchar_t) == sizeof(char16_t)) {
+      utf8::utf16to8(str.begin(), str.end(), std::back_inserter(result));
+    } else {
+      utf8::utf32to8(str.begin(), str.end(), std::back_inserter(result));
+    }
+  } catch (const utf8::exception &e) {
+    throw Exception(std::string("toUtf8: invalid wide string: ") + e.what());
   }
   return result;
 }
@@ -26,10 +31,14 @@ std::string toUtf8(std::string_view str) { return std::string(str); }
 
 std::wstring toUtf16(const std::string_view str) {
   std::wstring result;
-  if constexpr (sizeof(wchar_t) == sizeof(char16_t)) {
-    utf8::utf8to16(str.begin(), str.end(), std::back_inserter(result));
-  } else {
-    utf8::utf8to32(str.begin(), str.end(), std::back_inserter(result));
+  try {
+    if constexpr (sizeof(wchar_t) == sizeof(char16_t)) {
+      utf8::utf8to16(str.begin(), str.end(), std::back_inserter(result));
+    } else {
+      utf8::utf8to32(str.begin(), str.end(), std::back_inserter(result));
+    }
+  } catch (const utf8::exception &e) {
+    throw Exception(std::string("toUtf16: invalid UTF-8: ") + e.what());
   }
   return result;
 }

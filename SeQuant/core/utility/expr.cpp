@@ -16,6 +16,7 @@
 #include <bitset>
 #include <climits>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 
@@ -398,25 +399,30 @@ bool has_uniform_externals(const Sum &sum) {
   return std::ranges::all_of(sum.summands(), compare, extractor);
 }
 
-/// Under a result head the summands of @p sum may broadcast: each must supply
-/// a subset of the result's indices, every one of its aux indices, and
-/// together all of them. A result index
-/// is never contracted, so a summand that uses it in several slots supplies
-/// it. The (anti)symmetrizers of the summands are disregarded. As for a whole
-/// rhs, bra and ket indices are pooled, since a bra-ket symmetric summand may
-/// present them swapped.
-/// @pre every summand of @p sum is valid
-bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
-                        std::string *msg) {
+/// Checks the terms of the rhs of @p result: the summands of a Sum, which may
+/// broadcast, or else the rhs itself. Each term must supply a subset of the
+/// result's indices and every one of its aux indices, and the terms together
+/// all of them. A result index is never contracted, so a term that uses it in
+/// several slots supplies it. The (anti)symmetrizers of the terms are
+/// disregarded. Bra and ket indices are pooled, since a bra-ket symmetric term
+/// may present them swapped. A broadcast term whose only non-scalar factor is
+/// a tensor is broadcast as is, so it cannot trace over an index.
+/// @param terms the terms of the rhs, each valid
+/// @param is_sum whether @p terms are the summands of a Sum (for the messages)
+bool is_valid_terms(const ResultExpr &result, std::span<const ExprPtr> terms,
+                    bool is_sum, std::string *msg) {
+  const std::string term_name = is_sum ? "Summand" : "Rhs";
+  const auto n_result_indices = static_cast<std::size_t>(std::ranges::count_if(
+      result.indices(), [](const Index &idx) { return idx.nonnull(); }));
   const auto result_braket = ranges::views::concat(result.bra(), result.ket());
   container::set<Index> covered;
-  for (const ExprPtr &summand : sum.summands()) {
-    const ExprPtr term = detail::without_symmetrizers(summand);
+  for (const ExprPtr &t : terms) {
+    const ExprPtr term = detail::without_symmetrizers(t);
     const IndexGroups<> externals = get_unique_indices(term);
 
     auto check = [&](const Index &idx, const auto &allowed) {
       if (!ranges::contains(allowed, idx)) {
-        SEQUANT_EXPR_INVALID("Summand index " + toUtf8(idx.full_label()) +
+        SEQUANT_EXPR_INVALID(term_name + " index " + toUtf8(idx.full_label()) +
                              " is not an index of the result");
       }
       return true;
@@ -433,8 +439,39 @@ bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
     // broadcast is over bra and ket modes only
     for (const Index &idx : result.aux()) {
       if (idx.nonnull() && !supplied.contains(idx)) {
-        SEQUANT_EXPR_INVALID("Summand does not supply result aux index " +
+        SEQUANT_EXPR_INVALID(term_name + " does not supply result aux index " +
                              toUtf8(idx.full_label()));
+      }
+    }
+
+    if (is_sum && supplied.size() != n_result_indices) {
+      // a broadcast term is evaluated as is: a lone tensor cannot take its
+      // trace
+      const Expr *lone = term.get();
+      if (term->is<Product>()) {
+        lone = nullptr;
+        std::size_t n_nonscalar = 0;
+        for (const ExprPtr &factor : term->as<Product>().factors()) {
+          if (factor->is_scalar()) continue;
+          lone = factor.get();
+          ++n_nonscalar;
+        }
+        if (n_nonscalar != 1) lone = nullptr;
+      }
+      if (lone && lone->is<AbstractTensor>()) {
+        const auto slot_indices =
+            get_used_indices<container::set<Index>,
+                             SlotType::Bra | SlotType::Ket | SlotType::Aux>(
+                *lone);
+        for (const Index &idx : get_used_indices(*lone)) {
+          if (!ranges::contains(result.indices(), idx)) {
+            SEQUANT_EXPR_INVALID(
+                term_name +
+                (slot_indices.contains(idx) ? " traces over index "
+                                            : " depends on protoindex ") +
+                toUtf8(idx.full_label()) + " and cannot be broadcast");
+          }
+        }
       }
     }
     covered.insert(supplied.begin(), supplied.end());
@@ -443,8 +480,9 @@ bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
   for (const Index &idx :
        ranges::views::concat(result.bra(), result.ket(), result.aux())) {
     if (!covered.contains(idx)) {
-      SEQUANT_EXPR_INVALID("Result index " + toUtf8(idx.full_label()) +
-                           " appears in no summand");
+      SEQUANT_EXPR_INVALID(
+          "Result index " + toUtf8(idx.full_label()) +
+          (is_sum ? " appears in no summand" : " does not appear in the rhs"));
     }
   }
 
@@ -531,64 +569,26 @@ bool is_valid(const Expr &expr, std::string *msg) {
 }
 
 bool is_valid(const ResultExpr &expr, std::string *msg) {
-  if (expr.expression()->is<Sum>()) {
-    // validated as is_valid(Expr) does, except that the summands may broadcast
-    const Sum &sum = expr.expression()->as<Sum>();
-    for (const ExprPtr &summand : sum.summands()) {
-      if (!is_valid(summand, msg)) {
-        return false;
-      }
-    }
-    if (!has_uniform_externals(sum)) {
-      // a proto-indexed sum does not broadcast
-      if (is_proto_indexed(sum)) {
-        SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
-      }
-      return is_valid_broadcast(expr, sum, msg);
-    }
-  } else if (!is_valid(expr.expression(), msg)) {
-    return false;
-  }
-
-  // We need to make sure to remove any symmetrizers from the expression in
-  // order to not mess up the determination of external indices
-  const ExprPtr rhs = detail::without_symmetrizers(expr.expression());
-
-  IndexGroups<> externals = get_unique_indices(rhs);
-
-  const bool bra_ok = std::ranges::is_permutation(expr.bra(), externals.bra);
-  const bool ket_ok = std::ranges::is_permutation(expr.ket(), externals.ket);
-  const bool braket_ok = [&]() -> bool {
-    if (!bra_ok && !ket_ok) {
-      // Allow for potential braket symmetry having changed position of
-      // bra and ket indices. For simplicity's sake, be lenient and don't
-      // try to explicitly check for expression symmetry
-      auto combined_expr = ranges::views::concat(expr.bra(), expr.ket());
-      auto combined_ext = ranges::views::concat(externals.bra, externals.ket);
-
-      return std::ranges::is_permutation(combined_expr, combined_ext);
-    }
-
-    return bra_ok && ket_ok;
-  }();
-
-  if (!braket_ok && !bra_ok) {
-    SEQUANT_EXPR_INVALID(
-        "Bra indices of result are inconsistent with the rhs expression");
-  }
-  if (!braket_ok && !ket_ok) {
-    SEQUANT_EXPR_INVALID(
-        "Ket indices of result are inconsistent with the rhs expression");
-  }
-  if (!std::ranges::is_permutation(expr.aux(), externals.aux)) {
-    SEQUANT_EXPR_INVALID(
-        "Aux indices of result are inconsistent with the rhs expression");
-  }
-
   // TODO: check whether specified symmetries of result are fulfilled in the rhs
   // expression
+  const ExprPtr &rhs = expr.expression();
+  if (!rhs->is<Sum>()) {
+    if (!is_valid(rhs, msg)) return false;
+    return is_valid_terms(expr, std::span(&rhs, 1), /*is_sum=*/false, msg);
+  }
 
-  return true;
+  // validated as is_valid(Expr) does, except that the summands may broadcast
+  const Sum &sum = rhs->as<Sum>();
+  for (const ExprPtr &summand : sum.summands()) {
+    if (!is_valid(summand, msg)) {
+      return false;
+    }
+  }
+  // a proto-indexed sum does not broadcast
+  if (!has_uniform_externals(sum) && is_proto_indexed(sum)) {
+    SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
+  }
+  return is_valid_terms(expr, sum.summands(), /*is_sum=*/true, msg);
 }
 
 #undef SEQUANT_EXPR_INVALID

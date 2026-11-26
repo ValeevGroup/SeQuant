@@ -24,6 +24,8 @@
 #include <range/v3/algorithm/find.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -44,6 +46,16 @@ std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
 
   return {std::distance(begin, range.begin()),
           std::distance(range.begin(), range.end())};
+}
+
+/// @return @p x as an int64 if it is an integer within the range of int64
+inline std::optional<std::int64_t> exact_int64(double x) {
+  // casting a value outside [-2^63, 2^63) (or NaN) to int64 is undefined
+  constexpr double bound = 9223372036854775808.0;  // 2^63
+  if (!(x >= -bound && x < bound)) return std::nullopt;
+  const auto i = static_cast<std::int64_t>(x);
+  if (static_cast<double>(i) != x) return std::nullopt;
+  return i;
 }
 
 /// @return the basis that @p label, with the optional explicit @p instance,
@@ -257,13 +269,22 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
 
 template <typename PositionCache, typename Iterator>
 Constant to_constant(const io::serialization::v1::ast::Number &number,
-                     const PositionCache &, const Iterator &) {
-  if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
-      static_cast<std::int64_t>(number.denominator) == number.denominator) {
+                     const PositionCache &position_cache,
+                     const Iterator &begin) {
+  if (number.denominator == 0) {
+    auto [offset, length] = get_pos(number, position_cache, begin);
+    throw SerializationError(offset, length, "Division by zero");
+  }
+  // the grammar's floating-point parser also reads "inf" and "nan"
+  if (!std::isfinite(number.numerator / number.denominator)) {
+    auto [offset, length] = get_pos(number, position_cache, begin);
+    throw SerializationError(offset, length, "Number is not finite");
+  }
+  const auto numerator = exact_int64(number.numerator);
+  const auto denominator = exact_int64(number.denominator);
+  if (numerator && denominator) {
     // Integer fraction
-    return Constant(
-        ::sequant::rational(static_cast<std::int64_t>(number.numerator),
-                            static_cast<std::int64_t>(number.denominator)));
+    return Constant(::sequant::rational(*numerator, *denominator));
   } else {
     // Construct from floating point value
     return Constant(::sequant::rational(number.numerator / number.denominator));
@@ -490,19 +511,21 @@ struct Transformer {
     ExprPtr base = boost::apply_visitor(*this, power.base);
 
     // exponent must be a rational, reject otherwise
-    if (static_cast<std::int64_t>(power.exponent.numerator) !=
-            power.exponent.numerator ||
-        static_cast<std::int64_t>(power.exponent.denominator) !=
-            power.exponent.denominator) {
+    const auto numerator = exact_int64(power.exponent.numerator);
+    const auto denominator = exact_int64(power.exponent.denominator);
+    if (!numerator || !denominator) {
       auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
       throw SerializationError(
           offset, length,
           "Power exponent must be a rational number (integer numerator and "
           "denominator)");
     }
-    sequant::rational exponent(
-        static_cast<std::int64_t>(power.exponent.numerator),
-        static_cast<std::int64_t>(power.exponent.denominator));
+    if (*denominator == 0) {
+      auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
+      throw SerializationError(offset, length,
+                               "Power exponent has a zero denominator");
+    }
+    sequant::rational exponent(*numerator, *denominator);
 
     if (power.conjugated && base->is<AbstractTensor>()) {
       auto [offset, length] = get_pos(power, position_cache.get(), begin.get());

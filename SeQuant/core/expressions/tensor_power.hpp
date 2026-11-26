@@ -36,7 +36,9 @@ class TensorPower : public Expr, public AbstractTensor {
   ///            cloned
   /// @param[in] exponent any rational; a non-integer exponent requires the
   ///            symmetry of @p base to not be Symmetry::Antisymm
-  /// @throw Exception if a precondition is violated (via SEQUANT_ENFORCE)
+  /// @throw Exception if a precondition is violated, as SEQUANT_ENFORCE does
+  ///        (under SEQUANT_ASSERT_BEHAVIOR=ABORT it aborts instead; pow()
+  ///        checks the same preconditions and always throws)
   TensorPower(ExprPtr base, exponent_type exponent);
 
   /// @return the base expression

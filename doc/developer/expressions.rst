@@ -53,11 +53,12 @@ Broadcast sums under a head
 -------------------------------
 
 Broadcast is a property of a ``ResultExpr``, not of a ``Sum``: only a head names the modes a summand lacks, and supplies their
-slot (bra or ket) and extent. Hence :func:`is_valid(const ResultExpr&) <sequant::is_valid>` checks a Sum on the rhs per summand
-(each summand's external indices are a subset of the head's, each carries every aux index of the head, since broadcast is over
-bra and ket modes only, and together they cover it; a head index that a summand uses in any slot counts as supplied, since head
-indices are never contracted), while ``is_valid`` of a bare ``Sum`` keeps requiring
-uniform external indices. The symbolic layer keeps a broadcast Sum as written (``optimize(ResultExpr&)`` optimizes the summands
+slot (bra or ket) and extent. Hence :func:`is_valid(const ResultExpr&) <sequant::is_valid>` checks the rhs per term, the
+summands of a Sum or else the rhs as one term (each term's external indices are a subset of the head's, each carries every aux
+index of the head, since broadcast is over bra and ket modes only, and together they cover it; a head index that a term uses in any
+slot counts as supplied, since head indices are never contracted; a broadcast summand whose one non-scalar factor is a tensor must
+not trace over an index, since it is broadcast as is), while ``is_valid`` of a bare ``Sum`` keeps requiring uniform external
+indices. The symbolic layer keeps a broadcast Sum as written (``optimize(ResultExpr&)`` optimizes the summands
 like any others); ``binarize(const ResultExpr&)`` wraps each summand that lacks head indices (by ``detail::supplied_result_indices`` on
 the summand as written: unlike ``is_valid``, which strips symmetrizers first, it counts the slots of an Â or Ŝ factor,
 because binarization keeps that factor as a leaf whose slots carry the head's indices) in a unary ``EvalOp::Broadcast`` node shaped like a ``Power`` node: the operand subtree on the left, a

@@ -846,11 +846,33 @@ TEST_CASE("binarize-broadcast-sum", "[EvalExpr][broadcast]") {
   SECTION("a broadcast summand carrying a non-head index") {
     const ResultExpr res =
         deserialize<ResultExpr>(L"D{i_1;a_1} = ε{;a_1} + f{i_1,i_2;i_2}");
+    REQUIRE_FALSE(is_valid(res));
     REQUIRE_THROWS_WITH(
         binarize(res),
         Catch::Matchers::ContainsSubstring("carries index i_2") &&
             Catch::Matchers::ContainsSubstring(
                 "that is not an index of the result"));
+  }
+
+  SECTION("is_valid agrees with binarize on Hadamard products and traces") {
+    for (std::wstring_view spec : {
+             L"R{a_1;i_1} = f{a_1;i_1} g{i_1;}",
+             L"R{a_1;i_1} = f{a_1;i_1} g{i_1;} + k{a_1;}",
+             L"R{a_1;i_1} = f{a_1;i_1} g{i_1;} + k{a_1;i_2} m{i_2;}",
+             L"R{i_1;a_1} = f{i_1;a_1} + h{i_2;i_2}",
+             L"R{i_1;a_1} = f{i_1;a_1} + x h{i_2;i_2}",
+             L"R{i_1;a_1} = f{a_1;} + g{i_1;} h{i_2;i_2}",
+         }) {
+      CAPTURE(toUtf8(spec));
+      const ResultExpr res = deserialize<ResultExpr>(spec);
+      bool binarizes = true;
+      try {
+        (void)binarize(res);
+      } catch (const Exception&) {
+        binarizes = false;
+      }
+      REQUIRE(is_valid(res) == binarizes);
+    }
   }
 
   SECTION("a nested Sum broadcasts at the top level only") {

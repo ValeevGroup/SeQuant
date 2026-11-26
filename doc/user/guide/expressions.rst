@@ -96,7 +96,8 @@ how a compound expression is raised to a power: name it, then apply :func:`sequa
 Under a head, the summands of a :class:`sequant::Sum` need not carry the same external indices: a summand may omit some of the
 head's indices, meaning that it is constant along those modes and is broadcast over them, as in the orbital-energy denominator
 ``D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}``. :func:`is_valid() <sequant::is_valid>` accepts such a ``ResultExpr``
-if every summand's external indices are a subset of the head's and together the summands supply all of them; a bare ``Sum``, which
+if every summand's external indices are a subset of the head's and together the summands supply all of them (a head index that
+a summand uses in several slots, as in the Hadamard product ``f{a_1;i_1} g{i_1;}``, is supplied by it); a bare ``Sum``, which
 has no head to name the missing modes, must still be uniformly indexed. Aux modes cannot be broadcast over: a summand must carry
 every aux index of the head. :func:`sequant::binarize` of a ``ResultExpr`` wraps each short summand in a unary
 :cpp:enumerator:`sequant::EvalOp::Broadcast` node, which expands it over the head modes it lacks; :func:`sequant::optimize`

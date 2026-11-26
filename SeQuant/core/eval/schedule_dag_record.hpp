@@ -108,14 +108,15 @@ inline std::string output_kind_name(OutputKind k) {
 ///    the scalar), id "<key>#scale"; its right operand, the Constant leaf
 ///    holding the scalar, is (term key, number of tree positions), id
 ///    "<key>#scalar" (spec 6.1 names no id for it; it is a DAG value too);
-///  - a unary node (an Adjoint, a conjugated factor, or a Power, a
-///    TensorPower factor) takes one tree ordinal as a leaf would; its operand
-///    is id "<key>#<ordinal>/0" and its Constant sentinel (Adjoint's
-///    Constant{1}, Power's exponent) "<key>#<ordinal>/1", both at the same
-///    (term, node); when the operand is a subtree (an inlined equation), its
-///    other nodes are "<operand id>.<j>" in left-first post-order, a unary
-///    node among them taking one j with its own "/0" and "/1" below, all at
-///    the same (term, node);
+///  - a unary node (an Adjoint, a conjugated factor; a Power, a TensorPower
+///    factor; or a Broadcast, a summand that lacks some of its head's modes)
+///    takes one tree ordinal as a leaf would; its operand is id
+///    "<key>#<ordinal>/0" and its Constant sentinel (Adjoint's and
+///    Broadcast's Constant{1}, Power's exponent) "<key>#<ordinal>/1", both at
+///    the same (term, node); when the operand is a subtree (an inlined
+///    equation), its other nodes are "<operand id>.<j>" in left-first
+///    post-order, a unary node among them taking one j with its own "/0" and
+///    "/1" below, all at the same (term, node);
 ///  - the k-th partial sum of a root's left-fold Sum: (root label, k), id
 ///    "<label>+<k>".
 ///
