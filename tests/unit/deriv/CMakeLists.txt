@@ -6,6 +6,7 @@ add_executable(unit_tests-sequant-deriv ${BUILD_BY_DEFAULT}
     "hf_model.cpp"
     "identities.cpp"
     "judge.cpp"
+    "test_deriv_gradients.cpp"
     "test_deriv_hf.cpp"
     "test_deriv_hf_numeric.cpp"
     "test_deriv_identities.cpp"

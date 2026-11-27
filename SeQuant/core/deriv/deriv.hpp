@@ -3,6 +3,10 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expressions/expr_ptr.hpp>
+
+#include <string>
+#include <string_view>
 
 namespace sequant::deriv {
 
@@ -83,6 +87,48 @@ namespace sequant::deriv {
                            const container::svector<ExprPtr>& variables,
                            const container::svector<ResultExpr>& definitions);
 
+/// the derivative of a function by the elements of one block of a tensor:
+/// the leaves of one list of slot spaces
+struct TensorDerivative {
+  /// the block: a tensor with the label, symmetries and slot spaces of the
+  /// leaves, under index names of its own
+  ExprPtr variable;
+  /// the derivative by the element of the block at the indices of @c variable
+  ExprPtr derivative;
+};
+
+/// @return the derivatives of @p E by the tensor labelled @p label , one per
+/// block of its leaves in @p E , such that the first-order change of @p E under
+/// any change δ of those leaves that has their symmetries is
+///
+///   δE = Σ_blocks Σ_J derivative(J) δ(J),
+///
+/// J running over every element of the block (not only the independent
+/// ones). A block is the list of the spaces of the slots of a leaf; blocks
+/// that an operation of the leaves (see diff()) maps onto one another hold
+/// the same elements and are one entry, spelled as the block met first; so
+/// are a block and its bra-ket exchange where the adjoint spelling of a leaf
+/// holds the elements of the leaf. The leaves include those in the
+/// expressions of @p definitions , and those spelled as the adjoint
+/// (`t⁺`) where that holds the elements of the tensor labelled @p label :
+/// pass the label of the tensor, not that of its adjoint.
+/// Each derivative is `diff(E, {variable}, definitions)` divided by the number
+/// of operations that keep the block.
+///
+/// This is the density that multiplies the derivative of the leaves in the
+/// derivative of @p E by a parameter the leaves depend on. Where the adjoint
+/// spelling of a leaf holds other numbers than the leaf (see diff()), its
+/// blocks are entries of their own.
+/// @throw Exception what diff() throws; for a leaf with the label that has
+/// protoindices; and for two blocks that overlap without being one block
+[[nodiscard]] container::svector<TensorDerivative> tensor_derivatives(
+    const ExprPtr& E, std::wstring_view label,
+    const container::svector<ResultExpr>& definitions);
+
+/// tensor_derivatives() with no definitions
+[[nodiscard]] container::svector<TensorDerivative> tensor_derivatives(
+    const ExprPtr& E, std::wstring_view label);
+
 /// @return @p E where every one of @p variables is zero: the terms that hold
 /// one of them, in one of its spellings or those of its adjoint, are dropped.
 /// A leaf with a tensor variable's label vanishes if it lies inside that one
@@ -98,6 +144,22 @@ namespace sequant::deriv {
 /// its protoindices do not follow its slots as the variable's do
 [[nodiscard]] ExprPtr at_zero(const ExprPtr& E,
                               const container::svector<ExprPtr>& variables);
+
+namespace detail {
+
+/// @return the definition in @p definitions of a leaf @p leaf : the one whose
+/// head has its label and ranks, or nullptr if there is none
+const ResultExpr* definition_of(
+    const Tensor& leaf, const container::svector<ResultExpr>& definitions);
+
+/// @return the expanded expression of the definition @p definition of the
+/// leaf @p leaf , with the slots of the head renamed to those of the leaf,
+/// slot by slot, and the summed indices to temporary ones whose labels are
+/// not in @p taken
+ExprPtr instantiate(const ResultExpr& definition, const Tensor& leaf,
+                    container::set<std::wstring> taken);
+
+}  // namespace detail
 
 }  // namespace sequant::deriv
 

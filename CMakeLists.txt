@@ -514,6 +514,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/rules/pno.hpp
         SeQuant/domain/mbpt/rules/thc.cpp
         SeQuant/domain/mbpt/rules/thc.hpp
+        SeQuant/domain/mbpt/spbasis_rotation_gradient.cpp
+        SeQuant/domain/mbpt/spbasis_rotation_gradient.hpp
         SeQuant/domain/mbpt/series.cpp
         SeQuant/domain/mbpt/series.hpp
         SeQuant/domain/mbpt/space_qns.hpp
@@ -860,7 +862,7 @@ set_source_files_properties(
 # SeQuant-mbpt: MBPT domain code
 ##########################
 sequant_add_library(mbpt ${SeQuant_mbpt_src})
-target_link_libraries(SeQuant-mbpt PUBLIC SeQuant-core SeQuant-optimize)
+target_link_libraries(SeQuant-mbpt PUBLIC SeQuant-core SeQuant-optimize SeQuant-deriv)
 target_link_libraries(SeQuant-mbpt PRIVATE Eigen3::Eigen libperm::libperm)
 if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
     target_compile_definitions(SeQuant-mbpt PRIVATE SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)

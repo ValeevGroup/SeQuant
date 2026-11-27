@@ -6,6 +6,8 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -13,6 +15,7 @@
 #include <SeQuant/domain/mbpt/models/hf.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/series.hpp>
+#include <SeQuant/domain/mbpt/spbasis_rotation_gradient.hpp>
 
 #include <string>
 #include <vector>
@@ -316,6 +319,49 @@ int main() {
         ex<Constant>(-1) * pow(deserialize(L"D{i_1;a_2}:N-N-N"), -2) *
             deserialize(L"r{a_2;i_1}:N-N-N"));
     // end-snippet-12
+  }
+
+  {
+    // start-snippet-13
+    // the correlation energy of second order, with independent multipliers
+    const auto E = deserialize(
+        L"1/4 g{i_1,i_2;a_1,a_2}:A-N-S t{a_1,a_2;i_1,i_2}:A-N-S + "
+        L"1/4 λ{i_1,i_2;a_1,a_2}:A-N-S g{a_1,a_2;i_1,i_2}:A-N-S");
+    // one gradient per block of g: g{i,i;a,a} and g{a,a;i,i}; g has no
+    // bra-ket symmetry here, so these are different elements
+    const auto blocks = deriv::tensor_derivatives(E, L"g");
+    if (blocks.size() != 2) throw Exception("unexpected blocks");
+    // dE = Σ_J gradient(J) dg(J) over every element J of the block
+    const auto& x = blocks[0].variable->as<Tensor>();
+    const container::map<Index, Index> to_x{{Index(L"i_1"), x.bra()[0]},
+                                            {Index(L"i_2"), x.bra()[1]},
+                                            {Index(L"a_1"), x.ket()[0]},
+                                            {Index(L"a_2"), x.ket()[1]}};
+    require_equivalent(
+        blocks[0].derivative,
+        transform_expr(deserialize(L"1/4 Â{i_1,i_2;a_1,a_2}:A-N-S "
+                                   L"t{a_1,a_2;i_1,i_2}:A-N-S"),
+                       to_x));
+    // the response to a rotation of the orbitals of g: q in each slot in
+    // turn, p in place of the slot's index elsewhere
+    const Index p(L"i_5"), q(L"a_5");
+    require_equivalent(
+        mbpt::spbasis_rotation_gradient(E, {L"g"}, p, q),
+        deserialize(L"1/2 g{a_5,i_2;a_1,a_2}:A-N-S t{a_1,a_2;i_5,i_2}:A-N-S + "
+                    L"1/2 λ{i_5,i_2;a_1,a_2}:A-N-S g{a_1,a_2;a_5,i_2}:A-N-S"));
+    // the Fock operator depends on the basis also through the occupied
+    // orbitals: given its definition, it is differentiated through it
+    const container::svector<ResultExpr> fock{ResultExpr(
+        Tensor(L"f", bra{L"p_7"}, ket{L"p_8"}, Symmetry::Nonsymm),
+        deserialize(L"h{p_7;p_8}:N-N-N + g{p_7,i_7;p_8,i_7}:A-N-S"))};
+    require_equivalent(
+        mbpt::spbasis_rotation_gradient(
+            deserialize(L"z{a_1;i_1}:N-N-N f{i_1;a_1}:N-N-N"), {L"h", L"g"}, p,
+            q, fock),
+        deserialize(L"z{a_1;i_5}:N-N-N f{a_5;a_1}:N-N-N + "
+                    L"z{a_1;i_1}:N-N-N g{i_1,a_5;a_1,i_5}:A-N-S + "
+                    L"z{a_1;i_1}:N-N-N g{i_1,i_5;a_1,a_5}:A-N-S"));
+    // end-snippet-13
   }
 
   return 0;

@@ -313,8 +313,10 @@ container::svector<Elementary> elementary(
 /// the definitions of tensor leaves that diff() differentiates through
 using Definitions = container::svector<ResultExpr>;
 
-/// @return the definition in @p defs of a leaf @p t : the one whose head has
-/// t's label and ranks, or nullptr if there is none
+}  // namespace
+
+namespace detail {
+
 const ResultExpr* definition_of(const Tensor& t, const Definitions& defs) {
   for (const auto& d : defs)
     if (d.label() == t.label() && d.bra().size() == t.bra_rank() &&
@@ -323,9 +325,6 @@ const ResultExpr* definition_of(const Tensor& t, const Definitions& defs) {
   return nullptr;
 }
 
-/// @return the expression of the definition @p def of the leaf @p leaf ,
-/// with the slots of the head renamed to those of the leaf, slot by slot, and
-/// the summed indices to temporary ones whose labels are not in @p taken
 ExprPtr instantiate(const ResultExpr& def, const Tensor& leaf,
                     container::set<std::wstring> taken) {
   container::map<Index, Index> renames;
@@ -347,6 +346,13 @@ ExprPtr instantiate(const ResultExpr& def, const Tensor& leaf,
   expand(result);
   return result;
 }
+
+}  // namespace detail
+
+namespace {
+
+using detail::definition_of;
+using detail::instantiate;
 
 /// the labels of the indices of the @p factors of a term and of @p y
 container::set<std::wstring> labels_of(
@@ -918,6 +924,159 @@ ExprPtr diff(const ExprPtr& E, const container::svector<ExprPtr>& variables,
     for (const auto& i : get_used_indices(x)) known.insert(i);
   }
   return result;
+}
+
+namespace {
+
+/// the bases of the slots of a block: bra, ket, auxiliary
+struct Block {
+  container::svector<IndexBasis> bra, ket, aux;
+  bool operator==(const Block&) const = default;
+};
+
+Block block_of(const Tensor& t) {
+  Block result;
+  for (const auto& i : t.bra()) result.bra.push_back(i.basis());
+  for (const auto& i : t.ket()) result.ket.push_back(i.basis());
+  for (const auto& i : t.aux()) result.aux.push_back(i.basis());
+  return result;
+}
+
+/// the images of the block @p b of the tensor @p t under the operations of
+/// t, one per operation: the permutations of the slots of each side
+/// (Symmetry::Antisymm) or of the columns (column symmetry, equal ranks),
+/// each also followed by the exchange of bra and ket where diff() reads the
+/// leaves at the exchanged position as elements of t: as an operation
+/// (exchanges()), or as the adjoint spelling of a tensor with bra-ket
+/// symmetry
+container::svector<Block> images(const Tensor& t, const Block& b) {
+  const bool antisymm = t.symmetry() == Symmetry::Antisymm;
+  const bool columns = column_symmetric(t) && b.bra.size() == b.ket.size();
+  const bool exchange = t.braket_symmetry() != BraKetSymmetry::Nonsymm &&
+                        adjoint_holds_elements(t);
+  container::svector<std::size_t> order_B(b.bra.size()), order_K(b.ket.size());
+  std::iota(order_B.begin(), order_B.end(), std::size_t{0});
+  std::iota(order_K.begin(), order_K.end(), std::size_t{0});
+  const auto permuted = [](const auto& slots, const auto& order) {
+    container::svector<IndexBasis> result;
+    for (const auto k : order) result.push_back(slots[k]);
+    return result;
+  };
+  container::svector<Block> result;
+  do {
+    do {
+      Block image{permuted(b.bra, order_B),
+                  permuted(b.ket, columns ? order_B : order_K), b.aux};
+      result.push_back(image);
+      if (exchange) {
+        std::swap(image.bra, image.ket);
+        result.push_back(std::move(image));
+      }
+    } while (antisymm && std::next_permutation(order_K.begin(), order_K.end()));
+  } while ((antisymm || columns) &&
+           std::next_permutation(order_B.begin(), order_B.end()));
+  return result;
+}
+
+/// whether the blocks @p l and @p r share elements: the same ranks, and
+/// overlapping spaces in every slot
+bool overlap(const Block& l, const Block& r) {
+  const auto registry = get_default_index_basis_registry();
+  SEQUANT_ASSERT(registry);
+  const auto side = [&registry](const auto& a, const auto& b) {
+    return std::ranges::equal(
+        a, b, [&registry](const IndexBasis& x, const IndexBasis& y) {
+          return !different_instances(x, y) &&
+                 registry->valid_intersection(x.space(), y.space());
+        });
+  };
+  return side(l.bra, r.bra) && side(l.ket, r.ket) && side(l.aux, r.aux);
+}
+
+}  // namespace
+
+container::svector<TensorDerivative> tensor_derivatives(
+    const ExprPtr& E, std::wstring_view label,
+    const container::svector<ResultExpr>& definitions) {
+  const std::string where = "deriv::tensor_derivatives: ";
+  if (!E) throw Exception(where + "null argument");
+  // the leaves with the label, one per class of blocks, and the labels in
+  // use; a leaf spelled as the adjoint, where that holds the elements of the
+  // tensor with the label, counts as its adjoint
+  container::svector<ExprPtr> leaves;
+  container::svector<container::svector<Block>> classes;
+  container::set<std::wstring> taken;
+  const auto visit = [&](const ExprPtr& expr) {
+    auto e = expr->clone();
+    expand(e);
+    for (const auto& term : terms_of(e))
+      for (const auto& f : split(term).second) {
+        for (const auto& i : get_used_indices(f)) taken.emplace(i.label());
+        auto base = f->is<TensorPower>() ? f->as<TensorPower>().base() : f;
+        if (!base->is<Tensor>()) continue;
+        if (base->as<Tensor>().label() != label) {
+          auto flipped = adjoint(base);
+          if (flipped->as<Tensor>().label() != label ||
+              !adjoint_holds_elements(flipped->as<Tensor>()))
+            continue;
+          base = flipped;
+        }
+        const auto& t = base->as<Tensor>();
+        if (std::ranges::any_of(t.slots(), &Index::has_proto_indices))
+          throw Exception(where + "a leaf with the label has protoindices");
+        const auto b = block_of(t);
+        bool known = false;
+        for (const auto& c : classes) {
+          if (std::ranges::find(c, b) != c.end()) {
+            known = true;
+            break;
+          }
+          if (std::ranges::any_of(
+                  c, [&b](const Block& other) { return overlap(b, other); }))
+            throw Exception(where +
+                            "two blocks overlap without being one block");
+        }
+        if (known) continue;
+        leaves.push_back(base);
+        classes.push_back(images(t, b));
+      }
+  };
+  visit(E);
+  // the leaves that E holds through its definitions
+  for (const auto& d : definitions)
+    if (d.expression()) visit(d.expression());
+
+  container::svector<TensorDerivative> result;
+  const auto unused = unused_label_validator(std::move(taken));
+  for (std::size_t k = 0; k != leaves.size(); ++k) {
+    // the leaf under index names of its own
+    auto x = leaves[k]->clone();
+    container::svector<Index> bra, ket, aux;
+    for (const auto& i : x->as<Tensor>().bra())
+      bra.push_back(temporary(i, unused));
+    for (const auto& i : x->as<Tensor>().ket())
+      ket.push_back(temporary(i, unused));
+    for (const auto& i : x->as<Tensor>().aux())
+      aux.push_back(temporary(i, unused));
+    auto& x_t = x->as<Tensor>();
+    x_t.set_bra({bra.begin(), bra.end()});
+    x_t.set_ket({ket.begin(), ket.end()});
+    x_t.set_aux({aux.begin(), aux.end()});
+    const auto& block = classes[k].front();
+    const auto n = std::ranges::count(classes[k], block);
+    auto gradient = diff(E, {x}, definitions);
+    if (gradient->is_zero()) continue;
+    gradient = ex<Constant>(rational(1, n)) * gradient;
+    expand(gradient);
+    rapid_simplify(gradient);
+    result.push_back({std::move(x), std::move(gradient)});
+  }
+  return result;
+}
+
+container::svector<TensorDerivative> tensor_derivatives(
+    const ExprPtr& E, std::wstring_view label) {
+  return tensor_derivatives(E, label, {});
 }
 
 ExprPtr at_zero(const ExprPtr& E,
