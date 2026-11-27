@@ -331,7 +331,7 @@ them all. Ordered from the bottom up, each row depends only on rows above it:
 | `SeQuant-optimize` | `SeQuant/core/optimize` | eval, symb, bliss |
 | `SeQuant-export` | `SeQuant/core/export` | optimize, eval, symb |
 | `SeQuant-core` | `SeQuant/version.cpp` only; umbrella for symb, eval, optimize, export | symb, eval, optimize, export |
-| `SeQuant-mbpt` | `SeQuant/domain/mbpt` | core, optimize |
+| `SeQuant-mbpt` | `SeQuant/domain/mbpt` | core, optimize, deriv |
 
 Note that "core" is both the source directory (`SeQuant/core/`, which feeds
 `symb`, `deriv`, `eval`, `optimize` and `export`) and the small umbrella
